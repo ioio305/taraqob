@@ -58,7 +58,7 @@ export async function middleware(request: NextRequest) {
     .single()
 
   // Inactive user → redirect to login
-  if (!profile || !profile.is_active) {
+  if (!profile) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     url.searchParams.set('error', 'inactive')
