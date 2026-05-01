@@ -500,7 +500,7 @@ export default function SignalComposer({ sessions, userId, userRole }: ComposerP
                     { l: 'SPX', v: selectedSession.spx_close?.toLocaleString('en-US') },
                     { l: 'VIX', v: selectedSession.vix?.toFixed(2) },
                     { l: 'Bias', v: selectedSession.market_bias
-                      ? MARKET_BIAS_LABELS[selectedSession.market_bias]?.label_ar : '—' },
+                      ? MARKET_BIAS_LABELS[selectedSession.market_bias]?.ar : '—' },
                   ].map(item => (
                     <div key={item.l} className="bg-surface-50 rounded-lg p-2 border border-surface-200 text-center">
                       <div className="text-[10px] font-semibold text-surface-400 uppercase">{item.l}</div>
@@ -584,7 +584,7 @@ export default function SignalComposer({ sessions, userId, userRole }: ComposerP
                           onChange={() => update('market_bias', val)}
                           className="sr-only"
                         />
-                        {cfg.label_ar}
+                        {cfg.ar}
                       </label>
                     ))}
                   </div>
@@ -643,7 +643,7 @@ export default function SignalComposer({ sessions, userId, userRole }: ComposerP
                             {qConf && (
                               <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border
                                 ${qConf.color} ${qConf.bg} ${qConf.border}`}>
-                                {qConf.label_ar}
+                                {qConf.ar}
                               </span>
                             )}
                             <span className="text-[10px] text-surface-400 font-mono">
@@ -760,7 +760,7 @@ export default function SignalComposer({ sessions, userId, userRole }: ComposerP
                             onChange={() => update('risk_level', level)}
                             className="sr-only"
                           />
-                          {cfg.label_ar}
+                          {cfg.ar}
                         </label>
                       )
                     })}

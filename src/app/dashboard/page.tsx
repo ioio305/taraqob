@@ -45,7 +45,7 @@ function ActiveSignalHero({ signal }: { signal: Signal }) {
               <div className={`text-sm font-medium mt-0.5 ${
                 MARKET_BIAS_LABELS[signal.market_bias as keyof typeof MARKET_BIAS_LABELS]?.color ?? 'text-surface-600'
               }`}>
-                {MARKET_BIAS_LABELS[signal.market_bias as keyof typeof MARKET_BIAS_LABELS]?.label_ar}
+                {MARKET_BIAS_LABELS[signal.market_bias as keyof typeof MARKET_BIAS_LABELS]?.ar}
               </div>
             )}
           </div>
@@ -286,7 +286,7 @@ export default async function BetaDashboard() {
                   <span className={`text-xs font-medium ${
                     MARKET_BIAS_LABELS[s.market_bias as keyof typeof MARKET_BIAS_LABELS]?.color ?? ''
                   }`}>
-                    {MARKET_BIAS_LABELS[s.market_bias as keyof typeof MARKET_BIAS_LABELS]?.label_ar}
+                    {MARKET_BIAS_LABELS[s.market_bias as keyof typeof MARKET_BIAS_LABELS]?.ar}
                   </span>
                 )}
               </div>

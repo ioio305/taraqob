@@ -327,7 +327,7 @@ export default function ContractForm({ session, onSaved }: ContractFormProps) {
             <div className="text-sm font-bold text-navy-900">تقييم الجودة — مباشر</div>
             {qConfig && (
               <span className={`text-sm font-bold px-3 py-1.5 rounded-xl border ${qConfig.color} ${qConfig.bg} ${qConfig.border}`}>
-                {qConfig.label_ar}
+                {qConfig.ar}
               </span>
             )}
           </div>
@@ -340,7 +340,7 @@ export default function ContractForm({ session, onSaved }: ContractFormProps) {
             <div className="flex-1">
               <div className="flex items-center justify-between text-xs text-surface-400 mb-1">
                 <span>Liquidity Score</span>
-                <span>{EXEC_RISK_CONFIG[liqResult.execution_risk].label_ar} المخاطر</span>
+                <span>{EXEC_RISK_CONFIG[liqResult.execution_risk].ar} المخاطر</span>
               </div>
               <div className="w-full bg-surface-200 rounded-full h-3 overflow-hidden">
                 <div

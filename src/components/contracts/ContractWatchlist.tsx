@@ -163,7 +163,7 @@ export default function ContractWatchlist({
                     <div className="flex items-center gap-2">
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border
                         ${qConfig.color} ${qConfig.bg} ${qConfig.border}`}>
-                        {qConfig.label_ar}
+                        {qConfig.ar}
                       </span>
                       <ScoreBar score={c.liquidity_score} />
                     </div>
@@ -174,7 +174,7 @@ export default function ContractWatchlist({
                 <td className="px-3 py-3">
                   {eConfig ? (
                     <span className={`text-xs font-semibold ${eConfig.color}`}>
-                      {eConfig.label_ar}
+                      {eConfig.ar}
                     </span>
                   ) : '—'}
                 </td>
