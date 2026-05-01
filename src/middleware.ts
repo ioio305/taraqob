@@ -1,94 +1,70 @@
 import { createServerClient } from '@supabase/ssr'
-import { NextResponse, type NextRequest } from 'next/server'
-import type { UserRole } from '@/lib/types'
-
-// Route access configuration
-const ROUTE_ACCESS: Record<string, UserRole[]> = {
-  '/admin':    ['admin'],
-  '/analyst':  ['admin', 'analyst'],
-  '/dashboard': ['admin', 'analyst', 'beta_user'],
-}
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request })
+  const { pathname } = request.nextUrl
 
+  // Public routes — no auth required
+  const publicRoutes = ['/', '/login', '/auth/callback', '/compliance', '/how-it-works']
+  if (publicRoutes.some(route => pathname === route || pathname.startsWith('/auth/'))) {
+    return NextResponse.next()
+  }
+
+  // Create response
+  let response = NextResponse.next({ request: { headers: request.headers } })
+
+  // Create Supabase client
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
+        getAll: () => request.cookies.getAll(),
+        setAll: (cookiesToSet) => {
+          cookiesToSet.forEach(({ name, value, options }) => {
             request.cookies.set(name, value)
-          )
-          supabaseResponse = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
+            response.cookies.set(name, value, options)
+          })
         },
       },
     }
   )
 
+  // Check session
   const { data: { user } } = await supabase.auth.getUser()
-  const pathname = request.nextUrl.pathname
 
-  // Public routes — no auth required
-  const publicRoutes = ['/', '/login', '/auth/callback', '/compliance', '/how-it-works']
-  if (publicRoutes.some(r => pathname === r || pathname.startsWith('/auth/'))) {
-    return supabaseResponse
-  }
-
-  // Not authenticated → redirect to login
+  // Not logged in — redirect to login
   if (!user) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
-    url.searchParams.set('redirect', pathname)
     return NextResponse.redirect(url)
   }
 
   // Get user role
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('role, is_active')
+    .select('role')
     .eq('id', user.id)
     .single()
 
-  // Inactive user → redirect to login
-  if (!profile) {
+  const role = profile?.role ?? 'beta_user'
+
+  // Admin routes
+  if (pathname.startsWith('/admin') && role !== 'admin') {
     const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    url.searchParams.set('error', 'inactive')
+    url.pathname = role === 'analyst' ? '/analyst' : '/dashboard'
     return NextResponse.redirect(url)
   }
 
-  const role = profile.role as UserRole
-
-  // Check route access
-  for (const [routePrefix, allowedRoles] of Object.entries(ROUTE_ACCESS)) {
-    if (pathname.startsWith(routePrefix)) {
-      if (!allowedRoles.includes(role)) {
-        // Redirect to appropriate dashboard
-        const url = request.nextUrl.clone()
-        url.pathname = getRoleDashboard(role)
-        return NextResponse.redirect(url)
-      }
-    }
+  // Analyst routes
+  if (pathname.startsWith('/analyst') && !['admin', 'analyst'].includes(role)) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/dashboard'
+    return NextResponse.redirect(url)
   }
 
-  return supabaseResponse
-}
-
-function getRoleDashboard(role: UserRole): string {
-  switch (role) {
-    case 'admin':    return '/admin'
-    case 'analyst':  return '/analyst'
-    case 'beta_user': return '/dashboard'
-    default:         return '/login'
-  }
+  return response
 }
 
 export const config = {
