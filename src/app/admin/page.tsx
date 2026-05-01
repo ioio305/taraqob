@@ -81,7 +81,7 @@ function MarketStatusWidget({ session }: { session: MarketSession | null }) {
             positive: (session.spx_change_percent ?? 0) >= 0
           },
           { label: 'VIX', value: session.vix?.toFixed(2) ?? '—', mono: true, sub: '' },
-          { label: 'اتجاه السوق', value: biasConfig?.label_ar ?? '—', mono: false,
+          { label: 'اتجاه السوق', value: biasConfig?.label_ar ?? biasConfig?.ar ?? '—', mono: false,
             colorClass: biasConfig?.color },
           { label: 'مخاطر الأحداث', value:
             session.economic_event_risk === 'clear'     ? 'آمن' :
