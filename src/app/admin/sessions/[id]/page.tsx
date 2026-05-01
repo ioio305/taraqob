@@ -86,7 +86,7 @@ export default async function SessionDetailPage({
                 : 'text-surface-500' },
             { label: 'VIX',          value: s.vix?.toFixed(2) ?? '—',                       mono: true  },
             { label: 'VWAP',         value: s.vwap_status === 'above' ? 'فوق' : s.vwap_status === 'below' ? 'تحت' : '—', mono: false },
-            { label: 'الاتجاه',     value: biasConfig?.label_ar ?? '—',                     mono: false, colorClass: biasConfig?.color },
+            { label: 'الاتجاه',     value: biasConfig?.ar ?? '—',                     mono: false, colorClass: biasConfig?.color },
             { label: 'الأحداث',     value:
               s.economic_event_risk === 'clear'     ? 'آمن' :
               s.economic_event_risk === 'caution'   ? 'تحذير' :
