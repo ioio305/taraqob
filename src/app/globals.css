@@ -1,0 +1,426 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── CSS VARIABLES ─────────────────────────────────────── */
+:root {
+  /* Brand */
+  --color-navy-900:   #0D1B2A;
+  --color-navy-800:   #122236;
+  --color-navy-700:   #1A3048;
+  --color-gold-500:   #C9943A;
+  --color-gold-400:   #D4A853;
+  --color-teal-500:   #2A7B75;
+  --color-teal-400:   #3D9E97;
+
+  /* Surfaces */
+  --color-surface-50:  #F8FAFC;
+  --color-surface-100: #F1F5F9;
+  --color-surface-200: #E2E8F0;
+  --color-surface-900: #0F172A;
+
+  /* Typography */
+  --font-arabic: 'IBM Plex Sans Arabic', sans-serif;
+  --font-serif:  'Instrument Serif', Georgia, serif;
+  --font-mono:   'IBM Plex Mono', monospace;
+
+  /* Spacing */
+  --page-padding: clamp(1rem, 4vw, 3rem);
+  --sidebar-width: 260px;
+  --header-height: 64px;
+
+  /* Animation */
+  --transition-fast:   150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 350ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ── BASE RESET ────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  direction: rtl;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-arabic);
+  background-color: var(--color-surface-50);
+  color: var(--color-navy-900);
+  line-height: 1.6;
+  font-size: 1rem;
+}
+
+/* LTR override for specific elements */
+[dir="ltr"] {
+  direction: ltr;
+  font-family: 'IBM Plex Sans', var(--font-arabic), sans-serif;
+}
+
+/* ── TYPOGRAPHY ────────────────────────────────────────── */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-arabic);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--color-navy-900);
+}
+
+.font-serif {
+  font-family: var(--font-serif) !important;
+}
+
+.font-mono {
+  font-family: var(--font-mono) !important;
+}
+
+/* Arabic numbers */
+.num-arabic {
+  font-feature-settings: "tnum";
+}
+
+/* ── SCROLLBAR ─────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-surface-100);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-200);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-surface-300, #CBD5E1);
+}
+
+/* ── SELECTION ─────────────────────────────────────────── */
+::selection {
+  background-color: rgba(42, 123, 117, 0.15);
+  color: var(--color-navy-900);
+}
+
+/* ── FOCUS RING ────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-teal-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── COMPONENTS ────────────────────────────────────────── */
+
+/* Card */
+.card {
+  @apply bg-white rounded-xl border border-surface-200 shadow-card;
+}
+
+.card-dark {
+  @apply bg-navy-800 rounded-xl border border-navy-700 shadow-card;
+}
+
+/* Score Ring */
+.score-ring {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Signal Status Dot */
+.status-dot {
+  @apply w-2 h-2 rounded-full inline-block;
+}
+
+.status-dot-pulse {
+  @apply w-2 h-2 rounded-full inline-block animate-pulse;
+}
+
+/* Badge */
+.badge {
+  @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border;
+}
+
+/* Divider */
+.divider {
+  @apply border-t border-surface-200;
+}
+
+/* Label */
+.field-label {
+  @apply block text-xs font-medium text-surface-500 uppercase tracking-wider mb-1.5;
+}
+
+/* Input */
+.field-input {
+  @apply w-full px-4 py-2.5 rounded-lg border border-surface-200 bg-white
+    text-navy-900 placeholder-surface-400
+    focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent
+    transition-all duration-150
+    text-sm;
+}
+
+/* Button variants */
+.btn {
+  @apply inline-flex items-center justify-center gap-2 font-medium rounded-lg
+    transition-all duration-150 cursor-pointer select-none
+    disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-primary {
+  @apply btn px-5 py-2.5 bg-teal-500 text-white hover:bg-teal-400
+    shadow-sm hover:shadow-glow-teal text-sm;
+}
+
+.btn-secondary {
+  @apply btn px-5 py-2.5 bg-white text-navy-900 border border-surface-200
+    hover:bg-surface-50 shadow-sm text-sm;
+}
+
+.btn-gold {
+  @apply btn px-5 py-2.5 bg-gold-400 text-navy-900 hover:bg-gold-300
+    shadow-sm hover:shadow-glow-gold text-sm font-semibold;
+}
+
+.btn-danger {
+  @apply btn px-5 py-2.5 bg-red-600 text-white hover:bg-red-700 text-sm;
+}
+
+.btn-ghost {
+  @apply btn px-4 py-2 text-surface-600 hover:text-navy-900 hover:bg-surface-100 text-sm;
+}
+
+.btn-sm {
+  @apply px-3.5 py-1.5 text-xs;
+}
+
+.btn-lg {
+  @apply px-7 py-3.5 text-base;
+}
+
+/* Table */
+.data-table {
+  @apply w-full text-sm;
+}
+
+.data-table thead th {
+  @apply px-4 py-3 text-right text-xs font-semibold text-surface-500 uppercase tracking-wider
+    bg-surface-50 border-b border-surface-200;
+}
+
+.data-table tbody td {
+  @apply px-4 py-3.5 border-b border-surface-100 text-navy-900;
+}
+
+.data-table tbody tr:hover td {
+  @apply bg-surface-50;
+}
+
+/* Metric Card */
+.metric-card {
+  @apply card p-5 flex flex-col gap-1;
+}
+
+.metric-value {
+  @apply text-2xl font-bold text-navy-900 font-mono;
+}
+
+.metric-label {
+  @apply text-xs font-medium text-surface-500 uppercase tracking-wide;
+}
+
+.metric-change {
+  @apply text-xs font-medium;
+}
+
+/* Page header */
+.page-header {
+  @apply flex items-center justify-between mb-6;
+}
+
+.page-title {
+  @apply text-2xl font-bold text-navy-900;
+}
+
+.page-subtitle {
+  @apply text-sm text-surface-500 mt-0.5;
+}
+
+/* Section */
+.section-title {
+  @apply text-sm font-semibold text-surface-500 uppercase tracking-wider mb-4;
+}
+
+/* Sidebar nav item */
+.nav-item {
+  @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+    text-surface-600 hover:text-navy-900 hover:bg-surface-100
+    transition-all duration-150 cursor-pointer;
+}
+
+.nav-item-active {
+  @apply nav-item text-teal-700 bg-teal-50 hover:bg-teal-50 hover:text-teal-700;
+}
+
+/* Empty state */
+.empty-state {
+  @apply flex flex-col items-center justify-center py-16 text-center;
+}
+
+.empty-state-icon {
+  @apply w-12 h-12 text-surface-300 mb-4;
+}
+
+.empty-state-title {
+  @apply text-base font-semibold text-surface-600 mb-1;
+}
+
+.empty-state-desc {
+  @apply text-sm text-surface-400 max-w-xs;
+}
+
+/* Loading shimmer */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-100) 25%,
+    var(--color-surface-200) 50%,
+    var(--color-surface-100) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Compliance banner */
+.compliance-banner {
+  @apply bg-amber-50 border border-amber-200 rounded-xl p-4
+    text-xs text-amber-800 leading-relaxed;
+}
+
+/* ── ANIMATIONS ────────────────────────────────────────── */
+
+.animate-delay-100 { animation-delay: 100ms; }
+.animate-delay-200 { animation-delay: 200ms; }
+.animate-delay-300 { animation-delay: 300ms; }
+.animate-delay-400 { animation-delay: 400ms; }
+.animate-delay-500 { animation-delay: 500ms; }
+
+.animate-fade-in  { animation: fadeIn  0.4s ease-out both; }
+.animate-fade-up  { animation: fadeUp  0.5s ease-out both; }
+.animate-slide-r  { animation: slideInRight 0.4s ease-out both; }
+.animate-slide-l  { animation: slideInLeft  0.4s ease-out both; }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+@keyframes pulseGold {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(201, 148, 58, 0); }
+  50%       { box-shadow: 0 0 0 8px rgba(201, 148, 58, 0.1); }
+}
+
+/* ── PRINT ─────────────────────────────────────────────── */
+@media print {
+  .no-print { display: none !important; }
+  body { background: white; }
+}
+
+/* ── MOBILE OPTIMIZATIONS ──────────────────────────────── */
+
+/* Minimum touch target size */
+@media (max-width: 768px) {
+  :root {
+    --sidebar-width: 0px;
+    --page-padding: 1rem;
+  }
+
+  /* Larger touch targets on mobile */
+  .btn, button, a.btn-primary, a.btn-secondary {
+    min-height: 44px;
+  }
+
+  .btn-sm {
+    min-height: 36px;
+  }
+
+  /* Better readable font size on mobile */
+  .field-input {
+    font-size: 16px; /* prevents iOS zoom on focus */
+  }
+
+  select, input, textarea {
+    font-size: 16px !important; /* prevents iOS zoom */
+  }
+
+  /* Full-width cards on mobile */
+  .card {
+    border-radius: 12px;
+  }
+
+  /* Table scroll on mobile */
+  .data-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Nav item larger on mobile */
+  .nav-item {
+    padding: 0.75rem 0.875rem;
+    min-height: 44px;
+  }
+
+  /* Signal status badge bigger on mobile */
+  .badge {
+    padding: 0.375rem 0.625rem;
+    font-size: 0.75rem;
+  }
+}
+
+/* Smooth scrolling on iOS */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Better scrolling */
+.overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Safe area for notched phones */
+@supports (padding: max(0px)) {
+  .mobile-safe-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  nav, header {
+    padding-top: max(0px, env(safe-area-inset-top));
+  }
+}
