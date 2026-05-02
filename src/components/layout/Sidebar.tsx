@@ -120,12 +120,7 @@ export function AdminSidebar({ userName, userRole }: { userName: string; userRol
             <div className="text-[10px] text-surface-400">{userRole === 'admin' ? 'مدير النظام' : 'مشرف'}</div>
           </div>
         </div>
-        <form action="/auth/signout" method="post">
-          <button type="submit" className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-surface-500 hover:bg-red-50 hover:text-red-600 transition-colors">
-            {icons.logout}
-            تسجيل الخروج
-          </button>
-        </form>
+        <LogoutButton />
       </div>
     </div>
   )
