@@ -14,7 +14,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     .eq('id', user.id)
     .single()
 
-  if (!profile || !profile.is_active) redirect('/login?error=inactive')
+  if (!profile) redirect('/login')
 
   const displayName = profile.full_name_ar || profile.full_name || user.email || ''
 
