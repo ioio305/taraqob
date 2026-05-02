@@ -1,18 +1,16 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
 export default function LoginForm() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const redirect = searchParams.get('redirect') || '/dashboard'
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -24,7 +22,8 @@ export default function LoginForm() {
       setError('البريد أو كلمة المرور غير صحيحة')
       setLoading(false)
     } else {
-      router.push(redirect)
+      router.push('/dashboard')
+      router.refresh()
     }
   }
 
@@ -46,13 +45,26 @@ export default function LoginForm() {
           )}
           <div>
             <label className="field-label">البريد الإلكتروني</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-              required dir="ltr" className="field-input text-left" placeholder="example@email.com" />
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+              dir="ltr"
+              className="field-input text-left"
+              placeholder="example@email.com"
+            />
           </div>
           <div>
             <label className="field-label">كلمة المرور</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-              required dir="ltr" className="field-input" />
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              dir="ltr"
+              className="field-input"
+            />
           </div>
           <button type="submit" disabled={loading} className="btn-primary justify-center">
             {loading ? 'جارٍ الدخول...' : 'تسجيل الدخول'}
@@ -61,6 +73,9 @@ export default function LoginForm() {
             نسيت كلمة المرور؟
           </Link>
         </form>
+        <div className="mt-4 text-center text-xs text-surface-400">
+          للتحليل العام فقط — لا ضمان ربح
+        </div>
       </div>
     </div>
   )
