@@ -70,6 +70,30 @@ function RoleSwitcher({ userRole }: { userRole: UserRole }) {
   )
 }
 
+// ── Logout Button ────────────────────────────────────────────
+function LogoutButton() {
+  const router = useRouter()
+  async function handleLogout() {
+    const supabase = (await import('@/lib/supabase/client')).createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+    router.refresh()
+  }
+  return (
+    <button
+      onClick={handleLogout}
+      className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-surface-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+    >
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+        <polyline points="16 17 21 12 16 7"/>
+        <line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+      تسجيل الخروج
+    </button>
+  )
+}
+
 // ── Admin Sidebar ────────────────────────────────────────────
 export function AdminSidebar({ userName, userRole }: { userName: string; userRole: UserRole }) {
   return (
