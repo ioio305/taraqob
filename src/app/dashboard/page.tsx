@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import MarketPulse from '@/components/market/MarketPulse'
 import Link from 'next/link'
 import { SignalStatusBadge } from '@/components/ui'
 import { timeAgo, STRATEGY_LABELS, MARKET_BIAS_LABELS } from '@/lib/utils/constants'
@@ -253,6 +254,9 @@ export default async function BetaDashboard() {
 
   return (
     <div className="p-4 md:p-6 flex flex-col gap-4 animate-fade-in">
+
+      {/* ── نبضة السوق ── */}
+      <MarketPulse />
 
       {/* Market Status Bar */}
       <div className="card p-4">
