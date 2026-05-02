@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from:    'ترقّب <noreply@taraqob.app>',
+          from:    'ترقّب <info@resend.dev>',
           to:      [email],
           subject: `دعوة للانضمام إلى منصة ترقّب — خطة ${ROLE_NAMES[role]}`,
           html: `
