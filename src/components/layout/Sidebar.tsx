@@ -237,31 +237,49 @@ function RoleSwitcher() {
 
   const current = roles.find(r => r.value === currentRole)
 
+  const [open, setOpen] = useState(false)
+
   return (
-    <div className="relative group">
-      <button className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-all ${current?.color}`}>
+    <div className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-all ${current?.color}`}
+      >
         <span>{current?.label}</span>
-        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <polyline points="6 9 12 15 18 9"/>
         </svg>
       </button>
       {/* Dropdown */}
-      <div className="absolute left-0 top-full mt-1.5 w-36 bg-white border border-surface-200 rounded-xl shadow-card-md
-        opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50">
-        {roles.map(role => (
-          <button
-            key={role.value}
-            onClick={() => router.push(role.path)}
-            className={`w-full text-right px-4 py-2.5 text-xs font-medium transition-colors first:rounded-t-xl last:rounded-b-xl
-              ${currentRole === role.value
-                ? 'bg-teal-50 text-teal-700'
-                : 'text-surface-600 hover:bg-surface-50'
-              }`}
+      {open && (
+        <>
+          {/* Backdrop */}
+          <div className="fixed inset-0" style={{ zIndex: 9998 }} onClick={() => setOpen(false)} />
+          <div
+            className="absolute left-0 top-full mt-1.5 w-40 bg-white border border-surface-200 rounded-xl shadow-card-lg"
+            style={{ zIndex: 9999 }}
           >
-            {role.label}
-          </button>
-        ))}
-      </div>
+            {roles.map(role => (
+              <button
+                key={role.value}
+                onClick={() => { router.push(role.path); setOpen(false) }}
+                className={`w-full text-right px-4 py-2.5 text-xs font-medium transition-colors first:rounded-t-xl last:rounded-b-xl flex items-center justify-between
+                  ${currentRole === role.value
+                    ? 'bg-teal-50 text-teal-700'
+                    : 'text-surface-600 hover:bg-surface-50'
+                  }`}
+              >
+                <span>{role.label}</span>
+                {currentRole === role.value && (
+                  <svg className="w-3 h-3 text-teal-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -298,19 +316,21 @@ export function AppShell({
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Bar */}
         <header className="bg-white border-b border-surface-200 flex items-center justify-between
-          px-5 h-14 flex-shrink-0">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="lg:hidden text-surface-500 hover:text-navy-900 p-1"
-          >
-            {icons.menu}
-          </button>
+          px-5 h-14 flex-shrink-0 relative" style={{ overflow: 'visible', zIndex: 100 }}>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden text-surface-500 hover:text-navy-900 p-1"
+            >
+              {icons.menu}
+            </button>
+            {/* Role Switcher — يسار الهيدر */}
+            <RoleSwitcher />
+          </div>
           {title && (
             <h1 className="text-sm font-semibold text-navy-900 lg:text-base">{title}</h1>
           )}
           <div className="flex items-center gap-2">
-            {/* Role Switcher — Admin only */}
-            <RoleSwitcher />
             {/* Market status pill */}
             <div className="hidden sm:flex items-center gap-1.5 text-xs text-surface-500
               bg-surface-100 rounded-full px-3 py-1">

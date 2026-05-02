@@ -24,6 +24,67 @@ function NavLink({ href, label, icon }: { href: string; label: string; icon: Rea
   )
 }
 
+
+// ── ROLE SWITCHER ────────────────────────────────────────────
+function RoleSwitcher() {
+  const router   = useRouter()
+  const pathname = usePathname()
+  const [open, setOpen] = useState(false)
+
+  const currentRole = pathname.startsWith('/admin')
+    ? 'admin'
+    : pathname.startsWith('/analyst')
+    ? 'analyst'
+    : 'beta_user'
+
+  const roles = [
+    { value: 'admin',     label: 'Admin',  path: '/admin' },
+    { value: 'analyst',   label: 'محلل',   path: '/analyst' },
+    { value: 'beta_user', label: 'مستخدم', path: '/dashboard' },
+  ]
+  const current = roles.find(r => r.value === currentRole)
+
+  const colors: Record<string, string> = {
+    admin:     'text-navy-700 bg-navy-50 border-navy-200',
+    analyst:   'text-teal-700 bg-teal-50 border-teal-200',
+    beta_user: 'text-surface-700 bg-surface-50 border-surface-200',
+  }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-all ${colors[currentRole]}`}
+      >
+        <span>{current?.label}</span>
+        <svg className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0" style={{ zIndex: 9998 }} onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full mt-1.5 w-40 bg-white border border-surface-200 rounded-xl shadow-card-lg" style={{ zIndex: 9999 }}>
+            {roles.map(role => (
+              <button
+                key={role.value}
+                onClick={() => { router.push(role.path); setOpen(false) }}
+                className={`w-full text-right px-4 py-2.5 text-xs font-medium transition-colors first:rounded-t-xl last:rounded-b-xl flex items-center justify-between
+                  ${currentRole === role.value ? 'bg-teal-50 text-teal-700' : 'text-surface-600 hover:bg-surface-50'}`}
+              >
+                <span>{role.label}</span>
+                {currentRole === role.value && (
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                )}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function BetaUserShell({
   children, userName, userRole
 }: {
@@ -146,13 +207,16 @@ export default function BetaUserShell({
 
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white border-b border-surface-200 flex items-center justify-between px-5 h-14 flex-shrink-0">
-          <button onClick={() => setOpen(true)} className="lg:hidden text-surface-500 hover:text-navy-900">
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/>
-              <line x1="3" y1="18" x2="21" y2="18"/>
-            </svg>
-          </button>
+        <header className="bg-white border-b border-surface-200 flex items-center justify-between px-5 h-14 flex-shrink-0 relative" style={{ overflow: 'visible', zIndex: 100 }}>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setOpen(true)} className="lg:hidden text-surface-500 hover:text-navy-900">
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/>
+                <line x1="3" y1="18" x2="21" y2="18"/>
+              </svg>
+            </button>
+            <RoleSwitcher />
+          </div>
           <div className="flex items-center gap-2 text-xs text-surface-400 bg-surface-100 rounded-full px-3 py-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Beta — للتحليل العام فقط
