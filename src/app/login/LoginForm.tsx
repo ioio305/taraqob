@@ -1,30 +1,72 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
+const URL_ERROR_MESSAGES: Record<string, string> = {
+  inactive:    'هذا الحساب معطّل. تواصل مع المسؤول.',
+  auth_failed: 'فشل التحقق. حاول تسجيل الدخول من جديد.',
+  unauthorized:'غير مصرح لك بالوصول.',
+}
+
 export default function LoginForm() {
   const router = useRouter()
-  const [email, setEmail] = useState('')
+  const searchParams = useSearchParams()
+
+  const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState<string | null>(null)
+
+  useEffect(() => {
+    const urlError = searchParams.get('error')
+    if (urlError) {
+      setError(URL_ERROR_MESSAGES[urlError] ?? 'حدث خطأ غير متوقع.')
+    }
+  }, [searchParams])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError(null)
+
     const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (authError) {
       setError('البريد أو كلمة المرور غير صحيحة')
       setLoading(false)
-    } else {
-      router.push('/dashboard')
-      router.refresh()
+      return
     }
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setError('فشل التحقق من الجلسة. حاول مرة أخرى.')
+      setLoading(false)
+      return
+    }
+
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('role, is_active')
+      .eq('id', user.id)
+      .single()
+
+    if (!profile || profile.is_active === false) {
+      await supabase.auth.signOut()
+      setError('هذا الحساب معطّل. تواصل مع المسؤول.')
+      setLoading(false)
+      return
+    }
+
+    switch (profile.role) {
+      case 'admin':   router.push('/admin');    break
+      case 'analyst': router.push('/analyst');  break
+      default:        router.push('/dashboard'); break
+    }
+    router.refresh()
   }
 
   return (

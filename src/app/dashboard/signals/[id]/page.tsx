@@ -93,7 +93,7 @@ export default async function UserSignalDetailPage({ params }: { params: { id: s
               <span className={`text-xs font-semibold ${
                 MARKET_BIAS_LABELS[signal.market_bias as keyof typeof MARKET_BIAS_LABELS]?.color ?? ''
               }`}>
-                {MARKET_BIAS_LABELS[signal.market_bias as keyof typeof MARKET_BIAS_LABELS]?.label_ar ?? '—'}
+                {MARKET_BIAS_LABELS[signal.market_bias as keyof typeof MARKET_BIAS_LABELS]?.ar ?? '—'}
               </span>
             </div>
           )}

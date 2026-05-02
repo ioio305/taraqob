@@ -1,0 +1,247 @@
+﻿
+
+========== src/middleware.ts ==========
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  // Public routes â€” no auth required
+  const publicRoutes = ['/', '/login', '/auth/callback', '/compliance', '/how-it-works']
+  if (publicRoutes.some(route => pathname === route || pathname.startsWith('/auth/'))) {
+    return NextResponse.next()
+  }
+
+  // Create response
+  let response = NextResponse.next({ request: { headers: request.headers } })
+
+  // Create Supabase client
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll: (cookiesToSet) => {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value)
+            response.cookies.set(name, value, options)
+          })
+        },
+      },
+    }
+  )
+
+  // Check session
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // Not logged in â€” redirect to login
+  if (!user) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    return NextResponse.redirect(url)
+  }
+
+  // Get user role
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  const role = profile?.role ?? 'beta_user'
+
+  // Admin routes
+  if (pathname.startsWith('/admin') && role !== 'admin') {
+    const url = request.nextUrl.clone()
+    url.pathname = role === 'analyst' ? '/analyst' : '/dashboard'
+    return NextResponse.redirect(url)
+  }
+
+  // Analyst routes
+  if (pathname.startsWith('/analyst') && !['admin', 'analyst'].includes(role)) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/dashboard'
+    return NextResponse.redirect(url)
+  }
+
+  return response
+}
+
+export const config = {
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
+}
+
+========== src/app/admin/layout.tsx ==========
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import { AppShell, AdminSidebar } from '@/components/layout/Sidebar'
+import type { ReactNode } from 'react'
+
+export default async function AdminLayout({ children }: { children: ReactNode }) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('role, full_name, full_name_ar')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || profile.role !== 'admin') redirect('/dashboard')
+
+  // Count pending signals
+  const { count: pendingReview } = await supabase
+    .from('signals')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'pending_review')
+
+  const displayName = profile.full_name_ar || profile.full_name || user.email || ''
+
+  return (
+    <AppShell
+      sidebar={
+        <AdminSidebar
+          pendingReview={pendingReview ?? 0}
+          userName={displayName}
+        />
+      }
+    >
+      {children}
+    </AppShell>
+  )
+}
+
+
+========== src/app/dashboard/layout.tsx ==========
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import type { ReactNode } from 'react'
+import BetaUserShell from './BetaUserShell'
+
+export default async function DashboardLayout({ children }: { children: ReactNode }) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('role, full_name, full_name_ar, is_active')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) redirect('/login')
+
+  const displayName = profile.full_name_ar || profile.full_name || user.email || ''
+
+  return (
+    <BetaUserShell userName={displayName} userRole={profile.role}>
+      {children}
+    </BetaUserShell>
+  )
+}
+
+
+========== src/app/login/LoginForm.tsx ==========
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
+
+export default function LoginForm() {
+  const router = useRouter()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+    const supabase = createClient()
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) {
+      setError('ط§ظ„ط¨ط±ظٹط¯ ط£ظˆ ظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط± ط؛ظٹط± طµط­ظٹط­ط©')
+      setLoading(false)
+    } else {
+      router.push('/dashboard')
+      router.refresh()
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6" dir="rtl">
+      <div className="w-full max-w-sm">
+        <div className="text-center mb-8">
+          <div className="w-10 h-10 rounded-xl bg-navy-900 flex items-center justify-center mx-auto mb-4">
+            <span className="text-gold-400 font-bold font-mono">طھ</span>
+          </div>
+          <h1 className="text-xl font-bold text-navy-900">طھط±ظ‚ظ‘ط¨</h1>
+          <p className="text-sm text-surface-400 mt-1">ط§ظ„ط¨ظٹطھط§ ط§ظ„ظ…ط؛ظ„ظ‚ â€” ط§ظ„ط¯ط®ظˆظ„ ط¨ط§ظ„ط¯ط¹ظˆط© ظپظ‚ط·</p>
+        </div>
+        <form onSubmit={handleLogin} className="card p-6 flex flex-col gap-4">
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700">
+              {error}
+            </div>
+          )}
+          <div>
+            <label className="field-label">ط§ظ„ط¨ط±ظٹط¯ ط§ظ„ط¥ظ„ظƒطھط±ظˆظ†ظٹ</label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+              dir="ltr"
+              className="field-input text-left"
+              placeholder="example@email.com"
+            />
+          </div>
+          <div>
+            <label className="field-label">ظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط±</label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              dir="ltr"
+              className="field-input"
+            />
+          </div>
+          <button type="submit" disabled={loading} className="btn-primary justify-center">
+            {loading ? 'ط¬ط§ط±ظچ ط§ظ„ط¯ط®ظˆظ„...' : 'طھط³ط¬ظٹظ„ ط§ظ„ط¯ط®ظˆظ„'}
+          </button>
+          <Link href="/auth/forgot-password" className="text-center text-xs text-surface-400 hover:text-surface-600">
+            ظ†ط³ظٹطھ ظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط±طں
+          </Link>
+        </form>
+        <div className="mt-4 text-center text-xs text-surface-400">
+          ظ„ظ„طھط­ظ„ظٹظ„ ط§ظ„ط¹ط§ظ… ظپظ‚ط· â€” ظ„ط§ ط¶ظ…ط§ظ† ط±ط¨ط­
+        </div>
+      </div>
+    </div>
+  )
+}
+
+========== src/app/login/page.tsx ==========
+import { Suspense } from 'react'
+import LoginForm from './LoginForm'
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500" />
+    </div>}>
+      <LoginForm />
+    </Suspense>
+  )
+}

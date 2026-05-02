@@ -60,7 +60,7 @@ export default async function SignalDetailPage({
     : '—'
 
   const biasLabel = signal.market_bias
-    ? MARKET_BIAS_LABELS[signal.market_bias as keyof typeof MARKET_BIAS_LABELS]?.label_ar
+    ? MARKET_BIAS_LABELS[signal.market_bias as keyof typeof MARKET_BIAS_LABELS]?.ar
     : '—'
 
   const contractQuality = contract?.contract_quality
@@ -327,7 +327,7 @@ export default async function SignalDetailPage({
                   { label: 'SPX', value: session.spx_close?.toLocaleString('en-US'), mono: true },
                   { label: 'VIX', value: session.vix?.toFixed(2), mono: true },
                   { label: 'الاتجاه', value: session.market_bias
-                    ? MARKET_BIAS_LABELS[session.market_bias as keyof typeof MARKET_BIAS_LABELS]?.label_ar : '—' },
+                    ? MARKET_BIAS_LABELS[session.market_bias as keyof typeof MARKET_BIAS_LABELS]?.ar : '—' },
                   { label: 'الأحداث', value:
                     session.economic_event_risk === 'clear'   ? 'آمن' :
                     session.economic_event_risk === 'caution' ? 'تحذير' : 'خطر',

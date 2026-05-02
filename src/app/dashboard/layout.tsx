@@ -16,6 +16,10 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   if (!profile) redirect('/login')
 
+  if (profile.is_active === false) {
+    redirect('/login?error=inactive')
+  }
+
   const displayName = profile.full_name_ar || profile.full_name || user.email || ''
 
   return (

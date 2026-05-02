@@ -1,0 +1,1158 @@
+﻿# TARAQOB KEY FILES
+
+Netlify: https://taraqob.netlify.app
+Supabase: tedexwpuvdycynyzgioh
+
+
+========== src/middleware.ts ==========
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  // Public routes — no auth required
+  const publicRoutes = ['/', '/login', '/auth/callback', '/compliance', '/how-it-works']
+  if (publicRoutes.some(route => pathname === route || pathname.startsWith('/auth/'))) {
+    return NextResponse.next()
+  }
+
+  // Create response
+  let response = NextResponse.next({ request: { headers: request.headers } })
+
+  // Create Supabase client
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll: (cookiesToSet) => {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value)
+            response.cookies.set(name, value, options)
+          })
+        },
+      },
+    }
+  )
+
+  // Check session
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // Not logged in — redirect to login
+  if (!user) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    return NextResponse.redirect(url)
+  }
+
+  // Get user role
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  const role = profile?.role ?? 'beta_user'
+
+  // Admin routes
+  if (pathname.startsWith('/admin') && role !== 'admin') {
+    const url = request.nextUrl.clone()
+    url.pathname = role === 'analyst' ? '/analyst' : '/dashboard'
+    return NextResponse.redirect(url)
+  }
+
+  // Analyst routes
+  if (pathname.startsWith('/analyst') && !['admin', 'analyst'].includes(role)) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/dashboard'
+    return NextResponse.redirect(url)
+  }
+
+  return response
+}
+
+export const config = {
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
+}
+
+========== src/app/admin/layout.tsx ==========
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import { AppShell, AdminSidebar } from '@/components/layout/Sidebar'
+import type { ReactNode } from 'react'
+
+export default async function AdminLayout({ children }: { children: ReactNode }) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('role, full_name, full_name_ar')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || profile.role !== 'admin') redirect('/dashboard')
+
+  // Count pending signals
+  const { count: pendingReview } = await supabase
+    .from('signals')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'pending_review')
+
+  const displayName = profile.full_name_ar || profile.full_name || user.email || ''
+
+  return (
+    <AppShell
+      sidebar={
+        <AdminSidebar
+          pendingReview={pendingReview ?? 0}
+          userName={displayName}
+        />
+      }
+    >
+      {children}
+    </AppShell>
+  )
+}
+
+
+========== src/app/dashboard/layout.tsx ==========
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import type { ReactNode } from 'react'
+import BetaUserShell from './BetaUserShell'
+
+export default async function DashboardLayout({ children }: { children: ReactNode }) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('role, full_name, full_name_ar, is_active')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) redirect('/login')
+
+  const displayName = profile.full_name_ar || profile.full_name || user.email || ''
+
+  return (
+    <BetaUserShell userName={displayName} userRole={profile.role}>
+      {children}
+    </BetaUserShell>
+  )
+}
+
+
+========== src/app/analyst/layout.tsx ==========
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import { AppShell, AnalystSidebar } from '@/components/layout/Sidebar'
+import type { ReactNode } from 'react'
+
+export default async function AnalystLayout({ children }: { children: ReactNode }) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('role, full_name, full_name_ar')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || !['admin', 'analyst'].includes(profile.role)) {
+    redirect('/dashboard')
+  }
+
+  const displayName = profile.full_name_ar || profile.full_name || user.email || ''
+
+  return (
+    <AppShell
+      sidebar={<AnalystSidebar userName={displayName} />}
+    >
+      {children}
+    </AppShell>
+  )
+}
+
+
+========== src/app/login/page.tsx ==========
+import { Suspense } from 'react'
+import LoginForm from './LoginForm'
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500" />
+    </div>}>
+      <LoginForm />
+    </Suspense>
+  )
+}
+
+========== src/app/login/LoginForm.tsx ==========
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
+
+export default function LoginForm() {
+  const router = useRouter()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+    const supabase = createClient()
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) {
+      setError('البريد أو كلمة المرور غير صحيحة')
+      setLoading(false)
+    } else {
+      router.push('/dashboard')
+      router.refresh()
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6" dir="rtl">
+      <div className="w-full max-w-sm">
+        <div className="text-center mb-8">
+          <div className="w-10 h-10 rounded-xl bg-navy-900 flex items-center justify-center mx-auto mb-4">
+            <span className="text-gold-400 font-bold font-mono">ت</span>
+          </div>
+          <h1 className="text-xl font-bold text-navy-900">ترقّب</h1>
+          <p className="text-sm text-surface-400 mt-1">البيتا المغلق — الدخول بالدعوة فقط</p>
+        </div>
+        <form onSubmit={handleLogin} className="card p-6 flex flex-col gap-4">
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700">
+              {error}
+            </div>
+          )}
+          <div>
+            <label className="field-label">البريد الإلكتروني</label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+              dir="ltr"
+              className="field-input text-left"
+              placeholder="example@email.com"
+            />
+          </div>
+          <div>
+            <label className="field-label">كلمة المرور</label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              dir="ltr"
+              className="field-input"
+            />
+          </div>
+          <button type="submit" disabled={loading} className="btn-primary justify-center">
+            {loading ? 'جارٍ الدخول...' : 'تسجيل الدخول'}
+          </button>
+          <Link href="/auth/forgot-password" className="text-center text-xs text-surface-400 hover:text-surface-600">
+            نسيت كلمة المرور؟
+          </Link>
+        </form>
+        <div className="mt-4 text-center text-xs text-surface-400">
+          للتحليل العام فقط — لا ضمان ربح
+        </div>
+      </div>
+    </div>
+  )
+}
+
+========== src/app/auth/callback/route.ts ==========
+import { createClient } from '@/lib/supabase/server'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+
+export async function GET(request: NextRequest) {
+  const { searchParams, origin } = new URL(request.url)
+  const code = searchParams.get('code')
+  const next = searchParams.get('next') ?? '/'
+
+  if (code) {
+    const supabase = createClient()
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
+
+    if (!error) {
+      const { data: { user } } = await supabase.auth.getUser()
+
+      if (user) {
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+
+        const role = profile?.role
+        let redirect = next
+
+        if (next === '/') {
+          switch (role) {
+            case 'admin':   redirect = '/admin'; break
+            case 'analyst': redirect = '/analyst'; break
+            default:        redirect = '/dashboard'; break
+          }
+        }
+
+        return NextResponse.redirect(`${origin}${redirect}`)
+      }
+    }
+  }
+
+  return NextResponse.redirect(`${origin}/login?error=auth_failed`)
+}
+
+
+========== src/lib/supabase/client.ts ==========
+import { createBrowserClient } from '@supabase/ssr'
+
+export function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+}
+
+
+========== src/lib/supabase/server.ts ==========
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+
+export function createClient() {
+  const cookieStore = cookies()
+
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            )
+          } catch {
+            // Server Component — handled by middleware
+          }
+        },
+      },
+    }
+  )
+}
+
+// Service role client for admin operations (audit logging, etc.)
+export function createServiceClient() {
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      cookies: {
+        getAll() { return [] },
+        setAll() {},
+      },
+    }
+  )
+}
+
+
+========== src/lib/utils/constants.ts ==========
+import type {
+  SignalStatus, SignalStrategy, RiskLevel,
+  MarketBias, SignalUpdateType, IndicatorCode,
+  DecisionState, SignalStatusConfig, RiskLevelConfig
+} from '@/lib/types'
+
+// ── SIGNAL STATUS ────────────────────────────────────────────
+
+export const SIGNAL_STATUS_CONFIG: Record<SignalStatus, SignalStatusConfig> = {
+  draft: {
+    label_ar: 'مسودة',
+    label_en: 'Draft',
+    color: 'text-surface-400',
+    bgColor: 'bg-surface-100',
+    borderColor: 'border-surface-200',
+    dotColor: 'bg-surface-400',
+  },
+  pending_review: {
+    label_ar: 'قيد المراجعة',
+    label_en: 'Pending Review',
+    color: 'text-amber-700',
+    bgColor: 'bg-amber-50',
+    borderColor: 'border-amber-200',
+    dotColor: 'bg-amber-400',
+  },
+  published: {
+    label_ar: 'منشور',
+    label_en: 'Published',
+    color: 'text-teal-700',
+    bgColor: 'bg-teal-50',
+    borderColor: 'border-teal-200',
+    dotColor: 'bg-teal-500',
+  },
+  watch: {
+    label_ar: 'مراقبة',
+    label_en: 'Watch',
+    color: 'text-blue-700',
+    bgColor: 'bg-blue-50',
+    borderColor: 'border-blue-200',
+    dotColor: 'bg-blue-500',
+  },
+  conditional: {
+    label_ar: 'دخول مشروط',
+    label_en: 'Conditional',
+    color: 'text-amber-700',
+    bgColor: 'bg-amber-50',
+    borderColor: 'border-amber-200',
+    dotColor: 'bg-amber-500',
+  },
+  active: {
+    label_ar: 'إشارة نشطة',
+    label_en: 'Active',
+    color: 'text-emerald-700',
+    bgColor: 'bg-emerald-50',
+    borderColor: 'border-emerald-200',
+    dotColor: 'bg-emerald-500',
+  },
+  exit: {
+    label_ar: 'خروج',
+    label_en: 'Exit',
+    color: 'text-purple-700',
+    bgColor: 'bg-purple-50',
+    borderColor: 'border-purple-200',
+    dotColor: 'bg-purple-500',
+  },
+  invalidated: {
+    label_ar: 'ملغاة',
+    label_en: 'Invalidated',
+    color: 'text-red-700',
+    bgColor: 'bg-red-50',
+    borderColor: 'border-red-200',
+    dotColor: 'bg-red-500',
+  },
+  closed: {
+    label_ar: 'مغلقة',
+    label_en: 'Closed',
+    color: 'text-surface-600',
+    bgColor: 'bg-surface-100',
+    borderColor: 'border-surface-300',
+    dotColor: 'bg-surface-500',
+  },
+  archived: {
+    label_ar: 'مؤرشفة',
+    label_en: 'Archived',
+    color: 'text-surface-400',
+    bgColor: 'bg-surface-50',
+    borderColor: 'border-surface-200',
+    dotColor: 'bg-surface-300',
+  },
+}
+
+// ── RISK LEVEL ───────────────────────────────────────────────
+
+export const RISK_LEVEL_CONFIG: Record<RiskLevel, RiskLevelConfig> = {
+  low: {
+    label_ar: 'منخفضة',
+    label_en: 'Low',
+    color: 'text-emerald-700',
+    bgColor: 'bg-emerald-50',
+  },
+  medium: {
+    label_ar: 'متوسطة',
+    label_en: 'Medium',
+    color: 'text-amber-700',
+    bgColor: 'bg-amber-50',
+  },
+  high: {
+    label_ar: 'عالية',
+    label_en: 'High',
+    color: 'text-orange-700',
+    bgColor: 'bg-orange-50',
+  },
+  extreme: {
+    label_ar: 'قصوى',
+    label_en: 'Extreme',
+    color: 'text-red-700',
+    bgColor: 'bg-red-50',
+  },
+}
+
+// ── STRATEGY LABELS ──────────────────────────────────────────
+
+export const STRATEGY_LABELS: Record<SignalStrategy, { ar: string; en: string }> = {
+  bull_call_debit_spread: {
+    ar: 'Bull Call Debit Spread — سبريد شراء صاعد',
+    en: 'Bull Call Debit Spread',
+  },
+  bear_put_debit_spread: {
+    ar: 'Bear Put Debit Spread — سبريد شراء هابط',
+    en: 'Bear Put Debit Spread',
+  },
+  bull_put_credit_spread: {
+    ar: 'Bull Put Credit Spread — سبريد بيع صاعد',
+    en: 'Bull Put Credit Spread',
+  },
+  bear_call_credit_spread: {
+    ar: 'Bear Call Credit Spread — سبريد بيع هابط',
+    en: 'Bear Call Credit Spread',
+  },
+  long_call: {
+    ar: 'Long Call — شراء خيار صعود',
+    en: 'Long Call',
+  },
+  long_put: {
+    ar: 'Long Put — شراء خيار هبوط',
+    en: 'Long Put',
+  },
+}
+
+// ── MARKET BIAS LABELS ───────────────────────────────────────
+
+export const MARKET_BIAS_LABELS: Record<MarketBias, { ar: string; en: string; color: string }> = {
+  bullish: {
+    ar: 'صاعد',
+    en: 'Bullish',
+    color: 'text-emerald-700',
+  },
+  bearish: {
+    ar: 'هابط',
+    en: 'Bearish',
+    color: 'text-red-700',
+  },
+  neutral: {
+    ar: 'محايد',
+    en: 'Neutral',
+    color: 'text-surface-500',
+  },
+  mixed: {
+    ar: 'متضارب',
+    en: 'Mixed',
+    color: 'text-amber-700',
+  },
+  risk_off: {
+    ar: 'تجنب المخاطر',
+    en: 'Risk-Off',
+    color: 'text-red-700',
+  },
+}
+
+// ── DECISION STATE LABELS ────────────────────────────────────
+
+export const DECISION_STATE_LABELS: Record<DecisionState, { ar: string; en: string; color: string }> = {
+  no_trade: {
+    ar: 'لا تداول',
+    en: 'No Trade',
+    color: 'text-surface-500',
+  },
+  watch: {
+    ar: 'مراقبة',
+    en: 'Watch',
+    color: 'text-blue-600',
+  },
+  conditional: {
+    ar: 'دخول مشروط',
+    en: 'Conditional Entry',
+    color: 'text-amber-600',
+  },
+  active: {
+    ar: 'إشارة نشطة',
+    en: 'Active Signal',
+    color: 'text-emerald-600',
+  },
+  exit: {
+    ar: 'خروج',
+    en: 'Exit',
+    color: 'text-purple-600',
+  },
+  invalidated: {
+    ar: 'ملغاة',
+    en: 'Invalidated',
+    color: 'text-red-600',
+  },
+}
+
+// ── INDICATOR LABELS ─────────────────────────────────────────
+
+export const INDICATOR_LABELS: Record<IndicatorCode, { ar: string; en: string }> = {
+  market_regime:      { ar: 'حالة السوق',         en: 'Market Regime' },
+  volatility_pressure:{ ar: 'ضغط التذبذب',        en: 'Volatility Pressure' },
+  expected_move:      { ar: 'الحركة المتوقعة',    en: 'Expected Move' },
+  intraday_momentum:  { ar: 'الزخم اللحظي',       en: 'Intraday Momentum' },
+  options_liquidity:  { ar: 'جودة السيولة',        en: 'Options Liquidity' },
+  theta_burn:         { ar: 'تآكل الوقت',          en: 'Theta Burn' },
+  macro_event:        { ar: 'الأحداث الكلية',     en: 'Macro Events' },
+}
+
+// ── SIGNAL UPDATE TYPE LABELS ────────────────────────────────
+
+export const UPDATE_TYPE_LABELS: Record<SignalUpdateType, { ar: string; en: string }> = {
+  still_valid:        { ar: 'الإشارة لا تزال صالحة',     en: 'Still Valid' },
+  move_to_watch:      { ar: 'تحويل إلى مراقبة',          en: 'Move to Watch' },
+  entry_triggered:    { ar: 'تم تفعيل شرط الدخول',       en: 'Entry Triggered' },
+  exit_triggered:     { ar: 'تم تفعيل شرط الخروج',       en: 'Exit Triggered' },
+  invalidated:        { ar: 'تم إبطال الإشارة',          en: 'Invalidated' },
+  closed:             { ar: 'إغلاق الإشارة',             en: 'Signal Closed' },
+  reduce_risk:        { ar: 'تخفيض المخاطرة',            en: 'Reduce Risk' },
+  take_partial_profit:{ ar: 'أخذ ربح جزئي',              en: 'Take Partial Profit' },
+  cancel_setup:       { ar: 'إلغاء الإعداد',             en: 'Cancel Setup' },
+  note:               { ar: 'ملاحظة',                    en: 'Note' },
+}
+
+// ── NUMBER FORMATTERS ────────────────────────────────────────
+
+export function formatPrice(value: number | null | undefined, decimals = 2): string {
+  if (value === null || value === undefined) return '—'
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })
+}
+
+export function formatPercent(value: number | null | undefined, decimals = 2): string {
+  if (value === null || value === undefined) return '—'
+  const sign = value > 0 ? '+' : ''
+  return `${sign}${value.toFixed(decimals)}%`
+}
+
+export function formatScore(value: number | null | undefined): string {
+  if (value === null || value === undefined) return '—'
+  return `${Math.round(value)}/100`
+}
+
+export function getScoreColor(score: number | null): string {
+  if (score === null) return 'text-surface-400'
+  if (score >= 70) return 'text-emerald-600'
+  if (score >= 50) return 'text-amber-600'
+  return 'text-red-600'
+}
+
+export function getScoreBgColor(score: number | null): string {
+  if (score === null) return 'bg-surface-100'
+  if (score >= 70) return 'bg-emerald-50'
+  if (score >= 50) return 'bg-amber-50'
+  return 'bg-red-50'
+}
+
+// ── DATE FORMATTERS ──────────────────────────────────────────
+
+export function formatDate(date: string | null | undefined, lang: 'ar' | 'en' = 'ar'): string {
+  if (!date) return '—'
+  const d = new Date(date)
+  return d.toLocaleDateString(lang === 'ar' ? 'ar-SA' : 'en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+export function formatDateTime(date: string | null | undefined, lang: 'ar' | 'en' = 'ar'): string {
+  if (!date) return '—'
+  const d = new Date(date)
+  return d.toLocaleString(lang === 'ar' ? 'ar-SA' : 'en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+export function timeAgo(date: string | null | undefined, lang: 'ar' | 'en' = 'ar'): string {
+  if (!date) return '—'
+  const now = new Date()
+  const d = new Date(date)
+  const diffMs = now.getTime() - d.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMins / 60)
+  const diffDays = Math.floor(diffHours / 24)
+
+  if (lang === 'ar') {
+    if (diffMins < 1) return 'الآن'
+    if (diffMins < 60) return `منذ ${diffMins} دقيقة`
+    if (diffHours < 24) return `منذ ${diffHours} ساعة`
+    if (diffDays < 7) return `منذ ${diffDays} يوم`
+    return formatDate(date, 'ar')
+  } else {
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays < 7) return `${diffDays}d ago`
+    return formatDate(date, 'en')
+  }
+}
+
+
+========== next.config.js ==========
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  experimental: {
+    serverActions: {
+      allowedOrigins: ['localhost:3000', 'taraqob.netlify.app'],
+    },
+  },
+}
+
+module.exports = nextConfig
+
+========== src/app/globals.css ==========
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── CSS VARIABLES ─────────────────────────────────────── */
+:root {
+  /* Brand */
+  --color-navy-900:   #0D1B2A;
+  --color-navy-800:   #122236;
+  --color-navy-700:   #1A3048;
+  --color-gold-500:   #C9943A;
+  --color-gold-400:   #D4A853;
+  --color-teal-500:   #2A7B75;
+  --color-teal-400:   #3D9E97;
+
+  /* Surfaces */
+  --color-surface-50:  #F8FAFC;
+  --color-surface-100: #F1F5F9;
+  --color-surface-200: #E2E8F0;
+  --color-surface-900: #0F172A;
+
+  /* Typography */
+  --font-arabic: 'IBM Plex Sans Arabic', sans-serif;
+  --font-serif:  'Instrument Serif', Georgia, serif;
+  --font-mono:   'IBM Plex Mono', monospace;
+
+  /* Spacing */
+  --page-padding: clamp(1rem, 4vw, 3rem);
+  --sidebar-width: 260px;
+  --header-height: 64px;
+
+  /* Animation */
+  --transition-fast:   150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 350ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ── BASE RESET ────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  direction: rtl;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-arabic);
+  background-color: var(--color-surface-50);
+  color: var(--color-navy-900);
+  line-height: 1.6;
+  font-size: 1rem;
+}
+
+/* LTR override for specific elements */
+[dir="ltr"] {
+  direction: ltr;
+  font-family: 'IBM Plex Sans', var(--font-arabic), sans-serif;
+}
+
+/* ── TYPOGRAPHY ────────────────────────────────────────── */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-arabic);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--color-navy-900);
+}
+
+.font-serif {
+  font-family: var(--font-serif) !important;
+}
+
+.font-mono {
+  font-family: var(--font-mono) !important;
+}
+
+/* Arabic numbers */
+.num-arabic {
+  font-feature-settings: "tnum";
+}
+
+/* ── SCROLLBAR ─────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-surface-100);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-200);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-surface-300, #CBD5E1);
+}
+
+/* ── SELECTION ─────────────────────────────────────────── */
+::selection {
+  background-color: rgba(42, 123, 117, 0.15);
+  color: var(--color-navy-900);
+}
+
+/* ── FOCUS RING ────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-teal-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── COMPONENTS ────────────────────────────────────────── */
+
+/* Card */
+.card {
+  @apply bg-white rounded-xl border border-surface-200 shadow-card;
+}
+
+.card-dark {
+  @apply bg-navy-800 rounded-xl border border-navy-700 shadow-card;
+}
+
+/* Score Ring */
+.score-ring {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Signal Status Dot */
+.status-dot {
+  @apply w-2 h-2 rounded-full inline-block;
+}
+
+.status-dot-pulse {
+  @apply w-2 h-2 rounded-full inline-block animate-pulse;
+}
+
+/* Badge */
+.badge {
+  @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border;
+}
+
+/* Divider */
+.divider {
+  @apply border-t border-surface-200;
+}
+
+/* Label */
+.field-label {
+  @apply block text-xs font-medium text-surface-500 uppercase tracking-wider mb-1.5;
+}
+
+/* Input */
+.field-input {
+  @apply w-full px-4 py-2.5 rounded-lg border border-surface-200 bg-white
+    text-navy-900 placeholder-surface-400
+    focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent
+    transition-all duration-150
+    text-sm;
+}
+
+/* Button variants */
+.btn {
+  @apply inline-flex items-center justify-center gap-2 font-medium rounded-lg
+    transition-all duration-150 cursor-pointer select-none
+    disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-primary {
+  @apply btn px-5 py-2.5 bg-teal-500 text-white hover:bg-teal-400
+    shadow-sm hover:shadow-glow-teal text-sm;
+}
+
+.btn-secondary {
+  @apply btn px-5 py-2.5 bg-white text-navy-900 border border-surface-200
+    hover:bg-surface-50 shadow-sm text-sm;
+}
+
+.btn-gold {
+  @apply btn px-5 py-2.5 bg-gold-400 text-navy-900 hover:bg-gold-300
+    shadow-sm hover:shadow-glow-gold text-sm font-semibold;
+}
+
+.btn-danger {
+  @apply btn px-5 py-2.5 bg-red-600 text-white hover:bg-red-700 text-sm;
+}
+
+.btn-ghost {
+  @apply btn px-4 py-2 text-surface-600 hover:text-navy-900 hover:bg-surface-100 text-sm;
+}
+
+.btn-sm {
+  @apply px-3.5 py-1.5 text-xs;
+}
+
+.btn-lg {
+  @apply px-7 py-3.5 text-base;
+}
+
+/* Table */
+.data-table {
+  @apply w-full text-sm;
+}
+
+.data-table thead th {
+  @apply px-4 py-3 text-right text-xs font-semibold text-surface-500 uppercase tracking-wider
+    bg-surface-50 border-b border-surface-200;
+}
+
+.data-table tbody td {
+  @apply px-4 py-3.5 border-b border-surface-100 text-navy-900;
+}
+
+.data-table tbody tr:hover td {
+  @apply bg-surface-50;
+}
+
+/* Metric Card */
+.metric-card {
+  @apply card p-5 flex flex-col gap-1;
+}
+
+.metric-value {
+  @apply text-2xl font-bold text-navy-900 font-mono;
+}
+
+.metric-label {
+  @apply text-xs font-medium text-surface-500 uppercase tracking-wide;
+}
+
+.metric-change {
+  @apply text-xs font-medium;
+}
+
+/* Page header */
+.page-header {
+  @apply flex items-center justify-between mb-6;
+}
+
+.page-title {
+  @apply text-2xl font-bold text-navy-900;
+}
+
+.page-subtitle {
+  @apply text-sm text-surface-500 mt-0.5;
+}
+
+/* Section */
+.section-title {
+  @apply text-sm font-semibold text-surface-500 uppercase tracking-wider mb-4;
+}
+
+/* Sidebar nav item */
+.nav-item {
+  @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+    text-surface-600 hover:text-navy-900 hover:bg-surface-100
+    transition-all duration-150 cursor-pointer;
+}
+
+.nav-item-active {
+  @apply nav-item text-teal-700 bg-teal-50 hover:bg-teal-50 hover:text-teal-700;
+}
+
+/* Empty state */
+.empty-state {
+  @apply flex flex-col items-center justify-center py-16 text-center;
+}
+
+.empty-state-icon {
+  @apply w-12 h-12 text-surface-300 mb-4;
+}
+
+.empty-state-title {
+  @apply text-base font-semibold text-surface-600 mb-1;
+}
+
+.empty-state-desc {
+  @apply text-sm text-surface-400 max-w-xs;
+}
+
+/* Loading shimmer */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-100) 25%,
+    var(--color-surface-200) 50%,
+    var(--color-surface-100) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Compliance banner */
+.compliance-banner {
+  @apply bg-amber-50 border border-amber-200 rounded-xl p-4
+    text-xs text-amber-800 leading-relaxed;
+}
+
+/* ── ANIMATIONS ────────────────────────────────────────── */
+
+.animate-delay-100 { animation-delay: 100ms; }
+.animate-delay-200 { animation-delay: 200ms; }
+.animate-delay-300 { animation-delay: 300ms; }
+.animate-delay-400 { animation-delay: 400ms; }
+.animate-delay-500 { animation-delay: 500ms; }
+
+.animate-fade-in  { animation: fadeIn  0.4s ease-out both; }
+.animate-fade-up  { animation: fadeUp  0.5s ease-out both; }
+.animate-slide-r  { animation: slideInRight 0.4s ease-out both; }
+.animate-slide-l  { animation: slideInLeft  0.4s ease-out both; }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+@keyframes pulseGold {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(201, 148, 58, 0); }
+  50%       { box-shadow: 0 0 0 8px rgba(201, 148, 58, 0.1); }
+}
+
+/* ── PRINT ─────────────────────────────────────────────── */
+@media print {
+  .no-print { display: none !important; }
+  body { background: white; }
+}
+
+/* ── MOBILE OPTIMIZATIONS ──────────────────────────────── */
+
+/* Minimum touch target size */
+@media (max-width: 768px) {
+  :root {
+    --sidebar-width: 0px;
+    --page-padding: 1rem;
+  }
+
+  /* Larger touch targets on mobile */
+  .btn, button, a.btn-primary, a.btn-secondary {
+    min-height: 44px;
+  }
+
+  .btn-sm {
+    min-height: 36px;
+  }
+
+  /* Better readable font size on mobile */
+  .field-input {
+    font-size: 16px; /* prevents iOS zoom on focus */
+  }
+
+  select, input, textarea {
+    font-size: 16px !important; /* prevents iOS zoom */
+  }
+
+  /* Full-width cards on mobile */
+  .card {
+    border-radius: 12px;
+  }
+
+  /* Table scroll on mobile */
+  .data-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Nav item larger on mobile */
+  .nav-item {
+    padding: 0.75rem 0.875rem;
+    min-height: 44px;
+  }
+
+  /* Signal status badge bigger on mobile */
+  .badge {
+    padding: 0.375rem 0.625rem;
+    font-size: 0.75rem;
+  }
+}
+
+/* Smooth scrolling on iOS */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Better scrolling */
+.overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Safe area for notched phones */
+@supports (padding: max(0px)) {
+  .mobile-safe-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  nav, header {
+    padding-top: max(0px, env(safe-area-inset-top));
+  }
+}
+
+
