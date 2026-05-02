@@ -23,51 +23,39 @@ function NavLink({ href, label, icon }: { href: string; label: string; icon: Rea
   )
 }
 
-// ── Role Switcher — للمدير والمشرف فقط ──────────────────────
+// ── Role Switcher — زر Toggle للمدير والمشرف فقط ───────────
 function RoleSwitcher({ userRole }: { userRole: UserRole }) {
-  const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const router   = useRouter()
+  const pathname = usePathname()
 
   if (!['admin', 'moderator'].includes(userRole)) return null
 
-  const switchIcon = (
-    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-      <path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-    </svg>
-  )
+  const isAdmin = pathname.startsWith('/admin')
 
   return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-medium bg-surface-50 border-surface-200 text-surface-600 hover:bg-navy-50 hover:border-navy-200 hover:text-navy-700 transition-all"
-        title="تبديل الواجهة"
-      >
-        {switchIcon}
-        <span className="hidden sm:inline">واجهة المدير</span>
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0" style={{ zIndex: 9998 }} onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full mt-1.5 w-44 bg-white border border-surface-200 rounded-xl shadow-card-lg py-1" style={{ zIndex: 9999 }}>
-            <button
-              onClick={() => { router.push('/admin'); setOpen(false) }}
-              className="w-full text-right px-4 py-2.5 text-xs font-medium text-surface-600 hover:bg-surface-50 flex items-center gap-2"
-            >
-              <span>⚙️</span><span>واجهة المدير</span>
-            </button>
-            <button
-              onClick={() => setOpen(false)}
-              className="w-full text-right px-4 py-2.5 text-xs font-medium bg-teal-50 text-teal-700 flex items-center gap-2"
-            >
-              <span>👤</span><span>واجهة المستخدم</span>
-              <svg className="w-3 h-3 mr-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-            </button>
-          </div>
-        </>
-      )}
-    </div>
+    <button
+      onClick={() => router.push(isAdmin ? '/dashboard' : '/admin')}
+      className="flex items-center gap-0 rounded-full border border-surface-200 bg-surface-50 overflow-hidden text-xs font-semibold h-8 transition-all hover:shadow-sm"
+      title={isAdmin ? 'التبديل لواجهة المستخدم' : 'التبديل لواجهة المدير'}
+    >
+      {/* مدير — يمين */}
+      <span className={`flex items-center gap-1.5 px-3 h-full transition-all ${
+        isAdmin
+          ? 'bg-navy-900 text-white'
+          : 'text-surface-400'
+      }`}>
+        ⚙️ مدير
+      </span>
+
+      {/* مستخدم — يسار */}
+      <span className={`flex items-center gap-1.5 px-3 h-full transition-all ${
+        !isAdmin
+          ? 'bg-teal-600 text-white'
+          : 'text-surface-400'
+      }`}>
+        👤 مستخدم
+      </span>
+    </button>
   )
 }
 

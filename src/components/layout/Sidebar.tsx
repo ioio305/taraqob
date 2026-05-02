@@ -40,70 +40,32 @@ function NavLink({ href, label, icon }: { href: string; label: string; icon: Rea
   )
 }
 
-// ── Role Switcher — أيقونة تبديل للمدير فقط ─────────────────
+// ── Role Switcher — زر Toggle للمدير والمشرف فقط ───────────
 function RoleSwitcher({ userRole }: { userRole: UserRole }) {
   const router   = useRouter()
   const pathname = usePathname()
-  const [open, setOpen]   = useState(false)
 
-  // فقط للمدير والمشرف
   if (!['admin', 'moderator'].includes(userRole)) return null
 
-  const isInAdmin     = pathname.startsWith('/admin')
-  const isInDashboard = pathname.startsWith('/dashboard')
-
-  const views = [
-    { label: 'واجهة المدير',    path: '/admin',     icon: '⚙️', active: isInAdmin },
-    { label: 'واجهة المستخدم', path: '/dashboard', icon: '👤', active: isInDashboard },
-  ]
-
-  const currentView = views.find(v => v.active) ?? views[0]
+  const isAdmin = pathname.startsWith('/admin')
 
   return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen(o => !o)}
-        title={`الواجهة الحالية: ${currentView.label}`}
-        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-medium transition-all ${
-          open
-            ? 'bg-navy-50 border-navy-300 text-navy-700'
-            : 'bg-surface-50 border-surface-200 text-surface-600 hover:bg-navy-50 hover:border-navy-200 hover:text-navy-700'
-        }`}
-      >
-        {icons.switch}
-        <span className="hidden sm:inline">{currentView.label}</span>
-      </button>
-
-      {open && (
-        <>
-          <div className="fixed inset-0" style={{ zIndex: 9998 }} onClick={() => setOpen(false)} />
-          <div
-            className="absolute left-0 top-full mt-1.5 w-44 bg-white border border-surface-200 rounded-xl shadow-card-lg py-1"
-            style={{ zIndex: 9999 }}
-          >
-            {views.map(view => (
-              <button
-                key={view.path}
-                onClick={() => { router.push(view.path); setOpen(false) }}
-                className={`w-full text-right px-4 py-2.5 text-xs font-medium transition-colors flex items-center gap-2 ${
-                  view.active
-                    ? 'bg-teal-50 text-teal-700'
-                    : 'text-surface-600 hover:bg-surface-50'
-                }`}
-              >
-                <span>{view.icon}</span>
-                <span>{view.label}</span>
-                {view.active && (
-                  <svg className="w-3 h-3 mr-auto text-teal-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
-                )}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
+    <button
+      onClick={() => router.push(isAdmin ? '/dashboard' : '/admin')}
+      className="flex items-center gap-0 rounded-full border border-surface-200 bg-surface-50 overflow-hidden text-xs font-semibold h-8 transition-all hover:shadow-sm"
+      title={isAdmin ? 'التبديل لواجهة المستخدم' : 'التبديل لواجهة المدير'}
+    >
+      <span className={`flex items-center gap-1.5 px-3 h-full transition-all ${
+        isAdmin ? 'bg-navy-900 text-white' : 'text-surface-400'
+      }`}>
+        ⚙️ مدير
+      </span>
+      <span className={`flex items-center gap-1.5 px-3 h-full transition-all ${
+        !isAdmin ? 'bg-teal-600 text-white' : 'text-surface-400'
+      }`}>
+        👤 مستخدم
+      </span>
+    </button>
   )
 }
 
