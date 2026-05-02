@@ -31,22 +31,16 @@ function RoleSwitcher() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
 
-  const currentRole = pathname.startsWith('/admin')
-    ? 'admin'
-    : pathname.startsWith('/analyst')
-    ? 'analyst'
-    : 'beta_user'
+  const currentRole = pathname.startsWith('/admin') ? 'admin' : 'beta_user'
 
   const roles = [
     { value: 'admin',     label: 'Admin',  path: '/admin' },
-    { value: 'analyst',   label: 'محلل',   path: '/analyst' },
     { value: 'beta_user', label: 'مستخدم', path: '/dashboard' },
   ]
   const current = roles.find(r => r.value === currentRole)
 
   const colors: Record<string, string> = {
     admin:     'text-navy-700 bg-navy-50 border-navy-200',
-    analyst:   'text-teal-700 bg-teal-50 border-teal-200',
     beta_user: 'text-surface-700 bg-surface-50 border-surface-200',
   }
 

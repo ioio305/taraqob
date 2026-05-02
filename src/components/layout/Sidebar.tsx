@@ -221,23 +221,16 @@ export function AnalystSidebar({ userName = '', onClose }: { userName?: string; 
 function RoleSwitcher() {
   const router   = useRouter()
   const pathname = usePathname()
+  const [open, setOpen] = useState(false)
 
-  // تحديد الدور الحالي من المسار
-  const currentRole = pathname.startsWith('/admin')
-    ? 'admin'
-    : pathname.startsWith('/analyst')
-    ? 'analyst'
-    : 'beta_user'
+  const currentRole = pathname.startsWith('/admin') ? 'admin' : 'beta_user'
 
   const roles = [
     { value: 'admin',     label: 'Admin',   path: '/admin',     color: 'text-navy-700 bg-navy-50 border-navy-200' },
-    { value: 'analyst',   label: 'محلل',    path: '/analyst',   color: 'text-teal-700 bg-teal-50 border-teal-200' },
     { value: 'beta_user', label: 'مستخدم',  path: '/dashboard', color: 'text-surface-700 bg-surface-50 border-surface-200' },
   ]
 
   const current = roles.find(r => r.value === currentRole)
-
-  const [open, setOpen] = useState(false)
 
   return (
     <div className="relative">
