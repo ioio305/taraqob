@@ -30,28 +30,25 @@ function RoleSwitcher({ userRole }: { userRole: UserRole }) {
 
   if (!['admin', 'moderator'].includes(userRole)) return null
 
-  const isAdmin = pathname.startsWith('/admin')
+  const isInAdmin = pathname.startsWith('/admin')
+  const adminLabel = userRole === 'admin' ? '⚙️ مدير' : '🛡️ مشرف'
 
   return (
     <button
-      onClick={() => router.push(isAdmin ? '/dashboard' : '/admin')}
+      onClick={() => router.push(isInAdmin ? '/dashboard' : '/admin')}
       className="flex items-center gap-0 rounded-full border border-surface-200 bg-surface-50 overflow-hidden text-xs font-semibold h-8 transition-all hover:shadow-sm"
-      title={isAdmin ? 'التبديل لواجهة المستخدم' : 'التبديل لواجهة المدير'}
+      title={isInAdmin ? 'التبديل لواجهة المستخدم' : `التبديل لواجهة ${userRole === 'admin' ? 'المدير' : 'المشرف'}`}
     >
-      {/* مدير — يمين */}
+      {/* مدير/مشرف — يمين */}
       <span className={`flex items-center gap-1.5 px-3 h-full transition-all ${
-        isAdmin
-          ? 'bg-navy-900 text-white'
-          : 'text-surface-400'
+        isInAdmin ? 'bg-navy-900 text-white' : 'text-surface-400'
       }`}>
-        ⚙️ مدير
+        {adminLabel}
       </span>
 
       {/* مستخدم — يسار */}
       <span className={`flex items-center gap-1.5 px-3 h-full transition-all ${
-        !isAdmin
-          ? 'bg-teal-600 text-white'
-          : 'text-surface-400'
+        !isInAdmin ? 'bg-teal-600 text-white' : 'text-surface-400'
       }`}>
         👤 مستخدم
       </span>
