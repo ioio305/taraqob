@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import type { ReactNode } from 'react'
+import type { UserRole } from '@/lib/types'
 import BetaUserShell from './BetaUserShell'
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
@@ -21,9 +22,10 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   }
 
   const displayName = profile.full_name_ar || profile.full_name || user.email || ''
+  const userRole    = profile.role as UserRole
 
   return (
-    <BetaUserShell userName={displayName} userRole={profile.role}>
+    <BetaUserShell userName={displayName} userRole={userRole}>
       {children}
     </BetaUserShell>
   )

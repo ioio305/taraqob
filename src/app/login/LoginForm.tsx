@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import type { UserRole } from '@/lib/types'
 
 const URL_ERROR_MESSAGES: Record<string, string> = {
   inactive:    'هذا الحساب معطّل. تواصل مع المسؤول.',
@@ -12,19 +13,17 @@ const URL_ERROR_MESSAGES: Record<string, string> = {
 }
 
 export default function LoginForm() {
-  const router = useRouter()
+  const router       = useRouter()
   const searchParams = useSearchParams()
 
-  const [email, setEmail]       = useState('')
+  const [email, setEmail]     = useState('')
   const [password, setPassword] = useState('')
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState<string | null>(null)
 
   useEffect(() => {
     const urlError = searchParams.get('error')
-    if (urlError) {
-      setError(URL_ERROR_MESSAGES[urlError] ?? 'حدث خطأ غير متوقع.')
-    }
+    if (urlError) setError(URL_ERROR_MESSAGES[urlError] ?? 'حدث خطأ غير متوقع.')
   }, [searchParams])
 
   async function handleLogin(e: React.FormEvent) {
@@ -61,10 +60,13 @@ export default function LoginForm() {
       return
     }
 
-    switch (profile.role) {
-      case 'admin':   router.push('/admin');    break
-      case 'analyst': router.push('/analyst');  break
-      default:        router.push('/dashboard'); break
+    const role = profile.role as UserRole
+
+    // توجيه حسب الدور
+    if (['admin', 'moderator'].includes(role)) {
+      router.push('/admin')
+    } else {
+      router.push('/dashboard')
     }
     router.refresh()
   }
@@ -86,24 +88,15 @@ export default function LoginForm() {
           <div>
             <label className="field-label">البريد الإلكتروني</label>
             <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-              dir="ltr"
-              className="field-input text-left"
-              placeholder="example@email.com"
+              type="email" value={email} onChange={e => setEmail(e.target.value)}
+              required dir="ltr" className="field-input text-left" placeholder="example@email.com"
             />
           </div>
           <div>
             <label className="field-label">كلمة المرور</label>
             <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-              dir="ltr"
-              className="field-input"
+              type="password" value={password} onChange={e => setPassword(e.target.value)}
+              required dir="ltr" className="field-input"
             />
           </div>
           <button type="submit" disabled={loading} className="btn-primary justify-center">
