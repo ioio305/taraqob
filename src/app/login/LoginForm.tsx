@@ -73,9 +73,7 @@ export default function LoginForm() {
     <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6" dir="rtl">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-10 h-10 rounded-xl bg-navy-900 flex items-center justify-center mx-auto mb-4">
-            <span className="text-gold-400 font-bold font-mono">ت</span>
-          </div>
+          <img src="/logo.png" alt="ترقّب" className="w-16 h-16 object-contain mx-auto mb-4" />
           <h1 className="text-xl font-bold text-navy-900">ترقّب</h1>
           <p className="text-sm text-surface-400 mt-1">البيتا المغلق — الدخول بالدعوة فقط</p>
         </div>

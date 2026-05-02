@@ -44,9 +44,7 @@ export default function BetaUserShell({
       {/* Logo */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-surface-100">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-navy-900 flex items-center justify-center">
-            <span className="text-gold-400 font-bold text-sm font-mono">ت</span>
-          </div>
+          <img src="/logo.png" alt="ترقّب" className="w-9 h-9 object-contain" />
           <div>
             <div className="text-navy-900 font-bold text-sm leading-none">ترقّب</div>
             <div className="text-[10px] text-surface-400 mt-0.5">Beta مغلق</div>

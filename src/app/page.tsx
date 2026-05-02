@@ -153,9 +153,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-navy-900 flex items-center justify-center">
-              <span className="text-gold-400 font-bold text-sm font-mono">ت</span>
-            </div>
+            <img src="/logo.png" alt="ترقّب" className="w-10 h-10 object-contain" />
             <div>
               <div className="text-navy-900 font-bold text-base leading-none">ترقّب</div>
               <div className="text-surface-400 text-[10px] font-medium tracking-wide leading-none mt-0.5">
@@ -577,9 +575,7 @@ export default function LandingPage() {
             {/* Logo & Description */}
             <div>
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-8 h-8 rounded-lg bg-navy-800 border border-navy-700 flex items-center justify-center">
-                  <span className="text-gold-400 font-bold text-sm font-mono">ت</span>
-                </div>
+                <img src="/logo.png" alt="ترقّب" className="w-10 h-10 object-contain" />
                 <div>
                   <div className="text-white font-bold text-sm">ترقّب — Taraqob</div>
                   <div className="text-surface-500 text-[10px]">منصة دعم قرار لعقود SPX Options</div>

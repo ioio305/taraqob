@@ -11,6 +11,10 @@ export const metadata: Metadata = {
   keywords: ['SPX Options', 'دعم القرار', 'تحليل فني', 'إشارات موثقة', 'عقود الخيارات'],
   authors: [{ name: 'ترقّب' }],
   robots: 'noindex, nofollow', // Beta — not indexed
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+  },
   openGraph: {
     title: 'ترقّب — منصة دعم القرار',
     description: 'إشارات موثقة لعقود المؤشرات',
@@ -27,6 +31,7 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl">
       <head>
+        <link rel="icon" href="/logo.png" type="image/png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
