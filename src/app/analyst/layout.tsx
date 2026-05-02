@@ -1,8 +1,8 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { AppShell, AnalystSidebar } from '@/components/layout/Sidebar'
 import type { ReactNode } from 'react'
 
+// دور المحلل تم دمجه مع المشرف — هذه الصفحة تحول للـ admin
 export default async function AnalystLayout({ children }: { children: ReactNode }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -11,21 +11,16 @@ export default async function AnalystLayout({ children }: { children: ReactNode 
 
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('role, full_name, full_name_ar')
+    .select('role')
     .eq('id', user.id)
     .single()
 
-  if (!profile || !['admin', 'analyst'].includes(profile.role)) {
-    redirect('/dashboard')
+  // أي شخص يحاول الدخول لـ /analyst يُحوَّل للمكان المناسب
+  if (!profile) redirect('/login')
+
+  if (['admin', 'moderator'].includes(profile.role)) {
+    redirect('/admin')
   }
 
-  const displayName = profile.full_name_ar || profile.full_name || user.email || ''
-
-  return (
-    <AppShell
-      sidebar={<AnalystSidebar userName={displayName} />}
-    >
-      {children}
-    </AppShell>
-  )
+  redirect('/dashboard')
 }
