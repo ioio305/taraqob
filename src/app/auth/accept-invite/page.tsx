@@ -47,6 +47,9 @@ export default function AcceptInvitePage() {
 
     const supabase = createClient()
 
+    // تسجيل خروج أي جلسة حالية أولاً — أمان
+    await supabase.auth.signOut()
+
     // إنشاء الحساب
     const { data: authData, error: signupError } = await supabase.auth.signUp({
       email:    invitation.email,
@@ -76,7 +79,8 @@ export default function AcceptInvitePage() {
         .eq('id', authData.user.id)
     }
 
-    router.push('/dashboard')
+    // توجيه لصفحة الدخول بعد التسجيل
+    router.push('/login?registered=1')
   }
 
   const roleLabel: Record<string, string> = {
