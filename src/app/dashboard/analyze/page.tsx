@@ -434,6 +434,31 @@ export default function AnalyzePage() {
               </div>
             </div>
 
+            {/* التبرير البسيط */}
+            <div className={`px-5 py-4 border-b border-surface-100 ${
+              result.canEnter ? 'bg-white' : 'bg-surface-50'
+            }`}>
+              <div className="flex items-start gap-3">
+                <span className="text-2xl flex-shrink-0 mt-0.5">
+                  {result.decision === 'إشارة نشطة' ? '✅' :
+                   result.decision === 'دخول مشروط' ? '⚠️' :
+                   result.decision === 'مراقبة فقط' ? '👀' : '🚫'}
+                </span>
+                <div>
+                  <div className="text-sm font-semibold text-navy-900 leading-relaxed mb-2">
+                    {result.simpleReason}
+                  </div>
+                  <div className={`text-xs font-medium px-3 py-1.5 rounded-full inline-block ${
+                    result.canEnter
+                      ? 'bg-teal-100 text-teal-700'
+                      : 'bg-surface-100 text-surface-600'
+                  }`}>
+                    💡 {result.simpleAdvice}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="px-5 py-4 border-b border-surface-100">
               <div className="text-xs font-semibold text-surface-400 mb-3">ماذا تفعل؟</div>
               <div className="grid grid-cols-2 gap-3">

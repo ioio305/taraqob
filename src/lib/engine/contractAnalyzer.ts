@@ -55,6 +55,8 @@ export type AnalysisResult = {
   decisionColor:   string
   canEnter:        boolean
   hardBlockReason?: string
+  simpleReason:    string   // شرح بسيط للمستخدم
+  simpleAdvice:    string   // نصيحة عملية
 
   // بطاقة العقد
   entryZoneLow:    number
@@ -183,17 +185,22 @@ export function analyzeContract(
   const warnings: string[] = []
 
   // ── ١ حالة السوق ──────────────────────────────────────────
+  const isPut = contract.contractType === 'put'
   let marketScore = 50
-  const isCallFavored = market.spxDirection === 'bullish' && contract.contractType === 'call'
-  const isPutFavored  = market.spxDirection === 'bearish' && contract.contractType === 'put'
+  const isCallFavored = market.spxDirection === 'bullish' && !isPut
+  const isPutFavored  = market.spxDirection === 'bearish' && isPut
+  // السوق الصاعد بقوة فرصة للـ Put إذا وصل ذروة شراء
+  const isOverbought  = Math.abs(market.spxChange) > 1.2 && market.spxDirection === 'bullish'
+  const isPutOpportunity = isPut && isOverbought
 
   if (isCallFavored || isPutFavored) marketScore = 80
+  else if (isPutOpportunity) { marketScore = 65; } // ذروة شراء = فرصة للـ Put
   else if (market.spxDirection === 'neutral') marketScore = 50
-  else marketScore = 30
+  else marketScore = isPut ? 40 : 30 // السوق الصاعد أقل ضرراً للـ Put من الهابط للـ Call
 
-  // Stochastic simulation from change %
   const stochProxy = Math.min(100, Math.abs(market.spxChange) * 20 + 50)
-  if (stochProxy > 85) { marketScore -= 15; warnings.push('السوق في منطقة ذروة') }
+  if (stochProxy > 85 && !isPut) { marketScore -= 15; warnings.push('السوق في منطقة ذروة شراء') }
+  if (stochProxy > 85 && isPut)  { marketScore += 10; } // ذروة الشراء = فرصة للـ Put
 
   indicators.push({
     code: 'market_regime', nameAr: 'حالة السوق',
@@ -205,13 +212,21 @@ export function analyzeContract(
   // ── ٢ ضغط التذبذب ─────────────────────────────────────────
   let volScore = 70
   const vix = market.vixPrice
-  if (vix > 30) { volScore = 15; warnings.push('VIX مرتفع جداً — تجنب الدخول') }
-  else if (vix > 25) volScore = 35
-  else if (vix > 20) volScore = 50
-  else if (vix < 15) volScore = 90
-  else volScore = 75
-
-  if (market.spxChange > 0 && market.vixPrice > market.vixPrice * 1.01) volScore -= 10
+  if (isPut) {
+    // للـ Put: VIX مرتفع = إيجابي (يرفع قيمة العقد)
+    if (vix > 35)      { volScore = 30; warnings.push('VIX مرتفع جداً — خطر انعكاس') }
+    else if (vix > 25) volScore = 80  // ممتاز للـ Put
+    else if (vix > 20) volScore = 70  // جيد للـ Put
+    else if (vix < 15) volScore = 40  // VIX منخفض = Put رخيص لكن قد لا يتحرك
+    else               volScore = 60
+  } else {
+    // للـ Call: VIX منخفض = بيئة هادئة ومناسبة
+    if (vix > 30) { volScore = 15; warnings.push('VIX مرتفع جداً — تجنب الدخول') }
+    else if (vix > 25) volScore = 35
+    else if (vix > 20) volScore = 50
+    else if (vix < 15) volScore = 90
+    else volScore = 75
+  }
 
   indicators.push({
     code: 'volatility_pressure', nameAr: 'ضغط التذبذب',
@@ -343,7 +358,7 @@ export function analyzeContract(
   })
 
   // ── ١٠ احتمالية الربح ─────────────────────────────────────
-  const probReachStrike = delta * 100
+  const probReachStrike = Math.abs(delta) * 100
   const breakEvenPrice  = contract.strike + (contract.contractType === 'call' ? mid : -mid)
   const distToBreakEven = Math.abs(breakEvenPrice - market.spxPrice)
   const expectedMoveDTE = market.spxPrice * (vix / 100) * Math.sqrt(dte / 365)
@@ -415,6 +430,42 @@ export function analyzeContract(
     ? Math.ceil(lossPerContract / profitPerContract * 10) / 10
     : 0
 
+  // ── التبرير البسيط ────────────────────────────────────────
+  let simpleReason = ''
+  let simpleAdvice = ''
+
+  if (hardBlock) {
+    if (thetaScore < 15) {
+      simpleReason = 'العقد ينتهي قريباً جداً — كل يوم يمر يأكل من قيمته تلقائياً حتى لو تحرك السوق لصالحك.'
+      simpleAdvice = 'ابحث عن عقد بـ 7 أيام أو أكثر.'
+    } else if (liqScore < 20) {
+      simpleReason = 'السيولة ضعيفة جداً — قد لا تجد مشترياً عندما تريد البيع، أو ستبيع بخسارة إضافية بسبب الفارق الواسع.'
+      simpleAdvice = 'ابحث عن عقد بفارق Bid/Ask أضيق.'
+    } else if (vix > 35) {
+      simpleReason = 'التذبذب شديد جداً — السوق خائف والأسعار متقلبة بشكل غير طبيعي.'
+      simpleAdvice = 'انتظر حتى يهدأ VIX تحت 30.'
+    } else {
+      simpleReason = 'الظروف الحالية لا تدعم الدخول.'
+      simpleAdvice = 'انتظر فرصة أفضل.'
+    }
+  } else if (composite >= 75) {
+    simpleReason = isPut
+      ? 'المؤشرات تدعم توقع هبوط في SPX — التذبذب مناسب والظروف مهيأة.'
+      : 'المؤشرات تدعم توقع صعود في SPX — البيئة هادئة والزخم إيجابي.'
+    simpleAdvice = 'يمكنك الدخول — ضع وقف الخسارة فوراً عند الشراء.'
+  } else if (composite >= 62) {
+    simpleReason = 'الفرصة مقبولة لكن ليست مثالية — بعض المؤشرات تعطي إشارات مختلطة.'
+    simpleAdvice = 'إذا قررت الدخول خصص 2% فقط من محفظتك وضع وقف الخسارة فوراً.'
+  } else if (composite >= 48) {
+    simpleReason = 'الظروف غير كافية للدخول الآن — المؤشرات لا تعطي إشارة واضحة.'
+    simpleAdvice = 'راقب العقد ولا تدخل حتى تتحسن الإشارات.'
+  } else {
+    simpleReason = isPut
+      ? 'السوق صاعد بقوة ضد توقعك — الدخول الآن مخاطرة عالية.'
+      : 'الظروف ضعيفة ولا يوجد ما يدعم الصعود الآن.'
+    simpleAdvice = 'ابحث عن فرصة في وقت آخر.'
+  }
+
   return {
     indicators,
     composite,
@@ -422,6 +473,8 @@ export function analyzeContract(
     decisionColor,
     canEnter,
     hardBlockReason,
+    simpleReason,
+    simpleAdvice,
     entryZoneLow,
     entryZoneHigh,
     target1,
