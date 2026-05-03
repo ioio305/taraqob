@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { StrategyTooltip } from '@/components/analyze/StrategyTooltip'
+import { SmartTargetsCard } from '@/components/analyze/SmartTargets'
 import {
   analyzeContract, RISK_PROFILES, PLAN_FEATURES, STRATEGY_LABELS,
   type RiskProfile, type PlanType, type AssetType, type Strategy,
@@ -174,6 +176,7 @@ export default function AnalyzePage() {
   const [plan,          setPlan]          = useState<PlanType>('متقدم')
   const [result,        setResult]        = useState<AnalysisResult|null>(null)
   const [loading,       setLoading]       = useState(false)
+  const [marketSpx,     setMarketSpx]     = useState(7230)
   const [filledFromImage, setFilledFromImage] = useState(false)
 
   const [form, setForm] = useState<Record<string,string>>({
@@ -208,6 +211,7 @@ export default function AnalyzePage() {
       const res  = await fetch('/api/market/pulse')
       const data = await res.json()
       const spxPrice = data.spx?.price ?? 7230
+      setMarketSpx(spxPrice)
       const market = {
         spxPrice, spxChange: data.spx?.change ?? 0,
         spxDirection: data.spx?.direction ?? 'neutral',
@@ -299,15 +303,19 @@ export default function AnalyzePage() {
 
       {/* الاستراتيجية */}
       <div className="card p-4 mb-4">
-        <div className="text-xs font-semibold text-surface-400 mb-2">الاستراتيجية</div>
+        <div className="text-xs font-semibold text-surface-400 mb-2">الاستراتيجية — اضغط ؟ لشرح كل واحدة</div>
         <div className="space-y-2">
           {(Object.entries(STRATEGY_LABELS) as [Strategy, typeof STRATEGY_LABELS[Strategy]][]).map(([key, val]) => (
             <button key={key} onClick={() => { setStrategy(key); setResult(null) }}
               className={`w-full text-right flex items-center gap-3 px-4 py-2.5 rounded-xl border-2 transition-all ${strategy===key ? 'border-teal-400 bg-teal-50' : 'border-surface-200 hover:border-surface-300'}`}>
               <span className="text-lg flex-shrink-0">{val.icon}</span>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-bold text-navy-900">{val.ar}</div>
-                <div className="text-[10px] text-surface-400 truncate">{val.desc}</div>
+                <StrategyTooltip strategy={key as Strategy}>
+                  <div>
+                    <div className="text-sm font-bold text-navy-900">{val.ar}</div>
+                    <div className="text-[10px] text-surface-400 truncate">{val.desc}</div>
+                  </div>
+                </StrategyTooltip>
               </div>
               <div className="text-[10px] font-mono text-surface-400 flex-shrink-0">DTE {val.dteSuggested}</div>
               {strategy===key && <svg className="w-4 h-4 text-teal-500 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>}
@@ -537,6 +545,19 @@ export default function AnalyzePage() {
               </div>
             </div>
           </div>
+
+          {/* أهداف الجلسة الذكية */}
+          {result.canEnter && (
+            <SmartTargetsCard
+              result={result}
+              spxPrice={marketSpx}
+              strike={parseFloat(form.strike) || 7230}
+              mid={mid}
+              contractType={form.contractType as 'call'|'put'}
+              dte={parseInt(form.dte) || 1}
+              vix={17}
+            />
+          )}
 
           {/* المؤشرات */}
           <div className="card p-5">
