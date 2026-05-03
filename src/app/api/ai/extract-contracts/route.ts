@@ -1,20 +1,21 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+const PROMPT = 'You are analyzing a screenshot from Drayah Global trading platform showing SPX options contracts. Extract all visible contracts. For each provide: type (call/put), strike, bid, ask, delta (if visible), dte (if visible), expiry (YYYY-MM-DD if visible). In options chain tables right side is Calls, left side is Puts, middle is Strike. Respond ONLY with valid JSON: {"contracts":[{"type":"call","strike":7200,"bid":35.70,"ask":36.20,"delta":0.42,"dte":1,"expiry":"2026-05-04"}],"spxPrice":7229.32}'
+
 export async function POST(request: NextRequest) {
   try {
     const formData  = await request.formData()
     const imageFile = formData.get('image') as File
 
     if (!imageFile) {
-      return NextResponse.json({ error: 'لم يتم رفع صورة' }, { status: 400 })
+      return NextResponse.json({ error: 'no image uploaded' }, { status: 400 })
     }
 
     const bytes    = await imageFile.arrayBuffer()
     const base64   = Buffer.from(bytes).toString('base64')
     const mimeType = imageFile.type || 'image/jpeg'
 
-    // استدعاء Anthropic API مباشرة بدون SDK
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -28,52 +29,17 @@ export async function POST(request: NextRequest) {
         messages: [{
           role: 'user',
           content: [
-            {
-              type:   'image',
-              source: { type: 'base64', media_type: mimeType, data: base64 },
-            },
-            {
-              type: 'text',
-              text: `هذه صورة من منصة دراية جلوبل لعقود الخيارات على SPX أو S&P 500.
-
-استخرج كل العقود المرئية في الصورة. لكل عقد أعطني:
-- نوع العقد (call أو put)
-- Strike Price
-- Bid (سعر الطلب)
-- Ask (سعر العرض)
-- Delta إذا موجود
-- DTE أو تاريخ الانتهاء إذا موجود
-
-أعطني الإجابة بصيغة JSON فقط بدون أي نص آخر:
-{
-  "contracts": [
-    {
-      "type": "call",
-      "strike": 7200,
-      "bid": 35.70,
-      "ask": 36.20,
-      "delta": 0.42,
-      "expiry": "2026-05-04",
-      "dte": 1
-    }
-  ],
-  "spxPrice": 7229.32
-}
-
-ملاحظات:
-- في جدول الخيارات الجانب الأيمن عادةً Call والأيسر Put
-- Strike في العمود الأوسط
-- أعطني كل العقود المرئية`,
-            }
+            { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64 } },
+            { type: 'text',  text: PROMPT }
           ]
-        }),
+        }],
       }),
     })
 
     if (!response.ok) {
       const err = await response.text()
       console.error('Anthropic error:', err)
-      return NextResponse.json({ error: 'فشل الاتصال بخدمة AI' }, { status: 500 })
+      return NextResponse.json({ error: 'AI service error' }, { status: 500 })
     }
 
     const aiData = await response.json()
@@ -81,14 +47,13 @@ export async function POST(request: NextRequest) {
 
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
-      return NextResponse.json({ error: 'لم أستطع قراءة البيانات من الصورة' }, { status: 400 })
+      return NextResponse.json({ error: 'Could not read data from image' }, { status: 400 })
     }
 
-    const data = JSON.parse(jsonMatch[0])
-    return NextResponse.json(data)
+    return NextResponse.json(JSON.parse(jsonMatch[0]))
 
   } catch (err: any) {
     console.error('Extract contracts error:', err)
-    return NextResponse.json({ error: err.message || 'حدث خطأ أثناء معالجة الصورة' }, { status: 500 })
+    return NextResponse.json({ error: err.message || 'Processing error' }, { status: 500 })
   }
 }
