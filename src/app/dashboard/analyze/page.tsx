@@ -178,6 +178,10 @@ export default function AnalyzePage() {
   const [result,        setResult]        = useState<AnalysisResult|null>(null)
   const [loading,       setLoading]       = useState(false)
   const [marketSpx,     setMarketSpx]     = useState(7230)
+  const [savedId,       setSavedId]       = useState<string|null>(null)
+  const [entryPrice,    setEntryPrice]    = useState('')
+  const [showEntryForm, setShowEntryForm] = useState(false)
+  const [tradeRecorded, setTradeRecorded] = useState(false)
   const [filledFromImage, setFilledFromImage] = useState(false)
 
   const searchParams = useSearchParams()
@@ -258,7 +262,7 @@ export default function AnalyzePage() {
       const analysis = analyzeContract(contract, market, riskProfile, strategy)
       setResult(analysis)
       try {
-        await fetch('/api/analyses', {
+        const saveRes = await fetch('/api/analyses', {
           method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({
             contractType: contract.contractType, strike: contract.strike,
@@ -271,7 +275,11 @@ export default function AnalyzePage() {
             target1: analysis.target1, target2: analysis.target2, stopLoss: analysis.stopLoss,
           }),
         })
-      } catch {}
+        if (saveRes.ok) {
+          const saved = await saveRes.json()
+          if (saved.id) setSavedId(saved.id)
+        }
+      } catch { /* اختياري */ }
     } catch {
       const market = { spxPrice:7230, spxChange:0, spxDirection:'neutral', vixPrice:17, vixLevel:'normal', isFriday:false, isWeekend:false }
       const contract = {
@@ -504,10 +512,18 @@ export default function AnalyzePage() {
                   <div className="text-[10px] text-teal-600 font-semibold mb-1">🟢 ادخل عند</div>
                   <div className="text-sm font-bold text-teal-900 font-mono">${result.entryZoneLow.toFixed(2)} — ${result.entryZoneHigh.toFixed(2)}</div>
                 </div>
-                <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
-                  <div className="text-[10px] text-emerald-600 font-semibold mb-1">🎯 اخرج بربح عند</div>
-                  <div className="text-sm font-bold text-emerald-900 font-mono">${result.target1.toFixed(2)} <span className="text-[10px]">(+{((result.target1/mid-1)*100).toFixed(0)}%)</span></div>
-                  <div className="text-[10px] text-emerald-500 mt-0.5">هدف جريء: ${result.target2.toFixed(2)}</div>
+                <div className="col-span-2 grid grid-cols-3 gap-2">
+                  {[
+                    { label:'🎯 الهدف ١ — محافظ', val: result.target1, pct: ((result.target1/mid-1)*100), color:'bg-emerald-50 border-emerald-200 text-emerald-800' },
+                    { label:'🎯 الهدف ٢ — معتدل', val: result.target2, pct: ((result.target2/mid-1)*100), color:'bg-teal-50 border-teal-200 text-teal-800' },
+                    { label:'🚀 الهدف ٣ — جريء',  val: result.target2 * 1.3, pct: ((result.target2*1.3/mid-1)*100), color:'bg-navy-50 border-navy-200 text-navy-800' },
+                  ].map((t,i) => (
+                    <div key={i} className={`rounded-xl p-2.5 border text-center ${t.color}`}>
+                      <div className="text-[9px] font-semibold mb-1">{t.label}</div>
+                      <div className="text-sm font-bold font-mono">${t.val.toFixed(2)}</div>
+                      <div className="text-[10px] opacity-70">+{t.pct.toFixed(0)}%</div>
+                    </div>
+                  ))}
                 </div>
                 <div className={`rounded-xl p-3 border ${features.stopLoss?'bg-red-50 border-red-100':'bg-surface-50 border-surface-200'}`}>
                   <div className="text-[10px] text-red-600 font-semibold mb-1">🔴 اخرج بخسارة عند</div>
@@ -554,9 +570,82 @@ export default function AnalyzePage() {
             )}
 
             <div className="px-5 py-4">
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 mb-3">
                 <span className="font-bold">تنبيه:</span> هذا تحليل آلي للاسترشاد فقط — لا يُعدّ توصية ملزمة.
               </div>
+
+              {/* زر تسجيل الشراء */}
+              {result.canEnter && !tradeRecorded && savedId && (
+                <div>
+                  {!showEntryForm ? (
+                    <button
+                      onClick={() => setShowEntryForm(true)}
+                      className="w-full py-3 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 transition-colors"
+                    >
+                      ✅ سجّلت الشراء — أريد متابعة العقد
+                    </button>
+                  ) : (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                      <div className="text-sm font-bold text-emerald-900 mb-3">بكم اشتريت؟</div>
+                      <div className="flex gap-2 mb-3">
+                        <input
+                          type="number" step="0.01"
+                          value={entryPrice}
+                          onChange={e => setEntryPrice(e.target.value)}
+                          placeholder={`${mid.toFixed(2)}`}
+                          className="field-input flex-1 text-left font-mono"
+                          dir="ltr"
+                        />
+                        <button
+                          onClick={async () => {
+                            if (!entryPrice || !savedId) return
+                            const res = await fetch(`/api/analyses/${savedId}`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                action: 'enter',
+                                entryPrice: parseFloat(entryPrice),
+                                spxPrice: marketSpx,
+                              }),
+                            })
+                            if (res.ok) { setTradeRecorded(true); setShowEntryForm(false) }
+                          }}
+                          className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold text-sm"
+                        >
+                          تأكيد
+                        </button>
+                      </div>
+                      <div className="text-[10px] text-emerald-600">
+                        السعر الوسط الحالي: ${mid.toFixed(2)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* بطاقة المراقبة بعد تسجيل الشراء */}
+              {tradeRecorded && entryPrice && (
+                <div className="bg-navy-900 rounded-xl p-4 text-right">
+                  <div className="text-white font-bold text-sm mb-3">📊 بطاقة المراقبة</div>
+                  <div className="space-y-2">
+                    {[
+                      { label:'✅ اشتريت بـ',          val:`$${parseFloat(entryPrice).toFixed(2)}`, color:'text-white' },
+                      { label:'🎯 أخرج بربح (هدف ١)',   val:`$${result.target1.toFixed(2)} (+${((result.target1/parseFloat(entryPrice)-1)*100).toFixed(0)}%)`, color:'text-emerald-400' },
+                      { label:'🎯 أخرج بربح (هدف ٢)',   val:`$${result.target2.toFixed(2)} (+${((result.target2/parseFloat(entryPrice)-1)*100).toFixed(0)}%)`, color:'text-teal-400' },
+                      { label:'🔴 أخرج بخسارة عند',     val:`$${result.stopLoss.toFixed(2)} (-${((1-result.stopLoss/parseFloat(entryPrice))*100).toFixed(0)}%)`, color:'text-red-400' },
+                      { label:'⛔ SPX يجب أن لا يكسر', val:`${result.breakEvenPrice.toFixed(2)}`, color:'text-amber-400' },
+                    ].map((r,i) => (
+                      <div key={i} className="flex items-center justify-between">
+                        <span className="text-white/60 text-[11px]">{r.label}</span>
+                        <span className={`text-sm font-bold font-mono ${r.color}`}>{r.val}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-white/10 text-[10px] text-white/40 text-center">
+                    راقب دراية مباشرة — اخرج فوراً عند وقف الخسارة
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
