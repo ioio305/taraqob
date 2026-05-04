@@ -619,7 +619,7 @@ export function analyzeContract(
 
   const maxDaysStrategy = strategy === '0dte_scalping' ? 0 : strategy === 'gamma_scalping' ? 2 : rs.maxDays
   const holdDays = dte === 0
-    ? 'ساعات فقط — لا تحتفظ بعد 3:00 مساءً'
+    ? 'ساعات فقط — لا تحتفظ بعد 12:00 منتصف الليل (الرياض) / 3:00 مساءً (نيويورك)'
     : dte <= 3
     ? `يوم إلى يومين كحد أقصى`
     : `${Math.min(maxDaysStrategy, Math.floor(dte * 0.4))} — ${Math.min(maxDaysStrategy * 2, Math.floor(dte * 0.6))} أيام`
