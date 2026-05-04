@@ -1,108 +1,86 @@
 import { NextResponse } from 'next/server'
 
-const POLYGON_KEY = process.env.POLYGON_API_KEY
-const BASE        = 'https://api.polygon.io'
-
-// جلب آخر سعر لأي رمز
-async function fetchQuote(ticker: string) {
-  const res = await fetch(
-    `${BASE}/v2/last/trade/${ticker}?apiKey=${POLYGON_KEY}`,
-    { next: { revalidate: 60 } } // cache دقيقة واحدة
-  )
-  if (!res.ok) return null
-  const data = await res.json()
-  return data.results?.p ?? null // السعر
-}
-
-// جلب بيانات أمس للمقارنة
-async function fetchPrevClose(ticker: string) {
-  const res = await fetch(
-    `${BASE}/v2/aggs/ticker/${ticker}/prev?adjusted=true&apiKey=${POLYGON_KEY}`,
-    { next: { revalidate: 3600 } }
-  )
-  if (!res.ok) return null
-  const data = await res.json()
-  return data.results?.[0]?.c ?? null
+// Yahoo Finance — مجاني بالكامل بدون API Key
+async function fetchYahoo(symbol: string) {
+  try {
+    const res = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1m&range=1d`,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json',
+        },
+        next: { revalidate: 120 }, // cache دقيقتان
+      }
+    )
+    if (!res.ok) return null
+    const data = await res.json()
+    const meta = data?.chart?.result?.[0]?.meta
+    if (!meta) return null
+    return {
+      price:     meta.regularMarketPrice ?? meta.previousClose ?? 0,
+      prevClose: meta.previousClose ?? 0,
+      change:    meta.regularMarketChangePercent ?? 0,
+    }
+  } catch {
+    return null
+  }
 }
 
 export async function GET() {
   try {
-    // SPX = I:SPX في Polygon، VIX = I:VIX
-    const [spxPrice, spxPrev, vixPrice, vixPrev] = await Promise.all([
-      fetchQuote('I:SPX'),
-      fetchPrevClose('I:SPX'),
-      fetchQuote('I:VIX'),
-      fetchPrevClose('I:VIX'),
+    // SPX = ^GSPC, VIX = ^VIX في Yahoo Finance
+    const [spxData, vixData] = await Promise.all([
+      fetchYahoo('%5EGSPC'),  // ^GSPC = S&P 500
+      fetchYahoo('%5EVIX'),   // ^VIX
     ])
 
-    const spx = spxPrice ?? 0
-    const vix = vixPrice ?? 0
-    const spxChange = spxPrev ? ((spx - spxPrev) / spxPrev) * 100 : 0
-    const vixChange = vixPrev ? ((vix - vixPrev) / vixPrev) * 100 : 0
+    const spx = spxData?.price ?? 0
+    const vix = vixData?.price ?? 0
+    const spxChange = spxData?.change ?? 0
+    const vixChange = vixData?.change ?? 0
 
-    // تحليل البيئة
-    const isWeekend   = [0, 6].includes(new Date().getDay())
-    const isFriday    = new Date().getDay() === 5
-    const hour        = new Date().getUTCHours() // وقت السوق UTC
+    const isWeekend = [0, 6].includes(new Date().getDay())
+    const isFriday  = new Date().getDay() === 5
 
-    // حالة السوق
-    const marketBias = spxChange > 0.3
-      ? 'bullish'
-      : spxChange < -0.3
-      ? 'bearish'
-      : 'neutral'
+    const marketBias = spxChange > 0.3 ? 'bullish' : spxChange < -0.3 ? 'bearish' : 'neutral'
+    const spxDirection = marketBias
 
-    // حالة التذبذب
-    const vixLevel = vix < 15
-      ? 'low'      // هادئ جداً
-      : vix < 20
-      ? 'normal'   // طبيعي
-      : vix < 30
-      ? 'elevated' // متوتر
-      : 'high'     // خوف
+    const vixLevel = vix < 15 ? 'low' : vix < 20 ? 'normal' : vix < 30 ? 'elevated' : 'high'
 
-    // جودة البيئة للتداول
     let environmentScore = 100
-    let warnings: string[] = []
+    const warnings: string[] = []
 
-    if (vix > 30) { environmentScore -= 40; warnings.push('تذبذب عالٍ جداً — تجنب الدخول') }
+    if (vix > 30)  { environmentScore -= 40; warnings.push('تذبذب عالٍ جداً — تجنب الدخول') }
     else if (vix > 20) { environmentScore -= 20; warnings.push('تذبذب مرتفع — احذر') }
 
-    if (isFriday) { environmentScore -= 15; warnings.push('جمعة — سيولة منخفضة في نهاية الجلسة') }
+    if (isFriday)  { environmentScore -= 15; warnings.push('جمعة — سيولة منخفضة في نهاية الجلسة') }
     if (isWeekend) { environmentScore = 0; warnings.push('السوق مغلق') }
 
     if (Math.abs(spxChange) > 1.5) { environmentScore -= 20; warnings.push('تحرك حاد في SPX — تقلب عالٍ') }
 
-    // الخلاصة النصية
-    let summary = ''
-    let summaryColor = ''
+    const summary = isWeekend
+      ? 'السوق مغلق اليوم'
+      : environmentScore >= 75
+      ? `البيئة مناسبة للتداول — السوق ${marketBias === 'bullish' ? 'صاعد' : marketBias === 'bearish' ? 'هابط' : 'محايد'} وتذبذب ${vixLevel === 'low' ? 'منخفض جداً' : 'طبيعي'}`
+      : environmentScore >= 50
+      ? `البيئة مقبولة مع الحذر — ${warnings[0] ?? ''}`
+      : `بيئة غير مناسبة للتداول — ${warnings[0] ?? ''}`
 
-    if (isWeekend) {
-      summary = 'السوق مغلق اليوم'
-      summaryColor = 'neutral'
-    } else if (environmentScore >= 75) {
-      summary = `البيئة مناسبة للتداول — السوق ${marketBias === 'bullish' ? 'صاعد' : marketBias === 'bearish' ? 'هابط' : 'محايد'} وتذبذب ${vixLevel === 'low' ? 'منخفض جداً' : 'طبيعي'}`
-      summaryColor = 'green'
-    } else if (environmentScore >= 50) {
-      summary = `البيئة مقبولة مع الحذر — ${warnings[0] ?? ''}`
-      summaryColor = 'yellow'
-    } else {
-      summary = `بيئة غير مناسبة للتداول — ${warnings[0] ?? ''}`
-      summaryColor = 'red'
-    }
+    const summaryColor = isWeekend ? 'neutral' : environmentScore >= 75 ? 'green' : environmentScore >= 50 ? 'yellow' : 'red'
 
     return NextResponse.json({
       spx: {
-        price: spx,
-        prevClose: spxPrev,
-        change: spxChange,
-        direction: marketBias,
+        price:     Math.round(spx * 100) / 100,
+        prevClose: spxData?.prevClose ?? 0,
+        change:    Math.round(spxChange * 100) / 100,
+        direction: spxDirection,
       },
       vix: {
-        price: vix,
-        prevClose: vixPrev,
-        change: vixChange,
-        level: vixLevel,
+        price:     Math.round(vix * 100) / 100,
+        prevClose: vixData?.prevClose ?? 0,
+        change:    Math.round(vixChange * 100) / 100,
+        level:     vixLevel,
       },
       environment: {
         score: environmentScore,
@@ -113,8 +91,9 @@ export async function GET() {
         isWeekend,
       },
       timestamp: new Date().toISOString(),
+      source: 'yahoo',
     })
-  } catch (err) {
+  } catch {
     return NextResponse.json({ error: 'فشل جلب البيانات' }, { status: 500 })
   }
 }
