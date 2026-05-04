@@ -5,37 +5,66 @@ import Link from 'next/link'
 
 type ContractRec = {
   type: 'call'|'put'; strike: number
-  risk: 'آمن'|'متوسط'|'مغامر'; why: string; dte: number
+  risk: string; why: string; dte: number
   targetPct1: number; targetPct2: number; targetPct3: number
-  stopPct: number
+  stopPct: number; approxPrice: number
 }
 
 // لا أسعار تقديرية — فقط Strike الموصى به
 
-function generate(spx:number,vix:number,dir:string):ContractRec[] {
-  const step=5; const atm=Math.round(spx/step)*step
-  const isPut=dir==='bearish'; const t=isPut?'put':'call'
-  const s1=isPut?atm-5:atm+5
-  const s2=isPut?atm-10:atm+10
-  const s3=isPut?atm-15:atm+15
-  const isHighVix=vix>20
-  return [
-    { type:t,strike:s1,risk:'آمن',dte:7,
-      targetPct1:35,targetPct2:70,targetPct3:120,stopPct:45,
-      why:`${isPut?'السوق هابط':'السوق صاعد'} — ${t==='call'?'Call':'Put'} ${s1} — قريب من السعر الحالي — مخاطرة منخفضة` },
-    { type:t,strike:s2,risk:'متوسط',dte:3,
-      targetPct1:50,targetPct2:100,targetPct3:200,stopPct:50,
-      why:`مكافأة أعلى — ${t==='call'?'Call':'Put'} ${s2} — DTE 3 أيام — مخاطرة متوسطة` },
-    { type:t,strike:s3,risk:'مغامر',dte:0,
-      targetPct1:30,targetPct2:100,targetPct3:300,stopPct:60,
-      why:`0DTE — ${t==='call'?'Call':'Put'} ${s3} — ربح سريع أو خسارة سريعة` },
-  ]
+// سعر تقريبي بسيط للمثال التوضيحي فقط
+function approxPrice(spx:number, strike:number, vix:number, dte:number): number {
+  const dist = Math.abs(spx - strike)
+  const dailyMove = spx * (vix/100) / Math.sqrt(252)
+  const timeValue = dailyMove * Math.sqrt(Math.max(dte, 0.25))
+  const intrinsic = Math.max(0, strike < spx ? spx - strike : 0) // للـ Put
+  const base = intrinsic + timeValue * Math.exp(-dist / (dailyMove * 3))
+  return Math.max(1, Math.round(base * 10) / 10)
 }
 
-const RS = {
-  'آمن':   {badge:'bg-emerald-100 text-emerald-700 border-emerald-200',icon:'🟢'},
-  'متوسط': {badge:'bg-amber-100 text-amber-700 border-amber-200',      icon:'🟡'},
-  'مغامر': {badge:'bg-red-100 text-red-700 border-red-200',            icon:'🔴'},
+function generate(spx:number, vix:number, dir:string, userStrike?:number): ContractRec[] {
+  const step = 5
+  const atm   = Math.round(spx / step) * step
+  const isPut = dir === 'bearish'
+  const t     = isPut ? 'put' : 'call'
+
+  // إذا أدخل المستخدم strike محدد — ضعه أولاً
+  const s0 = userStrike ?? null
+  const s1 = isPut ? atm - 5  : atm + 5
+  const s2 = isPut ? atm - 10 : atm + 10
+  const s3 = isPut ? atm - 15 : atm + 15
+
+  const recs: ContractRec[] = []
+
+  // العقد الذي طلبه المستخدم
+  if (s0 && s0 !== s1 && s0 !== s2 && s0 !== s3) {
+    const p0 = approxPrice(spx, s0, vix, 7)
+    recs.push({
+      type:t, strike:s0, risk:'طلبك', dte:7,
+      targetPct1:35, targetPct2:70, targetPct3:120, stopPct:45,
+      approxPrice: p0,
+      why: `العقد الذي طلبته — ${t==='call'?'Call':'Put'} ${s0}`
+    })
+  }
+
+  // مقترحات ترقّب
+  const p1 = approxPrice(spx, s1, vix, 7)
+  recs.push({ type:t, strike:s1, risk:'قريب', dte:7, targetPct1:35, targetPct2:70, targetPct3:120, stopPct:45, approxPrice:p1, why:`قريب من السعر الحالي — أسهل للوصول` })
+
+  const p2 = approxPrice(spx, s2, vix, 3)
+  recs.push({ type:t, strike:s2, risk:'أبعد', dte:3, targetPct1:50, targetPct2:100, targetPct3:200, stopPct:50, approxPrice:p2, why:`أبعد عن السعر — ربح محتمل أعلى` })
+
+  const p3 = approxPrice(spx, s3, vix, 0)
+  recs.push({ type:t, strike:s3, risk:'0DTE', dte:0, targetPct1:30, targetPct2:100, targetPct3:300, stopPct:60, approxPrice:p3, why:`ينتهي اليوم — ربح سريع أو خسارة سريعة` })
+
+  return recs
+}
+
+const RS: Record<string,{badge:string,icon:string}> = {
+  'طلبك': {badge:'bg-navy-100 text-navy-700 border-navy-200',   icon:'⭐'},
+  'قريب': {badge:'bg-emerald-100 text-emerald-700 border-emerald-200',icon:'🟢'},
+  'أبعد': {badge:'bg-amber-100 text-amber-700 border-amber-200', icon:'🟡'},
+  '0DTE': {badge:'bg-red-100 text-red-700 border-red-200',       icon:'⚡'},
 }
 
 export default function SmartDashboard({analyses}:{analyses:any[]}) {
@@ -45,6 +74,7 @@ export default function SmartDashboard({analyses}:{analyses:any[]}) {
   const [liveVix,setLiveVix]=useState<number|null>(null)
   const [dir,setDir]=useState('bullish')
   const [selected,setSelected]=useState<ContractRec|null>(null)
+  const [userStrikeInput,setUserStrikeInput]=useState('')
   const [ready,setReady]=useState(false)
 
   useEffect(()=>{
@@ -58,7 +88,8 @@ export default function SmartDashboard({analyses}:{analyses:any[]}) {
   function analyze(){
     const spx=parseFloat(spxInput); const vix=liveVix??18
     if(!spx||spx<1000) return
-    setContracts(generate(spx,vix,dir)); setSelected(null)
+    const userStrike = userStrikeInput ? parseFloat(userStrikeInput) : undefined
+    setContracts(generate(spx,vix,dir,userStrike)); setSelected(null)
   }
 
   return (
@@ -71,19 +102,26 @@ export default function SmartDashboard({analyses}:{analyses:any[]}) {
           ترقّب يقترح رقم العقد تلقائياً — أو عدّله حسب ما تراه في دراية
         </div>
 
-        <div className="flex gap-2 mb-3">
-          <div className="flex-1">
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div>
             <div className="text-[10px] text-surface-500 font-semibold mb-1">
-              سعر SPX الآن
-              {liveSpx && <span className="text-teal-600 mr-2">(تلقائي ✅)</span>}
+              سعر SPX الآن {liveSpx && <span className="text-teal-600">(تلقائي ✅)</span>}
             </div>
             <input type="number" step="0.01" value={spxInput}
               onChange={e=>{setSpxInput(e.target.value);setContracts([])}}
-              placeholder="مثال: 7192" className="field-input text-left font-mono text-lg font-bold" dir="ltr"/>
+              placeholder="7192" className="field-input text-left font-mono font-bold" dir="ltr"/>
           </div>
-          <button onClick={analyze} disabled={!spxInput||parseFloat(spxInput)<1000}
-            className="btn-primary px-6 self-end">أوصِ ←</button>
+          <div>
+            <div className="text-[10px] text-surface-500 font-semibold mb-1">
+              Strike تريده (اختياري)
+            </div>
+            <input type="number" step="5" value={userStrikeInput}
+              onChange={e=>{setUserStrikeInput(e.target.value);setContracts([])}}
+              placeholder="مثال: 7185" className="field-input text-left font-mono font-bold" dir="ltr"/>
+          </div>
         </div>
+        <button onClick={analyze} disabled={!spxInput||parseFloat(spxInput)<1000}
+          className="btn-primary w-full justify-center mb-3">أوصِ بأفضل عقد ←</button>
 
         {/* اتجاه */}
         <div className="flex gap-2">
@@ -130,28 +168,36 @@ export default function SmartDashboard({analyses}:{analyses:any[]}) {
                 </div>
                 <div className="p-4">
                   <div className="text-sm font-semibold text-navy-900 mb-3">{c.why}</div>
-                  <div className="grid grid-cols-3 gap-2 mb-3">
+                  <div className="space-y-2 mb-3">
                     {[
-                      {n:'هدف ١',pct:c.targetPct1,cl:'bg-emerald-50 text-emerald-800 border border-emerald-200'},
-                      {n:'هدف ٢',pct:c.targetPct2,cl:'bg-teal-50 text-teal-800 border border-teal-200'},
-                      {n:'هدف ٣',pct:c.targetPct3,cl:'bg-navy-50 text-navy-800 border border-navy-200'},
-                    ].map((t,j)=>(
-                      <div key={j} className={`rounded-xl p-2 text-center ${t.cl}`}>
-                        <div className="text-[9px] font-semibold mb-0.5">🎯 {t.n}</div>
-                        <div className="text-sm font-bold">+{t.pct}%</div>
-                        <div className="text-[9px] opacity-60">من سعر دخولك</div>
-                      </div>
-                    ))}
+                      {n:'هدف ١',pct:c.targetPct1,cl:'bg-emerald-50 border-emerald-200 text-emerald-800'},
+                      {n:'هدف ٢',pct:c.targetPct2,cl:'bg-teal-50 border-teal-200 text-teal-800'},
+                      {n:'هدف ٣',pct:c.targetPct3,cl:'bg-navy-50 border-navy-200 text-navy-800'},
+                    ].map((t,j)=>{
+                      const exitPrice = (c.approxPrice*(1+t.pct/100)).toFixed(2)
+                      return (
+                        <div key={j} className={`rounded-xl px-3 py-2.5 border flex items-center justify-between ${t.cl}`}>
+                          <div>
+                            <div className="text-[10px] font-bold mb-0.5">🎯 {t.n} — +{t.pct}%</div>
+                            <div className="text-[10px] opacity-70">
+                              إذا اشتريت بـ ${c.approxPrice.toFixed(2)} — اخرج عند ${exitPrice}
+                            </div>
+                          </div>
+                          <div className="text-base font-bold font-mono">${exitPrice}</div>
+                        </div>
+                      )
+                    })}
                   </div>
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <div className="bg-teal-50 rounded-xl p-2.5 border border-teal-100">
-                      <div className="text-[9px] text-teal-600 font-bold">🟢 ادخل عند</div>
-                      <div className="text-xs font-bold text-teal-900">Bid/Ask من دراية</div>
-                      <div className="text-[9px] text-teal-500">بالسعر الظاهر في دراية</div>
+                      <div className="text-[9px] text-teal-600 font-bold">🟢 السعر التقريبي</div>
+                      <div className="text-sm font-bold text-teal-900 font-mono">${c.approxPrice.toFixed(1)}</div>
+                      <div className="text-[9px] text-teal-400">مثال — تحقق من دراية</div>
                     </div>
                     <div className="bg-red-50 rounded-xl p-2.5 border border-red-100">
-                      <div className="text-[9px] text-red-600 font-bold">🔴 وقف الخسارة</div>
-                      <div className="text-xs font-bold text-red-900">-{c.stopPct}% من سعر دخولك</div>
+                      <div className="text-[9px] text-red-600 font-bold">🔴 اخرج عند الخسارة</div>
+                      <div className="text-sm font-bold text-red-900 font-mono">${(c.approxPrice*(1-c.stopPct/100)).toFixed(1)}</div>
+                      <div className="text-[9px] text-red-400">-{c.stopPct}% (مثال)</div>
                     </div>
                   </div>
                   <div className="flex gap-2">
