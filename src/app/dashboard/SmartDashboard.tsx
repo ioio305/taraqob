@@ -4,29 +4,31 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
 type ContractRec = {
-  type: 'call'|'put'; strike: number; estPrice: number
-  target1: number; target2: number; target3: number
-  stopLoss: number; entryLow: number; entryHigh: number
+  type: 'call'|'put'; strike: number
   risk: 'آمن'|'متوسط'|'مغامر'; why: string; dte: number
+  targetPct1: number; targetPct2: number; targetPct3: number
+  stopPct: number
 }
 
-function estimatePrice(spx:number,strike:number,vix:number,dte:number):number {
-  const iv=vix/100; const T=Math.max(dte,0.5)/365
-  const d=Math.abs(strike-spx); const expMove=spx*iv*Math.sqrt(T)
-  const otm=d/expMove; const base=expMove*Math.exp(-otm*1.2)
-  return Math.max(0.5,Math.round(base*100)/100)
-}
+// لا أسعار تقديرية — فقط Strike الموصى به
 
 function generate(spx:number,vix:number,dir:string):ContractRec[] {
   const step=5; const atm=Math.round(spx/step)*step
   const isPut=dir==='bearish'; const t=isPut?'put':'call'
-  const s1=isPut?atm-5:atm+5; const p1=estimatePrice(spx,s1,vix,7)
-  const s2=isPut?atm-10:atm+10; const p2=estimatePrice(spx,s2,vix,3)
-  const s3=isPut?atm-15:atm+15; const p3=estimatePrice(spx,s3,vix,0)
+  const s1=isPut?atm-5:atm+5
+  const s2=isPut?atm-10:atm+10
+  const s3=isPut?atm-15:atm+15
+  const isHighVix=vix>20
   return [
-    { type:t,strike:s1,estPrice:p1,target1:p1*1.4,target2:p1*1.75,target3:p1*2.2,stopLoss:p1*0.55,entryLow:p1*0.95,entryHigh:p1*1.05,risk:'آمن',why:`${isPut?'السوق هابط':'السوق صاعد'} — ادخل ${t==='call'?'Call':'Put'} ${s1} بـ $${p1.toFixed(2)}`,dte:7 },
-    { type:t,strike:s2,estPrice:p2,target1:p2*1.5,target2:p2*2.0,target3:p2*3.0,stopLoss:p2*0.50,entryLow:p2*0.95,entryHigh:p2*1.10,risk:'متوسط',why:`أكثر مكافأة — ادخل ${t==='call'?'Call':'Put'} ${s2} بـ $${p2.toFixed(2)}`,dte:3 },
-    { type:t,strike:s3,estPrice:p3,target1:p3*1.3,target2:p3*2.0,target3:p3*4.0,stopLoss:p3*0.40,entryLow:p3*0.90,entryHigh:p3*1.10,risk:'مغامر',why:`0DTE — ربح سريع — ادخل ${t==='call'?'Call':'Put'} ${s3} بـ $${p3.toFixed(2)}`,dte:0 },
+    { type:t,strike:s1,risk:'آمن',dte:7,
+      targetPct1:35,targetPct2:70,targetPct3:120,stopPct:45,
+      why:`${isPut?'السوق هابط':'السوق صاعد'} — ${t==='call'?'Call':'Put'} ${s1} — قريب من السعر الحالي — مخاطرة منخفضة` },
+    { type:t,strike:s2,risk:'متوسط',dte:3,
+      targetPct1:50,targetPct2:100,targetPct3:200,stopPct:50,
+      why:`مكافأة أعلى — ${t==='call'?'Call':'Put'} ${s2} — DTE 3 أيام — مخاطرة متوسطة` },
+    { type:t,strike:s3,risk:'مغامر',dte:0,
+      targetPct1:30,targetPct2:100,targetPct3:300,stopPct:60,
+      why:`0DTE — ${t==='call'?'Call':'Put'} ${s3} — ربح سريع أو خسارة سريعة` },
   ]
 }
 
@@ -111,7 +113,7 @@ export default function SmartDashboard({analyses}:{analyses:any[]}) {
           {contracts.map((c,i)=>{
             const st=RS[c.risk]
             const isSel=selected?.strike===c.strike&&selected?.type===c.type
-            const rp=new URLSearchParams({contractType:c.type,strike:String(c.strike),bid:String((c.estPrice*0.97).toFixed(2)),ask:String((c.estPrice*1.03).toFixed(2)),delta:c.type==='call'?'0.35':'-0.35',dte:String(c.dte)}).toString()
+            const rp=new URLSearchParams({contractType:c.type,strike:String(c.strike),dte:String(c.dte)}).toString()
             return (
               <div key={i} className={`card overflow-hidden transition-all ${isSel?'border-2 border-teal-400':''}`}>
                 <div className="px-4 py-3 border-b border-surface-100 flex items-center justify-between">
@@ -122,33 +124,34 @@ export default function SmartDashboard({analyses}:{analyses:any[]}) {
                     </span>
                   </div>
                   <div className="text-right">
-                    <span className="text-lg font-bold text-navy-900 font-mono">{c.strike}</span>
-                    <span className="text-xs text-surface-400 mr-2">≈ ${c.estPrice.toFixed(2)}</span>
+                    <span className="text-xl font-bold text-navy-900 font-mono">{c.type==='call'?'Call':'Put'} {c.strike}</span>
+                    <div className="text-[10px] text-surface-400">DTE {c.dte} — تحقق من السعر في دراية</div>
                   </div>
                 </div>
                 <div className="p-4">
                   <div className="text-sm font-semibold text-navy-900 mb-3">{c.why}</div>
                   <div className="grid grid-cols-3 gap-2 mb-3">
                     {[
-                      {n:'هدف ١',v:c.target1,cl:'bg-emerald-50 text-emerald-800 border border-emerald-200'},
-                      {n:'هدف ٢',v:c.target2,cl:'bg-teal-50 text-teal-800 border border-teal-200'},
-                      {n:'هدف ٣',v:c.target3,cl:'bg-navy-50 text-navy-800 border border-navy-200'},
+                      {n:'هدف ١',pct:c.targetPct1,cl:'bg-emerald-50 text-emerald-800 border border-emerald-200'},
+                      {n:'هدف ٢',pct:c.targetPct2,cl:'bg-teal-50 text-teal-800 border border-teal-200'},
+                      {n:'هدف ٣',pct:c.targetPct3,cl:'bg-navy-50 text-navy-800 border border-navy-200'},
                     ].map((t,j)=>(
                       <div key={j} className={`rounded-xl p-2 text-center ${t.cl}`}>
                         <div className="text-[9px] font-semibold mb-0.5">🎯 {t.n}</div>
-                        <div className="text-xs font-bold font-mono">${t.v.toFixed(2)}</div>
-                        <div className="text-[9px] opacity-70">+{((t.v/c.estPrice-1)*100).toFixed(0)}%</div>
+                        <div className="text-sm font-bold">+{t.pct}%</div>
+                        <div className="text-[9px] opacity-60">من سعر دخولك</div>
                       </div>
                     ))}
                   </div>
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <div className="bg-teal-50 rounded-xl p-2.5 border border-teal-100">
-                      <div className="text-[9px] text-teal-600 font-bold">🟢 ادخل بين</div>
-                      <div className="text-xs font-bold text-teal-900 font-mono">${c.entryLow.toFixed(2)} — ${c.entryHigh.toFixed(2)}</div>
+                      <div className="text-[9px] text-teal-600 font-bold">🟢 ادخل عند</div>
+                      <div className="text-xs font-bold text-teal-900">Bid/Ask من دراية</div>
+                      <div className="text-[9px] text-teal-500">بالسعر الظاهر في دراية</div>
                     </div>
                     <div className="bg-red-50 rounded-xl p-2.5 border border-red-100">
-                      <div className="text-[9px] text-red-600 font-bold">🔴 اخرج عند</div>
-                      <div className="text-xs font-bold text-red-900 font-mono">${c.stopLoss.toFixed(2)} <span className="text-[9px] opacity-60">(-{((1-c.stopLoss/c.estPrice)*100).toFixed(0)}%)</span></div>
+                      <div className="text-[9px] text-red-600 font-bold">🔴 وقف الخسارة</div>
+                      <div className="text-xs font-bold text-red-900">-{c.stopPct}% من سعر دخولك</div>
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -168,23 +171,27 @@ export default function SmartDashboard({analyses}:{analyses:any[]}) {
 
           {selected&&(
             <div className="bg-navy-900 rounded-2xl p-5">
-              <div className="text-white font-bold text-sm mb-4">📊 بطاقة المتابعة — {selected.type==='call'?'Call':'Put'} {selected.strike}</div>
+              <div className="text-white font-bold text-sm mb-1">📊 {selected.type==='call'?'Call':'Put'} {selected.strike} — خطة التداول</div>
+              <div className="text-white/50 text-xs mb-4">ادخل السعر الفعلي من دراية — ثم احسب أهدافك</div>
               <div className="space-y-2.5">
                 {[
-                  {l:'💰 ادخل بين',v:`$${selected.entryLow.toFixed(2)} — $${selected.entryHigh.toFixed(2)}`,c:'text-white'},
-                  {l:'🎯 اخرج بربح هدف ١',v:`$${selected.target1.toFixed(2)} (+${((selected.target1/selected.estPrice-1)*100).toFixed(0)}%)`,c:'text-emerald-400'},
-                  {l:'🎯 اخرج بربح هدف ٢',v:`$${selected.target2.toFixed(2)} (+${((selected.target2/selected.estPrice-1)*100).toFixed(0)}%)`,c:'text-teal-400'},
-                  {l:'🚀 اخرج بربح هدف ٣',v:`$${selected.target3.toFixed(2)} (+${((selected.target3/selected.estPrice-1)*100).toFixed(0)}%)`,c:'text-amber-400'},
-                  {l:'🔴 اخرج بخسارة عند',v:`$${selected.stopLoss.toFixed(2)} (-${((1-selected.stopLoss/selected.estPrice)*100).toFixed(0)}%)`,c:'text-red-400'},
+                  {l:'💰 ادخل بـ',         v:'Bid/Ask من دراية',          c:'text-white'},
+                  {l:'🎯 هدف ١ — أخرج عند',v:`+${selected.targetPct1}% من سعر دخولك`, c:'text-emerald-400'},
+                  {l:'🎯 هدف ٢ — أخرج عند',v:`+${selected.targetPct2}% من سعر دخولك`, c:'text-teal-400'},
+                  {l:'🚀 هدف ٣ — أخرج عند',v:`+${selected.targetPct3}% من سعر دخولك`, c:'text-amber-400'},
+                  {l:'🔴 وقف الخسارة',      v:`-${selected.stopPct}% من سعر دخولك`,   c:'text-red-400'},
                 ].map((r,i)=>(
                   <div key={i} className="flex items-center justify-between">
                     <span className="text-white/60 text-xs">{r.l}</span>
-                    <span className={`text-sm font-bold font-mono ${r.c}`}>{r.v}</span>
+                    <span className={`text-sm font-bold ${r.c}`}>{r.v}</span>
                   </div>
                 ))}
               </div>
-              <div className="mt-4 pt-3 border-t border-white/10 text-[10px] text-white/30 text-center">
-                تحقق من السعر الفعلي في دراية قبل الدخول
+              <div className="mt-4">
+                <Link href={`/dashboard/analyze?contractType=${selected.type}&strike=${selected.strike}&dte=${selected.dte}`}
+                  className="block w-full py-2.5 rounded-xl bg-teal-600 text-white text-xs font-bold text-center hover:bg-teal-700 transition-colors">
+                  أدخل البيانات من دراية وحلّل بدقة ←
+                </Link>
               </div>
             </div>
           )}
