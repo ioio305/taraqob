@@ -3,8 +3,8 @@ import type { NextRequest } from 'next/server'
 
 export async function POST(request: NextRequest) {
   try {
-    const formData   = await request.formData()
-    const tableImage = formData.get('tableImage') as File | null
+    const formData    = await request.formData()
+    const tableImage  = formData.get('tableImage')  as File | null
     const detailImage = formData.get('detailImage') as File | null
 
     if (!tableImage && !detailImage) {
@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     }
 
     async function toBase64(file: File) {
-      const bytes  = await file.arrayBuffer()
+      const bytes = await file.arrayBuffer()
       return { data: Buffer.from(bytes).toString('base64'), type: file.type || 'image/jpeg' }
     }
 
@@ -21,20 +21,16 @@ export async function POST(request: NextRequest) {
     if (tableImage) {
       const b64 = await toBase64(tableImage)
       content.push({ type: 'image', source: { type: 'base64', media_type: b64.type, data: b64.data } })
-      content.push({ type: 'text', text: 'This is the options chain table showing multiple contracts.' })
+      content.push({ type: 'text', text: 'IMAGE 1: Options chain table from Drayah Global. Right side Calls, Left side Puts, Middle Strike. Small numbers below prices are volume.' })
     }
 
     if (detailImage) {
       const b64 = await toBase64(detailImage)
       content.push({ type: 'image', source: { type: 'base64', media_type: b64.type, data: b64.data } })
-      content.push({ type: 'text', text: 'This is the contract detail page showing Greeks and full data.' })
+      content.push({ type: 'text', text: 'IMAGE 2: Single contract detail page from Drayah Global showing all Greeks and contract details.' })
     }
 
-    const instruction = detailImage
-      ? 'Extract the SINGLE contract shown in the detail image. Get ALL available data: type (call/put), strike, bid, ask, delta, theta, vega, iv (implied volatility as decimal e.g. 0.246), dte, expiry. Also get spxPrice if shown. Return ONLY valid JSON: {"contracts":[{"type":"put","strike":7200,"bid":15.00,"ask":15.40,"delta":-0.347,"theta":-4.826,"vega":2.417,"iv":0.246,"dte":1,"expiry":"2026-05-04"}],"spxPrice":7229.32}'
-      : 'Extract ALL contracts from the options chain table. For each: type (call/put), strike, bid, ask, delta (if shown), dte (if shown), expiry. Right column is usually Calls, left is Puts, middle is Strike. Return ONLY valid JSON: {"contracts":[{"type":"call","strike":7200,"bid":35.70,"ask":36.20,"delta":0.42,"dte":1,"expiry":"2026-05-04"}],"spxPrice":7229.32}'
-
-    content.push({ type: 'text', text: instruction })
+    content.push({ type: 'text', text: 'Extract ALL data from these Drayah Global screenshots. From detail image get: type(call/put), strike, bid(طلب), ask(عرض), delta(دلتا), theta(ثيتا), vega(فيجا), gamma(جاما), iv as decimal(التقلبات الضمنية), dte(0=today), expiry, breakeven(نقطة التعادل), profitProbability(احتمالية الربح%). From table image get volume and openInterest for the matching strike. Return ONLY valid JSON: {"contracts":[{"type":"call","strike":7220,"bid":1.80,"ask":1.90,"delta":0.142,"theta":-1.962,"vega":0.326,"gamma":0.008,"iv":0.15,"dte":0,"expiry":"2026-05-04","volume":169,"openInterest":90,"breakeven":7222.35,"profitProbability":18}],"spxPrice":7192.59}' })
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -51,8 +47,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (!response.ok) {
-      const err = await response.text()
-      console.error('Anthropic error:', err)
+      console.error('Anthropic error:', await response.text())
       return NextResponse.json({ error: 'AI service error' }, { status: 500 })
     }
 

@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { StrategyTooltip } from '@/components/analyze/StrategyTooltip'
 import { SmartTargetsCard } from '@/components/analyze/SmartTargets'
+import { useSearchParams } from 'next/navigation'
 import {
   analyzeContract, RISK_PROFILES, PLAN_FEATURES, STRATEGY_LABELS,
   type RiskProfile, type PlanType, type AssetType, type Strategy,
@@ -179,9 +180,17 @@ export default function AnalyzePage() {
   const [marketSpx,     setMarketSpx]     = useState(7230)
   const [filledFromImage, setFilledFromImage] = useState(false)
 
+  const searchParams = useSearchParams()
+
   const [form, setForm] = useState<Record<string,string>>({
-    contractType:'call', strike:'', expiry:'', dte:'',
-    bid:'', ask:'', delta:'', theta:'', gamma:'', iv:'',
+    contractType: searchParams.get('contractType') || 'call',
+    strike:       searchParams.get('strike')       || '',
+    expiry:       searchParams.get('expiry')       || '',
+    dte:          searchParams.get('dte')          || '',
+    bid:          searchParams.get('bid')          || '',
+    ask:          searchParams.get('ask')          || '',
+    delta:        searchParams.get('delta')        || '',
+    theta:'', gamma:'', iv:'',
     vwapLevel:'', volume:'', openInterest:'',
     londonHigh:'', londonLow:'',
     ticker:'', beta:'', earningsDate:'',
@@ -189,16 +198,21 @@ export default function AnalyzePage() {
 
   function update(k: string, v: string) { setForm(f => ({ ...f, [k]:v })); setResult(null) }
 
-  function fillFromImage(c: ExtractedContract) {
+  function fillFromImage(c: any) {
     setForm(f => ({
-      ...f, contractType: c.type || 'call',
-      strike: c.strike ? String(c.strike) : '',
-      bid:    c.bid    ? String(c.bid)    : '',
-      ask:    c.ask    ? String(c.ask)    : '',
-      delta:  c.delta  ? String(c.delta)  : '',
-      theta:  c.theta  ? String(c.theta)  : '',
-      iv:     c.iv     ? String(Math.round(c.iv * 100)) : '',
-      dte:    c.dte    ? String(c.dte)    : '',
+      ...f,
+      contractType:  c.type         ? String(c.type)                        : f.contractType,
+      strike:        c.strike        ? String(c.strike)                      : '',
+      bid:           c.bid           ? String(c.bid)                         : '',
+      ask:           c.ask           ? String(c.ask)                         : '',
+      delta:         c.delta         ? String(c.delta)                       : '',
+      theta:         c.theta         ? String(c.theta)                       : '',
+      gamma:         c.gamma         ? String(c.gamma)                       : '',
+      iv:            c.iv            ? String(Math.round(c.iv * 100))        : '',
+      dte:           c.dte !== undefined ? String(c.dte)                     : '',
+      expiry:        c.expiry        ? String(c.expiry)                      : '',
+      volume:        c.volume        ? String(c.volume)                      : '',
+      openInterest:  c.openInterest  ? String(c.openInterest)                : '',
     }))
     setFilledFromImage(true); setResult(null); setInputMethod('manual')
     setTimeout(() => document.getElementById('analyze-form')?.scrollIntoView({ behavior:'smooth' }), 100)
