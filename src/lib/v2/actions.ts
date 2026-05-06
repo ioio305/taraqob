@@ -36,6 +36,21 @@ function computeDirection(changePct: number, vix: number): DirectionResult {
   return { direction: 'no_trade', contractType: null, label: '↔ محايد — انتظر', reason: 'SPX يتداول عرضياً — لا اتجاه واضح', color: '#F59E0B', score: 30 }
 }
 
+// ── Market Environment Classifier ──────────────────────────
+
+type MarketEnv = 'strongly_bullish' | 'bullish' | 'neutral' | 'bearish' | 'strongly_bearish' | 'high_volatility' | 'unclear'
+
+function classifyEnvironment(changePct: number, vix: number, spxPrice: number): { env: MarketEnv; reason: string } {
+  if (spxPrice === 0) return { env: 'unclear', reason: 'بيانات غير متاحة' }
+  if (vix > 30)       return { env: 'high_volatility', reason: `VIX ${vix.toFixed(1)} — تذبذب حاد، خطر مرتفع` }
+  if (changePct >= 1.0)  return { env: 'strongly_bullish', reason: `SPX +${changePct.toFixed(2)}% — صعود قوي اليوم` }
+  if (changePct >= 0.4)  return { env: 'bullish',          reason: `SPX +${changePct.toFixed(2)}% — اتجاه صاعد` }
+  if (changePct <= -1.0) return { env: 'strongly_bearish', reason: `SPX ${changePct.toFixed(2)}% — هبوط حاد` }
+  if (changePct <= -0.4) return { env: 'bearish',          reason: `SPX ${changePct.toFixed(2)}% — ضغط بيعي` }
+  if (vix > 22)          return { env: 'high_volatility',  reason: `VIX ${vix.toFixed(1)} — تذبذب مرتفع، حذر` }
+  return { env: 'neutral', reason: `SPX ${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}% — حركة محدودة` }
+}
+
 // ── ACTION 1: Market Snapshot ──────────────────────────────
 
 export async function fetchMarketSnapshot() {
@@ -46,6 +61,7 @@ export async function fetchMarketSnapshot() {
   const vixPrice  = market.vix?.last ?? 20
   const dir       = computeDirection(spxChgPct, vixPrice)
   const status    = computeMarketStatus()
+  const { env: marketEnv, reason: envReason } = classifyEnvironment(spxChgPct, vixPrice, spxPrice)
 
   const em = spxPrice > 0 && vixPrice > 0
     ? Math.round(spxPrice * (vixPrice / 100) * Math.sqrt(1 / 252))
@@ -73,6 +89,9 @@ export async function fetchMarketSnapshot() {
     direction_reason:   dir.reason,
     direction_color:    dir.color,
     contract_type:      dir.contractType,
+    // بيئة السوق — للـ Market Regime page
+    market_environment: marketEnv,
+    environment_reason: envReason,
     // جلسات لندن وطوكيو (High/Low كمرجع)
     london_high:        sessions.london.high,
     london_low:         sessions.london.low,
@@ -82,6 +101,9 @@ export async function fetchMarketSnapshot() {
     tokyo_low:          sessions.tokyo.low,
     tokyo_close:        sessions.tokyo.close,
     tokyo_change_pct:   sessions.tokyo.change_pct,
+    // aliases للـ market page
+    nikkei_change_pct:  sessions.tokyo.change_pct,
+    ftse_change_pct:    sessions.london.change_pct,
     // الحالة
     market_status:      status,
     fetched_at:         new Date().toISOString(),

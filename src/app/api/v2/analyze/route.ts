@@ -21,17 +21,22 @@ export async function GET(request: NextRequest) {
   const typeIn   = (searchParams.get('type') ?? 'call') as 'call' | 'put'
 
   try {
-    // ── 1. SPX + VIX ────────────────────────────────────────
-    let spxPrice = 0, spxChg = 0, vixPrice = 0
+    // ── 1. SPX + VIX — مباشر من Tradier بدون internal fetch ─
+    let spxPrice = 0, spxChg = 0, vixPrice = 20
     try {
-      // نستخدم pulse الذي يعمل بشكل موثوق
-      const host = request.headers.get('host') ?? 'localhost:3000'
-      const proto = host.includes('localhost') ? 'http' : 'https'
-      const pulseRes = await fetch(`${proto}://${host}/api/market/pulse`, { cache: 'no-store' })
-      const pulse = await pulseRes.json()
-      spxPrice = pulse?.spx?.price ?? 0
-      spxChg   = pulse?.spx?.change ?? 0
-      vixPrice = pulse?.vix?.price ?? 20
+      const mkt = await tGet('/markets/quotes?symbols=$SPX.X,$VIX.X,SPY&greeks=false')
+      const qs: any[] = Array.isArray(mkt?.quotes?.quote)
+        ? mkt.quotes.quote : [mkt?.quotes?.quote].filter(Boolean)
+      let spxQ = qs.find((q: any) => q.symbol === '$SPX.X' || q.symbol === 'SPX')
+      const vixQ = qs.find((q: any) => q.symbol === '$VIX.X' || q.symbol === 'VIX')
+      if (!spxQ?.last) {
+        const spy = qs.find((q: any) => q.symbol === 'SPY')
+        if (spy?.last) spxQ = { ...spy, last: spy.last * 10, prevclose: (spy.prevclose ?? spy.last) * 10 }
+      }
+      const prev = spxQ?.prevclose ?? spxQ?.last ?? 0
+      spxPrice = spxQ?.last ?? 0
+      spxChg   = prev > 0 ? ((spxPrice - prev) / prev) * 100 : 0
+      vixPrice = vixQ?.last ?? 20
     } catch {}
 
     if (!spxPrice) return NextResponse.json({ success: false, error: 'تعذر جلب سعر SPX' })

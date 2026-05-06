@@ -58,22 +58,34 @@ function scoreOTM(o: any, spxPrice: number, type: 'call' | 'put'): number {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const forceType = searchParams.get('type') as 'call' | 'put' | null
-  const host = request.headers.get('host') ?? 'localhost:3000'
-  const proto = host.includes('localhost') ? 'http' : 'https'
 
   try {
-    // ── 1. pulse + sessions بالتوازي ──────────────────────
-    const [pulseRes, sessData] = await Promise.all([
-      fetch(`${proto}://${host}/api/market/pulse`, { cache: 'no-store' }),
+    // ── 1. SPX + VIX + sessions بالتوازي — مباشر من Tradier ─
+    const [mktData, sessData] = await Promise.all([
+      tGet('/markets/quotes?symbols=$SPX.X,$VIX.X,SPY&greeks=false').catch(() => null),
       tGet('/markets/quotes?symbols=EWJ,EWU&greeks=false').catch(() => null),
     ])
 
-    const pulse     = await pulseRes.json()
-    const spxPrice  = pulse?.spx?.price ?? 0
-    const spxChgPct = pulse?.spx?.change ?? 0
-    const vixPrice  = pulse?.vix?.price ?? 0
-    const spxHigh   = pulse?.spx?.high  ?? 0
-    const spxLow    = pulse?.spx?.low   ?? 0
+    // استخرج SPX + VIX من البيانات الخام
+    let spxQ: any = null, vixQ: any = null
+    if (mktData?.quotes?.quote) {
+      const qs: any[] = Array.isArray(mktData.quotes.quote)
+        ? mktData.quotes.quote : [mktData.quotes.quote]
+      spxQ = qs.find((q: any) => q.symbol === '$SPX.X' || q.symbol === 'SPX') ?? null
+      vixQ = qs.find((q: any) => q.symbol === '$VIX.X' || q.symbol === 'VIX') ?? null
+      // fallback: SPY × 10
+      if (!spxQ?.last) {
+        const spy = qs.find((q: any) => q.symbol === 'SPY')
+        if (spy?.last) spxQ = { ...spy, last: spy.last * 10, prevclose: (spy.prevclose ?? spy.last) * 10, high: (spy.high ?? 0) * 10, low: (spy.low ?? 0) * 10 }
+      }
+    }
+
+    const spxPrice  = spxQ?.last ?? 0
+    const spxPrev   = spxQ?.prevclose ?? spxPrice
+    const spxChgPct = spxPrev > 0 ? ((spxPrice - spxPrev) / spxPrev) * 100 : 0
+    const vixPrice  = vixQ?.last ?? 0
+    const spxHigh   = spxQ?.high ?? 0
+    const spxLow    = spxQ?.low  ?? 0
 
     if (!spxPrice) return NextResponse.json({ success: false, error: 'تعذر جلب سعر SPX', contracts: [] })
 

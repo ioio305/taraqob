@@ -8,7 +8,7 @@ const nextConfig = {
   },
   experimental: {
     serverActions: {
-      allowedOrigins: ['localhost:3000', 'taraqob.netlify.app'],
+      allowedOrigins: ['localhost:3000', 'taraqob.vercel.app', 'taraqob.netlify.app'],
     },
   },
 }
