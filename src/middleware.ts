@@ -5,9 +5,8 @@ import type { NextRequest } from 'next/server'
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Public routes
-  const publicRoutes = ['/', '/login', '/auth/callback', '/auth/accept-invite', '/compliance', '/how-it-works']
-  if (publicRoutes.some(route => pathname === route || pathname.startsWith('/auth/'))) {
+  const publicRoutes = ['/', '/login', '/compliance', '/how-it-works']
+  if (publicRoutes.includes(pathname) || pathname.startsWith('/auth/')) {
     return NextResponse.next()
   }
 
@@ -43,7 +42,6 @@ export async function middleware(request: NextRequest) {
     .eq('id', user.id)
     .single()
 
-  // حساب معطّل
   if (!profile || profile.is_active === false) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
@@ -53,17 +51,21 @@ export async function middleware(request: NextRequest) {
 
   const role = profile.role
 
-  // Admin routes — admin و moderator فقط
   if (pathname.startsWith('/admin')) {
     if (!['admin', 'moderator'].includes(role)) {
       const url = request.nextUrl.clone()
-      url.pathname = '/dashboard'
+      url.pathname = '/v2'
       return NextResponse.redirect(url)
     }
   }
 
-  // Dashboard — للجميع ما عدا admin و moderator
-  // admin و moderator يمكنهم الوصول للـ dashboard للمعاينة
+  if (pathname.startsWith('/analyst')) {
+    if (!['admin', 'moderator', 'analyst'].includes(role)) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/v2'
+      return NextResponse.redirect(url)
+    }
+  }
 
   return response
 }
