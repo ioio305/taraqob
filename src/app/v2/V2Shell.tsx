@@ -2,133 +2,200 @@
 
 import { useState, useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-const NAV_MAIN = [
+// ── Nav definitions ────────────────────────────────────────────
+const NAV_TRADING = [
   { href: '/v2',             label: 'الداشبورد',        icon: '◈', exact: true  },
   { href: '/v2/analyze',     label: 'تحليل العقد',      icon: '⬡', exact: false },
   { href: '/v2/market',      label: 'Market Regime',    icon: '◐', exact: false },
   { href: '/v2/contract',    label: 'Contract Quality', icon: '◇', exact: false },
-]
-
-const NAV_DATA = [
   { href: '/v2/signals',     label: 'الإشارات',          icon: '◉', exact: false },
   { href: '/v2/performance', label: 'الأداء',            icon: '◫', exact: false },
 ]
 
 const NAV_ADMIN = [
-  { href: '/v2/admin',       label: 'لوحة الإدارة',      icon: '⊞', exact: true  },
-  { href: '/v2/admin/users', label: 'المستخدمون',        icon: '◎', exact: false },
-  { href: '/v2/admin/audit', label: 'سجل الأحداث',       icon: '≡',  exact: false },
+  { href: '/v2/admin',       label: 'نظرة عامة',        icon: '⊞', exact: true  },
+  { href: '/v2/admin/users', label: 'المستخدمون',       icon: '◎', exact: false },
+  { href: '/v2/admin/audit', label: 'سجل الأحداث',      icon: '≡',  exact: false },
 ]
 
-function NavLink({ href, label, icon, exact }: { href: string; label: string; icon: string; exact: boolean }) {
+// ── NavLink ────────────────────────────────────────────────────
+function NavLink({ href, label, icon, exact, accent = '#C9943A' }: {
+  href: string; label: string; icon: string; exact: boolean; accent?: string
+}) {
   const pathname = usePathname()
   const active = exact ? pathname === href : pathname.startsWith(href)
   return (
     <Link href={href}
-      className="group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200"
+      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
       style={{
-        color:        active ? '#E0C07A' : '#4A5568',
-        background:   active ? 'rgba(201,148,58,0.08)' : 'transparent',
-        borderRight:  active ? '2px solid #C9943A' : '2px solid transparent',
+        color:       active ? '#E8D5A3' : '#4A5568',
+        background:  active ? `${accent}12` : 'transparent',
+        borderRight: active ? `2px solid ${accent}` : '2px solid transparent',
       }}>
-      <span className="text-sm w-4 text-center" style={{ color: active ? '#C9943A' : '#2D3748' }}>{icon}</span>
-      <span className="font-medium tracking-wide">{label}</span>
-      {active && <span className="mr-auto w-1.5 h-1.5 rounded-full" style={{ background: '#C9943A' }} />}
+      <span className="w-4 text-center text-sm shrink-0" style={{ color: active ? accent : '#1A2A3A' }}>{icon}</span>
+      <span className="font-medium">{label}</span>
+      {active && <span className="mr-auto w-1.5 h-1.5 rounded-full shrink-0" style={{ background: accent }} />}
     </Link>
   )
 }
 
-function SectionLabel({ children }: { children: string }) {
+function SectionTitle({ children, color = '#1A2A3A' }: { children: string; color?: string }) {
   return (
-    <div className="text-xs font-semibold tracking-widest mb-2 px-3"
-      style={{ color: '#1A2A3A', letterSpacing: '0.2em' }}>
+    <div className="px-3 pb-1 pt-1 text-xs font-mono font-semibold tracking-widest uppercase"
+      style={{ color, letterSpacing: '0.18em' }}>
       {children}
     </div>
   )
 }
 
+// ── Main Shell ─────────────────────────────────────────────────
 export default function V2Shell({ children, userName, userRole }: {
   children: ReactNode; userName: string; userRole: string
 }) {
-  const router = useRouter()
-  const [mobileOpen, setMobileOpen]   = useState(false)
-  const [loggingOut, setLoggingOut]   = useState(false)
-  const isAdmin = ['admin', 'moderator'].includes(userRole)
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
 
-  async function logout() {
-    setLoggingOut(true)
-    await createClient().auth.signOut()
-    router.push('/login')
-  }
+  const isAdmin = userRole === 'admin'
+  const isMod   = userRole === 'moderator'
+  const isStaff = isAdmin || isMod
 
-  const roleLabelAr: Record<string, string> = {
+  const ROLE_LABEL: Record<string, string> = {
     admin:     'مدير',
     moderator: 'مشرف',
     user:      'مستخدم',
   }
+  const ROLE_COLOR: Record<string, string> = {
+    admin:     '#C9943A',
+    moderator: '#60A5FA',
+    user:      '#4A5568',
+  }
+  const roleColor = ROLE_COLOR[userRole] ?? '#4A5568'
 
-  const SidebarContent = (
-    <div className="flex flex-col h-full" style={{ background: '#080F17' }}>
+  async function logout() {
+    setLoggingOut(true)
+    try {
+      await createClient().auth.signOut()
+    } finally {
+      // force full reload to clear all cached auth state
+      window.location.href = '/login'
+    }
+  }
 
-      {/* ── Logo ── */}
-      <div className="px-5 pt-6 pb-5" style={{ borderBottom: '1px solid rgba(201,148,58,0.12)' }}>
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>ت</div>
+  // ── Sidebar content ──────────────────────────────────────────
+  const Sidebar = (
+    <div className="flex flex-col h-full select-none" style={{ background: '#08101A' }}>
+
+      {/* Logo */}
+      <div className="px-5 pt-5 pb-4 shrink-0"
+        style={{ borderBottom: '1px solid rgba(201,148,58,0.1)' }}>
+        <Link href={isStaff ? '/v2/admin' : '/v2'} className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0"
+            style={{ background: 'linear-gradient(135deg,#C9943A,#7A5010)', color: '#060D14' }}>ت</div>
           <div>
-            <div className="font-bold text-white text-sm tracking-widest">ترقّب</div>
-            <div className="text-xs font-mono" style={{ color: '#C9943A', letterSpacing: '0.15em' }}>TARAQOB PRO</div>
+            <div className="font-bold text-white text-sm tracking-wider">ترقّب</div>
+            <div className="text-xs font-mono" style={{ color: '#C9943A', letterSpacing: '0.12em' }}>TARAQOB PRO</div>
           </div>
+        </Link>
+      </div>
+
+      {/* Role badge */}
+      <div className="px-4 py-3 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
+          style={{ background: `${roleColor}0A`, border: `1px solid ${roleColor}20` }}>
+          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: roleColor }} />
+          <span className="text-xs font-mono" style={{ color: roleColor }}>{ROLE_LABEL[userRole] ?? userRole}</span>
+          {isStaff && (
+            <span className="mr-auto text-xs font-mono" style={{ color: '#1A2A3A' }}>
+              {isAdmin ? 'وصول كامل' : 'وصول محدود'}
+            </span>
+          )}
         </div>
       </div>
 
-      {/* ── التحليل ── */}
-      <div className="px-3 pt-5 pb-2">
-        <SectionLabel>التحليل</SectionLabel>
-        {NAV_MAIN.map(item => <NavLink key={item.href} {...item} />)}
-      </div>
-
-      {/* ── البيانات ── */}
-      <div className="px-3 pt-3 pb-2">
-        <SectionLabel>البيانات</SectionLabel>
-        {NAV_DATA.map(item => <NavLink key={item.href} {...item} />)}
-      </div>
-
-      {/* ── الإدارة — admin/moderator فقط ── */}
-      {isAdmin && (
-        <>
-          <div className="mx-4 my-3" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }} />
-          <div className="px-3 pb-2">
-            <SectionLabel>الإدارة</SectionLabel>
-            {NAV_ADMIN.map(item => <NavLink key={item.href} {...item} />)}
+      {/* ── Admin nav (staff only, shown first) ── */}
+      {isStaff && (
+        <div className="px-3 pt-4 pb-2 shrink-0">
+          <SectionTitle color="#C9943A40">الإدارة</SectionTitle>
+          <div className="space-y-0.5 mt-1">
+            {NAV_ADMIN.map(item => (
+              <NavLink key={item.href} {...item} accent="#C9943A" />
+            ))}
           </div>
-        </>
+        </div>
       )}
+
+      {/* Divider */}
+      {isStaff && (
+        <div className="mx-4 my-2 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }} />
+      )}
+
+      {/* ── Trading nav ── */}
+      <div className="px-3 pt-2 pb-2 shrink-0">
+        <SectionTitle>{isStaff ? 'التداول' : 'التحليل'}</SectionTitle>
+        <div className="space-y-0.5 mt-1">
+          {NAV_TRADING.slice(0, isStaff ? 4 : 4).map(item => (
+            <NavLink key={item.href} {...item} accent={isStaff ? '#60A5FA' : '#C9943A'} />
+          ))}
+        </div>
+      </div>
+
+      <div className="px-3 pt-1 pb-2 shrink-0">
+        <SectionTitle>البيانات</SectionTitle>
+        <div className="space-y-0.5 mt-1">
+          {NAV_TRADING.slice(4).map(item => (
+            <NavLink key={item.href} {...item} accent={isStaff ? '#60A5FA' : '#C9943A'} />
+          ))}
+        </div>
+      </div>
 
       <div className="flex-1" />
 
-      {/* ── User Info ── */}
-      <div className="px-4 py-4" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+      {/* ── User footer ── */}
+      <div className="px-4 py-4 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg,#1A3048,#0D1B2A)', color: '#C9943A', border: '1px solid rgba(201,148,58,0.25)' }}>
+          {/* Avatar */}
+          <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+            style={{ background: `${roleColor}15`, color: roleColor, border: `1px solid ${roleColor}30` }}>
             {userName.charAt(0).toUpperCase()}
           </div>
+
+          {/* Name */}
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium text-white truncate">{userName}</div>
-            <div className="text-xs font-mono truncate" style={{ color: '#2D3748' }}>
-              {roleLabelAr[userRole] ?? userRole}
+            <div className="text-sm font-semibold text-white truncate leading-tight">{userName}</div>
+            <div className="text-xs font-mono mt-0.5" style={{ color: '#2D3748' }}>
+              {ROLE_LABEL[userRole] ?? userRole}
             </div>
           </div>
-          <button onClick={logout} disabled={loggingOut} title="تسجيل الخروج"
-            className="text-xs transition-colors flex-shrink-0 disabled:opacity-40"
-            style={{ color: '#2D3748' }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#EF4444')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#2D3748')}>
-            {loggingOut ? '...' : '↩'}
+
+          {/* Logout */}
+          <button
+            onClick={logout}
+            disabled={loggingOut}
+            title="تسجيل الخروج"
+            className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all disabled:opacity-40"
+            style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.12)', color: '#4A5568' }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(239,68,68,0.15)'
+              e.currentTarget.style.color = '#EF4444'
+              e.currentTarget.style.borderColor = 'rgba(239,68,68,0.3)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(239,68,68,0.06)'
+              e.currentTarget.style.color = '#4A5568'
+              e.currentTarget.style.borderColor = 'rgba(239,68,68,0.12)'
+            }}>
+            {loggingOut ? (
+              <span className="text-xs font-mono" style={{ color: '#EF4444' }}>...</span>
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16,17 21,12 16,7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+            )}
           </button>
         </div>
       </div>
@@ -141,57 +208,70 @@ export default function V2Shell({ children, userName, userRole }: {
 
       {/* Mobile overlay */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden" style={{ background: 'rgba(0,0,0,0.75)' }}
+        <div className="fixed inset-0 z-40 lg:hidden" style={{ background: 'rgba(0,0,0,0.8)' }}
           onClick={() => setMobileOpen(false)} />
       )}
 
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex flex-col w-56 flex-shrink-0 h-screen"
-        style={{ borderLeft: '1px solid rgba(255,255,255,0.04)' }}>
-        {SidebarContent}
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex flex-col w-56 shrink-0 h-screen"
+        style={{ borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
+        {Sidebar}
       </aside>
 
-      {/* Mobile Sidebar */}
+      {/* Mobile sidebar */}
       <div className={`fixed inset-y-0 right-0 z-50 w-64 transform transition-transform duration-300 lg:hidden
         ${mobileOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-        {SidebarContent}
+        {Sidebar}
       </div>
 
-      {/* Main Area */}
+      {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
-        {/* Top Header */}
-        <header className="flex items-center justify-between px-5 h-12 flex-shrink-0"
-          style={{ background: 'rgba(8,15,23,0.95)', borderBottom: '1px solid rgba(255,255,255,0.04)', backdropFilter: 'blur(10px)' }}>
+        {/* Top bar */}
+        <header className="flex items-center justify-between px-4 h-12 shrink-0"
+          style={{ background: 'rgba(8,16,26,0.95)', borderBottom: '1px solid rgba(255,255,255,0.04)', backdropFilter: 'blur(10px)' }}>
 
-          <button onClick={() => setMobileOpen(true)} className="lg:hidden p-1" style={{ color: '#4A5568' }}>
+          <button onClick={() => setMobileOpen(true)} className="lg:hidden p-1.5 rounded-lg"
+            style={{ color: '#4A5568' }}>
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="3" y1="8" x2="21" y2="8" /><line x1="3" y1="16" x2="21" y2="16" />
+              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
 
           <MarketClock />
 
-          {isAdmin && (
-            <Link href="/v2/admin"
-              className="hidden sm:flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full transition-all"
-              style={{ border: '1px solid rgba(201,148,58,0.2)', color: '#C9943A', background: 'rgba(201,148,58,0.06)' }}>
-              <span>⊞</span>
-              <span>الإدارة</span>
-            </Link>
+          {/* Staff toggle: go to admin or trading view */}
+          {isStaff && (
+            <div className="hidden sm:flex items-center gap-2">
+              <Link href="/v2"
+                className="text-xs px-3 py-1.5 rounded-lg transition-all font-mono"
+                style={{ background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.15)', color: '#60A5FA' }}>
+                ◈ التداول
+              </Link>
+              <Link href="/v2/admin"
+                className="text-xs px-3 py-1.5 rounded-lg transition-all font-mono"
+                style={{ background: 'rgba(201,148,58,0.08)', border: '1px solid rgba(201,148,58,0.15)', color: '#C9943A' }}>
+                ⊞ الإدارة
+              </Link>
+            </div>
           )}
         </header>
 
-        {/* Page Content */}
+        {/* Content */}
         <main className="flex-1 overflow-y-auto">
           {children}
         </main>
 
-        {/* Mobile Bottom Nav */}
-        <nav className="lg:hidden flex-shrink-0 flex items-center justify-around px-2 py-2"
-          style={{ background: '#080F17', borderTop: '1px solid rgba(201,148,58,0.08)' }}>
-          {[...NAV_MAIN.slice(0, 3), NAV_DATA[0]].map(item => (
-            <MobileNavItem key={item.href} {...item} />
+        {/* Mobile bottom nav */}
+        <nav className="lg:hidden shrink-0 flex items-center justify-around px-1 py-2"
+          style={{ background: '#08101A', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          {(isStaff ? [
+            { href: '/v2/admin',   icon: '⊞', label: 'الإدارة',  exact: true  },
+            { href: '/v2',         icon: '◈', label: 'التداول',  exact: true  },
+            { href: '/v2/analyze', icon: '⬡', label: 'التحليل', exact: false },
+            { href: '/v2/signals', icon: '◉', label: 'الإشارات', exact: false },
+          ] : NAV_TRADING.slice(0, 4)).map(item => (
+            <MobileTab key={item.href} {...item} />
           ))}
         </nav>
       </div>
@@ -199,44 +279,46 @@ export default function V2Shell({ children, userName, userRole }: {
   )
 }
 
-function MobileNavItem({ href, icon, label, exact }: { href: string; icon: string; label: string; exact: boolean }) {
+function MobileTab({ href, icon, label, exact }: { href: string; icon: string; label: string; exact: boolean }) {
   const pathname = usePathname()
   const active = exact ? pathname === href : pathname.startsWith(href)
   return (
-    <Link href={href} className="flex flex-col items-center gap-1 px-3 py-1 rounded-lg"
-      style={{ color: active ? '#C9943A' : '#2D3748' }}>
-      <span className="text-base">{icon}</span>
-      <span className="text-[9px] font-medium">{label}</span>
+    <Link href={href} className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl min-w-[52px]"
+      style={{ color: active ? '#C9943A' : '#2D3748', background: active ? 'rgba(201,148,58,0.08)' : 'transparent' }}>
+      <span className="text-base leading-none">{icon}</span>
+      <span className="text-[9px] font-medium mt-0.5">{label}</span>
     </Link>
   )
 }
 
 function MarketClock() {
-  const [info, setInfo] = useState({ time: '', status: '' })
+  const [info, setInfo] = useState({ time: '', status: '', color: '#2D3748' })
 
   useEffect(() => {
     function tick() {
       const ny  = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
-      const h   = ny.getHours(), m = ny.getMinutes(), t = h * 60 + m, day = ny.getDay()
-      const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} ET`
-      const status =
-        day === 0 || day === 6 ? 'مغلق' :
-        t >= 570 && t < 960   ? 'مفتوح' :
-        t >= 540 && t < 570   ? 'قبل الافتتاح' : 'بعد الإغلاق'
-      setInfo({ time, status })
+      const h = ny.getHours(), m = ny.getMinutes(), day = ny.getDay()
+      const t = h * 60 + m
+      const time = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')} ET`
+      let status = '', color = '#2D3748'
+      if      (day === 0 || day === 6)  { status = 'مغلق';         color = '#2D3748' }
+      else if (t >= 570 && t < 960)    { status = 'مفتوح';        color = '#10B981' }
+      else if (t >= 540 && t < 570)    { status = 'قبل الافتتاح'; color = '#F59E0B' }
+      else                              { status = 'بعد الإغلاق';  color = '#4A5568' }
+      setInfo({ time, status, color })
     }
     tick()
     const id = setInterval(tick, 30000)
     return () => clearInterval(id)
   }, [])
 
-  const color = info.status === 'مفتوح' ? '#10B981' : info.status === 'قبل الافتتاح' ? '#F59E0B' : '#2D3748'
-
   return (
     <div className="flex items-center gap-2 text-xs">
-      {info.status && <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: color }} />}
-      <span style={{ fontFamily: '"IBM Plex Mono", monospace', color: '#4A5568' }}>{info.time}</span>
-      {info.status && <span style={{ color }}>{info.status}</span>}
+      {info.status === 'مفتوح' && (
+        <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: info.color }} />
+      )}
+      <span style={{ fontFamily: '"IBM Plex Mono", monospace', color: '#3D5060' }}>{info.time}</span>
+      <span style={{ color: info.color }}>{info.status}</span>
     </div>
   )
 }
