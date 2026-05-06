@@ -1,23 +1,23 @@
 // ============================================================
 // TRADIER API LAYER — ترقب v2
-// مصدر البيانات الوحيد — لا بيانات يدوية
 // ============================================================
 
 const TRADIER_BASE = 'https://api.tradier.com/v1'
-const TRADIER_TOKEN = process.env.TRADIER_API_KEY!
 
-if (!TRADIER_TOKEN) {
-  throw new Error('TRADIER_API_KEY غير موجود في متغيرات البيئة')
+function getToken(): string {
+  const token = process.env.TRADIER_API_KEY
+  if (!token) throw new Error('TRADIER_API_KEY غير موجود في متغيرات البيئة')
+  return token
 }
 
-const headers = {
-  Authorization: `Bearer ${TRADIER_TOKEN}`,
-  Accept: 'application/json',
+function getHeaders() {
+  return {
+    Authorization: `Bearer ${getToken()}`,
+    Accept: 'application/json',
+  }
 }
 
-// ============================================================
-// TYPES
-// ============================================================
+// ── Types ──────────────────────────────────────────────────
 
 export type TradierQuote = {
   symbol: string
@@ -33,8 +33,6 @@ export type TradierQuote = {
   low: number | null
   close: number | null
   prevclose: number | null
-  week_52_high: number | null
-  week_52_low: number | null
 }
 
 export type TradierOption = {
@@ -59,31 +57,7 @@ export type TradierOption = {
   } | null
 }
 
-export type TradierOptionsChain = {
-  options: TradierOption[]
-  expiration: string
-}
-
-export type MarketQuotes = {
-  spx: TradierQuote
-  vix: TradierQuote
-  spy: TradierQuote
-  fetchedAt: string
-  success: boolean
-  error?: string
-}
-
-export type GlobalMarkets = {
-  nikkei: TradierQuote | null   // ^N225 أو EWJ كـ proxy
-  ftse: TradierQuote | null     // ^FTSE أو EWU كـ proxy
-  dax: TradierQuote | null      // ^GDAXI أو EWG كـ proxy
-  fetchedAt: string
-  success: boolean
-}
-
-// ============================================================
-// CORE FETCH WRAPPER
-// ============================================================
+// ── Core Fetch ─────────────────────────────────────────────
 
 async function tradierFetch<T>(
   endpoint: string,
@@ -91,227 +65,201 @@ async function tradierFetch<T>(
 ): Promise<{ data: T | null; error: string | null }> {
   try {
     const url = new URL(`${TRADIER_BASE}${endpoint}`)
-    if (params) {
-      Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
-    }
+    if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
 
     const res = await fetch(url.toString(), {
-      headers,
-      next: { revalidate: 30 }, // cache 30 ثانية
+      headers: getHeaders(),
+      cache: 'no-store',
     })
 
     if (!res.ok) {
-      return {
-        data: null,
-        error: `Tradier API خطأ: ${res.status} ${res.statusText}`,
-      }
+      const text = await res.text()
+      return { data: null, error: `Tradier ${res.status}: ${text.slice(0, 100)}` }
     }
 
     const json = await res.json()
     return { data: json as T, error: null }
   } catch (err) {
-    return {
-      data: null,
-      error: err instanceof Error ? err.message : 'خطأ غير معروف في الاتصال',
-    }
+    return { data: null, error: err instanceof Error ? err.message : 'خطأ في الاتصال' }
   }
 }
 
-// ============================================================
-// 1. جلب أسعار السوق الرئيسية (SPX, VIX, SPY)
-// ============================================================
+// ── 1. Market Quotes (SPX, VIX, SPY) ───────────────────────
+
+export type MarketQuotes = {
+  spx: TradierQuote | null
+  vix: TradierQuote | null
+  spy: TradierQuote | null
+  fetchedAt: string
+  success: boolean
+  error?: string
+}
 
 export async function getMarketQuotes(): Promise<MarketQuotes> {
-  const { data, error } = await tradierFetch<{ quotes: { quote: TradierQuote[] | TradierQuote } }>(
-    '/markets/quotes',
-    { symbols: '$SPX.X,$VIX.X,SPY', greeks: 'false' }
-  )
+  // نجرب رموز متعددة
+  const symbolSets = [
+    '$SPX.X,$VIX.X,SPY',
+    'SPX,VIX,SPY',
+  ]
 
-  if (error || !data) {
-    return {
-      spx: {} as TradierQuote,
-      vix: {} as TradierQuote,
-      spy: {} as TradierQuote,
-      fetchedAt: new Date().toISOString(),
-      success: false,
-      error: error ?? 'فشل جلب بيانات السوق',
+  for (const symbols of symbolSets) {
+    const { data, error } = await tradierFetch<{ quotes: { quote: TradierQuote[] | TradierQuote } }>(
+      '/markets/quotes',
+      { symbols, greeks: 'false' }
+    )
+
+    if (error || !data?.quotes) continue
+
+    const quotes = Array.isArray(data.quotes.quote)
+      ? data.quotes.quote
+      : [data.quotes.quote]
+
+    const find = (sym: string) =>
+      quotes.find((q) => q.symbol === sym) ?? null
+
+    const spx = find('$SPX.X') ?? find('SPX')
+    const vix = find('$VIX.X') ?? find('VIX')
+    const spy = find('SPY')
+
+    if (spx?.last) {
+      return { spx, vix, spy, fetchedAt: new Date().toISOString(), success: true }
     }
   }
 
-  const quotes = Array.isArray(data.quotes.quote)
-    ? data.quotes.quote
-    : [data.quotes.quote]
-
-  const find = (sym: string) =>
-    quotes.find((q) => q.symbol === sym) ?? ({} as TradierQuote)
-
-  return {
-    spx: find('$SPX.X'),
-    vix: find('$VIX.X'),
-    spy: find('SPY'),
-    fetchedAt: new Date().toISOString(),
-    success: true,
+  // Yahoo Finance fallback
+  try {
+    const res = await fetch(
+      'https://query2.finance.yahoo.com/v8/finance/chart/%5EGSPC?interval=1m&range=1d',
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, cache: 'no-store' }
+    )
+    const d = await res.json()
+    const meta = d?.chart?.result?.[0]?.meta
+    const spxPrice = meta?.regularMarketPrice ?? 0
+    const spxPrev  = meta?.previousClose ?? spxPrice
+    const spxQ: TradierQuote = {
+      symbol: 'SPX', description: 'S&P 500 Index',
+      last: spxPrice, prevclose: spxPrev,
+      change: spxPrice - spxPrev,
+      change_percentage: spxPrev > 0 ? ((spxPrice - spxPrev) / spxPrev) * 100 : 0,
+      bid: null, ask: null, volume: null, open: null, high: null, low: null, close: null,
+    }
+    return { spx: spxQ, vix: null, spy: null, fetchedAt: new Date().toISOString(), success: true }
+  } catch {
+    return { spx: null, vix: null, spy: null, fetchedAt: new Date().toISOString(), success: false, error: 'فشل جلب بيانات السوق' }
   }
 }
 
-// ============================================================
-// 2. جلب الأسواق العالمية (ETF proxies)
-// ============================================================
+// ── 2. Global Markets ───────────────────────────────────────
+
+export type GlobalMarkets = {
+  nikkei: TradierQuote | null
+  ftse: TradierQuote | null
+  dax: TradierQuote | null
+  fetchedAt: string
+  success: boolean
+}
 
 export async function getGlobalMarkets(): Promise<GlobalMarkets> {
-  // EWJ = Japan ETF, EWU = UK ETF, EWG = Germany ETF
   const { data, error } = await tradierFetch<{ quotes: { quote: TradierQuote[] | TradierQuote } }>(
     '/markets/quotes',
     { symbols: 'EWJ,EWU,EWG', greeks: 'false' }
   )
 
-  if (error || !data) {
-    return {
-      nikkei: null,
-      ftse: null,
-      dax: null,
-      fetchedAt: new Date().toISOString(),
-      success: false,
-    }
+  if (error || !data?.quotes) {
+    return { nikkei: null, ftse: null, dax: null, fetchedAt: new Date().toISOString(), success: false }
   }
 
-  const quotes = Array.isArray(data.quotes.quote)
-    ? data.quotes.quote
-    : [data.quotes.quote]
-
-  const find = (sym: string) =>
-    quotes.find((q) => q.symbol === sym) ?? null
+  const quotes = Array.isArray(data.quotes.quote) ? data.quotes.quote : [data.quotes.quote]
+  const find = (sym: string) => quotes.find((q) => q.symbol === sym) ?? null
 
   return {
     nikkei: find('EWJ'),
-    ftse: find('EWU'),
-    dax: find('EWG'),
+    ftse:   find('EWU'),
+    dax:    find('EWG'),
     fetchedAt: new Date().toISOString(),
     success: true,
   }
 }
 
-// ============================================================
-// 3. جلب تواريخ انتهاء عقود SPX المتاحة
-// ============================================================
+// ── 3. SPX Expirations ─────────────────────────────────────
 
-export async function getSPXExpirations(): Promise<{
-  expirations: string[]
-  error: string | null
-}> {
-  const { data, error } = await tradierFetch<{
-    expirations: { date: string[] | string }
-  }>('/markets/options/expirations', {
-    symbol: 'SPX',
-    includeAllRoots: 'true',
-    strikes: 'false',
-  })
-
-  if (error || !data) {
-    return { expirations: [], error: error ?? 'فشل جلب تواريخ الانتهاء' }
+export async function getSPXExpirations(): Promise<{ expirations: string[]; error: string | null }> {
+  for (const symbol of ['SPX', 'SPXW']) {
+    const { data, error } = await tradierFetch<{ expirations: { date: string[] | string } }>(
+      '/markets/options/expirations',
+      { symbol, includeAllRoots: 'true', strikes: 'false' }
+    )
+    if (error || !data?.expirations?.date) continue
+    const dates = Array.isArray(data.expirations.date) ? data.expirations.date : [data.expirations.date]
+    if (dates.length > 0) return { expirations: dates, error: null }
   }
-
-  const dates = Array.isArray(data.expirations.date)
-    ? data.expirations.date
-    : [data.expirations.date]
-
-  return { expirations: dates, error: null }
+  return { expirations: [], error: 'لا توجد تواريخ انتهاء متاحة' }
 }
 
-// ============================================================
-// 4. جلب سلسلة عقود SPX لتاريخ انتهاء معين
-// ============================================================
+// ── 4. Options Chain ───────────────────────────────────────
 
 export async function getSPXOptionsChain(
   expiration: string,
   strikeRange?: { low: number; high: number }
 ): Promise<{ chain: TradierOption[]; error: string | null }> {
-  const params: Record<string, string> = {
-    symbol: 'SPX',
-    expiration,
-    greeks: 'true',
-  }
-
-  const { data, error } = await tradierFetch<{
-    options: { option: TradierOption[] | TradierOption } | null
-  }>('/markets/options/chains', params)
-
-  if (error || !data || !data.options) {
-    return { chain: [], error: error ?? 'لا توجد عقود لهذا التاريخ' }
-  }
-
-  let options = Array.isArray(data.options.option)
-    ? data.options.option
-    : [data.options.option]
-
-  // حساب Mid لكل عقد
-  options = options.map((opt) => ({
-    ...opt,
-    mid:
-      opt.bid != null && opt.ask != null
-        ? Math.round(((opt.bid + opt.ask) / 2) * 100) / 100
-        : null,
-  }))
-
-  // فلترة حسب نطاق Strike إذا طُلب
-  if (strikeRange) {
-    options = options.filter(
-      (o) => o.strike >= strikeRange.low && o.strike <= strikeRange.high
+  for (const symbol of ['SPX', 'SPXW']) {
+    const { data, error } = await tradierFetch<{ options: { option: TradierOption[] | TradierOption } | null }>(
+      '/markets/options/chains',
+      { symbol, expiration, greeks: 'true' }
     )
+
+    if (error || !data?.options) continue
+
+    let options = Array.isArray(data.options.option) ? data.options.option : [data.options.option]
+
+    // حساب mid
+    options = options.map((o) => ({
+      ...o,
+      mid: o.bid != null && o.ask != null ? Math.round(((o.bid + o.ask) / 2) * 100) / 100 : null,
+    }))
+
+    if (strikeRange) {
+      options = options.filter((o) => o.strike >= strikeRange.low && o.strike <= strikeRange.high)
+    }
+
+    if (options.length > 0) return { chain: options, error: null }
   }
 
-  return { chain: options, error: null }
+  return { chain: [], error: `لا توجد عقود للتاريخ ${expiration}` }
 }
 
-// ============================================================
-// 5. جلب بيانات عقد واحد برمزه
-// ============================================================
+// ── 5. Single Contract ─────────────────────────────────────
 
 export async function getContractBySymbol(symbol: string): Promise<{
-  contract: TradierOption | null
-  error: string | null
+  contract: TradierOption | null; error: string | null
 }> {
-  const { data, error } = await tradierFetch<{
-    quotes: { quote: TradierOption | TradierOption[] }
-  }>('/markets/quotes', {
-    symbols: symbol,
-    greeks: 'true',
-  })
+  const { data, error } = await tradierFetch<{ quotes: { quote: any } }>(
+    '/markets/quotes',
+    { symbols: symbol, greeks: 'true' }
+  )
 
-  if (error || !data) {
-    return { contract: null, error: error ?? 'فشل جلب بيانات العقد' }
+  if (error || !data?.quotes?.quote) {
+    return { contract: null, error: error ?? `لم يُعثر على العقد: ${symbol}` }
   }
 
-  const quote = Array.isArray(data.quotes.quote)
-    ? data.quotes.quote[0]
-    : data.quotes.quote
+  const q = Array.isArray(data.quotes.quote) ? data.quotes.quote[0] : data.quotes.quote
+  if (!q) return { contract: null, error: `لم يُعثر على العقد: ${symbol}` }
 
-  if (!quote) {
-    return { contract: null, error: `لم يُعثر على العقد: ${symbol}` }
+  return {
+    contract: {
+      ...q,
+      mid: q.bid != null && q.ask != null ? Math.round(((q.bid + q.ask) / 2) * 100) / 100 : null,
+    },
+    error: null,
   }
-
-  // حساب mid
-  const contract: TradierOption = {
-    ...quote,
-    mid:
-      quote.bid != null && quote.ask != null
-        ? Math.round(((quote.bid + quote.ask) / 2) * 100) / 100
-        : null,
-  }
-
-  return { contract, error: null }
 }
 
-// ============================================================
-// 6. إيجاد أفضل عقد تلقائياً
-// المعايير: السعر $5-$500، مناسب للمستخدم العادي
-// ============================================================
+// ── 6. Best Contract ($5–$500) ─────────────────────────────
 
 export async function findBestContract(
   spxPrice: number,
   direction: 'call' | 'put' = 'call'
 ): Promise<{ contract: TradierOption | null; expiration: string | null; error: string | null }> {
-
   const { expirations, error: expError } = await getSPXExpirations()
   if (expError || expirations.length === 0) {
     return { contract: null, expiration: null, error: expError ?? 'لا توجد تواريخ انتهاء' }
@@ -319,53 +267,30 @@ export async function findBestContract(
 
   const today = new Date()
 
-  // نجرب نطاقات DTE متعددة: 3-7 أيام أولاً، ثم 7-14، ثم 1-21
-  const dteRanges = [
-    { min: 3,  max: 7  },
-    { min: 7,  max: 14 },
-    { min: 1,  max: 21 },
-  ]
+  // نجرب DTE ranges متعددة
+  const dteRanges = [{ min: 2, max: 7 }, { min: 7, max: 14 }, { min: 1, max: 21 }]
 
   for (const range of dteRanges) {
     const targetExp = expirations.find((exp) => {
-      const dte = Math.ceil((new Date(exp).getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+      const dte = Math.ceil((new Date(exp).getTime() - today.getTime()) / 86400000)
       return dte >= range.min && dte <= range.max
     })
-
     if (!targetExp) continue
 
-    // نطاق Strike واسع حول السعر الحالي
-    const strikeRange = {
-      low:  spxPrice - 300,
-      high: spxPrice + 300,
-    }
-
-    const { chain, error: chainError } = await getSPXOptionsChain(targetExp, strikeRange)
-    if (chainError || chain.length === 0) continue
-
-    const filtered = chain.filter((o) => o.type === direction)
-
-    // ── الفلتر الأساسي: السعر $5 — $500 للعقد الواحد ──────
-    const priceFiltered = filtered.filter((o) => {
-      const mid = o.mid ?? ((o.bid ?? 0) + (o.ask ?? 0)) / 2
-      const midDollars = mid // SPX options: mid = سعر العقد
-      return midDollars >= 5 && midDollars <= 500
+    const { chain } = await getSPXOptionsChain(targetExp, {
+      low: spxPrice - 400, high: spxPrice + 400,
     })
+    if (chain.length === 0) continue
 
-    if (priceFiltered.length === 0) continue
-
-    // ── تسجيل النقاط لكل عقد ──────────────────────────────
-    const scored = priceFiltered
+    const filtered = chain
+      .filter((o) => o.type === direction)
       .filter((o) => {
+        const mid = o.mid ?? ((o.bid ?? 0) + (o.ask ?? 0)) / 2
         const bid = o.bid ?? 0
         const ask = o.ask ?? 0
-        const mid = (bid + ask) / 2
-        const spread = ask - bid
-        const spreadPct = mid > 0 ? spread / mid : 99
-        const volume = o.volume ?? 0
-
-        // شروط أساسية
-        return bid > 0 && ask > 0 && spreadPct < 0.25 && volume >= 5
+        const spreadPct = mid > 0 ? (ask - bid) / mid : 99
+        // ── الشرط الأساسي: السعر $5–$500 ──
+        return mid >= 5 && mid <= 500 && bid > 0 && ask > 0 && spreadPct < 0.30
       })
       .map((o) => {
         const mid = o.mid ?? ((o.bid ?? 0) + (o.ask ?? 0)) / 2
@@ -373,91 +298,75 @@ export async function findBestContract(
         const volume = o.volume ?? 0
         const bid = o.bid ?? 0
         const ask = o.ask ?? 0
-        const spreadPct = (ask - bid) / mid
+        const spreadPct = mid > 0 ? (ask - bid) / mid : 99
 
         let score = 0
+        // السعر المثالي $15–$150
+        if (mid >= 15 && mid <= 150)      score += 40
+        else if (mid >= 5 && mid < 15)    score += 20
+        else if (mid > 150 && mid <= 300) score += 15
+        else if (mid > 300 && mid <= 500) score += 5
 
-        // 1. السعر المثالي $20-$200 يأخذ أعلى نقاط
-        if (mid >= 20 && mid <= 200)       score += 40
-        else if (mid >= 5 && mid < 20)     score += 25
-        else if (mid > 200 && mid <= 350)  score += 20
-        else if (mid > 350 && mid <= 500)  score += 10
+        // Delta مناسب 0.10–0.35
+        if (delta >= 0.15 && delta <= 0.30)       score += 30
+        else if (delta >= 0.10 && delta < 0.15)   score += 18
+        else if (delta >= 0.30 && delta <= 0.40)  score += 15
+        else if (delta > 0.40 && delta <= 0.55)   score += 5
 
-        // 2. Delta مناسب 0.10-0.35 (خارج النقود = أرخص)
-        if (delta >= 0.15 && delta <= 0.30)      score += 30
-        else if (delta >= 0.10 && delta < 0.15)  score += 20
-        else if (delta >= 0.30 && delta <= 0.40) score += 20
-        else if (delta > 0.40)                   score += 5  // غالي جداً
+        // سيولة
+        if (volume >= 200)     score += 20
+        else if (volume >= 50) score += 12
+        else if (volume >= 10) score += 5
 
-        // 3. سيولة
-        if (volume >= 100)      score += 20
-        else if (volume >= 50)  score += 15
-        else if (volume >= 10)  score += 8
-        else                    score += 2
-
-        // 4. Spread ضيق
+        // Spread
         if (spreadPct < 0.05)      score += 10
-        else if (spreadPct < 0.10) score += 7
-        else if (spreadPct < 0.15) score += 4
+        else if (spreadPct < 0.10) score += 6
+        else if (spreadPct < 0.20) score += 2
 
         return { ...o, _score: score }
       })
       .sort((a: any, b: any) => b._score - a._score)
 
-    if (scored.length === 0) continue
-
-    // أفضل عقد
-    const best = scored[0] as TradierOption
-    return { contract: best, expiration: targetExp, error: null }
+    if (filtered.length > 0) {
+      const best = filtered[0] as TradierOption
+      return { contract: best, expiration: targetExp, error: null }
+    }
   }
 
   return {
     contract: null,
     expiration: null,
-    error: 'لا يوجد عقد بسعر مناسب ($5-$500). السوق قد يكون مغلقاً أو بيانات غير متاحة.',
+    error: 'لا يوجد عقد بسعر $5–$500. السوق مغلق أو البيانات غير متاحة.',
   }
 }
 
-// ============================================================
-// 7. حساب حالة السوق
-// ============================================================
+// ── 7. Market Status ────────────────────────────────────────
 
-export function computeMarketStatus(): 'pre_market' | 'open' | 'lunch' | 'power_hour' | 'after_hours' | 'closed' {
+export type MarketStatusType = 'pre_market' | 'open' | 'lunch' | 'power_hour' | 'after_hours' | 'closed'
+
+export function computeMarketStatus(): MarketStatusType {
   const now = new Date()
-  // تحويل لتوقيت نيويورك
-  const nyTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
-  const day = nyTime.getDay() // 0=Sunday, 6=Saturday
-  const hour = nyTime.getHours()
-  const min = nyTime.getMinutes()
-  const timeInMin = hour * 60 + min
+  const ny = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+  const day = ny.getDay()
+  const t = ny.getHours() * 60 + ny.getMinutes()
 
-  // عطلة نهاية الأسبوع
   if (day === 0 || day === 6) return 'closed'
-
-  if (timeInMin < 9 * 60 + 30) return 'pre_market'           // قبل 9:30
-  if (timeInMin >= 9 * 60 + 30 && timeInMin < 12 * 60) return 'open'      // 9:30 - 12:00
-  if (timeInMin >= 12 * 60 && timeInMin < 14 * 60) return 'lunch'         // 12:00 - 14:00
-  if (timeInMin >= 14 * 60 && timeInMin < 15 * 60) return 'open'          // 14:00 - 15:00
-  if (timeInMin >= 15 * 60 && timeInMin < 16 * 60) return 'power_hour'    // 15:00 - 16:00
-  if (timeInMin >= 16 * 60 && timeInMin < 20 * 60) return 'after_hours'   // بعد الإغلاق
+  if (t < 570)  return 'pre_market'   // < 9:30
+  if (t < 720)  return 'open'         // 9:30–12:00
+  if (t < 840)  return 'lunch'        // 12:00–14:00
+  if (t < 900)  return 'open'         // 14:00–15:00
+  if (t < 960)  return 'power_hour'   // 15:00–16:00
+  if (t < 1200) return 'after_hours'  // 16:00–20:00
   return 'closed'
 }
 
-// ============================================================
-// 8. حساب DTE
-// ============================================================
+// ── 8. Helpers ─────────────────────────────────────────────
 
 export function computeDTE(expirationDate: string): number {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const expiry = new Date(expirationDate)
-  expiry.setHours(0, 0, 0, 0)
-  return Math.max(0, Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)))
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const expiry = new Date(expirationDate); expiry.setHours(0, 0, 0, 0)
+  return Math.max(0, Math.ceil((expiry.getTime() - today.getTime()) / 86400000))
 }
-
-// ============================================================
-// 9. حساب Spread %
-// ============================================================
 
 export function computeSpreadPercent(bid: number | null, ask: number | null): number | null {
   if (bid == null || ask == null || bid <= 0 || ask <= 0) return null
