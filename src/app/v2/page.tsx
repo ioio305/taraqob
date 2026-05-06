@@ -53,8 +53,8 @@ export default function V2Dashboard() {
     window.location.href = `/v2/analyze?${p.toString()}`
   }
 
-  const spx = data?.market.spx
-  const vix = data?.market.vix.price ?? 0
+  const spx = data?.market?.spx
+  const vix = data?.market?.vix?.price ?? 0
   const dir = data?.direction
   const dirColor = dir?.color ?? '#4A5568'
   const noTrade = !dir?.type
@@ -122,9 +122,9 @@ export default function V2Dashboard() {
           <div className="rounded-xl p-3" style={{ background: 'rgba(0,0,0,0.3)' }}>
             <div className="text-xs font-mono mb-1" style={{ color: '#2D3748' }}>EXPECTED MOVE</div>
             {loading ? <Sk /> : <>
-              <div className="text-2xl font-bold font-mono" style={{ color: '#C9943A' }}>{data?.market.expectedMove ? `±${data.market.expectedMove}` : '—'}</div>
+              <div className="text-2xl font-bold font-mono" style={{ color: '#C9943A' }}>{data?.market?.expectedMove ? `±${data?.market?.expectedMove}` : '—'}</div>
               <div className="text-xs mt-0.5 font-mono" style={{ color: '#2D3748' }}>
-                {data?.market.emLower && data?.market.emUpper ? `${n(data.market.emLower, 0)} ↔ ${n(data.market.emUpper, 0)}` : '—'}
+                {data?.market?.emLower && data?.market?.emUpper ? `${n(data?.market?.emLower, 0)} ↔ ${n(data?.market?.emUpper, 0)}` : '—'}
               </div>
             </>}
           </div>
@@ -206,7 +206,7 @@ export default function V2Dashboard() {
 
         {!loading && (data?.contracts ?? []).length > 0 && (
           <div className="space-y-4">
-            {data!.contracts.map((c, i) => {
+            {(data?.contracts ?? []).map((c, i) => {
               const lc = LCOLORS[i] ?? '#4A5568'
               const t1 = c.mid * 1.40; const t2 = c.mid * 1.80; const t3 = c.mid * 2.50; const sl = c.mid * 0.55
               const spread = c.mid > 0 ? ((c.ask - c.bid) / c.mid * 100).toFixed(1) : '--'
