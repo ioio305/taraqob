@@ -30,11 +30,11 @@ function scoreOTM(c: Contract, spxPrice: number, type: 'call' | 'put'): number {
   const spread = mid > 0 ? (c.ask - c.bid) / mid : 99
 
   // رفض ITM صراحة
-  if (type === 'call' && c.strike <= spxPrice) return -1
+  if (type === "call" && c.strike <= spxPrice) return -1
   if (type === 'put'  && c.strike >= spxPrice) return -1
   // رفض خارج النطاق (6 strikes = 30 نقطة)
   const step = 5
-  const base = Math.round(spxPrice / step) * step
+  const base = Math.ceil(spxPrice / step) * step
   if (type === 'call' && (c.strike < base + step || c.strike > base + step * 6)) return -1
   if (type === 'put'  && (c.strike > base - step || c.strike < base - step * 6)) return -1
 
@@ -151,7 +151,7 @@ export default function SmartDashboard({ analyses }: { analyses: any[] }) {
 
   // نطاق OTM للعرض
   const step = 5
-  const base = Math.round(spxPrice / step) * step
+  const base = Math.ceil(spxPrice / step) * step
   const otmLow  = direction.type === 'call' ? base + step : base - step * 6
   const otmHigh = direction.type === 'call' ? base + step * 6 : base - step
 

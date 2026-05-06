@@ -13,73 +13,57 @@ async function tGet(path: string) {
   return res.json()
 }
 
-// ── Direction ────────────────────────────────────────────────
 function getDirection(chg: number, vix: number) {
-  if (vix > 28)    return { type: null,   label: 'لا تداول — VIX مرتفع',  color: '#EF4444', reason: `VIX ${vix.toFixed(1)} — خطر عالٍ` }
-  if (chg >= 0.5)  return { type: 'call', label: '▲ صاعد — Call فقط',    color: '#10B981', reason: `SPX +${chg.toFixed(2)}% — بيئة صاعدة` }
-  if (chg <= -0.5) return { type: 'put',  label: '▼ هابط — Put فقط',     color: '#EF4444', reason: `SPX ${chg.toFixed(2)}% — بيئة هابطة` }
-  if (chg >= 0.2)  return { type: 'call', label: '▲ صاعد معتدل — Call',  color: '#34D399', reason: `SPX +${chg.toFixed(2)}% — ميل صاعد` }
-  if (chg <= -0.2) return { type: 'put',  label: '▼ هابط معتدل — Put',   color: '#F87171', reason: `SPX ${chg.toFixed(2)}% — ميل هابط` }
-  return { type: null, label: '↔ محايد — انتظر', color: '#F59E0B', reason: 'SPX يتداول عرضياً — لا اتجاه واضح' }
+  if (vix > 28)    return { type: null,   label: 'لا تداول — VIX مرتفع',  color: '#EF4444', reason: `VIX ${vix.toFixed(1)}` }
+  if (chg >= 0.5)  return { type: 'call', label: '▲ صاعد — Call فقط',    color: '#10B981', reason: `SPX +${chg.toFixed(2)}%` }
+  if (chg <= -0.5) return { type: 'put',  label: '▼ هابط — Put فقط',     color: '#EF4444', reason: `SPX ${chg.toFixed(2)}%` }
+  if (chg >= 0.2)  return { type: 'call', label: '▲ صاعد معتدل — Call',  color: '#34D399', reason: `SPX +${chg.toFixed(2)}%` }
+  if (chg <= -0.2) return { type: 'put',  label: '▼ هابط معتدل — Put',   color: '#F87171', reason: `SPX ${chg.toFixed(2)}%` }
+  return { type: null, label: '↔ محايد — انتظر', color: '#F59E0B', reason: 'لا اتجاه واضح' }
 }
 
-// ── OTM Strike Range ─────────────────────────────────────────
-// Call: أول 6 strikes فوق SPX (OTM)
-// Put:  أول 6 strikes تحت SPX (OTM)
-function getOTMRange(spxPrice: number, type: 'call' | 'put', step = 5) {
-  const base = Math.round(spxPrice / step) * step
-  if (type === 'call') {
-    // Strike يبدأ من فوق السعر مباشرة (OTM)
-    const low  = base + step        // Strike أول فوق السعر
-    const high = base + (step * 6)  // Strike سادس فوق السعر
-    return { low, high }
-  } else {
-    // Strike يبدأ من تحت السعر مباشرة (OTM)
-    const high = base - step
-    const low  = base - (step * 6)
-    return { low, high }
-  }
+function isStrictOTM(strike: number, spxPrice: number, type: 'call' | 'put'): boolean {
+  // Call OTM = Strike أعلى بدقة من SPX
+  // Put OTM  = Strike أدنى بدقة من SPX
+  if (type === 'call') return strike > spxPrice
+  if (type === 'put')  return strike < spxPrice
+  return false
 }
 
-// ── Score (صارم) ─────────────────────────────────────────────
-function scoreOTM(o: any, spxPrice: number, type: 'call' | 'put'): number {
-  const mid    = o.bid && o.ask ? (o.bid + o.ask) / 2 : 0
-  const delta  = Math.abs(o.greeks?.delta ?? 0)
-  const gamma  = Math.abs(o.greeks?.gamma ?? 0)
-  const volume = o.volume ?? 0
-  const strike = o.strike ?? 0
+function scoreContract(o: any, spxPrice: number, type: 'call' | 'put'): number {
+  const mid   = o.bid && o.ask ? (o.bid + o.ask) / 2 : 0
+  const delta = Math.abs(o.greeks?.delta ?? 0)
+  const gamma = Math.abs(o.greeks?.gamma ?? 0)
+  const vol   = o.volume ?? 0
   const spread = mid > 0 ? (o.ask - o.bid) / mid : 99
 
-  // ── رفض فوري ────────────────────────────────────────────
-  if (mid < 5 || mid > 500)  return -1   // خارج نطاق السعر
+  // ── رفض فوري بدون استثناء ──────────────────────────────────
+  if (!isStrictOTM(o.strike, spxPrice, type)) return -1  // ITM أو ATM مرفوض
+  if (mid < 5 || mid > 500)  return -1
   if (o.bid <= 0 || o.ask <= 0) return -1
-  if (spread > 0.35)          return -1   // Spread واسع جداً
-  if (gamma > 0.020)          return -1   // Gamma حاد = خطر
-  if (volume < 5)             return -1   // سيولة صفر
-  if (delta > 0.55)           return -1   // ← رفض ITM (Delta > 0.55 = عميق ITM)
-
-  // ── رفض عقود ITM صراحةً ─────────────────────────────────
-  if (type === 'call' && strike <= spxPrice) return -1  // Strike تحت السعر = ITM
-  if (type === 'put'  && strike >= spxPrice) return -1  // Strike فوق السعر = ITM
+  if (spread > 0.35)          return -1
+  if (gamma > 0.018)          return -1  // Gamma حاد مرفوض
+  if (delta > 0.50)           return -1  // Delta عالي = شبه ITM مرفوض
+  if (vol < 5)                return -1
 
   let score = 0
 
-  // السعر المثالي $15–$150
-  if (mid >= 15 && mid <= 150)      score += 40
-  else if (mid >= 5 && mid < 15)    score += 18
+  // السعر المثالي $10–$150
+  if (mid >= 10 && mid <= 150)      score += 40
+  else if (mid >= 5 && mid < 10)    score += 20
   else if (mid > 150 && mid <= 300) score += 10
   else if (mid > 300 && mid <= 500) score += 4
 
-  // Delta مثالي 0.20–0.40 (OTM حقيقي)
-  if (delta >= 0.20 && delta <= 0.40)       score += 40
-  else if (delta >= 0.15 && delta < 0.20)   score += 25
-  else if (delta >= 0.40 && delta <= 0.55)  score += 10
-  else if (delta < 0.15)                    score += 5  // بعيد جداً = OTM عميق
+  // Delta مثالي OTM حقيقي 0.15–0.40
+  if (delta >= 0.20 && delta <= 0.40)      score += 40
+  else if (delta >= 0.15 && delta < 0.20)  score += 25
+  else if (delta >= 0.40 && delta <= 0.50) score += 8
+  else                                      score += 3  // < 0.15 بعيد جداً
 
   // سيولة
-  if (volume >= 500)      score += 12
-  else if (volume >= 100) score += 8
-  else if (volume >= 20)  score += 4
+  if (vol >= 500)       score += 12
+  else if (vol >= 100)  score += 8
+  else if (vol >= 20)   score += 4
 
   // Spread
   if (spread < 0.05)       score += 8
@@ -94,7 +78,7 @@ export async function GET(request: NextRequest) {
   const forceType = searchParams.get('type') as 'call' | 'put' | null
 
   try {
-    // ── 1. جلب السوق ─────────────────────────────────────────
+    // ── 1. SPX + VIX + Sessions ───────────────────────────────
     const mkt = await tGet('/markets/quotes?symbols=$SPX.X,$VIX.X,EWJ,EWU&greeks=false')
       .catch(() => tGet('/markets/quotes?symbols=SPX,VIX,EWJ,EWU&greeks=false'))
 
@@ -106,9 +90,9 @@ export async function GET(request: NextRequest) {
     const ewjQ = qs.find((q: any) => q.symbol === 'EWJ')
     const ewuQ = qs.find((q: any) => q.symbol === 'EWU')
 
-    const spxPrice  = spxQ?.last ?? 0
-    const spxChg    = spxQ?.change_percentage ?? 0
-    const vixPrice  = vixQ?.last ?? 20
+    const spxPrice = spxQ?.last ?? 0
+    const spxChg   = spxQ?.change_percentage ?? 0
+    const vixPrice = vixQ?.last ?? 20
     const em = spxPrice > 0 && vixPrice > 0
       ? Math.round(spxPrice * (vixPrice / 100) * Math.sqrt(1 / 252)) : null
 
@@ -125,13 +109,18 @@ export async function GET(request: NextRequest) {
       } catch { continue }
     }
 
-    // ── 3. أفضل 3 عقود OTM ────────────────────────────────────
+    // ── 3. أفضل 3 عقود OTM صارم ──────────────────────────────
     let top3: any[] = []
     let usedExp = ''
 
     if (contractType && spxPrice > 0 && expirations.length > 0) {
       const today = new Date()
-      const { low, high } = getOTMRange(spxPrice, contractType)
+
+      // نطاق البحث: 6 strikes فوق/تحت فقط (30 نقطة)
+      const STEP = 5
+      const base = Math.ceil(spxPrice / STEP) * STEP // أقرب strike أعلى من SPX
+      const searchLow  = contractType === 'call' ? base         : base - STEP * 6
+      const searchHigh = contractType === 'call' ? base + STEP * 5 : base - STEP
 
       for (const dteRange of [{ min: 1, max: 7 }, { min: 7, max: 14 }, { min: 0, max: 1 }]) {
         if (top3.length >= 3) break
@@ -148,33 +137,24 @@ export async function GET(request: NextRequest) {
             let opts: any[] = Array.isArray(chain?.options?.option)
               ? chain.options.option : [chain?.options?.option].filter(Boolean)
 
-            // فلتر صارم: النوع + نطاق OTM فقط (6 strikes)
             const filtered = opts
               .filter(o => {
                 if (o.option_type !== contractType) return false
-                if (o.strike < low || o.strike > high) return false // خارج نطاق OTM
+                if (o.strike < searchLow || o.strike > searchHigh) return false
                 return true
               })
               .map(o => {
                 const mid = o.bid && o.ask ? Math.round((o.bid + o.ask) / 2 * 100) / 100 : 0
                 return {
-                  symbol:       o.symbol,
-                  type:         o.option_type,
-                  strike:       o.strike,
-                  expiration:   o.expiration_date,
-                  dte:          Math.max(0, Math.ceil((new Date(o.expiration_date).getTime() - today.getTime()) / 86400000)),
-                  bid:          o.bid ?? 0,
-                  ask:          o.ask ?? 0,
-                  mid,
-                  last:         o.last ?? 0,
-                  volume:       o.volume ?? 0,
-                  openInterest: o.open_interest ?? 0,
-                  delta:        o.greeks?.delta ?? null,
-                  gamma:        o.greeks?.gamma ?? null,
-                  theta:        o.greeks?.theta ?? null,
-                  vega:         o.greeks?.vega  ?? null,
-                  iv:           o.greeks?.mid_iv ?? o.greeks?.smv_vol ?? null,
-                  _score:       scoreOTM(o, spxPrice, contractType),
+                  symbol: o.symbol, type: o.option_type, strike: o.strike,
+                  expiration: o.expiration_date,
+                  dte: Math.max(0, Math.ceil((new Date(o.expiration_date).getTime() - today.getTime()) / 86400000)),
+                  bid: o.bid ?? 0, ask: o.ask ?? 0, mid, last: o.last ?? 0,
+                  volume: o.volume ?? 0, openInterest: o.open_interest ?? 0,
+                  delta: o.greeks?.delta ?? null, gamma: o.greeks?.gamma ?? null,
+                  theta: o.greeks?.theta ?? null, vega: o.greeks?.vega ?? null,
+                  iv: o.greeks?.mid_iv ?? o.greeks?.smv_vol ?? null,
+                  _score: scoreContract(o, spxPrice, contractType),
                 }
               })
               .filter(o => o._score > 0)
@@ -192,24 +172,36 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // نطاق OTM المستخدم للعرض
+    const STEP = 5
+    const base = contractType && spxPrice
+      ? Math.ceil(spxPrice / STEP) * STEP : 0
+    const otmRange = contractType && base ? {
+      low:  contractType === 'call' ? base          : base - STEP * 6,
+      high: contractType === 'call' ? base + STEP * 5 : base - STEP,
+      note: contractType === 'call'
+        ? `${base}–${base + STEP * 5} (فوق SPX ${spxPrice.toFixed(0)})`
+        : `${base - STEP * 6}–${base - STEP} (تحت SPX ${spxPrice.toFixed(0)})`,
+    } : null
+
     return NextResponse.json({
       success: true,
       market: {
-        spx:          { price: spxPrice, changePct: spxChg, high: spxQ?.high, low: spxQ?.low, open: spxQ?.open },
-        vix:          { price: vixPrice },
+        spx: { price: spxPrice, changePct: spxChg, high: spxQ?.high, low: spxQ?.low, open: spxQ?.open },
+        vix: { price: vixPrice },
         expectedMove: em,
-        emUpper:      em && spxPrice ? Math.round(spxPrice + em) : null,
-        emLower:      em && spxPrice ? Math.round(spxPrice - em) : null,
+        emUpper: em && spxPrice ? Math.round(spxPrice + em) : null,
+        emLower: em && spxPrice ? Math.round(spxPrice - em) : null,
       },
       sessions: {
         london: { high: ewuQ?.high, low: ewuQ?.low, close: ewuQ?.last, changePct: ewuQ?.change_percentage },
         tokyo:  { high: ewjQ?.high, low: ewjQ?.low, close: ewjQ?.last, changePct: ewjQ?.change_percentage },
       },
-      direction:   { type: dir.type, label: dir.label, color: dir.color, reason: dir.reason },
+      direction: { type: dir.type, label: dir.label, color: dir.color, reason: dir.reason },
       contracts:   top3,
       expiration:  usedExp,
       expirations: expirations.slice(0, 8),
-      otmRange:    contractType && spxPrice ? getOTMRange(spxPrice, contractType) : null,
+      otmRange,
     })
 
   } catch (err: any) {
