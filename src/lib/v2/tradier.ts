@@ -304,77 +304,118 @@ export async function getContractBySymbol(symbol: string): Promise<{
 
 // ============================================================
 // 6. إيجاد أفضل عقد تلقائياً
-// المعايير: delta 0.35-0.50، سيولة عالية، DTE 7-21
+// المعايير: السعر $5-$500، مناسب للمستخدم العادي
 // ============================================================
 
 export async function findBestContract(
   spxPrice: number,
   direction: 'call' | 'put' = 'call'
 ): Promise<{ contract: TradierOption | null; expiration: string | null; error: string | null }> {
-  // جلب أقرب تاريخ انتهاء بين 7 و 21 يوم
+
   const { expirations, error: expError } = await getSPXExpirations()
   if (expError || expirations.length === 0) {
     return { contract: null, expiration: null, error: expError ?? 'لا توجد تواريخ انتهاء' }
   }
 
   const today = new Date()
-  const targetExp = expirations.find((exp) => {
-    const expDate = new Date(exp)
-    const dte = Math.ceil((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-    return dte >= 7 && dte <= 21
-  })
 
-  if (!targetExp) {
-    return { contract: null, expiration: null, error: 'لا يوجد تاريخ انتهاء مناسب (7-21 يوم)' }
-  }
+  // نجرب نطاقات DTE متعددة: 3-7 أيام أولاً، ثم 7-14، ثم 1-21
+  const dteRanges = [
+    { min: 3,  max: 7  },
+    { min: 7,  max: 14 },
+    { min: 1,  max: 21 },
+  ]
 
-  // نطاق Strike حول السعر الحالي
-  const strikeRange = {
-    low: direction === 'call' ? spxPrice - 50 : spxPrice - 100,
-    high: direction === 'call' ? spxPrice + 100 : spxPrice + 50,
-  }
-
-  const { chain, error: chainError } = await getSPXOptionsChain(targetExp, strikeRange)
-  if (chainError || chain.length === 0) {
-    return { contract: null, expiration: null, error: chainError ?? 'لا توجد عقود في النطاق' }
-  }
-
-  // فلترة حسب النوع
-  const filtered = chain.filter((o) => o.type === direction)
-
-  // اختيار أفضل عقد بمعايير:
-  // 1. Delta بين 0.35 و 0.50
-  // 2. Volume > 100
-  // 3. أضيق Spread ممكن
-  const scored = filtered
-    .filter((o) => {
-      const delta = Math.abs(o.greeks?.delta ?? 0)
-      const volume = o.volume ?? 0
-      const bid = o.bid ?? 0
-      const ask = o.ask ?? 0
-      const spread = ask - bid
-      const mid = (bid + ask) / 2
-      const spreadPct = mid > 0 ? spread / mid : 99
-      return delta >= 0.30 && delta <= 0.55 && volume >= 50 && spreadPct < 0.15
-    })
-    .sort((a, b) => {
-      // أولوية: delta أقرب لـ 0.42 + volume أعلى
-      const aDelta = Math.abs((a.greeks?.delta ?? 0) - 0.42)
-      const bDelta = Math.abs((b.greeks?.delta ?? 0) - 0.42)
-      const aVol = a.volume ?? 0
-      const bVol = b.volume ?? 0
-      return aDelta - bDelta || bVol - aVol
+  for (const range of dteRanges) {
+    const targetExp = expirations.find((exp) => {
+      const dte = Math.ceil((new Date(exp).getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+      return dte >= range.min && dte <= range.max
     })
 
-  if (scored.length === 0) {
-    return {
-      contract: null,
-      expiration: targetExp,
-      error: 'لا يوجد عقد يستوفي معايير الجودة (Delta 0.35-0.55، Volume > 50، Spread < 15%)',
+    if (!targetExp) continue
+
+    // نطاق Strike واسع حول السعر الحالي
+    const strikeRange = {
+      low:  spxPrice - 300,
+      high: spxPrice + 300,
     }
+
+    const { chain, error: chainError } = await getSPXOptionsChain(targetExp, strikeRange)
+    if (chainError || chain.length === 0) continue
+
+    const filtered = chain.filter((o) => o.type === direction)
+
+    // ── الفلتر الأساسي: السعر $5 — $500 للعقد الواحد ──────
+    const priceFiltered = filtered.filter((o) => {
+      const mid = o.mid ?? ((o.bid ?? 0) + (o.ask ?? 0)) / 2
+      const midDollars = mid // SPX options: mid = سعر العقد
+      return midDollars >= 5 && midDollars <= 500
+    })
+
+    if (priceFiltered.length === 0) continue
+
+    // ── تسجيل النقاط لكل عقد ──────────────────────────────
+    const scored = priceFiltered
+      .filter((o) => {
+        const bid = o.bid ?? 0
+        const ask = o.ask ?? 0
+        const mid = (bid + ask) / 2
+        const spread = ask - bid
+        const spreadPct = mid > 0 ? spread / mid : 99
+        const volume = o.volume ?? 0
+
+        // شروط أساسية
+        return bid > 0 && ask > 0 && spreadPct < 0.25 && volume >= 5
+      })
+      .map((o) => {
+        const mid = o.mid ?? ((o.bid ?? 0) + (o.ask ?? 0)) / 2
+        const delta = Math.abs(o.greeks?.delta ?? 0)
+        const volume = o.volume ?? 0
+        const bid = o.bid ?? 0
+        const ask = o.ask ?? 0
+        const spreadPct = (ask - bid) / mid
+
+        let score = 0
+
+        // 1. السعر المثالي $20-$200 يأخذ أعلى نقاط
+        if (mid >= 20 && mid <= 200)       score += 40
+        else if (mid >= 5 && mid < 20)     score += 25
+        else if (mid > 200 && mid <= 350)  score += 20
+        else if (mid > 350 && mid <= 500)  score += 10
+
+        // 2. Delta مناسب 0.10-0.35 (خارج النقود = أرخص)
+        if (delta >= 0.15 && delta <= 0.30)      score += 30
+        else if (delta >= 0.10 && delta < 0.15)  score += 20
+        else if (delta >= 0.30 && delta <= 0.40) score += 20
+        else if (delta > 0.40)                   score += 5  // غالي جداً
+
+        // 3. سيولة
+        if (volume >= 100)      score += 20
+        else if (volume >= 50)  score += 15
+        else if (volume >= 10)  score += 8
+        else                    score += 2
+
+        // 4. Spread ضيق
+        if (spreadPct < 0.05)      score += 10
+        else if (spreadPct < 0.10) score += 7
+        else if (spreadPct < 0.15) score += 4
+
+        return { ...o, _score: score }
+      })
+      .sort((a: any, b: any) => b._score - a._score)
+
+    if (scored.length === 0) continue
+
+    // أفضل عقد
+    const best = scored[0] as TradierOption
+    return { contract: best, expiration: targetExp, error: null }
   }
 
-  return { contract: scored[0], expiration: targetExp, error: null }
+  return {
+    contract: null,
+    expiration: null,
+    error: 'لا يوجد عقد بسعر مناسب ($5-$500). السوق قد يكون مغلقاً أو بيانات غير متاحة.',
+  }
 }
 
 // ============================================================
