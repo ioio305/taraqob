@@ -3,209 +3,330 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
-type ContractRec = {
-  type: 'call'|'put'; strike: number
-  risk: string; why: string; dte: number
-  targetPct1: number; targetPct2: number; targetPct3: number
-  stopPct: number; approxPrice: number
+type Contract = {
+  symbol: string; type: 'call'|'put'; strike: number
+  bid: number; ask: number; mid: number; last: number
+  volume: number; openInterest: number
+  iv: number|null; delta: number|null; gamma: number|null
+  theta: number|null; vega: number|null; dte: number
 }
 
-// لا أسعار تقديرية — فقط Strike الموصى به
+type Expiration = string
 
-// سعر تقريبي بسيط للمثال التوضيحي فقط
-function approxPrice(spx:number, strike:number, vix:number, dte:number): number {
-  const dist = Math.abs(spx - strike)
-  const dailyMove = spx * (vix/100) / Math.sqrt(252)
-  const timeValue = dailyMove * Math.sqrt(Math.max(dte, 0.25))
-  const intrinsic = Math.max(0, strike < spx ? spx - strike : 0) // للـ Put
-  const base = intrinsic + timeValue * Math.exp(-dist / (dailyMove * 3))
-  return Math.max(1, Math.round(base * 10) / 10)
+const RISK_STYLE: Record<string,{badge:string,icon:string}> = {
+  'طلبك': { badge:'bg-navy-100 text-navy-700 border-navy-200',    icon:'⭐' },
+  'قريب': { badge:'bg-emerald-100 text-emerald-700 border-emerald-200', icon:'🟢' },
+  'أبعد': { badge:'bg-amber-100 text-amber-700 border-amber-200',  icon:'🟡' },
+  '0DTE': { badge:'bg-red-100 text-red-700 border-red-200',        icon:'⚡' },
 }
 
-function generate(spx:number, vix:number, dir:string, userStrike?:number): ContractRec[] {
-  const step = 5
-  const atm   = Math.round(spx / step) * step
-  const isPut = dir === 'bearish'
-  const t     = isPut ? 'put' : 'call'
+function scoreContract(c: Contract, spx: number, dir: string): number {
+  let score = 50
+  const isPut   = c.type === 'put'
+  const isRight = (dir === 'bullish' && !isPut) || (dir === 'bearish' && isPut)
+  if (!isRight) return 0
 
-  // إذا أدخل المستخدم strike محدد — ضعه أولاً
-  const s0 = userStrike ?? null
-  const s1 = isPut ? atm - 5  : atm + 5
-  const s2 = isPut ? atm - 10 : atm + 10
-  const s3 = isPut ? atm - 15 : atm + 15
+  // Delta مثالي
+  const absDelta = Math.abs(c.delta ?? 0)
+  if (absDelta >= 0.25 && absDelta <= 0.50) score += 20
+  else if (absDelta >= 0.15 && absDelta <= 0.60) score += 10
 
-  const recs: ContractRec[] = []
+  // سيولة
+  if ((c.volume ?? 0) > 200)   score += 15
+  else if ((c.volume ?? 0) > 50) score += 8
 
-  // العقد الذي طلبه المستخدم
-  if (s0 && s0 !== s1 && s0 !== s2 && s0 !== s3) {
-    const p0 = approxPrice(spx, s0, vix, 7)
-    recs.push({
-      type:t, strike:s0, risk:'طلبك', dte:7,
-      targetPct1:35, targetPct2:70, targetPct3:120, stopPct:45,
-      approxPrice: p0,
-      why: `العقد الذي طلبته — ${t==='call'?'Call':'Put'} ${s0}`
-    })
+  // فارق Bid/Ask
+  const spread = c.mid > 0 ? (c.ask - c.bid) / c.mid * 100 : 100
+  if (spread < 5)  score += 15
+  else if (spread < 10) score += 8
+
+  // IV معقول
+  const iv = (c.iv ?? 0) * 100
+  if (iv >= 10 && iv <= 30) score += 10
+
+  return Math.min(100, score)
+}
+
+export default function SmartDashboard({ analyses }: { analyses: any[] }) {
+  const [spxPrice,   setSpxPrice]   = useState<number>(0)
+  const [vixPrice,   setVixPrice]   = useState<number>(0)
+  const [dir,        setDir]        = useState('bullish')
+  const [expirations, setExpirations] = useState<Expiration[]>([])
+  const [selectedExp, setSelectedExp] = useState('')
+  const [contracts,   setContracts]   = useState<Contract[]>([])
+  const [loading,     setLoading]     = useState(false)
+  const [loadingExp,  setLoadingExp]  = useState(false)
+  const [selected,    setSelected]    = useState<Contract|null>(null)
+  const [userStrike,  setUserStrike]  = useState('')
+  const [liveLoaded,  setLiveLoaded]  = useState(false)
+
+  // جلب بيانات السوق
+  useEffect(() => {
+    async function fetchLive() {
+      try {
+        const res  = await fetch('/api/market/pulse')
+        const data = await res.json()
+        if (data.spx?.price) { setSpxPrice(data.spx.price); setDir(data.spx.direction ?? 'bullish') }
+        if (data.vix?.price)  setVixPrice(data.vix.price)
+        setLiveLoaded(true)
+      } catch { setLiveLoaded(true) }
+    }
+    fetchLive()
+  }, [])
+
+  // جلب تواريخ الانتهاء
+  useEffect(() => {
+    if (!liveLoaded) return
+    setLoadingExp(true)
+    fetch('/api/market/options')
+      .then(r => r.json())
+      .then(d => {
+        const dates = d.expirations ?? []
+        setExpirations(dates)
+        if (dates.length > 0) setSelectedExp(dates[0])
+      })
+      .catch(() => {})
+      .finally(() => setLoadingExp(false))
+  }, [liveLoaded])
+
+  // جلب العقود عند اختيار تاريخ
+  async function fetchContracts(exp: string) {
+    if (!exp) return
+    setLoading(true); setContracts([]); setSelected(null)
+    try {
+      const strike = userStrike ? `&strike=${userStrike}` : ''
+      const res  = await fetch(`/api/market/options?expiration=${exp}${strike}`)
+      const data = await res.json()
+      if (data.contracts) {
+        // رتّب حسب الأفضل
+        const scored = data.contracts
+          .map((c: Contract) => ({ ...c, _score: scoreContract(c, spxPrice, dir) }))
+          .filter((c: any) => c._score > 0)
+          .sort((a: any, b: any) => b._score - a._score)
+        setContracts(scored)
+      }
+    } catch (e) {
+      console.error(e)
+    } finally { setLoading(false) }
   }
 
-  // مقترحات ترقّب
-  const p1 = approxPrice(spx, s1, vix, 7)
-  recs.push({ type:t, strike:s1, risk:'قريب', dte:7, targetPct1:35, targetPct2:70, targetPct3:120, stopPct:45, approxPrice:p1, why:`قريب من السعر الحالي — أسهل للوصول` })
+  useEffect(() => {
+    if (selectedExp) fetchContracts(selectedExp)
+  }, [selectedExp, dir])
 
-  const p2 = approxPrice(spx, s2, vix, 3)
-  recs.push({ type:t, strike:s2, risk:'أبعد', dte:3, targetPct1:50, targetPct2:100, targetPct3:200, stopPct:50, approxPrice:p2, why:`أبعد عن السعر — ربح محتمل أعلى` })
+  // أفضل 3 عقود
+  const topContracts = contracts.slice(0, 3)
+  const userContract = userStrike
+    ? contracts.find(c => c.strike === parseFloat(userStrike))
+    : null
 
-  const p3 = approxPrice(spx, s3, vix, 0)
-  recs.push({ type:t, strike:s3, risk:'0DTE', dte:0, targetPct1:30, targetPct2:100, targetPct3:300, stopPct:60, approxPrice:p3, why:`ينتهي اليوم — ربح سريع أو خسارة سريعة` })
-
-  return recs
-}
-
-const RS: Record<string,{badge:string,icon:string}> = {
-  'طلبك': {badge:'bg-navy-100 text-navy-700 border-navy-200',   icon:'⭐'},
-  'قريب': {badge:'bg-emerald-100 text-emerald-700 border-emerald-200',icon:'🟢'},
-  'أبعد': {badge:'bg-amber-100 text-amber-700 border-amber-200', icon:'🟡'},
-  '0DTE': {badge:'bg-red-100 text-red-700 border-red-200',       icon:'⚡'},
-}
-
-export default function SmartDashboard({analyses}:{analyses:any[]}) {
-  const [spxInput,setSpxInput]=useState('')
-  const [contracts,setContracts]=useState<ContractRec[]>([])
-  const [liveSpx,setLiveSpx]=useState<number|null>(null)
-  const [liveVix,setLiveVix]=useState<number|null>(null)
-  const [dir,setDir]=useState('bullish')
-  const [selected,setSelected]=useState<ContractRec|null>(null)
-  const [userStrikeInput,setUserStrikeInput]=useState('')
-  const [ready,setReady]=useState(false)
-
-  useEffect(()=>{
-    fetch('/api/market/pulse').then(r=>r.json()).then(d=>{
-      if(d.spx?.price){setLiveSpx(d.spx.price);setSpxInput(d.spx.price.toFixed(2));setDir(d.spx.direction??'bullish')}
-      if(d.vix?.price) setLiveVix(d.vix.price)
-      setReady(true)
-    }).catch(()=>setReady(true))
-  },[])
-
-  function analyze(){
-    const spx=parseFloat(spxInput); const vix=liveVix??18
-    if(!spx||spx<1000) return
-    const userStrike = userStrikeInput ? parseFloat(userStrikeInput) : undefined
-    setContracts(generate(spx,vix,dir,userStrike)); setSelected(null)
-  }
+  const displayContracts = [
+    ...(userContract ? [{ ...userContract, _label: 'طلبك' }] : []),
+    ...topContracts
+      .filter(c => c.strike !== parseFloat(userStrike))
+      .slice(0, 3)
+      .map((c, i) => ({ ...c, _label: i === 0 ? 'قريب' : i === 1 ? 'أبعد' : '0DTE' }))
+  ].slice(0, 4)
 
   return (
     <div className="space-y-4">
 
-      {/* إدخال سريع */}
+      {/* ── إدخال سريع ── */}
       <div className="card p-5">
-        <div className="text-sm font-bold text-navy-900 mb-1">🎯 ما أفضل عقد الآن؟</div>
+        <div className="text-sm font-bold text-navy-900 mb-1">🎯 أفضل عقد الآن — بيانات حقيقية</div>
         <div className="text-xs text-surface-400 mb-4">
-          ترقّب يقترح رقم العقد تلقائياً — أو عدّله حسب ما تراه في دراية
+          بيانات Tradier اللحظية — Bid/Ask وGreeks حقيقية
         </div>
 
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          <div>
-            <div className="text-[10px] text-surface-500 font-semibold mb-1">
-              سعر SPX الآن {liveSpx && <span className="text-teal-600">(تلقائي ✅)</span>}
+        {/* SPX وVIX */}
+        {spxPrice > 0 && (
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            <div className={`rounded-xl p-3 text-center ${dir==='bullish'?'bg-emerald-50 border border-emerald-200':dir==='bearish'?'bg-red-50 border border-red-200':'bg-surface-50 border border-surface-200'}`}>
+              <div className="text-[10px] text-surface-400 font-medium">S&P 500</div>
+              <div className="text-xl font-bold font-mono text-navy-900">{spxPrice.toFixed(2)}</div>
+              <div className={`text-[10px] font-medium ${dir==='bullish'?'text-emerald-600':dir==='bearish'?'text-red-600':'text-surface-500'}`}>
+                {dir==='bullish'?'📈 صاعد':dir==='bearish'?'📉 هابط':'↔️ محايد'}
+              </div>
             </div>
-            <input type="number" step="0.01" value={spxInput}
-              onChange={e=>{setSpxInput(e.target.value);setContracts([])}}
-              placeholder="7192" className="field-input text-left font-mono font-bold" dir="ltr"/>
-          </div>
-          <div>
-            <div className="text-[10px] text-surface-500 font-semibold mb-1">
-              Strike تريده (اختياري)
+            <div className={`rounded-xl p-3 text-center ${vixPrice>25?'bg-red-50 border border-red-200':vixPrice>20?'bg-amber-50 border border-amber-200':'bg-emerald-50 border border-emerald-200'}`}>
+              <div className="text-[10px] text-surface-400 font-medium">VIX</div>
+              <div className="text-xl font-bold font-mono text-navy-900">{vixPrice.toFixed(2)}</div>
+              <div className={`text-[10px] font-medium ${vixPrice>25?'text-red-600':vixPrice>20?'text-amber-600':'text-emerald-600'}`}>
+                {vixPrice<15?'هادئ جداً':vixPrice<20?'طبيعي':vixPrice<25?'مرتفع':'خطر'}
+              </div>
             </div>
-            <input type="number" step="5" value={userStrikeInput}
-              onChange={e=>{setUserStrikeInput(e.target.value);setContracts([])}}
-              placeholder="مثال: 7185" className="field-input text-left font-mono font-bold" dir="ltr"/>
           </div>
-        </div>
-        <button onClick={analyze} disabled={!spxInput||parseFloat(spxInput)<1000}
-          className="btn-primary w-full justify-center mb-3">أوصِ بأفضل عقد ←</button>
+        )}
 
         {/* اتجاه */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 mb-4">
           {[
-            {val:'bullish',label:'📈 صاعد',c:'border-emerald-400 bg-emerald-50 text-emerald-700'},
+            {val:'bullish',label:'📈 صاعد', c:'border-emerald-400 bg-emerald-50 text-emerald-700'},
             {val:'neutral', label:'↔️ محايد',c:'border-surface-300 bg-surface-50 text-surface-600'},
             {val:'bearish', label:'📉 هابط', c:'border-red-400 bg-red-50 text-red-700'},
           ].map(d=>(
-            <button key={d.val} onClick={()=>{setDir(d.val);setContracts([])}}
+            <button key={d.val} onClick={()=>{setDir(d.val);setSelected(null)}}
               className={`flex-1 py-2 rounded-xl border-2 text-xs font-bold transition-all ${dir===d.val?d.c:'border-surface-200 text-surface-400'}`}>
               {d.label}
             </button>
           ))}
         </div>
 
-        {liveVix&&(
-          <div className="mt-2 text-[10px] text-surface-400 text-center">
-            VIX: <span className={`font-mono font-bold ${liveVix<20?'text-emerald-600':liveVix<25?'text-amber-600':'text-red-600'}`}>{liveVix.toFixed(2)}</span>
-            {' '} — {liveVix<15?'هادئ جداً':liveVix<20?'طبيعي':liveVix<25?'مرتفع':'خطر'}
+        {/* Strike يريده المستخدم */}
+        <div className="mb-4">
+          <div className="text-[10px] text-surface-500 font-semibold mb-1">Strike تريده (اختياري)</div>
+          <div className="flex gap-2">
+            <input type="number" step="5" value={userStrike}
+              onChange={e => setUserStrike(e.target.value)}
+              placeholder={`مثال: ${spxPrice > 0 ? Math.round(spxPrice/5)*5 : 7200}`}
+              className="field-input flex-1 text-left font-mono" dir="ltr"/>
+            <button onClick={() => fetchContracts(selectedExp)}
+              disabled={!selectedExp || loading}
+              className="btn-primary px-4">
+              {loading ? '...' : 'أوصِ ←'}
+            </button>
           </div>
+        </div>
+
+        {/* تاريخ الانتهاء */}
+        {expirations.length > 0 && (
+          <div>
+            <div className="text-[10px] text-surface-500 font-semibold mb-1.5">تاريخ الانتهاء</div>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {expirations.map(exp => (
+                <button key={exp} onClick={() => setSelectedExp(exp)}
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-[10px] font-bold border transition-all ${selectedExp===exp?'bg-navy-900 text-white border-navy-900':'border-surface-200 text-surface-500 hover:border-surface-300'}`}>
+                  {exp}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {loadingExp && (
+          <div className="text-center text-xs text-surface-400 py-3">جارٍ جلب بيانات Tradier...</div>
         )}
       </div>
 
-      {/* التوصيات */}
-      {contracts.length>0&&(
+      {/* ── العقود الموصى بها ── */}
+      {loading && (
+        <div className="card p-8 text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500 mx-auto mb-3"/>
+          <div className="text-xs text-surface-400">جارٍ جلب العقود من Tradier...</div>
+        </div>
+      )}
+
+      {!loading && displayContracts.length > 0 && (
         <div className="space-y-3">
-          {contracts.map((c,i)=>{
-            const st=RS[c.risk]
-            const isSel=selected?.strike===c.strike&&selected?.type===c.type
-            const rp=new URLSearchParams({contractType:c.type,strike:String(c.strike),dte:String(c.dte)}).toString()
+          {displayContracts.map((c: any, i) => {
+            const st     = RISK_STYLE[c._label] ?? RISK_STYLE['قريب']
+            const isSel  = selected?.strike === c.strike && selected?.type === c.type
+            const spread = c.mid > 0 ? ((c.ask-c.bid)/c.mid*100).toFixed(1) : '--'
+            const t1price = c.mid * 1.40
+            const t2price = c.mid * 1.80
+            const t3price = c.mid * 2.50
+            const slPrice = c.mid * 0.55
+
+            const reParams = new URLSearchParams({
+              contractType: c.type, strike: String(c.strike),
+              bid: String(c.bid), ask: String(c.ask),
+              delta: String(c.delta ?? ''), theta: String(c.theta ?? ''),
+              gamma: String(c.gamma ?? ''), iv: String(c.iv ? Math.round(c.iv*100) : ''),
+              volume: String(c.volume ?? ''), dte: String(c.dte),
+            }).toString()
+
             return (
               <div key={i} className={`card overflow-hidden transition-all ${isSel?'border-2 border-teal-400':''}`}>
+                {/* Header */}
                 <div className="px-4 py-3 border-b border-surface-100 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${st.badge}`}>{st.icon} {c.risk}</span>
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${st.badge}`}>
+                      {st.icon} {c._label}
+                    </span>
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${c.type==='call'?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'}`}>
                       {c.type==='call'?'▲ Call':'▼ Put'}
                     </span>
                   </div>
                   <div className="text-right">
-                    <span className="text-xl font-bold text-navy-900 font-mono">{c.type==='call'?'Call':'Put'} {c.strike}</span>
-                    <div className="text-[10px] text-surface-400">DTE {c.dte} — تحقق من السعر في دراية</div>
+                    <div className="text-lg font-bold text-navy-900 font-mono">{c.type==='call'?'Call':'Put'} {c.strike}</div>
+                    <div className="text-[10px] text-surface-400">DTE {c.dte} — فارق {spread}%</div>
                   </div>
                 </div>
+
                 <div className="p-4">
-                  <div className="text-sm font-semibold text-navy-900 mb-3">{c.why}</div>
-                  <div className="space-y-2 mb-3">
-                    {[
-                      {n:'هدف ١',pct:c.targetPct1,cl:'bg-emerald-50 border-emerald-200 text-emerald-800'},
-                      {n:'هدف ٢',pct:c.targetPct2,cl:'bg-teal-50 border-teal-200 text-teal-800'},
-                      {n:'هدف ٣',pct:c.targetPct3,cl:'bg-navy-50 border-navy-200 text-navy-800'},
-                    ].map((t,j)=>{
-                      const exitPrice = (c.approxPrice*(1+t.pct/100)).toFixed(2)
-                      return (
-                        <div key={j} className={`rounded-xl px-3 py-2.5 border flex items-center justify-between ${t.cl}`}>
-                          <div>
-                            <div className="text-[10px] font-bold mb-0.5">🎯 {t.n} — +{t.pct}%</div>
-                            <div className="text-[10px] opacity-70">
-                              إذا اشتريت بـ ${c.approxPrice.toFixed(2)} — اخرج عند ${exitPrice}
-                            </div>
-                          </div>
-                          <div className="text-base font-bold font-mono">${exitPrice}</div>
+                  {/* Bid/Ask حقيقي */}
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    <div className="bg-surface-50 rounded-xl p-2.5 text-center border border-surface-200">
+                      <div className="text-[9px] text-surface-500 font-medium">Bid</div>
+                      <div className="text-sm font-bold text-navy-900 font-mono">${c.bid.toFixed(2)}</div>
+                    </div>
+                    <div className="bg-navy-50 rounded-xl p-2.5 text-center border border-navy-200">
+                      <div className="text-[9px] text-navy-600 font-medium">Mid ← ادخل بـ</div>
+                      <div className="text-sm font-bold text-navy-900 font-mono">${c.mid.toFixed(2)}</div>
+                    </div>
+                    <div className="bg-surface-50 rounded-xl p-2.5 text-center border border-surface-200">
+                      <div className="text-[9px] text-surface-500 font-medium">Ask</div>
+                      <div className="text-sm font-bold text-navy-900 font-mono">${c.ask.toFixed(2)}</div>
+                    </div>
+                  </div>
+
+                  {/* Greeks */}
+                  {c.delta && (
+                    <div className="grid grid-cols-4 gap-1.5 mb-3">
+                      {[
+                        {l:'Δ Delta', v: c.delta?.toFixed(3) ?? '--'},
+                        {l:'Θ Theta', v: c.theta?.toFixed(3) ?? '--'},
+                        {l:'Γ Gamma', v: c.gamma?.toFixed(4) ?? '--'},
+                        {l:'IV%',     v: c.iv ? `${(c.iv*100).toFixed(1)}%` : '--'},
+                      ].map(g => (
+                        <div key={g.l} className="bg-surface-50 rounded-lg p-1.5 text-center">
+                          <div className="text-[8px] text-surface-400">{g.l}</div>
+                          <div className="text-[10px] font-bold text-navy-900 font-mono">{g.v}</div>
                         </div>
-                      )
-                    })}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 mb-3">
-                    <div className="bg-teal-50 rounded-xl p-2.5 border border-teal-100">
-                      <div className="text-[9px] text-teal-600 font-bold">🟢 السعر التقريبي</div>
-                      <div className="text-sm font-bold text-teal-900 font-mono">${c.approxPrice.toFixed(1)}</div>
-                      <div className="text-[9px] text-teal-400">مثال — تحقق من دراية</div>
+                      ))}
                     </div>
-                    <div className="bg-red-50 rounded-xl p-2.5 border border-red-100">
-                      <div className="text-[9px] text-red-600 font-bold">🔴 اخرج عند الخسارة</div>
-                      <div className="text-sm font-bold text-red-900 font-mono">${(c.approxPrice*(1-c.stopPct/100)).toFixed(1)}</div>
-                      <div className="text-[9px] text-red-400">-{c.stopPct}% (مثال)</div>
+                  )}
+
+                  {/* 3 أهداف */}
+                  <div className="space-y-1.5 mb-3">
+                    {[
+                      {n:'هدف ١ +40%', price:t1price, pct:40, cl:'bg-emerald-50 border-emerald-200 text-emerald-800'},
+                      {n:'هدف ٢ +80%', price:t2price, pct:80, cl:'bg-teal-50 border-teal-200 text-teal-800'},
+                      {n:'هدف ٣ +150%',price:t3price, pct:150,cl:'bg-navy-50 border-navy-200 text-navy-800'},
+                    ].map((t,j)=>(
+                      <div key={j} className={`rounded-xl px-3 py-2 border flex items-center justify-between ${t.cl}`}>
+                        <div>
+                          <div className="text-[10px] font-bold">🎯 {t.n}</div>
+                          <div className="text-[10px] opacity-70">
+                            اشتريت بـ ${c.mid.toFixed(2)} — اخرج عند ${t.price.toFixed(2)}
+                          </div>
+                        </div>
+                        <div className="text-base font-bold font-mono">${t.price.toFixed(2)}</div>
+                      </div>
+                    ))}
+                    <div className="rounded-xl px-3 py-2 border bg-red-50 border-red-200 flex items-center justify-between">
+                      <div>
+                        <div className="text-[10px] font-bold text-red-700">🔴 وقف الخسارة -45%</div>
+                        <div className="text-[10px] text-red-500">اخرج فوراً عند ${slPrice.toFixed(2)}</div>
+                      </div>
+                      <div className="text-base font-bold font-mono text-red-700">${slPrice.toFixed(2)}</div>
                     </div>
                   </div>
+
+                  {/* Volume & OI */}
+                  <div className="flex gap-2 mb-3 text-[10px] text-surface-400">
+                    <span>📊 حجم: <span className="font-mono font-bold text-navy-900">{(c.volume??0).toLocaleString('en-US')}</span></span>
+                    <span>•</span>
+                    <span>OI: <span className="font-mono font-bold text-navy-900">{(c.openInterest??0).toLocaleString('en-US')}</span></span>
+                  </div>
+
+                  {/* أزرار */}
                   <div className="flex gap-2">
                     <button onClick={()=>setSelected(isSel?null:c)}
                       className={`flex-1 py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${isSel?'bg-teal-600 border-teal-600 text-white':'border-surface-200 text-surface-600 hover:border-teal-300'}`}>
                       {isSel?'✅ مختار':'اختر هذا العقد'}
                     </button>
-                    <Link href={`/dashboard/analyze?${rp}`}
+                    <Link href={`/dashboard/analyze?${reParams}`}
                       className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-navy-900 text-white text-center hover:bg-navy-800 transition-colors">
                       تحليل مفصل ←
                     </Link>
@@ -214,33 +335,14 @@ export default function SmartDashboard({analyses}:{analyses:any[]}) {
               </div>
             )
           })}
+        </div>
+      )}
 
-          {selected&&(
-            <div className="bg-navy-900 rounded-2xl p-5">
-              <div className="text-white font-bold text-sm mb-1">📊 {selected.type==='call'?'Call':'Put'} {selected.strike} — خطة التداول</div>
-              <div className="text-white/50 text-xs mb-4">ادخل السعر الفعلي من دراية — ثم احسب أهدافك</div>
-              <div className="space-y-2.5">
-                {[
-                  {l:'💰 ادخل بـ',         v:'Bid/Ask من دراية',          c:'text-white'},
-                  {l:'🎯 هدف ١ — أخرج عند',v:`+${selected.targetPct1}% من سعر دخولك`, c:'text-emerald-400'},
-                  {l:'🎯 هدف ٢ — أخرج عند',v:`+${selected.targetPct2}% من سعر دخولك`, c:'text-teal-400'},
-                  {l:'🚀 هدف ٣ — أخرج عند',v:`+${selected.targetPct3}% من سعر دخولك`, c:'text-amber-400'},
-                  {l:'🔴 وقف الخسارة',      v:`-${selected.stopPct}% من سعر دخولك`,   c:'text-red-400'},
-                ].map((r,i)=>(
-                  <div key={i} className="flex items-center justify-between">
-                    <span className="text-white/60 text-xs">{r.l}</span>
-                    <span className={`text-sm font-bold ${r.c}`}>{r.v}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4">
-                <Link href={`/dashboard/analyze?contractType=${selected.type}&strike=${selected.strike}&dte=${selected.dte}`}
-                  className="block w-full py-2.5 rounded-xl bg-teal-600 text-white text-xs font-bold text-center hover:bg-teal-700 transition-colors">
-                  أدخل البيانات من دراية وحلّل بدقة ←
-                </Link>
-              </div>
-            </div>
-          )}
+      {!loading && contracts.length === 0 && selectedExp && !loadingExp && (
+        <div className="card p-6 text-center">
+          <div className="text-3xl mb-2">📭</div>
+          <div className="text-sm text-surface-500">لا توجد عقود مناسبة</div>
+          <div className="text-xs text-surface-400 mt-1">جرّب تاريخ انتهاء مختلف أو غيّر الاتجاه</div>
         </div>
       )}
 
@@ -249,9 +351,9 @@ export default function SmartDashboard({analyses}:{analyses:any[]}) {
         <div className="text-white text-xs font-bold mb-3">⏰ Kill Zones اليوم (توقيت الرياض)</div>
         <div className="space-y-2">
           {[
-            {time:'11:00 ص — 1:00 م',label:'London Kill Zone',icon:'🇬🇧',best:false},
-            {time:'5:30 م — 7:00 م', label:'NY Open Kill Zone',icon:'🔥',best:true},
-            {time:'10:00 م — 11:30 م',label:'NY Close Kill Zone',icon:'🇺🇸',best:false},
+            {time:'11:00 ص — 1:00 م',  label:'London Kill Zone',  icon:'🇬🇧', best:false},
+            {time:'5:30 م — 7:00 م',   label:'NY Open Kill Zone', icon:'🔥',  best:true},
+            {time:'10:00 م — 11:30 م', label:'NY Close Kill Zone',icon:'🇺🇸', best:false},
           ].map(k=>(
             <div key={k.label} className={`flex items-center gap-2 px-3 py-2 rounded-xl ${k.best?'bg-amber-500/20 border border-amber-400/30':'bg-white/5'}`}>
               <span>{k.icon}</span>
@@ -263,7 +365,7 @@ export default function SmartDashboard({analyses}:{analyses:any[]}) {
       </div>
 
       {/* آخر التحليلات */}
-      {analyses.slice(0,3).length>0&&(
+      {analyses.slice(0,3).length > 0 && (
         <div className="card">
           <div className="px-5 pt-4 pb-3 border-b border-surface-100 flex items-center justify-between">
             <div className="text-sm font-bold text-navy-900">آخر تحليلاتك</div>
@@ -271,15 +373,17 @@ export default function SmartDashboard({analyses}:{analyses:any[]}) {
           </div>
           <div className="divide-y divide-surface-100">
             {analyses.slice(0,3).map((a:any)=>{
-              const sc=a.composite_score??0
-              const bg=sc>=70?'bg-emerald-600':sc>=50?'bg-amber-500':'bg-surface-600'
+              const sc = a.composite_score ?? 0
+              const bg = sc>=70?'bg-emerald-600':sc>=50?'bg-amber-500':'bg-surface-600'
               return (
                 <Link key={a.id} href={`/dashboard/history/${a.id}`}
                   className="flex items-center gap-3 px-5 py-3 hover:bg-surface-50 transition-colors">
                   <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${bg}`}>{sc||'--'}</div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${a.contract_type==='call'?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'}`}>{a.contract_type==='call'?'▲':'▼'}</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${a.contract_type==='call'?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'}`}>
+                        {a.contract_type==='call'?'▲':'▼'}
+                      </span>
                       <span className="text-sm font-bold text-navy-900">SPX {a.strike}</span>
                       <span className="text-[10px] text-surface-400">{a.dte}d</span>
                     </div>
@@ -296,7 +400,7 @@ export default function SmartDashboard({analyses}:{analyses:any[]}) {
       <div className="grid grid-cols-2 gap-3">
         <Link href="/dashboard/analyze" className="card p-4 flex items-center gap-3 hover:border-teal-300 transition-all border-2 border-transparent">
           <span className="text-2xl">🔍</span>
-          <div><div className="text-sm font-bold text-navy-900">تحليل عقد</div><div className="text-[10px] text-surface-400">تفصيلي من دراية</div></div>
+          <div><div className="text-sm font-bold text-navy-900">تحليل عقد</div><div className="text-[10px] text-surface-400">تفصيلي كامل</div></div>
         </Link>
         <Link href="/dashboard/history" className="card p-4 flex items-center gap-3 hover:border-teal-300 transition-all border-2 border-transparent">
           <span className="text-2xl">📊</span>
