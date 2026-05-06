@@ -9,260 +9,416 @@ async function tGet(path: string) {
     headers: { Authorization: `Bearer ${TRADIER_KEY}`, Accept: 'application/json' },
     cache: 'no-store',
   })
-  if (!res.ok) throw new Error(`Tradier ${res.status}`)
+  if (!res.ok) throw new Error(`Tradier ${res.status}: ${path}`)
   return res.json()
+}
+
+// Parse OCC symbol: SPXW260507C07350000
+function parseOCC(symbol: string) {
+  const m = symbol.toUpperCase().trim().match(/^(SPXW|SPX)(\d{6})([CP])(\d{8})$/)
+  if (!m) return null
+  const [, root, dateStr, cp] = m
+  const yy = 2000 + parseInt(dateStr.slice(0, 2))
+  const mm = parseInt(dateStr.slice(2, 4))
+  const dd = parseInt(dateStr.slice(4, 6))
+  const strikePad = m[4]
+  const expirationStr = `${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
+  const strike = parseInt(strikePad) / 1000
+  const type = cp === 'C' ? 'call' : 'put'
+
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const expDate = new Date(yy, mm - 1, dd); expDate.setHours(0, 0, 0, 0)
+  const dte = Math.max(0, Math.round((expDate.getTime() - today.getTime()) / 86400000))
+
+  return { root, expirationStr, strike, type: type as 'call' | 'put', dte }
+}
+
+// VWAP + Opening Range from SPY 1min timesales (SPY × 10 ≈ SPX)
+function computeVWAPandOR(data: any) {
+  const series: any[] = data?.series?.data
+  if (!Array.isArray(series) || series.length === 0) return { vwap: null, orHigh: null, orLow: null }
+
+  let sumPV = 0, sumV = 0
+  for (const c of series) {
+    const price = ((c.high ?? c.close) + (c.low ?? c.close) + c.close) / 3
+    const vol = c.volume ?? 0
+    sumPV += price * vol
+    sumV += vol
+  }
+
+  const SPY_MULT = 10
+  const vwap = sumV > 0 ? Math.round((sumPV / sumV) * SPY_MULT * 100) / 100 : null
+  const orCandles = series.slice(0, 30)
+  const orHigh = orCandles.length > 0 ? Math.round(Math.max(...orCandles.map((c: any) => c.high)) * SPY_MULT * 100) / 100 : null
+  const orLow  = orCandles.length > 0 ? Math.round(Math.min(...orCandles.map((c: any) => c.low))  * SPY_MULT * 100) / 100 : null
+
+  return { vwap, orHigh, orLow }
+}
+
+// Score contracts for shortlist ranking
+function scoreForShortlist(o: any, spxPrice: number, type: 'call' | 'put', dte: number): number {
+  const ask   = o.ask ?? 0
+  const bid   = o.bid ?? 0
+  const mid   = bid && ask ? (bid + ask) / 2 : 0
+  const delta = Math.abs(o.greeks?.delta ?? 0)
+  const vol   = o.volume ?? 0
+  const spread = mid > 0 ? (ask - bid) / mid : 99
+
+  if (type === 'call' && o.strike <= spxPrice) return -1
+  if (type === 'put'  && o.strike >= spxPrice) return -1
+  if (ask < 0.50 || ask > 5.00) return -1
+  if (!bid || !ask || bid <= 0)  return -1
+  if (delta < 0.10 || delta > 0.55) return -1
+
+  let score = 0
+
+  // Delta quality (40 pts)
+  const idealMin = dte === 0 ? 0.22 : 0.25
+  const idealMax = dte === 0 ? 0.32 : 0.35
+  if (delta >= idealMin && delta <= idealMax)          score += 40
+  else if (delta >= (dte === 0 ? 0.18 : 0.20) &&
+           delta <= (dte === 0 ? 0.35 : 0.38))         score += 25
+  else if (delta < idealMin)                            score += 10
+  else                                                  score += 5
+
+  // Premium (30 pts)
+  if (ask >= 1.0 && ask <= 3.0)       score += 30
+  else if (ask >= 0.5  && ask < 1.0)  score += 18
+  else if (ask > 3.0  && ask <= 5.0)  score += 15
+
+  // Volume (20 pts)
+  if (vol >= 500)       score += 20
+  else if (vol >= 100)  score += 15
+  else if (vol >= 20)   score += 8
+  else                  score += 2
+
+  // Spread (10 pts)
+  if (spread < 0.05)       score += 10
+  else if (spread < 0.10)  score += 7
+  else if (spread < 0.20)  score += 4
+  else if (spread < 0.35)  score += 1
+
+  return score
 }
 
 export async function GET(request: NextRequest) {
   const start = Date.now()
   const { searchParams } = new URL(request.url)
-  const symbol   = searchParams.get('symbol')
-  const strikeIn = parseFloat(searchParams.get('strike') ?? '0')
-  const typeIn   = (searchParams.get('type') ?? 'call') as 'call' | 'put'
+  const symbolRaw = (searchParams.get('symbol') ?? '').trim()
+
+  if (!symbolRaw) {
+    return NextResponse.json({ success: false, error: 'يجب إدخال رمز العقد بصيغة OCC — مثال: SPXW260507C07350000' })
+  }
+
+  const parsed = parseOCC(symbolRaw)
+  if (!parsed) {
+    return NextResponse.json({
+      success: false,
+      error: `صيغة الرمز غير صحيحة: "${symbolRaw}" — الصيغة المطلوبة: SPXW260507C07350000 (root + YYMMDD + C/P + strike×1000)`,
+    })
+  }
+
+  const { root, expirationStr, strike, type, dte } = parsed
 
   try {
-    // ── 1. SPX + VIX — مباشر من Tradier بدون internal fetch ─
-    let spxPrice = 0, spxChg = 0, vixPrice = 20
-    try {
-      const mkt = await tGet('/markets/quotes?symbols=$SPX.X,$VIX.X,SPY&greeks=false')
-      const qs: any[] = Array.isArray(mkt?.quotes?.quote)
-        ? mkt.quotes.quote : [mkt?.quotes?.quote].filter(Boolean)
-      let spxQ = qs.find((q: any) => q.symbol === '$SPX.X' || q.symbol === 'SPX')
-      const vixQ = qs.find((q: any) => q.symbol === '$VIX.X' || q.symbol === 'VIX')
-      if (!spxQ?.last) {
-        const spy = qs.find((q: any) => q.symbol === 'SPY')
-        if (spy?.last) spxQ = { ...spy, last: spy.last * 10, prevclose: (spy.prevclose ?? spy.last) * 10 }
-      }
-      const prev = spxQ?.prevclose ?? spxQ?.last ?? 0
-      spxPrice = spxQ?.last ?? 0
-      spxChg   = prev > 0 ? ((spxPrice - prev) / prev) * 100 : 0
-      vixPrice = vixQ?.last ?? 20
-    } catch {}
+    // ── جلب متوازٍ: سوق + عقد + timesales + سلسلة ──────────────
+    const [mktRes, contractRes, tsRes, chainRes] = await Promise.allSettled([
+      tGet('/markets/quotes?symbols=$SPX.X,$VIX.X,SPY&greeks=false'),
+      tGet(`/markets/quotes?symbols=${encodeURIComponent(symbolRaw.toUpperCase())}&greeks=true`),
+      tGet('/markets/timesales?symbol=SPY&interval=1min&session_filter=open'),
+      tGet(`/markets/options/chains?symbol=${root}&expiration=${expirationStr}&greeks=true`),
+    ])
 
-    if (!spxPrice) return NextResponse.json({ success: false, error: 'تعذر جلب سعر SPX' })
-
-    // ── 2. جلب العقد ────────────────────────────────────────
-    let contract: any = null
-    let expiration = ''
-
-    if (symbol) {
-      // رمز مباشر
-      const d = await tGet(`/markets/quotes?symbols=${encodeURIComponent(symbol)}&greeks=true`)
-      const q = Array.isArray(d?.quotes?.quote) ? d.quotes.quote[0] : d?.quotes?.quote
-      if (!q) return NextResponse.json({ success: false, error: `لم يُعثر على: ${symbol}` })
-      contract = { ...q, mid: q.bid && q.ask ? Math.round((q.bid + q.ask) / 2 * 100) / 100 : null }
-      expiration = q.expiration_date ?? ''
-
-    } else if (strikeIn) {
-      // بحث بـ Strike — في جميع التواريخ
-      let expirations: string[] = []
-      for (const sym of ['SPXW', 'SPX']) {
-        try {
-          const d = await tGet(`/markets/options/expirations?symbol=${sym}&includeAllRoots=true&strikes=false`)
-          const dates = d?.expirations?.date
-          if (dates) { expirations = Array.isArray(dates) ? dates : [dates]; break }
-        } catch { continue }
-      }
-
-      let found = false
-      for (const exp of expirations.slice(0, 10)) {
-        for (const sym of ['SPXW', 'SPX']) {
-          try {
-            const chain = await tGet(`/markets/options/chains?symbol=${sym}&expiration=${exp}&greeks=true`)
-            const opts: any[] = Array.isArray(chain?.options?.option)
-              ? chain.options.option : [chain?.options?.option].filter(Boolean)
-            // بحث بهامش ±10 للـ Strike
-            const match = opts.find(o => Math.abs(o.strike - strikeIn) <= 10 && o.option_type === typeIn)
-            if (match) {
-              contract = { ...match, mid: match.bid && match.ask ? Math.round((match.bid + match.ask) / 2 * 100) / 100 : null }
-              expiration = exp
-              found = true; break
-            }
-          } catch { continue }
-        }
-        if (found) break
-      }
-      if (!contract) return NextResponse.json({ success: false, error: `لم يُعثر على Strike ${strikeIn} ${typeIn.toUpperCase()}` })
-
-    } else {
-      // تلقائي: أفضل OTM
-      const autoType = spxChg >= 0.2 ? 'call' : spxChg <= -0.2 ? 'put' : 'call'
-      const step = 5
-      const base = Math.round(spxPrice / step) * step
-      const low  = autoType === 'call' ? base + step : base - step * 6
-      const high = autoType === 'call' ? base + step * 6 : base - step
-
-      let expirations: string[] = []
-      for (const sym of ['SPXW', 'SPX']) {
-        try {
-          const d = await tGet(`/markets/options/expirations?symbol=${sym}&includeAllRoots=true&strikes=false`)
-          const dates = d?.expirations?.date
-          if (dates) { expirations = Array.isArray(dates) ? dates : [dates]; break }
-        } catch { continue }
-      }
-
-      const today = new Date()
-      for (const dteR of [{ min: 1, max: 7 }, { min: 7, max: 14 }, { min: 0, max: 1 }]) {
-        const exp = expirations.find(e => {
-          const dte = Math.ceil((new Date(e).getTime() - today.getTime()) / 86400000)
-          return dte >= dteR.min && dte <= dteR.max
-        })
-        if (!exp) continue
-        for (const sym of ['SPXW', 'SPX']) {
-          try {
-            const chain = await tGet(`/markets/options/chains?symbol=${sym}&expiration=${exp}&greeks=true`)
-            const opts: any[] = Array.isArray(chain?.options?.option)
-              ? chain.options.option : [chain?.options?.option].filter(Boolean)
-            const best = opts
-              .filter(o => {
-                const mid = o.bid && o.ask ? (o.bid + o.ask) / 2 : 0
-                const delta = Math.abs(o.greeks?.delta ?? 0)
-                const gamma = Math.abs(o.greeks?.gamma ?? 0)
-                const isOTM = autoType === 'call' ? o.strike > spxPrice : o.strike < spxPrice
-                return o.option_type === autoType
-                  && isOTM
-                  && o.strike >= low && o.strike <= high
-                  && mid >= 5 && mid <= 500
-                  && delta >= 0.15 && delta <= 0.55
-                  && gamma < 0.020
-                  && (o.volume ?? 0) >= 5
-              })
-              .sort((a: any, b: any) => (b.volume ?? 0) - (a.volume ?? 0))[0]
-            if (best) {
-              contract = { ...best, mid: Math.round((best.bid + best.ask) / 2 * 100) / 100 }
-              expiration = exp
-              break
-            }
-          } catch { continue }
-        }
-        if (contract) break
-      }
-      if (!contract) return NextResponse.json({ success: false, error: 'لا يوجد عقد OTM مناسب ($5–$500)' })
+    // ── SPX + VIX ───────────────────────────────────────────────
+    if (mktRes.status === 'rejected') throw new Error('تعذر جلب بيانات السوق من Tradier')
+    const mkt = mktRes.value
+    const qs: any[] = Array.isArray(mkt?.quotes?.quote)
+      ? mkt.quotes.quote : [mkt?.quotes?.quote].filter(Boolean)
+    let spxQ = qs.find((q: any) => q.symbol === '$SPX.X' || q.symbol === 'SPX') ?? null
+    const vixQ = qs.find((q: any) => q.symbol === '$VIX.X' || q.symbol === 'VIX') ?? null
+    if (!spxQ?.last) {
+      const spy = qs.find((q: any) => q.symbol === 'SPY')
+      if (spy?.last) spxQ = { ...spy, last: spy.last * 10, prevclose: (spy.prevclose ?? spy.last) * 10 }
     }
+    const spxPrice = spxQ?.last ?? 0
+    if (!spxPrice) throw new Error('تعذر جلب سعر SPX — تأكد من صلاحية مفتاح Tradier')
+    const spxPrev   = spxQ?.prevclose ?? spxPrice
+    const spxChgPct = spxPrev > 0 ? ((spxPrice - spxPrev) / spxPrev) * 100 : 0
+    const vixPrice  = vixQ?.last ?? 0
+    if (!vixPrice) throw new Error('تعذر جلب VIX من Tradier')
 
-    // ── 3. تحذير ITM ─────────────────────────────────────────
-    const ctype      = contract.option_type ?? typeIn
-    const isITM      = ctype === 'call' ? contract.strike < spxPrice : contract.strike > spxPrice
-    const itmWarning = isITM ? `⚠ تحذير: هذا العقد ITM — Strike ${contract.strike} ${ctype === 'call' ? 'أقل' : 'أعلى'} من SPX ${spxPrice.toFixed(0)}` : null
+    // ── بيانات العقد ────────────────────────────────────────────
+    if (contractRes.status === 'rejected') throw new Error(`تعذر جلب العقد: ${symbolRaw}`)
+    const cd  = contractRes.value
+    const cq  = Array.isArray(cd?.quotes?.quote) ? cd.quotes.quote[0] : cd?.quotes?.quote
+    if (!cq)  throw new Error(`لم يُعثر على العقد: ${symbolRaw} — تأكد من الرمز وتاريخ الانتهاء`)
 
-    // ── 4. الـ 7 أدوات ──────────────────────────────────────
-    const today   = new Date()
-    const dte     = expiration ? Math.max(0, Math.ceil((new Date(expiration).getTime() - today.getTime()) / 86400000)) : 0
-    const mid     = contract.mid ?? ((contract.bid ?? 0) + (contract.ask ?? 0)) / 2
-    const spreadPct = mid > 0 ? Math.round(((contract.ask - contract.bid) / mid) * 10000) / 100 : 99
-    const delta   = contract.greeks?.delta ?? null
-    const gamma   = contract.greeks?.gamma ?? null
-    const theta   = contract.greeks?.theta ?? null
-    const vega    = contract.greeks?.vega  ?? null
-    const iv      = contract.greeks?.mid_iv ?? contract.greeks?.smv_vol ?? null
-    const vol     = contract.volume ?? 0
-    const oi      = contract.open_interest ?? 0
+    const bid      = cq.bid   ?? 0
+    const ask      = cq.ask   ?? 0
+    const mid      = bid && ask ? Math.round((bid + ask) / 2 * 100) / 100 : (cq.last ?? 0)
+    const spreadAbs = Math.round((ask - bid) * 100) / 100
+    const spreadPct = mid > 0 ? (ask - bid) / mid : 99
 
-    // Market Regime (20)
-    let reg = 10
-    if (spxChg >= 1.0) reg = 19; else if (spxChg >= 0.5) reg = 16; else if (spxChg >= 0.2) reg = 13
-    else if (spxChg <= -1.0) reg = 2; else if (spxChg <= -0.5) reg = 5; else if (spxChg <= -0.2) reg = 8
-    if (vixPrice > 25) reg = Math.max(0, reg - 4)
-    reg = Math.min(20, reg)
-
-    // Momentum (20)
-    let mom = 10
-    if (spxChg >= 0.8) mom = 18; else if (spxChg >= 0.3) mom = 14
-    else if (spxChg <= -0.8) mom = 3; else if (spxChg <= -0.3) mom = 7
-    mom = Math.min(20, mom)
-
-    // Contract Quality (20)
-    let qual = 0
+    const delta   = cq.greeks?.delta   ?? null
+    const gamma   = cq.greeks?.gamma   ?? null
+    const theta   = cq.greeks?.theta   ?? null
+    const vega    = cq.greeks?.vega    ?? null
+    const iv      = cq.greeks?.mid_iv  ?? cq.greeks?.smv_vol ?? null
+    const volume  = cq.volume         ?? 0
+    const oi      = cq.open_interest  ?? 0
     const absDelta = Math.abs(delta ?? 0)
-    if (spreadPct < 3) qual += 6; else if (spreadPct < 7) qual += 4; else if (spreadPct < 12) qual += 2
-    if (vol > 500) qual += 5; else if (vol > 100) qual += 4; else if (vol > 20) qual += 2
-    if (oi > 5000) qual += 4; else if (oi > 1000) qual += 3; else if (oi > 100) qual += 1
-    if (absDelta >= 0.20 && absDelta <= 0.40) qual += 5; else if (absDelta < 0.20) qual += 2; else qual += 3
-    if (isITM) qual = Math.max(0, qual - 5) // خصم لـ ITM
-    qual = Math.min(20, qual)
-    const grade = qual >= 17 ? 'excellent' : qual >= 13 ? 'good' : qual >= 9 ? 'acceptable' : qual >= 5 ? 'weak' : 'avoid'
+    const absGamma = Math.abs(gamma ?? 0)
+    const absTheta = Math.abs(theta ?? 0)
 
-    // Volatility (15)
-    let volS = 8
-    if (vixPrice < 15) volS = 13; else if (vixPrice < 20) volS = 11
-    else if (vixPrice < 25) volS = 8; else if (vixPrice < 30) volS = 5; else volS = 2
-    if ((iv ?? 0) * 100 > 30) volS -= 2
-    volS = Math.max(0, Math.min(15, volS))
+    // ── VWAP + Opening Range ────────────────────────────────────
+    const { vwap, orHigh, orLow } = tsRes.status === 'fulfilled'
+      ? computeVWAPandOR(tsRes.value)
+      : { vwap: null, orHigh: null, orLow: null }
 
-    // Entry/Exit (15)
-    const ep  = mid
-    const sl  = ctype === 'call' ? spxPrice - 15 : spxPrice + 15
-    const tgt = ctype === 'call' ? contract.strike + 25 : contract.strike - 25
-    const inv = ctype === 'call' ? spxPrice - 25 : spxPrice + 25
-    const rr  = Math.abs(spxPrice - inv) > 0 ? Math.round((Math.abs(tgt - contract.strike) / Math.abs(spxPrice - inv)) * 100) / 100 : null
-    const eeS = rr != null && rr >= 2 ? 15 : rr != null && rr >= 1.5 ? 11 : 8
+    // ── Expected Move ───────────────────────────────────────────
+    const emIntraday = spxPrice * (vixPrice / 100) * Math.sqrt(1 / 252)
+    const emDaily    = spxPrice * (vixPrice / 100) * Math.sqrt(Math.max(dte, 1) / 252)
+    const emUpper    = Math.round(spxPrice + emIntraday)
+    const emLower    = Math.round(spxPrice - emIntraday)
 
-    // Risk (10)
-    let riskS = 10; const flags: string[] = []
-    if (itmWarning) { flags.push(itmWarning); riskS -= 3 }
-    if (dte === 0 || (dte <= 1 && Math.abs(gamma ?? 0) > 0.01)) { flags.push('خطر Gamma حاد — 0DTE'); riskS -= 5 }
-    else if (dte <= 2) { flags.push('تحذير Theta — DTE قصير'); riskS -= 2 }
-    if (spreadPct > 20) { flags.push('Spread واسع جداً'); riskS -= 3 }
-    if (vixPrice > 30) { flags.push('VIX مرتفع جداً'); riskS -= 2 }
-    riskS = Math.max(0, Math.min(10, riskS))
+    // ── وضعية العقد ─────────────────────────────────────────────
+    const isITM      = type === 'call' ? strike <= spxPrice : strike >= spxPrice
+    const distFromATM = Math.abs(strike - spxPrice)
+    const distRatio   = emIntraday > 0 ? distFromATM / emIntraday : 0
 
-    const total = reg + mom + qual + volS + eeS + riskS
-    const decision = total >= 85 ? 'strong_entry' : total >= 75 ? 'conditional' : total >= 60 ? 'watch' : 'reject'
-    const dirAr = spxChg >= 0.2 ? 'صاعد' : spxChg <= -0.2 ? 'هابط' : 'محايد'
-    const reason = decision === 'reject'
-      ? `رُفضت — ${flags[0] ?? 'الدرجة أقل من 60'}`
-      : decision === 'watch' ? `مراقبة — السوق ${dirAr}، انتظر تأكيداً`
-      : decision === 'conditional' ? `فرصة مشروطة — السوق ${dirAr}، جودة: ${grade}`
-      : `فرصة قوية — السوق ${dirAr}، مع إدارة مخاطر صارمة`
+    const aboveVWAP = vwap ? spxPrice > vwap : null
+    const aboveOR   = orHigh ? spxPrice > orHigh : null
+    const belowOR   = orLow  ? spxPrice < orLow  : null
 
-    const em = spxPrice * (vixPrice / 100) * Math.sqrt(Math.max(dte, 1) / 252)
+    const callAligned = type === 'call'
+    const mktAligned  = callAligned ? spxChgPct >= 0.2 : spxChgPct <= -0.2
+    const mktOpposed  = callAligned ? spxChgPct <= -0.5 : spxChgPct >= 0.5
+
+    // ── محرك 1: اتجاه السوق (15 نقطة) ──────────────────────────
+    let e1 = 7
+    if (vixPrice > 28) { e1 = 0 }
+    else if (mktOpposed) { e1 = 2 }
+    else if (Math.abs(spxChgPct) >= 1.0 && mktAligned) { e1 = 15 }
+    else if (Math.abs(spxChgPct) >= 0.5 && mktAligned) { e1 = 13 }
+    else if (Math.abs(spxChgPct) >= 0.2 && mktAligned) { e1 = 10 }
+
+    // ── محرك 2: الزخم الداخلي — VWAP + OR (15 نقطة) ─────────────
+    let e2 = 7
+    if (aboveVWAP !== null) {
+      const vwapAligned = callAligned ? aboveVWAP : !aboveVWAP
+      e2 = vwapAligned ? 11 : 5
+      if (aboveOR !== null || belowOR !== null) {
+        const orAligned = callAligned ? aboveOR === true : belowOR === true
+        const orOpposed = callAligned ? belowOR === true : aboveOR === true
+        if (orAligned)  e2 = Math.min(15, e2 + 4)
+        if (orOpposed)  e2 = Math.max(0,  e2 - 3)
+      }
+    } else {
+      // لا VWAP — نستخدم تغيير SPX فقط
+      e2 = Math.abs(spxChgPct) > 0.5 && mktAligned ? 10 : Math.abs(spxChgPct) > 0.5 ? 4 : 7
+    }
+    e2 = Math.max(0, Math.min(15, e2))
+
+    // ── محرك 3: ملاءمة Expected Move (15 نقطة) ──────────────────
+    let e3 = 7
+    if (isITM) {
+      e3 = 2
+    } else {
+      const idealMin = 0.30
+      const idealMax = dte === 0 ? 0.80 : 1.00
+      if (distRatio >= idealMin && distRatio <= idealMax)        e3 = 14
+      else if (distRatio > idealMax && distRatio <= idealMax * 1.4) e3 = 10
+      else if (distRatio < idealMin)                             e3 = 8
+      else                                                       e3 = 4
+    }
+    e3 = Math.max(0, Math.min(15, e3))
+
+    // ── محرك 4: جودة العقد (20 نقطة) ────────────────────────────
+    let e4 = 0
+    const dIdealMin = dte === 0 ? 0.22 : 0.25
+    const dIdealMax = dte === 0 ? 0.32 : 0.35
+    const dRangeMin = dte === 0 ? 0.18 : 0.20
+    const dRangeMax = dte === 0 ? 0.35 : 0.38
+
+    if      (absDelta >= dIdealMin && absDelta <= dIdealMax) e4 += 12
+    else if (absDelta >= dRangeMin && absDelta <= dRangeMax) e4 += 8
+    else if (absDelta >= 0.10 && absDelta < dRangeMin)       e4 += 3
+    else if (absDelta > dRangeMax && absDelta <= 0.50)        e4 += 4
+
+    if      (ask >= 1.0 && ask <= 3.0) e4 += 8
+    else if (ask >= 0.5 && ask < 1.0)  e4 += 5
+    else if (ask > 3.0 && ask <= 5.0)  e4 += 5
+    else                               e4 -= 6
+
+    if (isITM) e4 = Math.max(0, e4 - 8)
+    e4 = Math.max(0, Math.min(20, e4))
+
+    // ── محرك 5: السيولة والـ Spread (15 نقطة) ───────────────────
+    let e5 = 0
+    if      (volume >= 1000) e5 += 7
+    else if (volume >= 500)  e5 += 5
+    else if (volume >= 100)  e5 += 3
+    else if (volume >= 20)   e5 += 1
+
+    if      (oi >= 5000) e5 += 3
+    else if (oi >= 1000) e5 += 2
+    else if (oi >= 100)  e5 += 1
+
+    if      (spreadPct < 0.05) e5 += 5
+    else if (spreadPct < 0.10) e5 += 4
+    else if (spreadPct < 0.20) e5 += 2
+    else if (spreadPct < 0.35) e5 += 1
+    else                       e5 -= 2
+
+    e5 = Math.max(0, Math.min(15, e5))
+
+    // ── محرك 6: مخاطر Theta/Gamma (10 نقطة) ─────────────────────
+    let e6 = 10
+    const riskFlags: string[] = []
+
+    if (isITM) {
+      riskFlags.push(`⚠ العقد ITM — Strike ${strike} ${type === 'call' ? 'أقل' : 'أعلى'} من SPX ${spxPrice.toFixed(0)}`)
+      e6 -= 4
+    }
+    if (dte === 0) {
+      if (absGamma > 0.015) { riskFlags.push(`⚠ Gamma حاد 0DTE (${absGamma.toFixed(4)}) — مخاطرة عالية بعد الظهر`); e6 -= 4 }
+      else                  { riskFlags.push('0DTE — Theta يتسارع بعد الساعة 2 ظ'); e6 -= 1 }
+    } else if (dte === 1) {
+      if (absTheta > 3) { riskFlags.push(`⚠ Theta مرتفع (${absTheta.toFixed(2)}) — احرص على التوقيت`); e6 -= 2 }
+    }
+    if (spreadPct > 0.30) { riskFlags.push(`⚠ Spread واسع (${(spreadPct * 100).toFixed(0)}%) — صعوبة في التنفيذ`); e6 -= 2 }
+    if (vixPrice > 30)    { riskFlags.push(`⚠ VIX مرتفع جداً (${vixPrice.toFixed(1)}) — بيئة عالية المخاطر`); e6 -= 3 }
+
+    e6 = Math.max(0, Math.min(10, e6))
+
+    // ── محرك 7: وضوح التنفيذ (10 نقطة) ─────────────────────────
+    let e7 = 0
+    if (bid > 0 && ask > 0)            e7 += 4
+    if (ask >= 0.5 && ask <= 5.0)      e7 += 3
+    if (spreadPct < 0.15)              e7 += 3
+    e7 = Math.max(0, Math.min(10, e7))
+
+    // ── الدرجة الكلية والقرار ────────────────────────────────────
+    const total = e1 + e2 + e3 + e4 + e5 + e6 + e7
+    const decision: 'execute' | 'conditional' | 'watch' | 'reject' =
+      total >= 80 ? 'execute' : total >= 65 ? 'conditional' : total >= 50 ? 'watch' : 'reject'
+
+    const dirAr   = spxChgPct >= 0.3 ? 'صاعد' : spxChgPct <= -0.3 ? 'هابط' : 'محايد'
+    const vwapAr  = vwap ? (spxPrice > vwap ? '، فوق VWAP' : '، تحت VWAP') : ''
+    const decisionReasonAr =
+      decision === 'reject'      ? `رُفض — ${riskFlags[0] ?? 'الدرجة أقل من 50'}`
+      : decision === 'watch'     ? `مراقبة — السوق ${dirAr}${vwapAr}، انتظر تأكيداً إضافياً`
+      : decision === 'conditional' ? `فرصة مشروطة — السوق ${dirAr}${vwapAr}، الدخول بحذر`
+      : `نفّذ الآن — السوق ${dirAr}${vwapAr}، الشروط مكتملة`
+
+    // ── أسعار الدخول ────────────────────────────────────────────
+    const entryConservative = bid > 0 && ask > 0 ? Math.round((bid + 0.35 * spreadAbs) * 100) / 100 : null
+    const entryBalanced     = bid > 0 && ask > 0 ? Math.round((bid + 0.60 * spreadAbs) * 100) / 100 : null
+
+    // ── أهداف بناءً على Expected Move ───────────────────────────
+    const emRef = emIntraday
+    const f1 = dte === 0 ? 0.40 : 0.60
+    const f2 = dte === 0 ? 0.65 : 0.85
+    const f3 = dte === 0 ? 0.90 : 1.10
+    const fs = dte === 0 ? 0.35 : 0.40
+
+    const t1 = type === 'call' ? Math.round(spxPrice + emRef * f1) : Math.round(spxPrice - emRef * f1)
+    const t2 = type === 'call' ? Math.round(spxPrice + emRef * f2) : Math.round(spxPrice - emRef * f2)
+    const t3 = type === 'call' ? Math.round(spxPrice + emRef * f3) : Math.round(spxPrice - emRef * f3)
+    const stopSPX = type === 'call' ? Math.round(spxPrice - emRef * fs) : Math.round(spxPrice + emRef * fs)
+
+    // ── قائمة مختصرة — أفضل 8 عقود من نفس الانتهاء ─────────────
+    let shortlist: any[] = []
+    if (chainRes.status === 'fulfilled') {
+      const opts: any[] = Array.isArray(chainRes.value?.options?.option)
+        ? chainRes.value.options.option : [chainRes.value?.options?.option].filter(Boolean)
+
+      shortlist = opts
+        .filter(o => o.option_type === type)
+        .map(o => ({
+          symbol:      o.symbol,
+          strike:      o.strike,
+          bid:         o.bid   ?? 0,
+          ask:         o.ask   ?? 0,
+          mid:         o.bid && o.ask ? Math.round((o.bid + o.ask) / 2 * 100) / 100 : 0,
+          volume:      o.volume ?? 0,
+          delta:       o.greeks?.delta ?? null,
+          gamma:       o.greeks?.gamma ?? null,
+          iv:          o.greeks?.mid_iv ?? o.greeks?.smv_vol ?? null,
+          isSelected:  o.strike === strike,
+          _score:      scoreForShortlist(o, spxPrice, type, dte),
+        }))
+        .filter(o => o._score > 0)
+        .sort((a, b) => b._score - a._score)
+        .slice(0, 8)
+        .map(({ _score, ...rest }) => rest)
+    }
 
     return NextResponse.json({
       success: true,
       analysis: {
-        selected_symbol:        contract.symbol,
-        selected_strike:        contract.strike,
-        selected_expiry:        expiration,
-        selected_dte:           dte,
-        contract_type:          ctype,
-        is_itm:                 isITM,
-        itm_warning:            itmWarning,
-        bid: contract.bid, ask: contract.ask, mid, last_price: contract.last,
-        spread: contract.ask && contract.bid ? contract.ask - contract.bid : null,
-        spread_percent:         spreadPct,
-        volume: vol, open_interest: oi,
+        // هوية العقد
+        symbol: symbolRaw.toUpperCase(), root, type, strike,
+        expiration: expirationStr, dte,
+
+        // أسعار
+        bid, ask, mid, last: cq.last ?? null,
+        spread_abs: spreadAbs,
+        spread_pct: Math.round(spreadPct * 10000) / 100,
+        volume, open_interest: oi,
+
+        // Greeks
         delta, gamma, theta, vega, iv,
-        spx_price_at_analysis:  spxPrice,
-        vix_at_analysis:        vixPrice,
-        market_regime_score:    reg,
-        market_regime_status:   spxChg >= 0.5 ? 'bullish' : spxChg <= -0.5 ? 'bearish' : 'neutral',
-        market_direction:       spxChg >= 0.2 ? 'bullish' : spxChg <= -0.2 ? 'bearish' : 'neutral',
-        momentum_score:         mom,
-        momentum_direction:     spxChg >= 0.2 ? 'bullish' : 'neutral',
-        contract_quality_score: qual,
-        contract_quality_grade: grade,
-        volatility_score:       volS,
-        volatility_environment: vixPrice < 20 ? 'suitable_buy' : 'neutral',
-        entry_exit_score:       eeS,
-        entry_price:            ep,
-        stop_loss_level:        sl,
-        target_level:           tgt,
-        invalidation_level:     inv,
-        risk_reward_ratio:      rr,
-        risk_score:             riskS,
-        risk_level:             riskS >= 9 ? 'low' : riskS >= 7 ? 'medium' : riskS >= 5 ? 'high' : 'extreme',
-        active_risk_flags:      flags,
-        expected_move_upper:    Math.round(spxPrice + em),
-        expected_move_lower:    Math.round(spxPrice - em),
-        target_probability:     delta != null ? Math.round(Math.abs(delta) * 100) : null,
-        total_score:            total,
+
+        // السوق
+        spx_price: spxPrice,
+        spx_change_pct: Math.round(spxChgPct * 100) / 100,
+        vix: vixPrice,
+        vwap,
+        or_high: orHigh, or_low: orLow,
+        spx_vs_vwap: vwap ? (spxPrice > vwap ? 'above' : 'below') : null,
+
+        // Expected Move
+        em_intraday: Math.round(emIntraday * 100) / 100,
+        em_daily:    Math.round(emDaily    * 100) / 100,
+        em_upper: emUpper, em_lower: emLower,
+
+        // وضعية
+        is_itm: isITM,
+        dist_from_atm: Math.round(distFromATM * 100) / 100,
+
+        // 7 محركات
+        scores: {
+          market_direction:  { score: e1, max: 15, label: 'اتجاه السوق' },
+          momentum:          { score: e2, max: 15, label: 'الزخم — VWAP / OR' },
+          em_fit:            { score: e3, max: 15, label: 'ملاءمة Expected Move' },
+          contract_quality:  { score: e4, max: 20, label: 'جودة العقد' },
+          liquidity_spread:  { score: e5, max: 15, label: 'السيولة والـ Spread' },
+          theta_gamma_risk:  { score: e6, max: 10, label: 'مخاطر Theta / Gamma' },
+          execution_clarity: { score: e7, max: 10, label: 'وضوح التنفيذ' },
+        },
+        total_score: total,
         decision,
-        decision_reason_ar:     reason,
-        analysis_duration_ms:   Date.now() - start,
+        decision_reason_ar: decisionReasonAr,
+
+        // دخول
+        entry_conservative: entryConservative,
+        entry_balanced:     entryBalanced,
+
+        // أهداف + وقف (مستويات SPX)
+        stop_spx: stopSPX,
+        target1_spx: t1, target2_spx: t2, target3_spx: t3,
+
+        // مخاطر
+        risk_flags: riskFlags,
+
+        // قائمة مختصرة
+        shortlist,
+
+        analysis_duration_ms: Date.now() - start,
       },
     })
-
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 200 })
+    return NextResponse.json({ success: false, error: err.message ?? 'خطأ داخلي' })
   }
 }
