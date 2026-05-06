@@ -24,14 +24,14 @@ export async function GET(request: NextRequest) {
     // ── 1. SPX + VIX ────────────────────────────────────────
     let spxPrice = 0, spxChg = 0, vixPrice = 0
     try {
-      const mkt = await tGet('/markets/quotes?symbols=$SPX.X,$VIX.X&greeks=false')
-        .catch(() => tGet('/markets/quotes?symbols=SPX,VIX&greeks=false'))
-      const qs: any[] = Array.isArray(mkt?.quotes?.quote) ? mkt.quotes.quote : [mkt?.quotes?.quote].filter(Boolean)
-      const spxQ = qs.find((q: any) => ['$SPX.X', 'SPX'].includes(q.symbol))
-      const vixQ = qs.find((q: any) => ['$VIX.X', 'VIX'].includes(q.symbol))
-      spxPrice = spxQ?.last ?? 0
-      spxChg   = spxQ?.change_percentage ?? 0
-      vixPrice = vixQ?.last ?? 20
+      // نستخدم pulse الذي يعمل بشكل موثوق
+      const host = request.headers.get('host') ?? 'localhost:3000'
+      const proto = host.includes('localhost') ? 'http' : 'https'
+      const pulseRes = await fetch(`${proto}://${host}/api/market/pulse`, { cache: 'no-store' })
+      const pulse = await pulseRes.json()
+      spxPrice = pulse?.spx?.price ?? 0
+      spxChg   = pulse?.spx?.change ?? 0
+      vixPrice = pulse?.vix?.price ?? 20
     } catch {}
 
     if (!spxPrice) return NextResponse.json({ success: false, error: 'تعذر جلب سعر SPX' })
