@@ -5,11 +5,21 @@ import type { NextRequest } from 'next/server'
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  const publicRoutes = ['/', '/login', '/compliance', '/how-it-works']
-  if (publicRoutes.includes(pathname) || pathname.startsWith('/auth/')) {
+  // ── المسارات العامة — لا تحتاج login ─────────────────────
+  const publicRoutes = [
+    '/',
+    '/login',
+    '/compliance',
+    '/how-it-works',
+  ]
+  if (
+    publicRoutes.includes(pathname) ||
+    pathname.startsWith('/auth/')
+  ) {
     return NextResponse.next()
   }
 
+  // ── التحقق من الجلسة ──────────────────────────────────────
   let response = NextResponse.next({ request: { headers: request.headers } })
 
   const supabase = createServerClient(
@@ -30,6 +40,7 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
+  // ── غير مسجّل → login ─────────────────────────────────────
   if (!user) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
@@ -42,6 +53,7 @@ export async function middleware(request: NextRequest) {
     .eq('id', user.id)
     .single()
 
+  // ── حساب معطّل ────────────────────────────────────────────
   if (!profile || profile.is_active === false) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
@@ -51,6 +63,7 @@ export async function middleware(request: NextRequest) {
 
   const role = profile.role
 
+  // ── Admin routes — admin و moderator فقط ─────────────────
   if (pathname.startsWith('/admin')) {
     if (!['admin', 'moderator'].includes(role)) {
       const url = request.nextUrl.clone()
@@ -59,6 +72,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // ── Analyst routes ────────────────────────────────────────
   if (pathname.startsWith('/analyst')) {
     if (!['admin', 'moderator', 'analyst'].includes(role)) {
       const url = request.nextUrl.clone()
@@ -67,6 +81,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // ── باقي المسارات (dashboard, v2, etc.) — الكل مسموح ─────
   return response
 }
 

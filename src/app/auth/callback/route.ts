@@ -26,9 +26,16 @@ export async function GET(request: NextRequest) {
 
         if (next === '/') {
           switch (role) {
-            case 'admin':   redirect = '/admin';    break
-            case 'analyst': redirect = '/analyst';  break
-            default:        redirect = '/v2';       break  // ← beta_user → v2
+            case 'admin':
+            case 'moderator':
+              redirect = '/admin'
+              break
+            case 'analyst':
+              redirect = '/analyst'
+              break
+            default:
+              redirect = '/v2'  // beta_user → v2
+              break
           }
         }
 
