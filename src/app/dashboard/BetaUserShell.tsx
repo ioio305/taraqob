@@ -23,34 +23,55 @@ function NavLink({ href, label, icon }: { href: string; label: string; icon: Rea
   )
 }
 
-// ── Role Switcher — زر Toggle للمدير والمشرف فقط ───────────
 function RoleSwitcher({ userRole }: { userRole: UserRole }) {
   const router   = useRouter()
   const pathname = usePathname()
-
   if (!['admin', 'moderator'].includes(userRole)) return null
-
-  const isInAdmin = pathname.startsWith('/admin')
+  const isInAdmin  = pathname.startsWith('/admin')
   const adminLabel = userRole === 'admin' ? '⚙️ مدير' : '🛡️ مشرف'
-
   return (
     <button
       onClick={() => router.push(isInAdmin ? '/dashboard' : '/admin')}
       className="flex items-center gap-0 rounded-full border border-surface-200 bg-surface-50 overflow-hidden text-xs font-semibold h-8 transition-all hover:shadow-sm"
-      title={isInAdmin ? 'التبديل لواجهة المستخدم' : `التبديل لواجهة ${userRole === 'admin' ? 'المدير' : 'المشرف'}`}
     >
-      {/* مدير/مشرف — يمين */}
-      <span className={`flex items-center gap-1.5 px-3 h-full transition-all ${
-        isInAdmin ? 'bg-navy-900 text-white' : 'text-surface-400'
-      }`}>
+      <span className={`flex items-center gap-1.5 px-3 h-full transition-all ${isInAdmin ? 'bg-navy-900 text-white' : 'text-surface-400'}`}>
         {adminLabel}
       </span>
-
-      {/* مستخدم — يسار */}
-      <span className={`flex items-center gap-1.5 px-3 h-full transition-all ${
-        !isInAdmin ? 'bg-teal-600 text-white' : 'text-surface-400'
-      }`}>
+      <span className={`flex items-center gap-1.5 px-3 h-full transition-all ${!isInAdmin ? 'bg-teal-600 text-white' : 'text-surface-400'}`}>
         👤 مستخدم
+      </span>
+    </button>
+  )
+}
+
+// ── زر التبديل بين النظام القديم والمطور ────────────────────
+function VersionToggle() {
+  const router   = useRouter()
+  const pathname = usePathname()
+  const isV2 = pathname.startsWith('/v2')
+
+  return (
+    <button
+      onClick={() => router.push(isV2 ? '/dashboard' : '/v2')}
+      className="flex items-center gap-0 rounded-full border overflow-hidden text-xs font-semibold h-8 transition-all hover:shadow-sm"
+      style={{ borderColor: isV2 ? '#C9943A' : '#e2e8f0' }}
+      title={isV2 ? 'التبديل للنظام الكلاسيكي' : 'التبديل للنظام المطور'}
+    >
+      {/* الكلاسيكي */}
+      <span className={`flex items-center gap-1.5 px-3 h-full transition-all ${
+        !isV2
+          ? 'bg-teal-600 text-white'
+          : 'text-surface-400 hover:text-surface-600'
+      }`}>
+        كلاسيكي
+      </span>
+      {/* المطور */}
+      <span className={`flex items-center gap-1.5 px-3 h-full transition-all ${
+        isV2
+          ? 'text-white'
+          : 'text-surface-400 hover:text-surface-600'
+      }`} style={isV2 ? { backgroundColor: '#C9943A' } : {}}>
+        ✦ مطور
       </span>
     </button>
   )
@@ -71,20 +92,24 @@ export default function BetaUserShell({
     router.push('/login')
   }
 
-  const planLabel: Record<UserRole, string> = {
+  const planLabel: Record<string, string> = {
     admin:     'مدير النظام',
     moderator: 'مشرف',
     free:      'مجاني',
     pro:       'محترف',
     quant:     'متقدم',
+    beta_user: 'بيتا',
+    analyst:   'محلل',
   }
 
-  const planColor: Record<UserRole, string> = {
+  const planColor: Record<string, string> = {
     admin:     'text-gold-700 bg-gold-50',
     moderator: 'text-purple-700 bg-purple-50',
     free:      'text-surface-600 bg-surface-100',
     pro:       'text-teal-700 bg-teal-50',
     quant:     'text-navy-700 bg-navy-50',
+    beta_user: 'text-teal-700 bg-teal-50',
+    analyst:   'text-navy-700 bg-navy-50',
   }
 
   const Sidebar = (
@@ -95,8 +120,8 @@ export default function BetaUserShell({
           <img src="/logo.png" alt="ترقّب" className="w-9 h-9 object-contain" />
           <div>
             <div className="text-navy-900 font-bold text-sm">ترقّب</div>
-            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${planColor[userRole]}`}>
-              {planLabel[userRole]}
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${planColor[userRole] ?? 'text-surface-600 bg-surface-100'}`}>
+              {planLabel[userRole] ?? userRole}
             </span>
           </div>
         </div>
@@ -119,13 +144,30 @@ export default function BetaUserShell({
         <NavLink href="/dashboard/performance" label="سجل الأداء" icon={
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
         } />
-
-        {/* التنبيهات — pro و quant و admin فقط */}
         {['admin', 'moderator', 'pro', 'quant'].includes(userRole) && (
           <NavLink href="/dashboard/notifications" label="التنبيهات" icon={
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
           } />
         )}
+
+        {/* ── فاصل + زر النظام المطور ── */}
+        <div className="pt-3 mt-3 border-t border-surface-100">
+          <Link
+            href="/v2"
+            className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150 border"
+            style={{
+              background: 'linear-gradient(135deg, #0D1B2A 0%, #1A3048 100%)',
+              borderColor: '#C9943A',
+              color: '#E0C07A',
+            }}
+          >
+            <span style={{ color: '#C9943A' }}>✦</span>
+            النظام المطور
+            <span className="mr-auto text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#C9943A22', color: '#C9943A', border: '1px solid #C9943A44' }}>
+              جديد
+            </span>
+          </Link>
+        </div>
       </nav>
 
       {/* User */}
@@ -136,7 +178,7 @@ export default function BetaUserShell({
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-xs font-semibold text-navy-900 truncate">{userName}</div>
-            <div className={`text-[10px] font-medium ${planColor[userRole]}`}>{planLabel[userRole]}</div>
+            <div className={`text-[10px] font-medium ${planColor[userRole] ?? ''}`}>{planLabel[userRole] ?? userRole}</div>
           </div>
         </div>
         <button
@@ -152,7 +194,6 @@ export default function BetaUserShell({
 
   return (
     <div className="flex h-screen bg-surface-50 overflow-hidden" dir="rtl">
-      {/* Mobile Overlay */}
       {open && <div className="fixed inset-0 bg-navy-900/40 z-40 lg:hidden" onClick={() => setOpen(false)} />}
 
       {/* Desktop Sidebar */}
@@ -170,12 +211,7 @@ export default function BetaUserShell({
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Header */}
-        <header
-          className="bg-white border-b border-surface-200 flex items-center justify-between px-5 h-14 flex-shrink-0 relative"
-          style={{ overflow: 'visible', zIndex: 100 }}
-        >
-          {/* يسار */}
+        <header className="bg-white border-b border-surface-200 flex items-center justify-between px-5 h-14 flex-shrink-0 relative" style={{ overflow: 'visible', zIndex: 100 }}>
           <div className="flex items-center gap-3">
             <button onClick={() => setOpen(true)} className="lg:hidden text-surface-500 hover:text-navy-900">
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -184,11 +220,12 @@ export default function BetaUserShell({
             </button>
             <RoleSwitcher userRole={userRole} />
           </div>
-
-          {/* يمين */}
-          <div className="flex items-center gap-2 text-xs text-surface-400 bg-surface-100 rounded-full px-3 py-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            Beta — للتحليل العام فقط
+          <div className="flex items-center gap-3">
+            <VersionToggle />
+            <div className="flex items-center gap-2 text-xs text-surface-400 bg-surface-100 rounded-full px-3 py-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Beta — للتحليل العام فقط
+            </div>
           </div>
         </header>
 
@@ -198,13 +235,14 @@ export default function BetaUserShell({
         <nav className="lg:hidden fixed bottom-0 right-0 left-0 z-30 bg-white border-t border-surface-200">
           <div className="flex items-center justify-around px-2 py-1.5">
             {[
-              { href: '/dashboard',          icon: '🏠', label: 'الرئيسية' },
-              { href: '/dashboard/analyze',  icon: '🔍', label: 'تحليل' },
-              { href: '/dashboard/signals',  icon: '⚡', label: 'الإشارات' },
-              { href: '/dashboard/performance', icon: '📊', label: 'الأداء' },
+              { href: '/dashboard',             icon: '🏠', label: 'الرئيسية' },
+              { href: '/dashboard/analyze',     icon: '🔍', label: 'تحليل'    },
+              { href: '/dashboard/signals',     icon: '⚡', label: 'الإشارات' },
+              { href: '/v2',                    icon: '✦',  label: 'المطور'   },
             ].map(item => (
               <Link key={item.href} href={item.href} className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-[10px] ${
-                pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
+                pathname === item.href || (item.href !== '/dashboard' && item.href !== '/v2' && pathname.startsWith(item.href))
+                  || (item.href === '/v2' && pathname.startsWith('/v2'))
                   ? 'text-teal-700 font-semibold'
                   : 'text-surface-400'
               }`}>
