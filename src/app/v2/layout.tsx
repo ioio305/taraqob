@@ -1,18 +1,26 @@
-import type { Metadata } from 'next'
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import type { ReactNode } from 'react'
+import V2Shell from './V2Shell'
 
-export const metadata: Metadata = {
-  title: 'ترقب — النسخة المطورة',
-  description: 'منصة تحليل عقود SPX Options',
-}
+export default async function V2Layout({ children }: { children: ReactNode }) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
 
-export default function V2Layout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('role, full_name, full_name_ar, is_active')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || profile.is_active === false) redirect('/login?error=inactive')
+
+  const displayName = profile.full_name_ar || profile.full_name || user.email || ''
+
   return (
-    <div className="min-h-screen bg-navy-950 font-sans" dir="rtl">
+    <V2Shell userName={displayName} userRole={profile.role}>
       {children}
-    </div>
+    </V2Shell>
   )
 }
