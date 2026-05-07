@@ -216,26 +216,65 @@ export async function GET(request: NextRequest) {
     }
 
     // ── 3. Live Strike Rotation: fetch + score + rank ────────────
-    let top3: any[] = []
-    let usedExp      = ''
+    let top3: any[]   = []
+    let usedExp        = ''
+    let watchMode      = false   // true when market is neutral — show best available as watchlist
 
-    if (contractType && spxPrice > 0 && expirations.length > 0) {
-      // Use ET date string for comparison — Vercel runs UTC, new Date() comparisons are unreliable
-      const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
 
-      // OTM search window: 8 strikes above/below current price in $5 steps
+    // Helper: score + collect best N contracts for a given type from chain
+    function collectBest(opts: any[], type: 'call' | 'put', base: number, n: number) {
       const STEP      = 5
-      const base      = Math.ceil(spxPrice / STEP) * STEP
-      const searchLow  = contractType === 'call' ? base            : base - STEP * 8
-      const searchHigh = contractType === 'call' ? base + STEP * 7 : base - STEP
+      const searchLow  = type === 'call' ? base            : base - STEP * 8
+      const searchHigh = type === 'call' ? base + STEP * 7 : base - STEP
 
-      // DTE priority order: 0DTE first (most relevant), then 1-7, then 7-14
+      return opts
+        .filter(o => o.option_type === type && o.strike >= searchLow && o.strike <= searchHigh)
+        .map(o => {
+          const mid   = o.bid != null && o.ask != null ? Math.round((o.bid + o.ask) / 2 * 100) / 100 : 0
+          const eDate = new Date(o.expiration_date + 'T12:00:00Z')
+          const tDate = new Date(todayStr + 'T12:00:00Z')
+          const dte   = Math.max(0, Math.round((eDate.getTime() - tDate.getTime()) / 86400000))
+          const live  = liveScore(o, spxPrice, type, em)
+          return {
+            symbol:       o.symbol,
+            type:         o.option_type,
+            strike:       o.strike,
+            expiration:   o.expiration_date,
+            dte,
+            bid:          o.bid  ?? 0,
+            ask:          o.ask  ?? 0,
+            mid,
+            last:         o.last ?? 0,
+            volume:       o.volume ?? 0,
+            openInterest: o.open_interest ?? 0,
+            delta:        o.greeks?.delta   ?? null,
+            gamma:        o.greeks?.gamma   ?? null,
+            theta:        o.greeks?.theta   ?? null,
+            vega:         o.greeks?.vega    ?? null,
+            iv:           o.greeks?.mid_iv  ?? o.greeks?.smv_vol ?? null,
+            _score:       live,
+          }
+        })
+        .filter(o => o._score > 0)
+        .sort((a, b) => b._score - a._score)
+        .slice(0, n)
+    }
+
+    if (spxPrice > 0 && expirations.length > 0) {
+      const STEP = 5
+      const base = Math.ceil(spxPrice / STEP) * STEP
+
+      // When neutral: show best 1 call + 1 put as watchlist (not execution signal)
+      const typesToFetch: Array<'call' | 'put'> = contractType
+        ? [contractType]
+        : ['call', 'put']
+
       for (const dteRange of [{ min: 0, max: 1 }, { min: 1, max: 7 }, { min: 7, max: 14 }]) {
         if (top3.length >= 3) break
 
         const exp = expirations.find(e => {
-          // String diff in days: safe for YYYY-MM-DD format
-          const eDate = new Date(e + 'T12:00:00Z')   // noon UTC avoids midnight boundary
+          const eDate = new Date(e + 'T12:00:00Z')
           const tDate = new Date(todayStr + 'T12:00:00Z')
           const dte   = Math.round((eDate.getTime() - tDate.getTime()) / 86400000)
           return dte >= dteRange.min && dte <= dteRange.max
@@ -245,48 +284,23 @@ export async function GET(request: NextRequest) {
         for (const sym of ['SPXW', 'SPX']) {
           try {
             const chain = await tGet(`/markets/options/chains?symbol=${sym}&expiration=${exp}&greeks=true`)
-            let opts: any[] = Array.isArray(chain?.options?.option)
+            const opts: any[] = Array.isArray(chain?.options?.option)
               ? chain.options.option
               : [chain?.options?.option].filter(Boolean)
 
-            const scored = opts
-              .filter(o =>
-                o.option_type === contractType &&
-                o.strike >= searchLow &&
-                o.strike <= searchHigh
-              )
-              .map(o => {
-                const mid  = o.bid != null && o.ask != null ? Math.round((o.bid + o.ask) / 2 * 100) / 100 : 0
-                const eDate = new Date(o.expiration_date + 'T12:00:00Z')
-                const tDate = new Date(todayStr + 'T12:00:00Z')
-                const dte  = Math.max(0, Math.round((eDate.getTime() - tDate.getTime()) / 86400000))
-                const live = liveScore(o, spxPrice, contractType, em)
-                return {
-                  symbol:       o.symbol,
-                  type:         o.option_type,
-                  strike:       o.strike,
-                  expiration:   o.expiration_date,
-                  dte,
-                  bid:          o.bid  ?? 0,
-                  ask:          o.ask  ?? 0,
-                  mid,
-                  last:         o.last ?? 0,
-                  volume:       o.volume ?? 0,
-                  openInterest: o.open_interest ?? 0,
-                  delta:        o.greeks?.delta   ?? null,
-                  gamma:        o.greeks?.gamma   ?? null,
-                  theta:        o.greeks?.theta   ?? null,
-                  vega:         o.greeks?.vega    ?? null,
-                  iv:           o.greeks?.mid_iv  ?? o.greeks?.smv_vol ?? null,
-                  _score:       live,
-                }
-              })
-              .filter(o => o._score > 0)
-              .sort((a, b) => b._score - a._score)
-              .slice(0, 3)
+            let collected: any[] = []
+            if (!contractType) {
+              // Neutral market: 1 best call + 1 best put
+              const bestCall = collectBest(opts, 'call', base, 1)
+              const bestPut  = collectBest(opts, 'put',  base, 1)
+              collected = [...bestCall, ...bestPut]
+              if (collected.length > 0) watchMode = true
+            } else {
+              collected = collectBest(opts, contractType, base, 3)
+            }
 
-            if (scored.length > 0) {
-              top3    = scored
+            if (collected.length > 0) {
+              top3    = collected
               usedExp = exp
               break
             }
@@ -320,7 +334,8 @@ export async function GET(request: NextRequest) {
         london: { high: ewuQ?.high ?? null, low: ewuQ?.low ?? null, close: ewuQ?.last ?? null, changePct: ewuQ?.change_percentage ?? null },
         tokyo:  { high: ewjQ?.high ?? null, low: ewjQ?.low ?? null, close: ewjQ?.last ?? null, changePct: ewjQ?.change_percentage ?? null },
       },
-      direction: { type: dir.type, label: dir.label, color: dir.color, reason: dir.reason },
+      direction:   { type: dir.type, label: dir.label, color: dir.color, reason: dir.reason },
+      watchMode,
       contracts:   top3,
       expiration:  usedExp,
       expirations: expirations.slice(0, 8),

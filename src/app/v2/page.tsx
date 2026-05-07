@@ -23,6 +23,7 @@ type Contract  = {
 type Data = {
   success: boolean; error?: string
   marketClosed?: boolean; marketStatus?: string
+  watchMode?: boolean
   market: Market; sessions: Sessions; direction: Direction
   contracts: Contract[]; expiration: string; expirations: string[]
   otmRange: { low: number; high: number; note: string } | null
@@ -39,8 +40,9 @@ function Sk({ w = 'w-24', h = 'h-5', rounded = 'rounded-lg' }: { w?: string; h?:
   return <div className={`${w} ${h} ${rounded} animate-pulse`} style={{ background: 'rgba(255,255,255,0.06)' }} />
 }
 
-const RANK_COLORS = ['#C9943A', '#34D399', '#60A5FA']
-const RANK_LABELS = ['الأفضل', 'بديل', 'محافظ']
+const RANK_COLORS      = ['#C9943A', '#34D399', '#60A5FA']
+const RANK_LABELS      = ['الأفضل', 'بديل', 'محافظ']
+const WATCH_RANK_LABEL: Record<string, string> = { call: '▲ Call — مراقبة', put: '▼ Put — مراقبة' }
 const REFRESH_SEC = 30
 
 export default function V2Dashboard() {
@@ -303,13 +305,24 @@ export default function V2Dashboard() {
 
         <div className="flex items-center justify-between px-5 py-4"
              style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-          <div className="flex items-center gap-2">
-            <span style={{ color: '#C9943A' }}>◈</span>
-            <span className="text-sm font-medium text-white">أفضل 3 عقود OTM الآن</span>
-            <span className="text-xs px-2 py-0.5 rounded-full font-mono"
-                  style={{ background: 'rgba(201,148,58,0.1)', color: '#C9943A', border: '1px solid rgba(201,148,58,0.2)' }}>
-              $5–$500 · OTM صارم
+          <div className="flex items-center gap-2 flex-wrap">
+            <span style={{ color: data?.watchMode ? '#60A5FA' : '#C9943A' }}>
+              {data?.watchMode ? '◉' : '◈'}
             </span>
+            <span className="text-sm font-medium text-white">
+              {data?.watchMode ? 'مراقبة — السوق عرضي' : 'أفضل 3 عقود OTM الآن'}
+            </span>
+            {data?.watchMode ? (
+              <span className="text-xs px-2 py-0.5 rounded-full font-mono"
+                    style={{ background: 'rgba(96,165,250,0.1)', color: '#60A5FA', border: '1px solid rgba(96,165,250,0.2)' }}>
+                Call + Put · للمراقبة فقط
+              </span>
+            ) : (
+              <span className="text-xs px-2 py-0.5 rounded-full font-mono"
+                    style={{ background: 'rgba(201,148,58,0.1)', color: '#C9943A', border: '1px solid rgba(201,148,58,0.2)' }}>
+                $5–$500 · OTM صارم
+              </span>
+            )}
           </div>
           {!loading && ts && (
             <span className="text-xs font-mono" style={{ color: '#2D3748' }}>
@@ -363,14 +376,23 @@ export default function V2Dashboard() {
             </div>
           )}
 
-          {/* No-trade state (market open but VIX high / neutral) */}
-          {!loading && !data?.marketClosed && noTrade && (
+          {/* No-trade state: only show if neutral AND no watchlist contracts */}
+          {!loading && !data?.marketClosed && noTrade && !data?.watchMode && (data?.contracts ?? []).length === 0 && (
             <div className="py-14 text-center">
               <div className="text-5xl mb-4 opacity-20">⏸</div>
               <div className="text-lg font-semibold mb-2" style={{ color: '#F59E0B' }}>
                 الانتظار هو القرار الصحيح الآن
               </div>
               <div className="text-sm max-w-xs mx-auto" style={{ color: '#4A5568' }}>{dir?.reason}</div>
+            </div>
+          )}
+          {/* Watch mode banner */}
+          {!loading && data?.watchMode && (data?.contracts ?? []).length > 0 && (
+            <div className="rounded-xl px-4 py-3 flex items-center gap-2 text-sm"
+                 style={{ background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.15)' }}>
+              <span style={{ color: '#60A5FA' }}>◉</span>
+              <span style={{ color: '#60A5FA', fontWeight: 600 }}>وضع المراقبة</span>
+              <span style={{ color: '#4A5568' }}>— SPX عرضي ({dir?.reason}). العقود أدناه للمراقبة فقط، لا تُنفّذ دون اتجاه واضح.</span>
             </div>
           )}
 
@@ -404,7 +426,9 @@ export default function V2Dashboard() {
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold px-2.5 py-0.5 rounded-full"
                           style={{ background: `${lc}22`, color: lc, border: `1px solid ${lc}45` }}>
-                      {RANK_LABELS[i]}
+                      {data?.watchMode
+                        ? (WATCH_RANK_LABEL[c.type] ?? RANK_LABELS[i])
+                        : RANK_LABELS[i]}
                     </span>
                     <span className="text-xs font-bold px-2 py-0.5 rounded"
                           style={{
