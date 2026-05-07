@@ -66,9 +66,9 @@ function scoreForShortlist(o: any, spxPrice: number, type: 'call' | 'put', dte: 
 
   if (type === 'call' && o.strike <= spxPrice) return -1
   if (type === 'put'  && o.strike >= spxPrice) return -1
-  if (ask < 0.50 || ask > 5.00) return -1
+  if (ask < 1 || ask > 800)     return -1   // SPX options range $1–$800
   if (!bid || !ask || bid <= 0)  return -1
-  if (delta < 0.10 || delta > 0.55) return -1
+  if (delta < 0.05 || delta > 0.60) return -1
 
   let score = 0
 
@@ -81,10 +81,11 @@ function scoreForShortlist(o: any, spxPrice: number, type: 'call' | 'put', dte: 
   else if (delta < idealMin)                            score += 10
   else                                                  score += 5
 
-  // Premium (30 pts)
-  if (ask >= 1.0 && ask <= 3.0)       score += 30
-  else if (ask >= 0.5  && ask < 1.0)  score += 18
-  else if (ask > 3.0  && ask <= 5.0)  score += 15
+  // Premium (30 pts) — SPX options range $5–$500
+  if (ask >= 5 && ask <= 150)        score += 30
+  else if (ask > 150 && ask <= 400)  score += 18
+  else if (ask > 400 && ask <= 800)  score += 10
+  else if (ask >= 1 && ask < 5)      score += 5
 
   // Volume (20 pts)
   if (vol >= 500)       score += 20
@@ -101,13 +102,48 @@ function scoreForShortlist(o: any, spxPrice: number, type: 'call' | 'put', dte: 
   return score
 }
 
+// Build OCC symbol from strike + type using nearest expiration
+async function strikeToOCC(strikeNum: number, type: 'call' | 'put'): Promise<string | null> {
+  try {
+    // Try to get nearest expiration
+    for (const sym of ['SPXW', 'SPX']) {
+      const d = await tGet(`/markets/options/expirations?symbol=${sym}&includeAllRoots=true&strikes=false`).catch(() => null)
+      const dates = d?.expirations?.date
+      if (!dates) continue
+      const list: string[] = Array.isArray(dates) ? dates : [dates]
+      const today = new Date()
+      // Pick nearest expiration (today or future)
+      const nearest = list.find(e => new Date(e) >= today) ?? list[0]
+      if (!nearest) continue
+      const [y, mo, da] = nearest.split('-')
+      const yy  = y.slice(2)                        // "26"
+      const mm  = mo                                 // "05"
+      const dd  = da                                 // "07"
+      const cp  = type === 'call' ? 'C' : 'P'
+      const pad = String(Math.round(strikeNum * 1000)).padStart(8, '0')
+      return `${sym}${yy}${mm}${dd}${cp}${pad}`
+    }
+  } catch {}
+  return null
+}
+
 export async function GET(request: NextRequest) {
   const start = Date.now()
   const { searchParams } = new URL(request.url)
-  const symbolRaw = (searchParams.get('symbol') ?? '').trim()
+  let symbolRaw = (searchParams.get('symbol') ?? '').trim()
+
+  // Accept plain strike + type (e.g., ?strike=7350&type=call)
+  if (!symbolRaw) {
+    const strikeParam = searchParams.get('strike')
+    const typeParam   = (searchParams.get('type') ?? 'call') as 'call' | 'put'
+    if (strikeParam && /^\d+(\.\d+)?$/.test(strikeParam.trim())) {
+      const built = await strikeToOCC(parseFloat(strikeParam), typeParam)
+      if (built) symbolRaw = built
+    }
+  }
 
   if (!symbolRaw) {
-    return NextResponse.json({ success: false, error: 'يجب إدخال رمز العقد بصيغة OCC — مثال: SPXW260507C07350000' })
+    return NextResponse.json({ success: false, error: 'يجب إدخال رمز العقد أو رقم الستريك' })
   }
 
   const parsed = parseOCC(symbolRaw)
@@ -123,7 +159,7 @@ export async function GET(request: NextRequest) {
   try {
     // ── جلب متوازٍ: سوق + عقد + timesales + سلسلة ──────────────
     const [mktRes, contractRes, tsRes, chainRes] = await Promise.allSettled([
-      tGet('/markets/quotes?symbols=$SPX.X,$VIX.X,SPY&greeks=false'),
+      tGet('/markets/quotes?symbols=$SPX.X,$VIX.X,VIX,SPY,VIXY&greeks=false'),
       tGet(`/markets/quotes?symbols=${encodeURIComponent(symbolRaw.toUpperCase())}&greeks=true`),
       tGet('/markets/timesales?symbol=SPY&interval=1min&session_filter=open'),
       tGet(`/markets/options/chains?symbol=${root}&expiration=${expirationStr}&greeks=true`),
@@ -135,17 +171,21 @@ export async function GET(request: NextRequest) {
     const qs: any[] = Array.isArray(mkt?.quotes?.quote)
       ? mkt.quotes.quote : [mkt?.quotes?.quote].filter(Boolean)
     let spxQ = qs.find((q: any) => q.symbol === '$SPX.X' || q.symbol === 'SPX') ?? null
-    const vixQ = qs.find((q: any) => q.symbol === '$VIX.X' || q.symbol === 'VIX') ?? null
+    let vixQ = qs.find((q: any) => q.symbol === '$VIX.X' || q.symbol === 'VIX') ?? null
     if (!spxQ?.last) {
       const spy = qs.find((q: any) => q.symbol === 'SPY')
       if (spy?.last) spxQ = { ...spy, last: spy.last * 10, prevclose: (spy.prevclose ?? spy.last) * 10 }
+    }
+    // VIX fallback: prevclose → VIXY proxy → default 17
+    if (!vixQ?.last && !vixQ?.prevclose) {
+      const vixy = qs.find((q: any) => q.symbol === 'VIXY')
+      if (vixy?.last) vixQ = { last: Math.round(vixy.last * 3.5 * 10) / 10 }
     }
     const spxPrice = spxQ?.last ?? 0
     if (!spxPrice) throw new Error('تعذر جلب سعر SPX — تأكد من صلاحية مفتاح Tradier')
     const spxPrev   = spxQ?.prevclose ?? spxPrice
     const spxChgPct = spxPrev > 0 ? ((spxPrice - spxPrev) / spxPrev) * 100 : 0
-    const vixPrice  = vixQ?.last ?? 0
-    if (!vixPrice) throw new Error('تعذر جلب VIX من Tradier')
+    const vixPrice  = vixQ?.last ?? vixQ?.prevclose ?? 17
 
     // ── بيانات العقد ────────────────────────────────────────────
     if (contractRes.status === 'rejected') throw new Error(`تعذر جلب العقد: ${symbolRaw}`)

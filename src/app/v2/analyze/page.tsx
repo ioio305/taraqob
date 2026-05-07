@@ -189,12 +189,26 @@ function AnalyzeContent() {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState<string | null>(null)
 
-  const runAnalysis = useCallback(async (sym?: string) => {
+  const runAnalysis = useCallback(async (sym?: string, strike?: string, type?: string) => {
     const s = (sym ?? input).trim().toUpperCase()
-    if (!s) { setError('أدخل رمز العقد بصيغة OCC — مثال: SPXW260507C07350000'); return }
+    // Build query: prefer full OCC symbol, fallback to strike+type
+    let url = ''
+    if (s && /^(SPXW|SPX)\d{6}[CP]\d{8}$/i.test(s)) {
+      url = `/api/v2/analyze?symbol=${encodeURIComponent(s)}`
+    } else if (strike) {
+      url = `/api/v2/analyze?strike=${encodeURIComponent(strike)}&type=${encodeURIComponent(type ?? 'call')}`
+    } else if (s && /^\d+(\.\d+)?$/.test(s)) {
+      // User typed a plain number in the input box — treat as strike
+      url = `/api/v2/analyze?strike=${encodeURIComponent(s)}&type=call`
+    } else if (s) {
+      url = `/api/v2/analyze?symbol=${encodeURIComponent(s)}`
+    } else {
+      setError('أدخل رمز OCC أو رقم الستريك — مثال: SPXW260507C07350000 أو 7350')
+      return
+    }
     setLoading(true); setError(null); setAnalysis(null)
     try {
-      const res  = await fetch(`/api/v2/analyze?symbol=${encodeURIComponent(s)}`)
+      const res  = await fetch(url)
       const data = await res.json()
       if (!data.success) setError(data.error ?? 'خطأ غير معروف')
       else setAnalysis(data.analysis)
@@ -205,8 +219,11 @@ function AnalyzeContent() {
   }, [input])
 
   useEffect(() => {
-    const sym = params.get('symbol')
-    if (sym) runAnalysis(sym)
+    const sym    = params.get('symbol')
+    const strike = params.get('strike')
+    const type   = params.get('type') ?? 'call'
+    if (sym)    { setInput(sym);    runAnalysis(sym) }
+    else if (strike) { setInput(strike); runAnalysis('', strike, type) }
   }, []) // eslint-disable-line
 
   return (
@@ -215,13 +232,13 @@ function AnalyzeContent() {
 
       {/* ── Input ── */}
       <Card>
-        <SectionLabel>تحليل العقد — أدخل رمز OCC الكامل</SectionLabel>
+        <SectionLabel>تحليل العقد — أدخل رمز OCC أو رقم الستريك</SectionLabel>
         <div className="flex gap-2">
           <input
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && runAnalysis()}
-            placeholder="مثال: SPXW260507C07350000"
+            placeholder="7350  أو  SPXW260507C07350000"
             className="flex-1 rounded-xl px-4 py-3 text-sm text-white outline-none font-mono"
             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
             dir="ltr"
@@ -236,7 +253,7 @@ function AnalyzeContent() {
         </div>
         <div className="flex items-center justify-between mt-2">
           <p className="text-xs font-mono" style={{ color: '#2D3748' }}>
-            الصيغة: Root + YYMMDD + C/P + Strike×1000 — مثال: SPXW260507C07350000
+            يقبل: رقم الستريك (7350) أو رمز OCC الكامل (SPXW260507C07350000)
           </p>
           <Link href="/v2" className="text-xs shrink-0 mr-4" style={{ color: '#4A5568' }}>
             ← الداشبورد
