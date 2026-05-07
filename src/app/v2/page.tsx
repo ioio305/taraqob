@@ -5,7 +5,7 @@ import Link from 'next/link'
 
 type Market = {
   spx: { price: number; changePct: number; high: number; low: number }
-  vix: { price: number }
+  vix: { price: number; estimated?: boolean }
   expectedMove: number | null
   emUpper: number | null
   emLower: number | null
@@ -199,9 +199,17 @@ export default function V2Dashboard() {
             <><Sk w="w-full" h="h-8" /><Sk w="w-full" h="h-2" rounded="rounded-full" /></>
           ) : (
             <>
-              <div className="text-3xl font-bold font-mono leading-none"
-                   style={{ color: vix > 25 ? '#EF4444' : vix > 18 ? '#F59E0B' : '#10B981' }}>
-                {n(vix)}
+              <div className="flex items-baseline gap-1.5">
+                <div className="text-3xl font-bold font-mono leading-none"
+                     style={{ color: vix > 25 ? '#EF4444' : vix > 18 ? '#F59E0B' : '#10B981' }}>
+                  {n(vix)}
+                </div>
+                {data?.market?.vix?.estimated && (
+                  <span className="text-xs font-mono px-1.5 py-0.5 rounded"
+                        style={{ background: 'rgba(201,148,58,0.12)', color: '#C9943A', border: '1px solid rgba(201,148,58,0.2)' }}>
+                    ~تقديري
+                  </span>
+                )}
               </div>
               <div className="text-xs font-mono" style={{ color: '#4A5568' }}>
                 {vix < 15 ? 'هادئ جداً' : vix < 20 ? 'طبيعي' : vix < 25 ? 'مرتفع' : '⚠ خطر'}

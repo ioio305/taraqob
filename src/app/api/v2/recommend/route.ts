@@ -26,11 +26,11 @@ function isMarketOpen(): { open: boolean; label: string } {
 
 // ── Market direction from SPX change + VIX ──────────────────────────────
 function getDirection(changePct: number, vix: number) {
-  if (vix > 28)          return { type: null,   label: 'لا تداول — VIX مرتفع',  color: '#EF4444', reason: `VIX ${vix.toFixed(1)} — خطر عالٍ` }
-  if (changePct >= 0.5)  return { type: 'call', label: '▲ صاعد — Call فقط',    color: '#10B981', reason: `SPX +${changePct.toFixed(2)}% — بيئة صاعدة` }
-  if (changePct <= -0.5) return { type: 'put',  label: '▼ هابط — Put فقط',     color: '#EF4444', reason: `SPX ${changePct.toFixed(2)}% — بيئة هابطة` }
-  if (changePct >= 0.2)  return { type: 'call', label: '▲ صاعد معتدل — Call',  color: '#34D399', reason: `SPX +${changePct.toFixed(2)}%` }
-  if (changePct <= -0.2) return { type: 'put',  label: '▼ هابط معتدل — Put',   color: '#F87171', reason: `SPX ${changePct.toFixed(2)}%` }
+  if (vix > 28)           return { type: null,   label: 'لا تداول — VIX مرتفع',  color: '#EF4444', reason: `VIX ${vix.toFixed(1)} — خطر عالٍ` }
+  if (changePct >= 0.5)   return { type: 'call', label: '▲ صاعد — Call فقط',    color: '#10B981', reason: `SPX +${changePct.toFixed(2)}% — بيئة صاعدة` }
+  if (changePct <= -0.5)  return { type: 'put',  label: '▼ هابط — Put فقط',     color: '#EF4444', reason: `SPX ${changePct.toFixed(2)}% — بيئة هابطة` }
+  if (changePct >= 0.15)  return { type: 'call', label: '▲ صاعد معتدل — Call',  color: '#34D399', reason: `SPX +${changePct.toFixed(2)}%` }
+  if (changePct <= -0.15) return { type: 'put',  label: '▼ هابط معتدل — Put',   color: '#F87171', reason: `SPX ${changePct.toFixed(2)}%` }
   return { type: null, label: '↔ محايد — انتظر', color: '#F59E0B', reason: 'SPX يتداول عرضياً — لا اتجاه' }
 }
 
@@ -121,8 +121,9 @@ export async function GET(request: NextRequest) {
 
   try {
     // ── 1. Fetch SPX, VIX, sessions in parallel ──────────────────
+    // Include VIXY as VIX proxy (VIXY × 3.4 ≈ VIX when VIX is low-mid range)
     const [mktData, sessData] = await Promise.all([
-      tGet('/markets/quotes?symbols=$SPX.X,$VIX.X,SPY&greeks=false').catch(() => null),
+      tGet('/markets/quotes?symbols=$SPX.X,$VIX.X,VIX,SPY,VIXY&greeks=false').catch(() => null),
       tGet('/markets/quotes?symbols=EWJ,EWU&greeks=false').catch(() => null),
     ])
 
@@ -133,7 +134,7 @@ export async function GET(request: NextRequest) {
         ? mktData.quotes.quote : [mktData.quotes.quote]
       spxQ = qs.find((q: any) => q.symbol === '$SPX.X' || q.symbol === 'SPX') ?? null
       vixQ = qs.find((q: any) => q.symbol === '$VIX.X' || q.symbol === 'VIX') ?? null
-      // SPY × 10 fallback
+      // SPY × 10 fallback for SPX
       if (!spxQ?.last) {
         const spy = qs.find((q: any) => q.symbol === 'SPY')
         if (spy?.last) spxQ = {
@@ -144,13 +145,20 @@ export async function GET(request: NextRequest) {
           low:       (spy.low  ?? 0) * 10,
         }
       }
+      // VIXY proxy fallback if VIX unavailable (VIXY ≈ VIX/3.5 in typical range)
+      if (!vixQ?.last && !vixQ?.prevclose) {
+        const vixy = qs.find((q: any) => q.symbol === 'VIXY')
+        if (vixy?.last) vixQ = { last: Math.round(vixy.last * 3.5 * 10) / 10, prevclose: null }
+      }
     }
 
     const spxPrice  = spxQ?.last      ?? 0
     const spxPrev   = spxQ?.prevclose ?? spxPrice
     const spxChgPct = spxPrev > 0 ? ((spxPrice - spxPrev) / spxPrev) * 100 : 0
-    // VIX: use last, fall back to prevclose if last is null at market open
-    const vixPrice  = vixQ?.last ?? vixQ?.prevclose ?? 0
+    // VIX: try last → prevclose → VIXY proxy → conservative default 17
+    const vixRaw    = vixQ?.last ?? vixQ?.prevclose ?? 0
+    const vixPrice  = vixRaw > 0 ? vixRaw : 17
+    const vixEstimated = vixRaw === 0
     const spxHigh   = spxQ?.high ?? 0
     const spxLow    = spxQ?.low  ?? 0
 
@@ -180,7 +188,7 @@ export async function GET(request: NextRequest) {
         marketStatus: mktStatus.label,
         market: {
           spx:          { price: spxPrice, changePct: spxChgPct, high: spxHigh, low: spxLow },
-          vix:          { price: vixPrice },
+          vix:          { price: vixPrice, estimated: vixEstimated },
           expectedMove: em,
           emUpper:      em && spxPrice ? Math.round(spxPrice + em) : null,
           emLower:      em && spxPrice ? Math.round(spxPrice - em) : null,
@@ -297,7 +305,7 @@ export async function GET(request: NextRequest) {
       success: true,
       market: {
         spx:          { price: spxPrice, changePct: spxChgPct, high: spxHigh, low: spxLow },
-        vix:          { price: vixPrice },
+        vix:          { price: vixPrice, estimated: vixEstimated },
         expectedMove: em,
         emUpper:      em && spxPrice ? Math.round(spxPrice + em) : null,
         emLower:      em && spxPrice ? Math.round(spxPrice - em) : null,
