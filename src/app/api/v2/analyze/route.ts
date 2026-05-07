@@ -102,29 +102,34 @@ function scoreForShortlist(o: any, spxPrice: number, type: 'call' | 'put', dte: 
   return score
 }
 
-// Build OCC symbol from strike + type using nearest expiration
+// ET date string "YYYY-MM-DD" regardless of server timezone (Vercel runs UTC)
+function todayET(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+}
+
+// Build OCC symbol from strike + type using nearest SPXW/SPX expiration
 async function strikeToOCC(strikeNum: number, type: 'call' | 'put'): Promise<string | null> {
-  try {
-    // Try to get nearest expiration
-    for (const sym of ['SPXW', 'SPX']) {
-      const d = await tGet(`/markets/options/expirations?symbol=${sym}&includeAllRoots=true&strikes=false`).catch(() => null)
+  const todayStr = todayET()  // e.g. "2026-05-07" — string comparison is safe for YYYY-MM-DD
+  const cp  = type === 'call' ? 'C' : 'P'
+  const pad = String(Math.round(strikeNum * 1000)).padStart(8, '0')
+
+  for (const sym of ['SPXW', 'SPX']) {
+    try {
+      const d     = await tGet(`/markets/options/expirations?symbol=${sym}&includeAllRoots=true&strikes=false`)
       const dates = d?.expirations?.date
       if (!dates) continue
       const list: string[] = Array.isArray(dates) ? dates : [dates]
-      const today = new Date()
-      // Pick nearest expiration (today or future)
-      const nearest = list.find(e => new Date(e) >= today) ?? list[0]
+      // String comparison works because format is YYYY-MM-DD
+      const nearest = list.find(e => e >= todayStr)
       if (!nearest) continue
       const [y, mo, da] = nearest.split('-')
-      const yy  = y.slice(2)                        // "26"
-      const mm  = mo                                 // "05"
-      const dd  = da                                 // "07"
-      const cp  = type === 'call' ? 'C' : 'P'
-      const pad = String(Math.round(strikeNum * 1000)).padStart(8, '0')
-      return `${sym}${yy}${mm}${dd}${cp}${pad}`
-    }
-  } catch {}
-  return null
+      return `${sym}${y.slice(2)}${mo}${da}${cp}${pad}`
+    } catch { continue }
+  }
+
+  // Hard fallback: build today's symbol without API call
+  const [y, mo, da] = todayStr.split('-')
+  return `SPXW${y.slice(2)}${mo}${da}${cp}${pad}`
 }
 
 export async function GET(request: NextRequest) {

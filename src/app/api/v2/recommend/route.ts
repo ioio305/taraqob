@@ -220,7 +220,8 @@ export async function GET(request: NextRequest) {
     let usedExp      = ''
 
     if (contractType && spxPrice > 0 && expirations.length > 0) {
-      const today = new Date()
+      // Use ET date string for comparison — Vercel runs UTC, new Date() comparisons are unreliable
+      const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
 
       // OTM search window: 8 strikes above/below current price in $5 steps
       const STEP      = 5
@@ -233,7 +234,10 @@ export async function GET(request: NextRequest) {
         if (top3.length >= 3) break
 
         const exp = expirations.find(e => {
-          const dte = Math.ceil((new Date(e).getTime() - today.getTime()) / 86400000)
+          // String diff in days: safe for YYYY-MM-DD format
+          const eDate = new Date(e + 'T12:00:00Z')   // noon UTC avoids midnight boundary
+          const tDate = new Date(todayStr + 'T12:00:00Z')
+          const dte   = Math.round((eDate.getTime() - tDate.getTime()) / 86400000)
           return dte >= dteRange.min && dte <= dteRange.max
         })
         if (!exp) continue
@@ -253,7 +257,9 @@ export async function GET(request: NextRequest) {
               )
               .map(o => {
                 const mid  = o.bid != null && o.ask != null ? Math.round((o.bid + o.ask) / 2 * 100) / 100 : 0
-                const dte  = Math.max(0, Math.ceil((new Date(o.expiration_date).getTime() - today.getTime()) / 86400000))
+                const eDate = new Date(o.expiration_date + 'T12:00:00Z')
+                const tDate = new Date(todayStr + 'T12:00:00Z')
+                const dte  = Math.max(0, Math.round((eDate.getTime() - tDate.getTime()) / 86400000))
                 const live = liveScore(o, spxPrice, contractType, em)
                 return {
                   symbol:       o.symbol,
