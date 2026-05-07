@@ -149,7 +149,8 @@ export async function GET(request: NextRequest) {
     const spxPrice  = spxQ?.last      ?? 0
     const spxPrev   = spxQ?.prevclose ?? spxPrice
     const spxChgPct = spxPrev > 0 ? ((spxPrice - spxPrev) / spxPrev) * 100 : 0
-    const vixPrice  = vixQ?.last ?? 0
+    // VIX: use last, fall back to prevclose if last is null at market open
+    const vixPrice  = vixQ?.last ?? vixQ?.prevclose ?? 0
     const spxHigh   = spxQ?.high ?? 0
     const spxLow    = spxQ?.low  ?? 0
 
