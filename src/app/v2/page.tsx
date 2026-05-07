@@ -22,6 +22,7 @@ type Contract  = {
 }
 type Data = {
   success: boolean; error?: string
+  marketClosed?: boolean; marketStatus?: string
   market: Market; sessions: Sessions; direction: Direction
   contracts: Contract[]; expiration: string; expirations: string[]
   otmRange: { low: number; high: number; note: string } | null
@@ -40,7 +41,7 @@ function Sk({ w = 'w-24', h = 'h-5', rounded = 'rounded-lg' }: { w?: string; h?:
 
 const RANK_COLORS = ['#C9943A', '#34D399', '#60A5FA']
 const RANK_LABELS = ['الأفضل', 'بديل', 'محافظ']
-const REFRESH_SEC = 45
+const REFRESH_SEC = 30
 
 export default function V2Dashboard() {
   const [data, setData]     = useState<Data | null>(null)
@@ -331,8 +332,31 @@ export default function V2Dashboard() {
             </div>
           ))}
 
-          {/* No-trade state */}
-          {!loading && noTrade && (
+          {/* Market closed state */}
+          {!loading && data?.marketClosed && (
+            <div className="py-12 text-center">
+              <div className="text-5xl mb-4 opacity-15">🌙</div>
+              <div className="text-lg font-semibold mb-2" style={{ color: '#4A5568' }}>
+                {data.marketStatus}
+              </div>
+              <div className="text-sm mb-4" style={{ color: '#2D3748' }}>
+                عقود الخيارات غير متاحة خارج جلسة التداول
+              </div>
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-mono"
+                   style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: '#2D3748' }}>
+                يُعاد المحاولة كل {REFRESH_SEC} ثانية
+              </div>
+              {(spx?.price ?? 0) > 0 && (
+                <div className="mt-6 text-xs font-mono space-y-1" style={{ color: '#374151' }}>
+                  <div>آخر سعر SPX: <span style={{ color: '#C9943A' }}>{n(spx?.price, 0)}</span></div>
+                  {vix > 0 && <div>VIX: <span style={{ color: '#C9943A' }}>{n(vix)}</span></div>}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* No-trade state (market open but VIX high / neutral) */}
+          {!loading && !data?.marketClosed && noTrade && (
             <div className="py-14 text-center">
               <div className="text-5xl mb-4 opacity-20">⏸</div>
               <div className="text-lg font-semibold mb-2" style={{ color: '#F59E0B' }}>
@@ -343,7 +367,7 @@ export default function V2Dashboard() {
           )}
 
           {/* Empty — no OTM found */}
-          {!loading && !noTrade && (data?.contracts ?? []).length === 0 && (
+          {!loading && !data?.marketClosed && !noTrade && (data?.contracts ?? []).length === 0 && (
             <div className="py-14 text-center">
               <div className="text-4xl mb-4 opacity-20">◌</div>
               <div className="text-sm" style={{ color: '#4A5568' }}>

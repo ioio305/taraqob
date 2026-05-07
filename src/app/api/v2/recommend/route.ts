@@ -13,6 +13,17 @@ async function tGet(path: string) {
   return res.json()
 }
 
+// ── Market hours check (NYSE: Mon-Fri 9:30-16:00 ET) ────────────────────
+function isMarketOpen(): { open: boolean; label: string } {
+  const ny  = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
+  const day = ny.getDay()          // 0=Sun, 6=Sat
+  const t   = ny.getHours() * 60 + ny.getMinutes()
+  if (day === 0 || day === 6)           return { open: false, label: 'السوق مغلق — عطلة نهاية الأسبوع' }
+  if (t < 570)                          return { open: false, label: 'السوق لم يفتح بعد — Pre-Market' }
+  if (t >= 960)                         return { open: false, label: 'السوق أُغلق — After Hours' }
+  return { open: true, label: 'مفتوح' }
+}
+
 // ── Market direction from SPX change + VIX ──────────────────────────────
 function getDirection(changePct: number, vix: number) {
   if (vix > 28)          return { type: null,   label: 'لا تداول — VIX مرتفع',  color: '#EF4444', reason: `VIX ${vix.toFixed(1)} — خطر عالٍ` }
@@ -158,6 +169,32 @@ export async function GET(request: NextRequest) {
 
     const dir          = getDirection(spxChgPct, vixPrice)
     const contractType = (forceType ?? dir.type) as 'call' | 'put' | null
+    const mktStatus    = isMarketOpen()
+
+    // ── Market closed → return quotes without attempting options chains ──
+    if (!mktStatus.open && !forceType) {
+      return NextResponse.json({
+        success:     true,
+        marketClosed: true,
+        marketStatus: mktStatus.label,
+        market: {
+          spx:          { price: spxPrice, changePct: spxChgPct, high: spxHigh, low: spxLow },
+          vix:          { price: vixPrice },
+          expectedMove: em,
+          emUpper:      em && spxPrice ? Math.round(spxPrice + em) : null,
+          emLower:      em && spxPrice ? Math.round(spxPrice - em) : null,
+        },
+        sessions: {
+          london: { high: ewuQ?.high ?? null, low: ewuQ?.low ?? null, close: ewuQ?.last ?? null, changePct: ewuQ?.change_percentage ?? null },
+          tokyo:  { high: ewjQ?.high ?? null, low: ewjQ?.low ?? null, close: ewjQ?.last ?? null, changePct: ewjQ?.change_percentage ?? null },
+        },
+        direction:   { type: null, label: mktStatus.label, color: '#4A5568', reason: 'لا تداول خارج أوقات السوق' },
+        contracts:   [],
+        expiration:  '',
+        expirations: [],
+        otmRange:    null,
+      })
+    }
 
     // ── 2. Fetch expirations ─────────────────────────────────────
     let expirations: string[] = []
