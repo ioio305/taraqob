@@ -4,34 +4,28 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import type { UserRole } from '@/lib/types'
-
-const URL_SUCCESS_MESSAGES: Record<string, string> = {
-  registered: 'تم إنشاء حسابك بنجاح! سجّل دخولك الآن.',
-}
 
 const URL_ERROR_MESSAGES: Record<string, string> = {
-  inactive:    'هذا الحساب معطّل. تواصل مع المسؤول.',
-  auth_failed: 'فشل التحقق. حاول تسجيل الدخول من جديد.',
-  unauthorized:'غير مصرح لك بالوصول.',
+  inactive:     'هذا الحساب معطّل. تواصل مع المسؤول.',
+  auth_failed:  'فشل التحقق. حاول تسجيل الدخول من جديد.',
+  unauthorized: 'غير مصرح لك بالوصول.',
 }
 
 export default function LoginForm() {
   const router       = useRouter()
   const searchParams = useSearchParams()
 
-  const [email, setEmail]     = useState('')
+  const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState<string | null>(null)
-
-  const [success, setSuccess] = useState<string | null>(null)
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState<string | null>(null)
+  const [success, setSuccess]   = useState<string | null>(null)
 
   useEffect(() => {
-    const urlError   = searchParams.get('error')
-    const urlSuccess = searchParams.get('registered')
+    const urlError = searchParams.get('error')
+    const registered = searchParams.get('registered')
     if (urlError)   setError(URL_ERROR_MESSAGES[urlError] ?? 'حدث خطأ غير متوقع.')
-    if (urlSuccess) setSuccess(URL_SUCCESS_MESSAGES['registered'])
+    if (registered) setSuccess('تم إنشاء حسابك بنجاح! سجّل دخولك الآن.')
   }, [searchParams])
 
   async function handleLogin(e: React.FormEvent) {
@@ -68,58 +62,106 @@ export default function LoginForm() {
       return
     }
 
-    const role = profile.role as UserRole
-
-    // توجيه حسب الدور
-    if (['admin', 'moderator'].includes(role)) {
-      router.push('/admin')
+    // توجيه حسب الدور — نظام V2 فقط
+    if (['admin', 'moderator'].includes(profile.role)) {
+      window.location.href = '/v2/admin'
     } else {
-      router.push('/dashboard')
+      window.location.href = '/v2'
     }
-    router.refresh()
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6" dir="rtl">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen flex items-center justify-center p-6" dir="rtl"
+         style={{ background: '#060D14', fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
+
+      {/* Ambient glow */}
+      <div className="fixed inset-0 pointer-events-none" aria-hidden>
+        <div style={{
+          position: 'absolute', top: '20%', left: '50%', transform: 'translateX(-50%)',
+          width: '50vw', height: '50vw', borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(201,148,58,0.05) 0%, transparent 70%)',
+        }} />
+      </div>
+
+      <div className="w-full max-w-sm relative z-10">
+
+        {/* Logo + Brand */}
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="ترقّب" className="w-16 h-16 object-contain mx-auto mb-4" />
-          <h1 className="text-xl font-bold text-navy-900">ترقّب</h1>
-          <p className="text-sm text-surface-400 mt-1">البيتا المغلق — الدخول بالدعوة فقط</p>
+          <div className="flex justify-center mb-4">
+            <img src="/logo.png" alt="ترقّب"
+                 className="w-20 h-20 object-contain"
+                 style={{ filter: 'drop-shadow(0 0 20px rgba(201,148,58,0.3))' }} />
+          </div>
+          <h1 className="text-2xl font-bold text-white tracking-wider">ترقّب</h1>
+          <p className="text-sm mt-1 font-mono" style={{ color: '#4A5568' }}>
+            البيتا المغلق — الدخول بالدعوة فقط
+          </p>
         </div>
-        <form onSubmit={handleLogin} className="card p-6 flex flex-col gap-4">
+
+        {/* Card */}
+        <div className="rounded-2xl p-6 space-y-4"
+             style={{ background: 'rgba(13,27,42,0.9)', border: '1px solid rgba(255,255,255,0.07)', boxShadow: '0 24px 60px rgba(0,0,0,0.4)' }}>
+
+          {/* Success */}
           {success && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-700">
-              ✅ {success}
+            <div className="rounded-xl p-3 text-xs"
+                 style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', color: '#34D399' }}>
+              ✓ {success}
             </div>
           )}
+
+          {/* Error */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700">
+            <div className="rounded-xl p-3 text-xs"
+                 style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#F87171' }}>
               {error}
             </div>
           )}
+
+          {/* Email */}
           <div>
-            <label className="field-label">البريد الإلكتروني</label>
+            <label className="block text-xs font-mono mb-2" style={{ color: '#4A5568' }}>
+              البريد الإلكتروني
+            </label>
             <input
               type="email" value={email} onChange={e => setEmail(e.target.value)}
-              required dir="ltr" className="field-input text-left" placeholder="example@email.com"
+              required dir="ltr" placeholder="example@email.com"
+              className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none font-mono"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
             />
           </div>
+
+          {/* Password */}
           <div>
-            <label className="field-label">كلمة المرور</label>
+            <label className="block text-xs font-mono mb-2" style={{ color: '#4A5568' }}>
+              كلمة المرور
+            </label>
             <input
               type="password" value={password} onChange={e => setPassword(e.target.value)}
-              required dir="ltr" className="field-input"
+              required dir="ltr"
+              className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
             />
           </div>
-          <button type="submit" disabled={loading} className="btn-primary justify-center">
+
+          {/* Submit */}
+          <button
+            type="button"
+            onClick={handleLogin}
+            disabled={loading || !email || !password}
+            className="w-full py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
+            style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
             {loading ? 'جارٍ الدخول...' : 'تسجيل الدخول'}
           </button>
-          <Link href="/auth/forgot-password" className="text-center text-xs text-surface-400 hover:text-surface-600">
+
+          <Link href="/auth/forgot-password"
+                className="block text-center text-xs font-mono transition-colors"
+                style={{ color: '#2D3748' }}>
             نسيت كلمة المرور؟
           </Link>
-        </form>
-        <div className="mt-4 text-center text-xs text-surface-400">
+        </div>
+
+        <div className="mt-5 text-center text-xs font-mono" style={{ color: '#1A2A3A' }}>
           للتحليل العام فقط — لا ضمان ربح
         </div>
       </div>

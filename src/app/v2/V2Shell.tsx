@@ -92,8 +92,7 @@ export default function V2Shell({ children, userName, userRole }: {
       <div className="px-5 pt-5 pb-4 shrink-0"
         style={{ borderBottom: '1px solid rgba(201,148,58,0.1)' }}>
         <Link href={isStaff ? '/v2/admin' : '/v2'} className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0"
-            style={{ background: 'linear-gradient(135deg,#C9943A,#7A5010)', color: '#060D14' }}>ت</div>
+          <img src="/logo.png" alt="ترقّب" className="w-9 h-9 object-contain shrink-0" />
           <div>
             <div className="font-bold text-white text-sm tracking-wider">ترقّب</div>
             <div className="text-xs font-mono" style={{ color: '#C9943A', letterSpacing: '0.12em' }}>TARAQOB PRO</div>

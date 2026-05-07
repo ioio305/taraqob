@@ -44,8 +44,7 @@ export default async function RootPage() {
           position: 'sticky', top: 0,
         }}>
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0"
-            style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>ت</div>
+          <img src="/logo.png" alt="ترقّب" className="w-9 h-9 object-contain shrink-0" />
           <div>
             <div className="font-bold text-white text-sm tracking-widest">ترقّب</div>
             <div className="text-xs font-mono hidden sm:block"
@@ -374,8 +373,7 @@ export default async function RootPage() {
       <footer style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
         <div className="max-w-5xl mx-auto px-6 py-8 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold"
-              style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>ت</div>
+            <img src="/logo.png" alt="ترقّب" className="w-6 h-6 object-contain" />
             <span className="text-sm font-bold text-white">ترقّب</span>
             <span className="text-xs font-mono" style={{ color: '#1A2A3A' }}>TARAQOB PRO</span>
           </div>
