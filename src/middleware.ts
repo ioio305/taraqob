@@ -5,6 +5,18 @@ import type { NextRequest } from 'next/server'
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
+  // ── إعادة توجيه المسارات الكلاسيكية القديمة ─────────────────
+  if (pathname.startsWith('/admin')) {
+    const url = request.nextUrl.clone()
+    url.pathname = pathname.replace(/^\/admin/, '/v2/admin') || '/v2/admin'
+    return NextResponse.redirect(url)
+  }
+  if (pathname === '/dashboard' || pathname === '/analyst') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/v2'
+    return NextResponse.redirect(url)
+  }
+
   // ── مسارات عامة — لا تحتاج تسجيل دخول ──────────────────────
   const publicRoutes = ['/', '/login', '/compliance', '/how-it-works']
   if (publicRoutes.includes(pathname) || pathname.startsWith('/auth/')) {

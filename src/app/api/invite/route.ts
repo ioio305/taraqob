@@ -2,12 +2,10 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const VALID_ROLES = ['free', 'pro', 'quant', 'moderator']
+const VALID_ROLES = ['user', 'moderator']
 
 const ROLE_NAMES: Record<string, string> = {
-  free:      'مجاني',
-  pro:       'محترف',
-  quant:     'متقدم',
+  user:      'مستخدم',
   moderator: 'مشرف',
 }
 
@@ -72,18 +70,23 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({
           from:    'ترقّب <info@resend.dev>',
           to:      [email],
-          subject: `دعوة للانضمام إلى منصة ترقّب — خطة ${ROLE_NAMES[role]}`,
+          subject: `دعوة للانضمام إلى منصة ترقّب`,
           html: `
-            <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
-              <h2 style="color: #0D1B2A;">مرحباً بك في ترقّب 👋</h2>
-              <p style="color: #475569;">تمت دعوتك للانضمام إلى منصة ترقّب لتحليل عقود SPX Options.</p>
-              <p style="color: #475569;">نوع اشتراكك: <strong style="color: #2A7B75;">${ROLE_NAMES[role]}</strong></p>
-              <div style="margin: 32px 0;">
-                <a href="${inviteLink}" style="background: #0D1B2A; color: white; padding: 14px 28px; border-radius: 12px; text-decoration: none; font-weight: bold;">
-                  قبول الدعوة والتسجيل
+            <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px; background: #060D14; color: white; border-radius: 16px;">
+              <div style="text-align: center; margin-bottom: 28px;">
+                <div style="display: inline-block; background: linear-gradient(135deg,#C9943A,#8F6415); border-radius: 12px; padding: 10px 18px;">
+                  <span style="font-size: 20px; font-weight: bold; color: #060D14;">ترقّب</span>
+                </div>
+              </div>
+              <h2 style="color: #E8D5A3; margin-bottom: 12px;">مرحباً بك في ترقّب</h2>
+              <p style="color: #64748B; line-height: 1.7;">تمت دعوتك للانضمام إلى منصة ترقّب — منصة تحليل عقود SPX Options المتقدمة.</p>
+              <p style="color: #64748B;">صلاحيتك: <strong style="color: #C9943A;">${ROLE_NAMES[role]}</strong></p>
+              <div style="margin: 32px 0; text-align: center;">
+                <a href="${inviteLink}" style="background: linear-gradient(135deg,#C9943A,#8F6415); color: #060D14; padding: 14px 32px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 15px;">
+                  قبول الدعوة والتسجيل ←
                 </a>
               </div>
-              <p style="color: #94A3B8; font-size: 12px;">الرابط صالح لمدة 7 أيام. إذا لم تطلب هذه الدعوة تجاهل هذا البريد.</p>
+              <p style="color: #374151; font-size: 12px; text-align: center;">الرابط صالح لمدة 7 أيام. إذا لم تطلب هذه الدعوة تجاهل هذا البريد.</p>
             </div>
           `,
         }),
