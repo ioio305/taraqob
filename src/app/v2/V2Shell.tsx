@@ -11,7 +11,7 @@ const ROLE_ICON_MAP:  Record<string, string>  = { admin: '⊞', moderator: '◎'
 
 // ── Nav definitions ────────────────────────────────────────────
 const NAV_TRADING = [
-  { href: '/v2',             label: 'الداشبورد',   icon: '◈', exact: true  },
+  { href: '/v2',             label: 'لوحة المستخدم', icon: '◈', exact: true  },
   { href: '/v2/analyze',     label: 'تحليل العقد', icon: '⬡', exact: false },
   { href: '/v2/signals',     label: 'الإشارات',    icon: '◉', exact: false },
   { href: '/v2/performance', label: 'الأداء',      icon: '◫', exact: false },
@@ -196,6 +196,16 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
           ))}
         </div>
       </div>
+
+      {/* ── Strategy engine — admin / moderator / partner only ── */}
+      {(isStaff || userSecondaryRoles.includes('partner')) && (
+        <div className="px-3 pt-1 pb-2 shrink-0">
+          <SectionTitle color="#C9943A40">متقدم</SectionTitle>
+          <div className="space-y-0.5 mt-1">
+            <NavLink href="/v2/strategy" label="محرك الاستراتيجيات" icon="⚙" exact={false} accent="#C9943A" />
+          </div>
+        </div>
+      )}
 
       <div className="flex-1" />
 
