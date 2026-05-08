@@ -577,6 +577,49 @@ function AnalyzeContent() {
               </div>
             )}
 
+            {/* ── Risk Management ── */}
+            <Card>
+              <SectionLabel>إدارة المخاطر — مشروط بحجم المركز</SectionLabel>
+              {(() => {
+                const contractCost = Math.round((analysis.entry_balanced ?? analysis.mid) * 100)
+                const maxLoss      = contractCost
+                const t1PremEst    = analysis.dte === 0
+                  ? Math.round(contractCost * 1.5)
+                  : Math.round(contractCost * 2.0)
+                const t2PremEst    = analysis.dte === 0
+                  ? Math.round(contractCost * 2.5)
+                  : Math.round(contractCost * 3.5)
+                const rr1 = contractCost > 0 ? (t1PremEst / contractCost).toFixed(1) : '—'
+                const rr2 = contractCost > 0 ? (t2PremEst / contractCost).toFixed(1) : '—'
+                return (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <div className="rounded-xl p-3" style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                        <div className="text-xs font-mono mb-1" style={{ color: '#EF4444' }}>أقصى خسارة / عقد</div>
+                        <div className="text-xl font-bold font-mono" style={{ color: '#EF4444' }}>${maxLoss.toLocaleString()}</div>
+                        <div className="text-xs font-mono mt-0.5" style={{ color: '#4A5568' }}>تكلفة العقد × 100 سهم</div>
+                      </div>
+                      <div className="rounded-xl p-3" style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                        <div className="text-xs font-mono mb-1" style={{ color: '#10B981' }}>هدف ١ — ربح متوقع</div>
+                        <div className="text-xl font-bold font-mono" style={{ color: '#10B981' }}>${t1PremEst.toLocaleString()}</div>
+                        <div className="text-xs font-mono mt-0.5" style={{ color: '#4A5568' }}>R:R ≈ 1:{rr1}</div>
+                      </div>
+                      <div className="rounded-xl p-3" style={{ background: 'rgba(96,165,250,0.07)', border: '1px solid rgba(96,165,250,0.2)' }}>
+                        <div className="text-xs font-mono mb-1" style={{ color: '#60A5FA' }}>هدف ٢ — ربح متوقع</div>
+                        <div className="text-xl font-bold font-mono" style={{ color: '#60A5FA' }}>${t2PremEst.toLocaleString()}</div>
+                        <div className="text-xs font-mono mt-0.5" style={{ color: '#4A5568' }}>R:R ≈ 1:{rr2}</div>
+                      </div>
+                    </div>
+                    <div className="rounded-xl px-4 py-3 text-xs font-mono leading-relaxed" dir="rtl"
+                      style={{ background: 'rgba(201,148,58,0.06)', border: '1px solid rgba(201,148,58,0.15)', color: '#C9943A' }}>
+                      ⚠ المخاطر المقدرة لعقد واحد فقط — لا تخاطر بأكثر من 1-2% من رأس المال في صفقة واحدة.
+                      عقود 0DTE عالية المخاطر وقد تنتهي بلا قيمة خلال ساعات.
+                    </div>
+                  </div>
+                )
+              })()}
+            </Card>
+
             {/* ── Shortlist ── */}
             {analysis.shortlist.length > 0 && (
               <Card>
@@ -642,8 +685,17 @@ function AnalyzeContent() {
               </Card>
             )}
 
+            {/* ── Compliance Disclaimer ── */}
+            <div className="rounded-2xl px-5 py-4 text-xs leading-relaxed font-mono" dir="rtl"
+              style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)', color: '#2D3748' }}>
+              <div className="font-semibold mb-1" style={{ color: '#4A5568' }}>إخلاء مسؤولية — أداة دعم قرار فقط</div>
+              هذا التحليل للأغراض التعليمية والمعلوماتية حصراً. لا يُعدّ نصيحة استثمارية أو توصية بالشراء أو البيع.
+              تداول عقود الخيارات ينطوي على مخاطر عالية وقد يؤدي إلى خسارة رأس المال كاملاً.
+              استشر مستشاراً مالياً مرخصاً قبل اتخاذ أي قرار استثماري.
+              البيانات مؤخرة 15 دقيقة من Tradier (الخطة المجانية).
+            </div>
             <div className="text-xs text-center font-mono pb-4" style={{ color: '#1A2A3A' }}>
-              وقت التحليل: {analysis.analysis_duration_ms}ms · البيانات من Tradier API
+              وقت التحليل: {analysis.analysis_duration_ms}ms · البيانات من Tradier API (15-min delay)
             </div>
           </div>
         )

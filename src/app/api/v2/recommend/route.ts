@@ -52,7 +52,7 @@ function liveScore(
   // ── Hard rejects ───────────────────────────────────────────────
   if (type === 'call' && o.strike <= spxPrice) return -1   // ITM
   if (type === 'put'  && o.strike >= spxPrice) return -1   // ITM
-  if (mid < 5 || mid > 500)                    return -1   // price out of range
+  if (mid < 1 || mid > 1500)                   return -1   // price out of range
   if (!o.bid || !o.ask || o.ask <= o.bid)      return -1   // invalid quotes
   if (spread > 0.35)                            return -1   // spread too wide
   if (gamma > 0.020)                            return -1   // gamma explosion risk
@@ -92,12 +92,12 @@ function liveScore(
   else if (spread < 0.25) score += 4
   else                    score += 0
 
-  // ── 4. Mid-Price Range (15 pts) — $10-150 optimal R/R ──────────
-  if      (mid >= 10  && mid <= 150) score += 15
-  else if (mid >= 5   && mid <  10)  score += 9
-  else if (mid >  150 && mid <= 300) score += 6
-  else if (mid >  300 && mid <= 500) score += 3
-  else                               score += 0
+  // ── 4. Mid-Price Range (15 pts) — $5-300 optimal R/R for SPX ──
+  if      (mid >= 5   && mid <= 300)  score += 15
+  else if (mid >= 2   && mid <  5)    score += 9
+  else if (mid >  300 && mid <= 600)  score += 6
+  else if (mid >  600 && mid <= 1000) score += 3
+  else                                score += 0
 
   // ── 5. Volume / Liquidity (10 pts) ─────────────────────────────
   if      (volume >= 500) score += 10
@@ -445,8 +445,8 @@ export async function GET(request: NextRequest) {
         emLower:      em && spxPrice ? Math.round(spxPrice - em) : null,
       },
       sessions: {
-        london: { high: ewuQ?.high ?? null, low: ewuQ?.low ?? null, close: ewuQ?.last ?? null, changePct: ewuQ?.change_percentage ?? null },
-        tokyo:  { high: ewjQ?.high ?? null, low: ewjQ?.low ?? null, close: ewjQ?.last ?? null, changePct: ewjQ?.change_percentage ?? null },
+        london: sessions.london,
+        tokyo:  sessions.tokyo,
       },
       direction:   { type: dir.type, label: dir.label, color: dir.color, reason: dir.reason },
       watchMode,

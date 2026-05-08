@@ -412,7 +412,7 @@ export default function V2Dashboard() {
             <div className="py-14 text-center">
               <div className="text-4xl mb-4 opacity-20">◌</div>
               <div className="text-sm" style={{ color: '#4A5568' }}>
-                {data?.error ?? 'لا يوجد عقد OTM بسعر $5–$500 في الوقت الحالي'}
+                {data?.error ?? 'لا يوجد عقد OTM مؤهل في الوقت الحالي — جرب لاحقاً أو استخدم أداة التحليل'}
               </div>
               <div className="text-xs mt-2" style={{ color: '#2D3748' }}>
                 يتحدث كل {REFRESH_SEC} ثانية تلقائياً
@@ -615,6 +615,14 @@ export default function V2Dashboard() {
             تحليل ←
           </button>
         </div>
+      </div>
+
+      {/* ── Compliance Disclaimer ── */}
+      <div className="rounded-xl px-4 py-3 text-xs leading-relaxed font-mono" dir="rtl"
+        style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)', color: '#2D3748' }}>
+        <span className="font-semibold" style={{ color: '#4A5568' }}>إخلاء مسؤولية: </span>
+        هذه المنصة أداة دعم قرار تعليمية فقط، لا تُعدّ نصيحة استثمارية. تداول الخيارات ينطوي على مخاطر عالية.
+        البيانات مؤخرة 15 دقيقة (Tradier free tier). استشر مستشاراً مالياً قبل أي قرار.
       </div>
 
       {/* ── Tools Grid ── */}
