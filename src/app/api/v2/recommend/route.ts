@@ -34,30 +34,58 @@ function getDirection(changePct: number, vix: number) {
   return { type: null, label: '↔ محايد — انتظر', color: '#F59E0B', reason: 'SPX يتداول عرضياً — لا اتجاه' }
 }
 
+// ── Mandatory Pre-Filter ─────────────────────────────────────────────────
+// Executed BEFORE any scoring. Order is fixed and cannot be bypassed.
+// Returns rejection reason string, or null if contract passes all gates.
+function mandatoryFilter(
+  o: any,
+  spxPrice: number,
+  type: 'call' | 'put',
+): string | null {
+  const ask = o.ask ?? 0
+  const bid = o.bid ?? 0
+
+  // ── Gate 1: ITM check (absolute — no exceptions) ──────────────
+  if (type === 'call' && o.strike <= spxPrice)
+    return 'ITM Contract Not Allowed'          // call ITM: strike ≤ underlying
+  if (type === 'put' && o.strike >= spxPrice)
+    return 'ITM Contract Not Allowed'          // put ITM: strike ≥ underlying
+
+  // ── Gate 2: OTM confirmation (redundant guard, belt-and-suspenders) ──
+  const isOTM = type === 'call' ? o.strike > spxPrice : o.strike < spxPrice
+  if (!isOTM) return 'Not OTM'
+
+  // ── Gate 3: Quote validity ────────────────────────────────────
+  if (!bid || !ask || bid <= 0 || ask <= 0 || ask <= bid)
+    return 'Invalid Quote'
+
+  // ── Gate 4: Ask price range $0.50–$5.00 (absolute — no exceptions) ──
+  if (ask < 0.50) return 'Ask Below $0.50'
+  if (ask > 5.00) return 'Ask Above $5.00'
+
+  return null   // passed all gates → proceed to scoring
+}
+
 // ── Live Strike Rotation Engine ─────────────────────────────────────────
-// Target: OTM contracts with Ask $0.50–$5.00 (cost $50–$500 per contract)
-// Returns -1 to hard-reject, otherwise 0-100 score.
+// Only contracts that pass mandatoryFilter() reach this function.
+// Returns quality score 0–100.
 function liveScore(
   o: any,
   spxPrice: number,
   type: 'call' | 'put',
   em: number | null,
 ): number {
-  const ask    = o.ask  ?? 0
-  const bid    = o.bid  ?? 0
-  const mid    = ask > 0 && bid > 0 ? (bid + ask) / 2 : 0
-  const delta  = Math.abs(o.greeks?.delta ?? 0)
-  const volume = o.volume ?? 0
-  const spread = mid > 0 ? (ask - bid) / mid : 99
+  // ── Run mandatory filter first — hard stop ────────────────────
+  if (mandatoryFilter(o, spxPrice, type) !== null) return -1
 
-  // ── Hard rejects ───────────────────────────────────────────────
-  if (type === 'call' && o.strike <= spxPrice) return -1   // ITM
-  if (type === 'put'  && o.strike >= spxPrice) return -1   // ITM
-  if (ask < 0.50 || ask > 5.00)               return -1   // Ask must be $0.50–$5.00
-  if (!bid || !ask || ask <= bid)              return -1   // invalid quotes
-  if (spread > 0.50)                           return -1   // spread too wide for cheap contracts
-  if (delta > 0.35)                            return -1   // too close to ATM (too expensive)
-  if (volume < 5)                              return -1   // no liquidity
+  const ask    = o.ask
+  const bid    = o.bid
+  const mid    = (bid + ask) / 2
+  const volume = o.volume ?? 0
+  const spread = (ask - bid) / mid
+
+  // ── Quality filter: spread too wide for cheap contracts ───────
+  if (spread > 0.50) return -1
 
   let score = 0
 
@@ -66,20 +94,19 @@ function liveScore(
   else if (ask >= 0.50 && ask <  1.00) score += 22
   else if (ask >  3.00 && ask <= 5.00) score += 16
 
-  // ── 2. EM Fit (30 pts) — cheap OTM = 0.8x–2.5x EM from ATM ──
+  // ── 2. EM Fit (30 pts) — cheap OTM sits 0.8x–2.5x EM from ATM ─
   if (em && em > 0) {
     const dist = Math.abs(o.strike - spxPrice)
     const pct  = dist / em
     if      (pct >= 0.80 && pct <= 1.60) score += 30   // sweet spot: 1–2× EM
-    else if (pct >= 0.50 && pct <  0.80) score += 20   // closer, slightly pricier
-    else if (pct >  1.60 && pct <= 2.50) score += 14   // very far OTM, low prob
-    else if (pct >= 0.30 && pct <  0.50) score += 8    // too close = too expensive
-    else                                 score += 0    // >2.5× EM = lottery ticket
+    else if (pct >= 0.50 && pct <  0.80) score += 20
+    else if (pct >  1.60 && pct <= 2.50) score += 14
+    else if (pct >= 0.30 && pct <  0.50) score += 8
+    else                                 score += 0    // >2.5× EM = lottery
   } else {
-    // fallback when no EM data
-    if (ask >= 0.75 && ask <= 2.50) score += 20
-    else if (ask < 0.75)            score += 12
-    else                            score += 8
+    if      (ask >= 0.75 && ask <= 2.50) score += 20
+    else if (ask < 0.75)                 score += 12
+    else                                 score += 8
   }
 
   // ── 3. Spread Tightness (20 pts) ───────────────────────────────
@@ -87,7 +114,6 @@ function liveScore(
   else if (spread < 0.10) score += 15
   else if (spread < 0.20) score += 8
   else if (spread < 0.35) score += 3
-  else                    score += 0
 
   // ── 4. Volume / Liquidity (15 pts) ─────────────────────────────
   if      (volume >= 1000) score += 15
@@ -95,7 +121,7 @@ function liveScore(
   else if (volume >= 200)  score += 7
   else if (volume >= 50)   score += 4
   else if (volume >= 10)   score += 2
-  else                     score += 1
+  else if (volume >= 5)    score += 1
 
   return score
 }

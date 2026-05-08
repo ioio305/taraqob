@@ -115,38 +115,54 @@ function computeVWAPandOR(data: any) {
   return { vwap, orHigh, orLow }
 }
 
-// Score contract for shortlist
+// Score contract for shortlist (analyze page — same ITM/OTM/Ask gates as recommend engine)
 function scoreForShortlist(o: any, spxPrice: number, type: 'call' | 'put', dte: number): number {
-  const ask   = o.ask ?? 0
-  const bid   = o.bid ?? 0
-  const mid   = bid && ask ? (bid + ask) / 2 : 0
-  const delta = Math.abs(o.greeks?.delta ?? 0)
-  const vol   = o.volume ?? 0
-  const spread = mid > 0 ? (ask - bid) / mid : 99
-  if (type === 'call' && o.strike <= spxPrice) return -1
-  if (type === 'put'  && o.strike >= spxPrice) return -1
-  if (ask < 1 || ask > 800)    return -1
-  if (!bid || !ask || bid <= 0) return -1
-  if (delta < 0.05 || delta > 0.60) return -1
+  const ask  = o.ask ?? 0
+  const bid  = o.bid ?? 0
+  const vol  = o.volume ?? 0
+
+  // ── Gate 1: ITM — absolute reject ────────────────────────────
+  if (type === 'call' && o.strike <= spxPrice) return -1   // ITM Call
+  if (type === 'put'  && o.strike >= spxPrice) return -1   // ITM Put
+
+  // ── Gate 2: OTM confirmation ──────────────────────────────────
+  const isOTM = type === 'call' ? o.strike > spxPrice : o.strike < spxPrice
+  if (!isOTM) return -1
+
+  // ── Gate 3: Quote validity ────────────────────────────────────
+  if (!bid || !ask || bid <= 0 || ask <= bid) return -1
+
+  // ── Gate 4: Ask range $0.50–$5.00 ────────────────────────────
+  if (ask < 0.50 || ask > 5.00) return -1
+
+  const mid    = (bid + ask) / 2
+  const delta  = Math.abs(o.greeks?.delta ?? 0)
+  const spread = (ask - bid) / mid
+
   let score = 0
-  const idealMin = dte === 0 ? 0.22 : 0.25
-  const idealMax = dte === 0 ? 0.32 : 0.35
-  if (delta >= idealMin && delta <= idealMax)                        score += 40
-  else if (delta >= (dte===0?0.18:0.20) && delta <= (dte===0?0.35:0.38)) score += 25
-  else if (delta < idealMin)                                          score += 10
-  else                                                                score += 5
-  if (ask >= 5 && ask <= 150)       score += 30
-  else if (ask > 150 && ask <= 400) score += 18
-  else if (ask > 400 && ask <= 800) score += 10
-  else if (ask >= 1 && ask < 5)     score += 5
-  if (vol >= 500)      score += 20
-  else if (vol >= 100) score += 15
-  else if (vol >= 20)  score += 8
-  else                 score += 2
-  if (spread < 0.05)      score += 10
-  else if (spread < 0.10) score += 7
-  else if (spread < 0.20) score += 4
-  else if (spread < 0.35) score += 1
+
+  // Ask quality
+  if      (ask >= 1.00 && ask <= 3.00) score += 40
+  else if (ask >= 0.50 && ask <  1.00) score += 28
+  else if (ask >  3.00 && ask <= 5.00) score += 18
+
+  // Volume
+  if      (vol >= 1000) score += 30
+  else if (vol >= 500)  score += 22
+  else if (vol >= 100)  score += 14
+  else if (vol >= 20)   score += 6
+  else                  score += 1
+
+  // Spread tightness
+  if      (spread < 0.05) score += 20
+  else if (spread < 0.10) score += 14
+  else if (spread < 0.20) score += 7
+  else if (spread < 0.35) score += 2
+
+  // Delta as tie-breaker (informational only — not a gate)
+  if (delta >= 0.05 && delta <= 0.25) score += 10
+  else if (delta > 0.25)              score += 4
+
   return score
 }
 
