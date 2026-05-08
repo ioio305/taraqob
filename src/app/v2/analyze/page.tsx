@@ -290,8 +290,18 @@ function AnalyzeContent() {
     const sym    = params.get('symbol')
     const strike = params.get('strike')
     const type   = params.get('type') ?? 'call'
-    if (sym)         { setInput(sym);    runAnalysis(sym) }
-    else if (strike) { setInput(strike); runAnalysis('', strike, type) }
+    // If a full OCC symbol is given, use it directly
+    if (sym && /^(SPXW|SPX)\d{6}[CP]\d{8}$/i.test(sym)) {
+      setInput(sym)
+      runAnalysis(sym)
+    } else if (strike) {
+      // strike-based (symbol=SPX is context only, not an OCC symbol)
+      setInput(strike)
+      runAnalysis('', strike, type)
+    } else if (sym) {
+      setInput(sym)
+      runAnalysis(sym)
+    }
   }, []) // eslint-disable-line
 
   return (

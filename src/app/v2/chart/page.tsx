@@ -487,6 +487,15 @@ export default function ChartPage() {
         </div>
       </div>
 
+      {/* ── Page purpose banner ───────────────────────────────────────────── */}
+      <div className="bg-[#0a1929] border border-[#1e3a50] rounded-xl px-4 py-3 flex gap-3 items-start">
+        <span className="text-lg shrink-0 mt-0.5">📊</span>
+        <div className="text-xs text-gray-400 space-y-1">
+          <p><span className="text-[#E8D5A3] font-bold">هذه الصفحة:</span> تحليل مؤشر SPX كسوق — تُظهر الاتجاه العام والزخم والتذبذب لمساعدتك على اتخاذ قرار الدخول.</p>
+          <p><span className="text-[#C9943A] font-bold">أدخل رقم السترايك ←</span> للانتقال لصفحة <strong>تحليل العقد</strong> التي تُحلل عقد SPX المحدد (Delta، Greeks، السيولة، الأهداف الدقيقة).</p>
+        </div>
+      </div>
+
       {/* ── Unified Summary Card ───────────────────────────────────────────── */}
       {analysis && (
         <div className={`rounded-2xl p-4 ${decisionStyle(analysis.summary.decisionCode)}`}>
@@ -570,13 +579,23 @@ export default function ChartPage() {
               )}
             </div>
 
-            {/* Legend */}
-            <div className="flex gap-4 text-xs text-gray-500 px-4 py-1.5">
-              <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#f59e0b] inline-block" />EMA9</span>
-              <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#06b6d4] inline-block" />EMA21</span>
-              <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#a855f7] inline-block" />EMA50</span>
-              <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#f43f5e] inline-block border-dashed border-b" />EMA200</span>
-              {intraday && <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#fbbf24] inline-block" />VWAP</span>}
+            {/* Legend + indicator guide */}
+            <div className="px-4 pt-2 pb-1 space-y-2">
+              <div className="flex gap-4 text-xs text-gray-500 flex-wrap">
+                <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#f59e0b] inline-block" />EMA9</span>
+                <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#06b6d4] inline-block" />EMA21</span>
+                <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#a855f7] inline-block" />EMA50</span>
+                <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#f43f5e] inline-block" />EMA200</span>
+                {intraday && <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#fbbf24] inline-block" />VWAP</span>}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-0.5 text-xs border-t border-[#1e3a50] pt-1.5">
+                <span><span className="text-[#f59e0b] font-bold">EMA9</span><span className="text-gray-600"> — الاتجاه الأقصر أمداً، أول مؤشر يتفاعل مع الحركة</span></span>
+                <span><span className="text-[#06b6d4] font-bold">EMA21</span><span className="text-gray-600"> — اتجاه أسبوعي، خط دعم/مقاومة ديناميكي مهم</span></span>
+                <span><span className="text-[#a855f7] font-bold">EMA50</span><span className="text-gray-600"> — اتجاه شهري، يحدد هل التوجه متوسط الأمد قوي</span></span>
+                <span><span className="text-[#f43f5e] font-bold">EMA200</span><span className="text-gray-600"> — الخط الاستراتيجي: فوقه سوق صاعد، تحته سوق هابط</span></span>
+                {intraday && <span className="sm:col-span-2"><span className="text-[#fbbf24] font-bold">VWAP</span><span className="text-gray-600"> — متوسط سعر اليوم المرجّح بالحجم، فوقه = مشترون مسيطرون</span></span>}
+              </div>
+              <p className="text-xs text-gray-700">القراءة الصحيحة: EMA9 {'>'} EMA21 {'>'} EMA50 والسعر فوقها جميعاً = إشارة صاعدة قوية</p>
             </div>
 
             <div ref={trendRef} className="w-full" />
@@ -619,9 +638,29 @@ export default function ChartPage() {
               )}
             </div>
 
-            <div className="px-4 pt-1 pb-0.5 text-xs text-gray-600">RSI 14</div>
+            {/* RSI guide */}
+            <div className="px-4 pt-2 pb-1 space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-[#818cf8]">RSI 14</span>
+                <span className="text-xs text-gray-600">— مقياس قوة الزخم من 0 إلى 100</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <span className="bg-red-500/10 border border-red-500/20 rounded-lg px-2 py-1 text-red-400 text-center">{'>'} 70 تشبع شراء<br/><span className="text-gray-600 text-[10px]">لا تدخل CALL</span></span>
+                <span className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-2 py-1 text-emerald-400 text-center">45–68 منطقة التداول<br/><span className="text-gray-600 text-[10px]">أفضل منطقة للدخول</span></span>
+                <span className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-2 py-1 text-blue-400 text-center">{'<'} 30 تشبع بيع<br/><span className="text-gray-600 text-[10px]">ارتداد محتمل</span></span>
+              </div>
+            </div>
             <div ref={rsiRef} className="w-full" />
-            <div className="px-4 pt-1 pb-0.5 text-xs text-gray-600">MACD — هيستوغرام + خط MACD (أزرق) + إشاري (ذهبي)</div>
+
+            {/* MACD guide */}
+            <div className="px-4 pt-2 pb-1 space-y-1 border-t border-[#1e3a50]">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                <span><span className="text-[#3b82f6] font-bold">خط MACD</span><span className="text-gray-600"> — الفرق بين EMA12 وEMA26</span></span>
+                <span><span className="text-[#f59e0b] font-bold">خط الإشارة</span><span className="text-gray-600"> — EMA9 لخط MACD</span></span>
+                <span><span className="text-gray-400 font-bold">الهيستوغرام</span><span className="text-gray-600"> — المسافة بينهما (أخضر = صعود)</span></span>
+              </div>
+              <p className="text-xs text-gray-700">MACD فوق الإشاري + هيستوغرام أخضر ومتصاعد = زخم قوي للشراء</p>
+            </div>
             <div ref={macdRef} className="w-full" />
 
             {analysis && (
@@ -662,11 +701,25 @@ export default function ChartPage() {
               )}
             </div>
 
-            {/* BB Legend */}
-            <div className="flex gap-4 text-xs text-gray-500 px-4 py-1.5">
-              <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#06b6d4] inline-block" />BB+</span>
-              <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#94a3b8] inline-block" />وسط</span>
-              <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#a855f7] inline-block" />BB-</span>
+            {/* BB + ATR guide */}
+            <div className="px-4 pt-2 pb-1 space-y-2">
+              <div className="flex gap-4 text-xs text-gray-500 flex-wrap">
+                <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#06b6d4] inline-block" />الحد العلوي</span>
+                <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#94a3b8] inline-block" />الوسط</span>
+                <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#a855f7] inline-block" />الحد السفلي</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs border-t border-[#1e3a50] pt-1.5">
+                <div>
+                  <span className="font-bold text-[#06b6d4]">Bollinger Bands</span>
+                  <span className="text-gray-600"> — نطاق يغطي 95% من الحركة المتوقعة</span>
+                  <div className="text-gray-700 mt-0.5">السعر قرب الحد العلوي = مبالغة في الصعود | قرب السفلي = ارتداد محتمل</div>
+                </div>
+                <div>
+                  <span className="font-bold text-white">ATR 14</span>
+                  <span className="text-gray-600"> — متوسط التذبذب اليومي بالنقاط</span>
+                  <div className="text-gray-700 mt-0.5">يُحدد هل السوق متحرك بما يكفي لتحقيق أهداف الخيارات</div>
+                </div>
+              </div>
             </div>
 
             <div ref={volRef} className="w-full" />
@@ -720,15 +773,18 @@ export default function ChartPage() {
               )}
             </div>
 
-            {/* Levels legend */}
-            {analysis?.summary.t1Level && (
-              <div className="flex gap-4 text-xs text-gray-500 px-4 py-1.5">
-                <span className="text-[#f59e0b]">·· الدخول</span>
-                <span className="text-emerald-400">-- H1</span>
-                <span className="text-green-300">-- H2</span>
-                <span className="text-red-400">-- Stop</span>
-              </div>
-            )}
+            {/* Decision chart guide */}
+            <div className="px-4 pt-2 pb-1 space-y-1.5">
+              <p className="text-xs text-gray-600">يجمع هذا الشارت نتائج المؤشرات الثلاثة ويضع مستويات التداول المقترحة مباشرة على السعر</p>
+              {analysis?.summary.t1Level && (
+                <div className="flex gap-4 text-xs flex-wrap">
+                  <span><span className="text-[#f59e0b] font-bold">·· الدخول</span><span className="text-gray-600"> — السعر الحالي (مرجع)</span></span>
+                  <span><span className="text-emerald-400 font-bold">-- H1</span><span className="text-gray-600"> — الهدف الأول (ATR × 1.5)</span></span>
+                  <span><span className="text-green-300 font-bold">-- H2</span><span className="text-gray-600"> — الهدف الثاني (ATR × 3)</span></span>
+                  <span><span className="text-red-400 font-bold">-- Stop</span><span className="text-gray-600"> — وقف الخسارة (ATR × 1)</span></span>
+                </div>
+              )}
+            </div>
 
             <div ref={decRef} className="w-full" />
 
