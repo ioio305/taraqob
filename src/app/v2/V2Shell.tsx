@@ -119,7 +119,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
     try {
       await createClient().auth.signOut()
     } finally {
-      window.location.href = '/login'
+      window.location.href = '/'
     }
   }
 
