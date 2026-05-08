@@ -613,13 +613,11 @@ export default function V2Dashboard() {
       </div>
 
       {/* ── Tools Grid ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
-          { href: '/v2/analyze',     icon: '⬡', label: 'أداة التحليل',     desc: '7 محركات + Decision Score', color: '#C9943A' },
-          { href: '/v2/market',      icon: '◐', label: 'Market Regime',    desc: 'حالة السوق واتجاهه',       color: '#10B981' },
-          { href: '/v2/contract',    icon: '◇', label: 'Contract Quality', desc: 'تقييم جودة العقد',          color: '#60A5FA' },
-          { href: '/v2/signals',     icon: '◉', label: 'الإشارات',          desc: 'إشارات محفوظة',             color: '#A78BFA' },
-          { href: '/v2/performance', icon: '◫', label: 'الأداء',            desc: 'إحصائيات وأرقام',           color: '#34D399' },
+          { href: '/v2/analyze',     icon: '⬡', label: 'أداة التحليل', desc: '7 محركات + Decision Score', color: '#C9943A' },
+          { href: '/v2/signals',     icon: '◉', label: 'الإشارات',      desc: 'إشارات محفوظة',             color: '#A78BFA' },
+          { href: '/v2/performance', icon: '◫', label: 'الأداء',        desc: 'إحصائيات وأرقام',           color: '#34D399' },
         ].map(t => (
           <Link key={t.href} href={t.href}
                 className="rounded-xl p-4 transition-all"

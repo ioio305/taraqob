@@ -17,6 +17,7 @@ type ShortlistRow = {
 type Analysis = {
   symbol: string; root: string; type: string; strike: number
   expiration: string; dte: number
+  is_estimated?: boolean
   bid: number; ask: number; mid: number; last: number | null
   spread_abs: number; spread_pct: number
   volume: number; open_interest: number
@@ -324,6 +325,15 @@ function AnalyzeContent() {
 
         return (
           <div className="space-y-4">
+
+            {/* ── Estimated badge ── */}
+            {analysis.is_estimated && (
+              <div className="rounded-xl px-4 py-2.5 flex items-center gap-2 text-sm"
+                style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
+                <span style={{ color: '#F59E0B' }}>⚡</span>
+                <span style={{ color: '#F59E0B' }}>تحليل تقديري — السوق مغلق حالياً، أسعار Black-Scholes بناءً على SPX و VIX</span>
+              </div>
+            )}
 
             {/* ── Market Status Bar ── */}
             <div className="rounded-2xl px-5 py-3 flex flex-wrap items-center gap-x-5 gap-y-2"
