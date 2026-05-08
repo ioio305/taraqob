@@ -456,16 +456,22 @@ export async function GET(request: NextRequest) {
         }))
       if (cfg.aggregate > 1) bars = aggregateBars(bars, cfg.aggregate)
     } else {
-      const url = `${TRADIER_BASE}/markets/history?symbol=%24SPX.X&interval=${cfg.tradierInterval}&start=${start}&end=${end}`
+      // Use SPY × 10 for historical data — $SPX.X is unreliable on Tradier history endpoint
+      const url = `${TRADIER_BASE}/markets/history?symbol=SPY&interval=${cfg.tradierInterval}&start=${start}&end=${end}`
       const res  = await fetch(url, { headers: HDR, cache: 'no-store' })
       if (!res.ok) throw new Error(`Tradier history ${res.status}`)
       const json = await res.json()
-      const raw  = json?.history?.day ?? []
+      // Tradier uses history.day / history.week / history.month depending on interval
+      const hist = json?.history ?? {}
+      const raw  = hist.day ?? hist.week ?? hist.month ?? []
       bars = (Array.isArray(raw) ? raw : [raw])
         .filter((d: { date?: string }) => !!d?.date)
         .map((d: { date: string; open: number; high: number; low: number; close: number; volume?: number }) => ({
           time:   d.date,
-          open:   d.open, high: d.high, low: d.low, close: d.close,
+          open:   +(d.open  * 10).toFixed(2),
+          high:   +(d.high  * 10).toFixed(2),
+          low:    +(d.low   * 10).toFixed(2),
+          close:  +(d.close * 10).toFixed(2),
           volume: d.volume ?? 0,
         }))
     }
@@ -473,8 +479,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: String(err) }, { status: 502 })
   }
 
-  if (bars.length < 15) {
-    return NextResponse.json({ tf, symbol: 'SPX', candles: [], analysis: defaultAnalysis(), error: 'بيانات غير كافية' })
+  if (bars.length < 10) {
+    return NextResponse.json({ tf, symbol: 'SPX', candles: [], analysis: defaultAnalysis(), error: 'بيانات غير كافية — تحقق من اتصال Tradier' })
   }
 
   const closes = bars.map(b => b.close)
