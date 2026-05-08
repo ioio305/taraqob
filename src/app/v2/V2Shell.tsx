@@ -33,6 +33,11 @@ const NAV_ADMIN = [
   { href: '/v2/admin/audit', label: 'سجل الأحداث',      icon: '≡',  exact: false },
 ]
 
+const TIER_RANK: Record<string, number> = { radar: 1, signal: 2, edge: 3, alpha: 4 }
+function tierAllows(userTier: string, required: string) {
+  return (TIER_RANK[userTier] ?? 1) >= (TIER_RANK[required] ?? 1)
+}
+
 // ── NavLink ────────────────────────────────────────────────────
 function NavLink({ href, label, icon, exact, accent = '#C9943A' }: {
   href: string; label: string; icon: string; exact: boolean; accent?: string
@@ -50,6 +55,25 @@ function NavLink({ href, label, icon, exact, accent = '#C9943A' }: {
       <span className="w-4 text-center text-sm shrink-0" style={{ color: active ? accent : '#1A2A3A' }}>{icon}</span>
       <span className="font-medium">{label}</span>
       {active && <span className="mr-auto w-1.5 h-1.5 rounded-full shrink-0" style={{ background: accent }} />}
+    </Link>
+  )
+}
+
+// ── LockedNavLink — للميزات التي تحتاج ترقية ──────────────────
+function LockedNavLink({ label, icon, requiredTier }: {
+  label: string; icon: string; requiredTier: string
+}) {
+  const tc = TIER_COLOR[requiredTier] ?? '#4A5568'
+  return (
+    <Link href="/v2/upgrade"
+      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 group"
+      style={{ borderRight: '2px solid transparent' }}>
+      <span className="w-4 text-center text-sm shrink-0" style={{ color: '#1A2A3A' }}>{icon}</span>
+      <span className="font-medium" style={{ color: '#1A2A3A' }}>{label}</span>
+      <span className="mr-auto text-xs font-mono px-1.5 py-0.5 rounded transition-all"
+            style={{ background: `${tc}12`, color: tc, border: `1px solid ${tc}20` }}>
+        {TIER_LABEL[requiredTier]}
+      </span>
     </Link>
   )
 }
@@ -247,17 +271,27 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
         <SectionTitle>الأدوات</SectionTitle>
         <div className="space-y-0.5 mt-1">
           {NAV_TOOLS.map(item => (
-            <NavLink key={item.href} {...item} accent={showAdminNav ? '#60A5FA' : '#C9943A'} />
+            isStaff || tierAllows(subscriptionTier, 'signal')
+              ? <NavLink key={item.href} {...item} accent={showAdminNav ? '#60A5FA' : '#C9943A'} />
+              : <LockedNavLink key={item.href} label={item.label} icon={item.icon} requiredTier="signal" />
           ))}
         </div>
       </div>
 
-      {/* ── Strategy engine — admin / moderator / partner only ── */}
-      {(isStaff || userSecondaryRoles.includes('partner')) && (
+      {/* ── Strategy engine — admin / moderator / partner / edge+ ── */}
+      {(isStaff || userSecondaryRoles.includes('partner') || tierAllows(subscriptionTier, 'edge')) && (
         <div className="px-3 pt-1 pb-2 shrink-0">
           <SectionTitle color="#C9943A40">متقدم</SectionTitle>
           <div className="space-y-0.5 mt-1">
             <NavLink href="/v2/strategy" label="محرك الاستراتيجيات" icon="⚙" exact={false} accent="#C9943A" />
+          </div>
+        </div>
+      )}
+      {!isStaff && !userSecondaryRoles.includes('partner') && !tierAllows(subscriptionTier, 'edge') && tierAllows(subscriptionTier, 'signal') && (
+        <div className="px-3 pt-1 pb-2 shrink-0">
+          <SectionTitle color="#C9943A40">متقدم</SectionTitle>
+          <div className="space-y-0.5 mt-1">
+            <LockedNavLink label="محرك الاستراتيجيات" icon="⚙" requiredTier="edge" />
           </div>
         </div>
       )}

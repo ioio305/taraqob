@@ -69,6 +69,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (typeof body.full_name === 'string')    profileUpdates.full_name    = body.full_name.trim()
   if (typeof body.full_name_ar === 'string') profileUpdates.full_name_ar = body.full_name_ar.trim()
 
+  const VALID_TIERS = ['radar', 'signal', 'edge', 'alpha']
+  if (typeof body.subscription_tier === 'string' && VALID_TIERS.includes(body.subscription_tier)) {
+    profileUpdates.subscription_tier = body.subscription_tier
+  }
+
   // secondary_roles stored in preferences JSONB
   if (Array.isArray(body.secondary_roles)) {
     // Merge into existing preferences

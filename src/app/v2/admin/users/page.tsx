@@ -7,17 +7,22 @@ type User = {
   id: string; full_name: string | null; full_name_ar: string | null; email: string
   role: string; is_active: boolean; created_at: string
   preferences?: Record<string, unknown>
+  subscription_tier?: string
 }
 
 const ROLES = ['user', 'moderator', 'admin'] as const
 const ROLE_AR: Record<string, string>    = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
 const ROLE_COLOR: Record<string, string> = { admin: '#C9943A', moderator: '#60A5FA', user: '#4A5568' }
 
+const TIERS = ['radar', 'signal', 'edge', 'alpha'] as const
+const TIER_LABEL: Record<string, string> = { radar: 'Radar', signal: 'Signal', edge: 'Edge', alpha: 'Alpha' }
+const TIER_COLOR: Record<string, string> = { radar: '#4A5568', signal: '#60A5FA', edge: '#C9943A', alpha: '#A78BFA' }
+
 // ── Edit Modal ──────────────────────────────────────────────────────────────
 function EditModal({ user, onClose, onSaved }: {
   user: User; onClose: () => void; onSaved: () => void
 }) {
-  const [tab, setTab]       = useState<'info' | 'role' | 'password'>('info')
+  const [tab, setTab]       = useState<'info' | 'role' | 'tier' | 'password'>('info')
   const [saving, setSaving] = useState(false)
   const [msg, setMsg]       = useState<{ text: string; ok: boolean } | null>(null)
 
@@ -27,6 +32,7 @@ function EditModal({ user, onClose, onSaved }: {
 
   const [role, setRole]         = useState(user.role)
   const [isActive, setIsActive] = useState(user.is_active !== false)
+  const [tier, setTier]         = useState(user.subscription_tier ?? 'radar')
 
   const [pwMode, setPwMode]       = useState<'link' | 'set'>('link')
   const [newPw, setNewPw]         = useState('')
@@ -35,6 +41,7 @@ function EditModal({ user, onClose, onSaved }: {
   const TABS = [
     { key: 'info',     label: 'المعلومات',   icon: '◎' },
     { key: 'role',     label: 'الدور',        icon: '◈' },
+    { key: 'tier',     label: 'الباقة',       icon: '◉' },
     { key: 'password', label: 'كلمة المرور', icon: '🔑' },
   ] as const
 
@@ -50,6 +57,9 @@ function EditModal({ user, onClose, onSaved }: {
     if (tab === 'role') {
       payload.role      = role
       payload.is_active = isActive
+    }
+    if (tab === 'tier') {
+      payload.subscription_tier = tier
     }
     if (tab === 'password') {
       payload.action   = pwMode === 'link' ? 'reset_password_link' : 'set_password'
@@ -165,6 +175,36 @@ function EditModal({ user, onClose, onSaved }: {
                 </button>
               </Field>
             </>
+          )}
+
+          {/* Tier Tab */}
+          {tab === 'tier' && (
+            <Field label="مستوى الاشتراك">
+              <div className="grid grid-cols-2 gap-2">
+                {TIERS.map(t => {
+                  const tc = TIER_COLOR[t]
+                  return (
+                    <button key={t} onClick={() => setTier(t)}
+                            className="py-3 rounded-xl text-sm font-bold font-mono transition-all flex flex-col items-center gap-1"
+                            style={{
+                              background: tier === t ? `${tc}18` : 'rgba(255,255,255,0.03)',
+                              color:      tier === t ? tc : '#2D3748',
+                              border:     `1px solid ${tier === t ? tc + '50' : 'rgba(255,255,255,0.06)'}`,
+                            }}>
+                      {TIER_LABEL[t]}
+                      {tier === t && <span className="text-xs font-normal" style={{ color: tc, opacity: 0.7 }}>● محدد</span>}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="mt-3 rounded-xl p-3 text-xs" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', color: '#4A5568' }}>
+                <div className="font-semibold text-white mb-1">المزايا حسب الباقة:</div>
+                <div>Radar — مجاني، وصول أساسي</div>
+                <div>Signal — $29/شهر، كونسول + شارت</div>
+                <div>Edge — $89/شهر، كل شيء + محرك الاستراتيجيات</div>
+                <div>Alpha — دعوة فقط، وصول كامل</div>
+              </div>
+            </Field>
           )}
 
           {/* Password Tab */}
@@ -490,7 +530,7 @@ export default function UsersPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    {['المستخدم', 'الدور', 'الحالة', 'تاريخ التسجيل', 'إجراءات'].map(h => (
+                    {['المستخدم', 'الدور', 'الباقة', 'الحالة', 'تاريخ التسجيل', 'إجراءات'].map(h => (
                       <th key={h} className="text-right px-4 py-3 text-xs font-mono font-medium" style={{ color: '#2D3748' }}>{h}</th>
                     ))}
                   </tr>
@@ -517,6 +557,18 @@ export default function UsersPage() {
                                 style={{ background: `${rc}12`, color: rc, border: `1px solid ${rc}25` }}>
                             {ROLE_AR[u.role] ?? u.role}
                           </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          {(() => {
+                            const t = u.subscription_tier ?? 'radar'
+                            const tc = TIER_COLOR[t] ?? '#4A5568'
+                            return (
+                              <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg"
+                                    style={{ background: `${tc}12`, color: tc, border: `1px solid ${tc}25` }}>
+                                {TIER_LABEL[t] ?? t}
+                              </span>
+                            )
+                          })()}
                         </td>
                         <td className="px-4 py-3">
                           <span className="text-xs font-mono px-2 py-1 rounded"
@@ -574,11 +626,21 @@ export default function UsersPage() {
                       <div className="font-semibold text-white truncate">{u.full_name_ar || u.full_name || '—'}</div>
                       <div className="text-xs font-mono truncate" style={{ color: '#2D3748' }}>{u.email}</div>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
                       <span className="text-xs font-mono px-2 py-0.5 rounded"
                             style={{ background: `${rc}12`, color: rc }}>
                         {ROLE_AR[u.role] ?? u.role}
                       </span>
+                      {(() => {
+                        const t = u.subscription_tier ?? 'radar'
+                        const tc = TIER_COLOR[t] ?? '#4A5568'
+                        return (
+                          <span className="text-xs font-mono font-bold px-2 py-0.5 rounded"
+                                style={{ background: `${tc}12`, color: tc }}>
+                            {TIER_LABEL[t] ?? t}
+                          </span>
+                        )
+                      })()}
                       <span className="text-xs font-mono px-2 py-0.5 rounded"
                             style={{
                               background: u.is_active !== false ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',

@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('user_profiles')
-    .select('id, full_name, full_name_ar, email, role, is_active, created_at, preferences', { count: 'exact' })
+    .select('id, full_name, full_name_ar, email, role, is_active, created_at, preferences, subscription_tier', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range((page - 1) * limit, page * limit - 1)
 
