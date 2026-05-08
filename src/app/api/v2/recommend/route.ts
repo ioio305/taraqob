@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { computeStrategy } from '@/lib/v2/strategyEngine'
 
 const TRADIER_KEY = process.env.TRADIER_API_KEY
 const BASE        = 'https://api.tradier.com/v1'
@@ -446,46 +447,45 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // ── Enrich top3 with trading signals ─────────────────────────────────
-    function generateReason(o: any, chgPct: number, vix: number, isWatchMode: boolean, status: string): string {
-      if (vix > 28)         return `VIX مرتفع (${vix.toFixed(0)}) — بيئة متقلبة، توقف عن الدخول`
-      if (isWatchMode)      return 'السوق عرضي — الدخول غير مُوصى به، مراقبة فقط'
-      const dir  = chgPct >= 0.5 ? 'صاعد بقوة' : chgPct >= 0.15 ? 'صاعد معتدل' : chgPct <= -0.5 ? 'هابط بقوة' : 'هابط معتدل'
-      const d    = `Δ${Math.abs(o.delta ?? 0).toFixed(2)}`
-      const a    = `Ask $${(o.ask ?? 0).toFixed(2)}`
-      if (status === 'execute') return `${dir} · ${d} · ${a} — الشروط مكتملة للدخول`
-      if (status === 'watch')   return `${dir} · ${d} · ${a} — انتظر تأكيداً إضافياً`
-      return `${dir} · ${a} — الفرصة ضعيفة، انتظر ظروفاً أفضل`
-    }
+    // ── Enrich top3 with strategy engine ─────────────────────────────────────
+    const emUpper = em ? Math.round(spxPrice + em) : Math.round(spxPrice + 50)
+    const emLower = em ? Math.round(spxPrice - em) : Math.round(spxPrice - 50)
 
     const enrichedTop3 = top3.map(o => {
-      const spread    = (o.ask ?? 0) - (o.bid ?? 0)
-      const entryCons = Math.round(((o.bid ?? 0) + 0.35 * spread) * 100) / 100
-      const entryBal  = Math.round(((o.bid ?? 0) + 0.60 * spread) * 100) / 100
-      const isCall    = o.type === 'call'
-      const t1Spx     = isCall
-        ? Math.round(spxPrice + (em ?? 0) * 0.40)
-        : Math.round(spxPrice - (em ?? 0) * 0.40)
-      const stopSpx   = o.stop_spx ?? Math.round(spxPrice + (isCall ? -1 : 1) * (em ?? 0) * 0.35)
-      const score     = o._score ?? 0
+      const score = o._score ?? 0
 
       let status: 'execute' | 'watch' | 'no-trade'
-      if (watchMode || vixPrice >= 28)  status = score >= 50 ? 'watch' : 'no-trade'
-      else if (score >= 75)              status = 'execute'
-      else if (score >= 40)              status = 'watch'
-      else                               status = 'no-trade'
+      if (watchMode || vixPrice >= 28) status = score >= 50 ? 'watch' : 'no-trade'
+      else if (score >= 80)            status = 'execute'
+      else if (score >= 74)            status = 'watch'
+      else                             status = 'no-trade'
+
+      const strat = computeStrategy({
+        score,
+        dte:      o.dte   ?? 0,
+        iv:       o.iv    ?? null,
+        bid:      o.bid   ?? 0,
+        ask:      o.ask   ?? 0,
+        mid:      o.mid   ?? 0,
+        delta:    o.delta ?? null,
+        gamma:    o.gamma ?? null,
+        spxPrice,
+        emUpper,
+        emLower,
+        type:     o.type as 'call' | 'put',
+        chgPct:   spxChgPct,
+        vixPrice,
+      })
+
+      // One-line display reason for dashboard card
+      const reason = watchMode
+        ? 'السوق عرضي — مراقبة فقط، لا تدخل دون اتجاه واضح'
+        : vixPrice >= 28
+          ? `VIX مرتفع (${vixPrice.toFixed(0)}) — توقف عن الدخول`
+          : strat.strategyReason
 
       const { _score, ...rest } = o
-      return {
-        ...rest,
-        score,
-        status,
-        reason:             generateReason(o, spxChgPct, vixPrice, watchMode, status),
-        entry_conservative: entryCons,
-        entry_balanced:     entryBal,
-        target1_spx:        t1Spx,
-        stop_spx:           stopSpx,
-      }
+      return { ...rest, score, status, reason, strategy: strat }
     })
 
     // OTM range description

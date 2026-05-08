@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { computeStrategy } from '@/lib/v2/strategyEngine'
 
 const TRADIER_KEY = process.env.TRADIER_API_KEY
 const BASE = 'https://api.tradier.com/v1'
@@ -488,6 +489,24 @@ export async function GET(request: NextRequest) {
         .map(({ _score, ...rest }) => rest)
     }
 
+    // ── محرك استراتيجية الأهداف ──────────────────────────────────────────────
+    const strategy = computeStrategy({
+      score:    total,
+      dte,
+      iv,
+      bid,
+      ask,
+      mid,
+      delta,
+      gamma,
+      spxPrice,
+      emUpper,
+      emLower,
+      type,
+      chgPct:   spxChgPct,
+      vixPrice,
+    })
+
     return NextResponse.json({
       success: true,
       analysis: {
@@ -534,6 +553,7 @@ export async function GET(request: NextRequest) {
           t3:   { spx: t3,      exit_price: exitT3,   exit_total: Math.round(exitT3   * 100), pnl: Math.round((exitT3   - entryPx) * 100) },
           stop: { spx: stopSPX, exit_price: exitStop, exit_total: Math.round(exitStop * 100), pnl: Math.round((exitStop - entryPx) * 100) },
         },
+        strategy,
         risk_flags: riskFlags,
         shortlist,
         analysis_duration_ms: Date.now() - start,

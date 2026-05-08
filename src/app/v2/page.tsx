@@ -15,6 +15,23 @@ type Sessions = {
   tokyo:  { high: number | null; low: number | null; close: number | null; changePct: number | null }
 }
 type Direction = { type: 'call' | 'put' | null; label: string; color: string; reason: string }
+type ContractStrategy = {
+  strategy: 'fast' | 'balanced' | 'strong'
+  strategyLabel: string
+  strategyReason: string
+  postT1Action: string
+  cancelCondition: string
+  earlyExitCondition: string
+  stopPct: number; t1Pct: number; t2Pct: number; t3Pct: number | null
+  entry: number
+  entryConservative: number; entryBalanced: number
+  entryConservativeTotal: number; entryBalancedTotal: number
+  stopPrice: number; stopTotal: number; stopLoss: number; stopSpxLevel: number | null
+  t1Price: number; t1Total: number; t1Profit: number; t1SpxLevel: number | null; t1InEM: boolean
+  t2Price: number; t2Total: number; t2Profit: number; t2SpxLevel: number | null; t2InEM: boolean
+  t3Price: number | null; t3Total: number | null; t3Profit: number | null
+  t3SpxLevel: number | null; t3InEM: boolean | null
+}
 type Contract  = {
   symbol: string; type: string; strike: number; expiration: string; dte: number
   bid: number; ask: number; mid: number; volume: number; openInterest: number
@@ -22,10 +39,7 @@ type Contract  = {
   score: number
   status: 'execute' | 'watch' | 'no-trade'
   reason: string
-  entry_conservative: number
-  entry_balanced: number
-  target1_spx: number
-  stop_spx: number
+  strategy: ContractStrategy
 }
 type ShortlistItem = {
   symbol: string; type: string; strike: number; expiration: string; dte: number
@@ -395,22 +409,24 @@ export default function V2Dashboard() {
             </div>
           )}
 
-          {/* Decision cards */}
+          {/* Decision + strategy cards */}
           {!loading && (data?.contracts ?? []).map((c, i) => {
-            const lc   = RANK_COLORS[i] ?? '#4A5568'
-            const sm   = statusMeta(c.status)
-            const sc   = scoreColor(c.score ?? 0)
+            const lc    = RANK_COLORS[i] ?? '#4A5568'
+            const sm    = statusMeta(c.status)
+            const sc    = scoreColor(c.score ?? 0)
             const isCall = c.type === 'call'
+            const strat  = c.strategy
+            const stratColor = strat?.strategy === 'strong' ? '#10B981'
+              : strat?.strategy === 'balanced' ? '#C9943A' : '#60A5FA'
 
             return (
               <div key={c.symbol} className="rounded-xl overflow-hidden"
                    style={{ border: `1px solid ${lc}25` }}>
 
-                {/* Header: type · strike · score · status */}
+                {/* ── Header: type · strike · score · status ── */}
                 <div className="flex items-center justify-between gap-2 px-4 py-3 flex-wrap"
                      style={{ background: `${lc}08`, borderBottom: `1px solid ${lc}18` }}>
                   <div className="flex items-center gap-2">
-                    {/* Type badge */}
                     <span className="text-xs font-bold px-2.5 py-1 rounded-lg"
                           style={{
                             background: isCall ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
@@ -419,24 +435,17 @@ export default function V2Dashboard() {
                           }}>
                       {isCall ? '▲ CALL' : '▼ PUT'}
                     </span>
-                    {/* Strike */}
                     <span className="text-xl font-bold font-mono text-white">
                       {c.strike.toLocaleString()}
                     </span>
-                    <span className="text-xs font-mono" style={{ color: '#4A5568' }}>
-                      DTE {c.dte}
-                    </span>
+                    <span className="text-xs font-mono" style={{ color: '#4A5568' }}>DTE {c.dte}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {/* Score */}
-                    <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg"
+                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg"
                          style={{ background: 'rgba(0,0,0,0.3)', border: `1px solid ${sc}30` }}>
                       <span className="text-xs font-mono" style={{ color: '#4A5568' }}>Score</span>
-                      <span className="text-sm font-bold font-mono" style={{ color: sc }}>
-                        {c.score ?? '—'}
-                      </span>
+                      <span className="text-sm font-bold font-mono" style={{ color: sc }}>{c.score ?? '—'}</span>
                     </div>
-                    {/* Status */}
                     <span className="text-xs font-bold px-3 py-1 rounded-lg"
                           style={{ background: sm.bg, color: sm.color, border: `1px solid ${sm.border}` }}>
                       {sm.label}
@@ -446,52 +455,134 @@ export default function V2Dashboard() {
 
                 <div className="p-4 space-y-3" style={{ background: 'rgba(0,0,0,0.2)' }}>
 
-                  {/* Entry: conservative + balanced */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-lg p-3 text-center"
-                         style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                      <div className="text-xs font-mono mb-1" style={{ color: '#4A5568' }}>دخول محافظ</div>
-                      <div className="text-lg font-bold font-mono text-white">${n(c.entry_conservative)}</div>
-                      <div className="text-xs font-mono mt-0.5" style={{ color: '#2D3748' }}>
-                        × 100 = ${((c.entry_conservative ?? 0) * 100).toFixed(0)}
-                      </div>
-                    </div>
-                    <div className="rounded-lg p-3 text-center"
-                         style={{ background: 'rgba(201,148,58,0.08)', border: '1px solid rgba(201,148,58,0.25)' }}>
-                      <div className="text-xs font-mono mb-1" style={{ color: '#C9943A80' }}>دخول متوازن</div>
-                      <div className="text-lg font-bold font-mono" style={{ color: '#C9943A' }}>${n(c.entry_balanced)}</div>
-                      <div className="text-xs font-mono mt-0.5" style={{ color: '#8F6415' }}>
-                        × 100 = ${((c.entry_balanced ?? 0) * 100).toFixed(0)}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Target 1 + Stop Loss */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="flex items-center justify-between rounded-lg px-3 py-2.5"
-                         style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
-                      <span className="text-xs font-semibold" style={{ color: '#10B981' }}>◎ هدف ١</span>
-                      <span className="font-bold font-mono text-sm" style={{ color: '#10B981' }}>
-                        {c.target1_spx ? c.target1_spx.toLocaleString() : '—'}
+                  {/* ── Strategy badge + reason ── */}
+                  {strat && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-lg"
+                            style={{ background: `${stratColor}15`, color: stratColor, border: `1px solid ${stratColor}35` }}>
+                        استراتيجية {strat.strategyLabel}
+                      </span>
+                      <span className="text-xs leading-snug" style={{ color: '#64748B' }}>
+                        {c.reason}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between rounded-lg px-3 py-2.5"
-                         style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-                      <span className="text-xs font-semibold" style={{ color: '#EF4444' }}>⊘ وقف</span>
-                      <span className="font-bold font-mono text-sm" style={{ color: '#EF4444' }}>
-                        {c.stop_spx ? c.stop_spx.toLocaleString() : '—'}
-                      </span>
-                    </div>
-                  </div>
+                  )}
 
-                  {/* Reason + Analyze button */}
+                  {/* ── Entry: conservative + balanced ── */}
+                  {strat && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-lg p-3"
+                           style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                        <div className="text-xs font-mono mb-1" style={{ color: '#4A5568' }}>دخول محافظ</div>
+                        <div className="text-lg font-bold font-mono text-white">${n(strat.entryConservative)}</div>
+                        <div className="text-xs font-mono mt-0.5" style={{ color: '#2D3748' }}>
+                          × 100 = <span className="text-white">${strat.entryConservativeTotal}</span>
+                        </div>
+                      </div>
+                      <div className="rounded-lg p-3"
+                           style={{ background: 'rgba(201,148,58,0.07)', border: '1px solid rgba(201,148,58,0.22)' }}>
+                        <div className="text-xs font-mono mb-1" style={{ color: '#C9943A88' }}>دخول متوازن</div>
+                        <div className="text-lg font-bold font-mono" style={{ color: '#C9943A' }}>${n(strat.entryBalanced)}</div>
+                        <div className="text-xs font-mono mt-0.5" style={{ color: '#8F6415' }}>
+                          × 100 = <span style={{ color: '#C9943A' }}>${strat.entryBalancedTotal}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Targets + Stop (compact 3-row) ── */}
+                  {strat && (
+                    <div className="space-y-1.5">
+                      {[
+                        {
+                          label:  `هدف ١ — ${(strat.t1Pct * 100).toFixed(0)}%`,
+                          price:  strat.t1Price,
+                          total:  strat.t1Total,
+                          profit: strat.t1Profit,
+                          spx:    strat.t1SpxLevel,
+                          inEM:   strat.t1InEM,
+                          color:  '#10B981',
+                          bg:     'rgba(16,185,129,0.07)',
+                          border: 'rgba(16,185,129,0.2)',
+                          icon:   '◎',
+                        },
+                        {
+                          label:  `هدف ٢ — ${(strat.t2Pct * 100).toFixed(0)}%`,
+                          price:  strat.t2Price,
+                          total:  strat.t2Total,
+                          profit: strat.t2Profit,
+                          spx:    strat.t2SpxLevel,
+                          inEM:   strat.t2InEM,
+                          color:  '#60A5FA',
+                          bg:     'rgba(96,165,250,0.07)',
+                          border: 'rgba(96,165,250,0.2)',
+                          icon:   '◎',
+                        },
+                        ...(strat.t3Price ? [{
+                          label:  `هدف ٣ — ${((strat.t3Pct ?? 0) * 100).toFixed(0)}%`,
+                          price:  strat.t3Price,
+                          total:  strat.t3Total ?? 0,
+                          profit: strat.t3Profit ?? 0,
+                          spx:    strat.t3SpxLevel,
+                          inEM:   strat.t3InEM ?? false,
+                          color:  '#A78BFA',
+                          bg:     'rgba(167,139,250,0.07)',
+                          border: 'rgba(167,139,250,0.2)',
+                          icon:   '◎',
+                        }] : []),
+                        {
+                          label:  `وقف الخسارة — ${(strat.stopPct * 100).toFixed(0)}%`,
+                          price:  strat.stopPrice,
+                          total:  strat.stopTotal,
+                          profit: strat.stopLoss,
+                          spx:    strat.stopSpxLevel,
+                          inEM:   null,
+                          color:  '#EF4444',
+                          bg:     'rgba(239,68,68,0.07)',
+                          border: 'rgba(239,68,68,0.2)',
+                          icon:   '⊘',
+                        },
+                      ].map(row => (
+                        <div key={row.label} className="rounded-lg px-3 py-2"
+                             style={{ background: row.bg, border: `1px solid ${row.border}` }}>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-semibold shrink-0" style={{ color: row.color }}>
+                              {row.icon} {row.label}
+                              {row.inEM === false && (
+                                <span className="mr-1 text-xs font-mono" style={{ color: '#F59E0B' }}>⚠ خارج EM</span>
+                              )}
+                            </span>
+                            <div className="flex items-center gap-3 font-mono text-xs text-left">
+                              <span className="font-bold" style={{ color: row.color }}>${n(row.price)}</span>
+                              <span style={{ color: '#4A5568' }}>(×100 = ${row.total})</span>
+                              <span className="font-semibold"
+                                    style={{ color: row.profit >= 0 ? '#10B981' : '#EF4444' }}>
+                                {row.profit >= 0 ? '+' : ''}${row.profit}
+                              </span>
+                            </div>
+                          </div>
+                          {row.spx && (
+                            <div className="text-xs font-mono mt-0.5" style={{ color: '#2D3748' }}>
+                              مستوى SPX المطلوب: <span style={{ color: '#94A3B8' }}>{row.spx.toLocaleString()}</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ── Post-T1 action + analyze button ── */}
                   <div className="flex items-center justify-between gap-3 pt-0.5">
-                    <div className="text-xs leading-relaxed min-w-0 flex-1"
-                         style={{ color: '#64748B' }}>
-                      {c.reason ?? '—'}
-                    </div>
+                    {strat && (
+                      <div className="flex items-start gap-1.5 min-w-0 flex-1">
+                        <span className="shrink-0 mt-0.5 text-xs" style={{ color: '#F59E0B' }}>↑</span>
+                        <div className="text-xs leading-snug" style={{ color: '#64748B' }}>
+                          {strat.postT1Action}
+                        </div>
+                      </div>
+                    )}
                     <Link href={`/v2/analyze?symbol=${encodeURIComponent(c.symbol)}`}
-                          className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap"
+                          className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap"
                           style={{ background: `${lc}15`, border: `1px solid ${lc}35`, color: lc }}>
                       تحليل كامل ←
                     </Link>

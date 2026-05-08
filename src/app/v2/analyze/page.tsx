@@ -7,6 +7,21 @@ import Link from 'next/link'
 // ── Types ──────────────────────────────────────────────────────────────────
 type ScoreEntry = { score: number; max: number; label: string }
 
+type StrategyResult = {
+  strategy: 'fast' | 'balanced' | 'strong'
+  strategyLabel: string; strategyReason: string
+  postT1Action: string; cancelCondition: string; earlyExitCondition: string
+  stopPct: number; t1Pct: number; t2Pct: number; t3Pct: number | null
+  entry: number
+  entryConservative: number; entryBalanced: number
+  entryConservativeTotal: number; entryBalancedTotal: number
+  stopPrice: number; stopTotal: number; stopLoss: number; stopSpxLevel: number | null
+  t1Price: number; t1Total: number; t1Profit: number; t1SpxLevel: number | null; t1InEM: boolean
+  t2Price: number; t2Total: number; t2Profit: number; t2SpxLevel: number | null; t2InEM: boolean
+  t3Price: number | null; t3Total: number | null; t3Profit: number | null
+  t3SpxLevel: number | null; t3InEM: boolean | null
+}
+
 type TargetLevel = {
   spx: number; exit_price: number; exit_total: number; pnl: number
 }
@@ -45,6 +60,7 @@ type Analysis = {
   entry_balanced_total: number
   stop_spx: number; target1_spx: number; target2_spx: number; target3_spx: number
   targets?: { t1: TargetLevel; t2: TargetLevel; t3: TargetLevel; stop: TargetLevel }
+  strategy?: StrategyResult
   risk_flags: string[]
   shortlist: ShortlistRow[]
   analysis_duration_ms: number
@@ -468,6 +484,197 @@ function AnalyzeContent() {
               </div>
             </div>
 
+            {/* ── Strategy Engine — Full Detail ── */}
+            {analysis.strategy && (() => {
+              const s = analysis.strategy!
+              const stratColor = s.strategy === 'strong' ? '#10B981'
+                : s.strategy === 'balanced' ? '#C9943A' : '#60A5FA'
+              const inEMBadge = (inEM: boolean | null) =>
+                inEM === null ? null
+                : inEM
+                  ? <span className="text-xs font-mono px-1.5 py-0.5 rounded mr-1"
+                           style={{ background: 'rgba(16,185,129,0.12)', color: '#10B981', border: '1px solid rgba(16,185,129,0.25)' }}>
+                      داخل EM ✓
+                    </span>
+                  : <span className="text-xs font-mono px-1.5 py-0.5 rounded mr-1"
+                           style={{ background: 'rgba(245,158,11,0.12)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.25)' }}>
+                      خارج EM ⚠
+                    </span>
+
+              const targets = [
+                {
+                  label:  `هدف ١`,
+                  pct:    `${(s.t1Pct * 100).toFixed(0)}%`,
+                  price:  s.t1Price,
+                  total:  s.t1Total,
+                  profit: s.t1Profit,
+                  spx:    s.t1SpxLevel,
+                  inEM:   s.t1InEM,
+                  color:  '#4ADE80',
+                  bg:     'rgba(74,222,128,0.06)',
+                  border: 'rgba(74,222,128,0.2)',
+                  icon:   '◎',
+                },
+                {
+                  label:  `هدف ٢`,
+                  pct:    `${(s.t2Pct * 100).toFixed(0)}%`,
+                  price:  s.t2Price,
+                  total:  s.t2Total,
+                  profit: s.t2Profit,
+                  spx:    s.t2SpxLevel,
+                  inEM:   s.t2InEM,
+                  color:  '#10B981',
+                  bg:     'rgba(16,185,129,0.06)',
+                  border: 'rgba(16,185,129,0.2)',
+                  icon:   '◎',
+                },
+                ...(s.t3Price ? [{
+                  label:  `هدف ٣`,
+                  pct:    `${((s.t3Pct ?? 0) * 100).toFixed(0)}%`,
+                  price:  s.t3Price!,
+                  total:  s.t3Total!,
+                  profit: s.t3Profit!,
+                  spx:    s.t3SpxLevel,
+                  inEM:   s.t3InEM,
+                  color:  '#A78BFA',
+                  bg:     'rgba(167,139,250,0.06)',
+                  border: 'rgba(167,139,250,0.2)',
+                  icon:   '◎',
+                }] : []),
+                {
+                  label:  `وقف الخسارة`,
+                  pct:    `${(s.stopPct * 100).toFixed(0)}%`,
+                  price:  s.stopPrice,
+                  total:  s.stopTotal,
+                  profit: s.stopLoss,
+                  spx:    s.stopSpxLevel,
+                  inEM:   null,
+                  color:  '#EF4444',
+                  bg:     'rgba(239,68,68,0.06)',
+                  border: 'rgba(239,68,68,0.2)',
+                  icon:   '⊘',
+                },
+              ]
+
+              return (
+                <Card>
+                  <SectionLabel>محرك الاستراتيجية — الأهداف ووقف الخسارة</SectionLabel>
+
+                  {/* Strategy header */}
+                  <div className="flex flex-wrap items-center gap-3 mb-5 pb-4"
+                       style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <span className="text-sm font-bold px-3 py-1.5 rounded-xl"
+                          style={{ background: `${stratColor}15`, color: stratColor, border: `1px solid ${stratColor}35` }}>
+                      استراتيجية {s.strategyLabel}
+                    </span>
+                    <div className="text-sm leading-snug flex-1" style={{ color: '#94A3B8' }}>
+                      {s.strategyReason}
+                    </div>
+                    <div className="flex gap-3 text-xs font-mono shrink-0">
+                      <span style={{ color: '#EF4444' }}>وقف {(s.stopPct * 100).toFixed(0)}%</span>
+                      <span style={{ color: '#10B981' }}>ه١ +{(s.t1Pct * 100).toFixed(0)}%</span>
+                      <span style={{ color: '#60A5FA' }}>ه٢ +{(s.t2Pct * 100).toFixed(0)}%</span>
+                      {s.t3Pct && <span style={{ color: '#A78BFA' }}>ه٣ +{(s.t3Pct * 100).toFixed(0)}%</span>}
+                    </div>
+                  </div>
+
+                  {/* Entry */}
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    {[
+                      { label: 'دخول محافظ',  sub: 'Bid + 35% Spread', px: s.entryConservative, tot: s.entryConservativeTotal, color: '#C9943A', bg: 'rgba(201,148,58,0.08)', border: 'rgba(201,148,58,0.25)' },
+                      { label: 'دخول متوازن', sub: 'Bid + 60% Spread', px: s.entryBalanced,     tot: s.entryBalancedTotal,     color: '#60A5FA', bg: 'rgba(96,165,250,0.08)',  border: 'rgba(96,165,250,0.25)' },
+                    ].map(e => (
+                      <div key={e.label} className="rounded-xl p-4"
+                           style={{ background: e.bg, border: `1px solid ${e.border}` }}>
+                        <div className="text-xs font-mono mb-1" style={{ color: e.color }}>{e.label}</div>
+                        <div className="text-2xl font-bold font-mono leading-none" style={{ color: e.color }}>
+                          ${n(e.px)}
+                        </div>
+                        <div className="text-xs font-mono mt-1" style={{ color: '#4A5568' }}>/ سهم</div>
+                        <div className="mt-2 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                          <div className="text-xs font-mono" style={{ color: '#2D3748' }}>القيمة الفعلية (×100)</div>
+                          <div className="text-base font-bold font-mono" style={{ color: e.color }}>
+                            ${e.tot.toLocaleString()}
+                          </div>
+                        </div>
+                        <div className="text-xs font-mono mt-1" style={{ color: '#2D3748' }}>{e.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Target table */}
+                  {/* Column headers */}
+                  <div className="grid grid-cols-5 gap-1 px-3 pb-1.5 text-xs font-mono text-center"
+                       style={{ color: '#2D3748' }}>
+                    <div>الهدف / الوقف</div>
+                    <div>النسبة</div>
+                    <div>سعر العقد</div>
+                    <div>القيمة (×100)</div>
+                    <div>الربح / الخسارة</div>
+                  </div>
+                  <div className="space-y-1.5 mb-4">
+                    {targets.map(row => (
+                      <div key={row.label} className="rounded-xl px-4 py-3"
+                           style={{ background: row.bg, border: `1px solid ${row.border}` }}>
+                        <div className="grid grid-cols-5 gap-1 items-center text-center">
+                          <div className="text-xs font-bold text-right" style={{ color: row.color }}>
+                            {row.icon} {row.label}
+                          </div>
+                          <div className="font-mono text-xs" style={{ color: '#94A3B8' }}>{row.pct}</div>
+                          <div className="font-bold font-mono text-sm" style={{ color: row.color }}>
+                            ${n(row.price)}
+                          </div>
+                          <div className="font-mono text-sm text-white">
+                            ${row.total.toLocaleString()}
+                          </div>
+                          <div className="font-bold font-mono text-sm"
+                               style={{ color: row.profit >= 0 ? '#10B981' : '#EF4444' }}>
+                            {row.profit >= 0 ? '+' : ''}${Math.abs(row.profit).toLocaleString()}
+                          </div>
+                        </div>
+                        {/* SPX level + EM badge */}
+                        {row.spx && (
+                          <div className="flex items-center gap-2 mt-1.5 pt-1.5"
+                               style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                            <span className="text-xs font-mono" style={{ color: '#4A5568' }}>
+                              مستوى SPX المطلوب:
+                            </span>
+                            <span className="font-bold font-mono text-xs" style={{ color: row.color }}>
+                              {row.spx.toLocaleString()}
+                            </span>
+                            {inEMBadge(row.inEM)}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Conditions */}
+                  <div className="space-y-2">
+                    {[
+                      { icon: '↑', label: 'بعد هدف ١',        text: s.postT1Action,       color: '#C9943A' },
+                      { icon: '✕', label: 'شرط الإلغاء',       text: s.cancelCondition,    color: '#EF4444' },
+                      { icon: '⚡', label: 'شرط الخروج المبكر', text: s.earlyExitCondition, color: '#F59E0B' },
+                    ].map(cond => (
+                      <div key={cond.label} className="flex items-start gap-3 rounded-xl px-4 py-3"
+                           style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <span className="text-base shrink-0 mt-0.5" style={{ color: cond.color }}>{cond.icon}</span>
+                        <div>
+                          <div className="text-xs font-semibold mb-0.5" style={{ color: cond.color }}>{cond.label}</div>
+                          <div className="text-sm leading-snug" style={{ color: '#94A3B8' }}>{cond.text}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="text-xs font-mono mt-3 pt-3" dir="rtl"
+                       style={{ borderTop: '1px solid rgba(255,255,255,0.04)', color: '#2D3748' }}>
+                    * أسعار العقد تقديرية بناءً على Delta-Gamma Taylor expansion · كل دخول بأمر محدد فقط، لا سوق
+                  </div>
+                </Card>
+              )
+            })()}
+
             {/* ── Score Breakdown — 7 Engines ── */}
             <Card>
               <SectionLabel>تفصيل القرار — 7 محركات</SectionLabel>
@@ -504,119 +711,10 @@ function AnalyzeContent() {
               </div>
             </Card>
 
-            {/* ── Entry + Targets (redesigned) ── */}
+            {/* ── EM Map ── */}
             <Card>
-              <SectionLabel>الدخول والأهداف — سعر العقد · القيمة الفعلية · الربح/الخسارة</SectionLabel>
-
-              {/* ── Entry rows ── */}
-              <div className="grid grid-cols-2 gap-3 mb-5">
-                {[
-                  { label: 'دخول محافظ', sub: 'Bid + 35% Spread', px: analysis.entry_conservative, tot: analysis.entry_conservative_total, color: '#C9943A', bg: 'rgba(201,148,58,0.08)', border: 'rgba(201,148,58,0.25)' },
-                  { label: 'دخول متوازن', sub: 'Bid + 60% Spread', px: analysis.entry_balanced,     tot: analysis.entry_balanced_total,     color: '#60A5FA', bg: 'rgba(96,165,250,0.08)',  border: 'rgba(96,165,250,0.25)' },
-                ].map(e => (
-                  <div key={e.label} className="rounded-xl p-4"
-                       style={{ background: e.bg, border: `1px solid ${e.border}` }}>
-                    <div className="text-xs font-mono mb-2" style={{ color: e.color }}>{e.label}</div>
-                    <div className="text-2xl font-bold font-mono leading-none" style={{ color: e.color }}>
-                      ${n(e.px)}
-                    </div>
-                    <div className="text-xs font-mono mt-1" style={{ color: '#4A5568' }}>سعر السهم</div>
-                    <div className="mt-2 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                      <div className="text-xs font-mono" style={{ color: '#2D3748' }}>القيمة الفعلية (×100)</div>
-                      <div className="text-base font-bold font-mono" style={{ color: e.color }}>
-                        ${e.tot != null ? e.tot.toLocaleString() : '—'}
-                      </div>
-                    </div>
-                    <div className="text-xs font-mono mt-1" style={{ color: '#2D3748' }}>{e.sub}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* ── Target rows with full details ── */}
-              {analysis.targets ? (() => {
-                const entryTotal = analysis.entry_balanced_total
-                const rows = [
-                  { label: 'هدف ١', icon: '◎', tgt: analysis.targets.t1, color: '#4ADE80', bg: 'rgba(74,222,128,0.06)',  isStop: false },
-                  { label: 'هدف ٢', icon: '◎', tgt: analysis.targets.t2, color: '#10B981', bg: 'rgba(16,185,129,0.06)', isStop: false },
-                  { label: 'هدف ٣', icon: '◎', tgt: analysis.targets.t3, color: '#059669', bg: 'rgba(5,150,105,0.06)',  isStop: false },
-                  { label: 'وقف الخسارة', icon: '⊘', tgt: analysis.targets.stop, color: '#EF4444', bg: 'rgba(239,68,68,0.06)', isStop: true },
-                ]
-                return (
-                  <div className="space-y-2">
-                    {/* Column headers */}
-                    <div className="grid grid-cols-4 gap-2 px-2 pb-1">
-                      {['مستوى SPX', 'سعر الخروج', 'القيمة (×100)', 'الربح/الخسارة'].map(h => (
-                        <div key={h} className="text-xs font-mono text-center" style={{ color: '#2D3748' }}>{h}</div>
-                      ))}
-                    </div>
-                    {rows.map(r => {
-                      const pnlSign = r.tgt.pnl >= 0 ? '+' : ''
-                      return (
-                        <div key={r.label} className="rounded-xl px-4 py-3"
-                             style={{ background: r.bg, border: `1px solid ${r.color}20` }}>
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-xs font-bold" style={{ color: r.color }}>{r.icon} {r.label}</span>
-                            <span className="text-xs font-mono" style={{ color: '#2D3748' }}>
-                              (Strike {n(analysis.strike, 0)} · {analysis.dte}DTE)
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-4 gap-2">
-                            <div className="text-center">
-                              <div className="text-lg font-bold font-mono" style={{ color: r.color }}>
-                                {r.tgt.spx.toLocaleString()}
-                              </div>
-                              <div className="text-xs font-mono" style={{ color: '#2D3748' }}>SPX</div>
-                            </div>
-                            <div className="text-center">
-                              <div className="text-base font-bold font-mono text-white">
-                                ${n(r.tgt.exit_price)}
-                              </div>
-                              <div className="text-xs font-mono" style={{ color: '#2D3748' }}>/ سهم</div>
-                            </div>
-                            <div className="text-center">
-                              <div className="text-base font-bold font-mono text-white">
-                                ${r.tgt.exit_total.toLocaleString()}
-                              </div>
-                              <div className="text-xs font-mono" style={{ color: '#2D3748' }}>قيمة العقد</div>
-                            </div>
-                            <div className="text-center">
-                              <div className="text-base font-bold font-mono"
-                                   style={{ color: r.tgt.pnl >= 0 ? '#10B981' : '#EF4444' }}>
-                                {pnlSign}${Math.abs(r.tgt.pnl).toLocaleString()}
-                              </div>
-                              <div className="text-xs font-mono" style={{ color: '#2D3748' }}>
-                                {r.tgt.pnl >= 0 ? 'ربح' : 'خسارة'}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                    <div className="text-xs font-mono px-2 pt-1" style={{ color: '#2D3748' }}>
-                      * الأسعار تقديرية بناءً على Delta-Gamma (Taylor expansion) · تتغير مع تحركات SPX
-                    </div>
-                  </div>
-                )
-              })() : (
-                /* Fallback: old SPX-only display if targets not in response */
-                <div className="space-y-2">
-                  {[
-                    { label: 'هدف ١ — SPX', v: n(analysis.target1_spx, 0), color: '#4ADE80', bg: 'rgba(74,222,128,0.08)'  },
-                    { label: 'هدف ٢ — SPX', v: n(analysis.target2_spx, 0), color: '#10B981', bg: 'rgba(16,185,129,0.08)' },
-                    { label: 'هدف ٣ — SPX', v: n(analysis.target3_spx, 0), color: '#059669', bg: 'rgba(5,150,105,0.08)'  },
-                    { label: 'وقف — SPX',   v: n(analysis.stop_spx, 0),    color: '#EF4444', bg: 'rgba(239,68,68,0.08)'  },
-                  ].map(t => (
-                    <div key={t.label} className="flex items-center justify-between rounded-xl px-4 py-3"
-                         style={{ background: t.bg, border: `1px solid ${t.color}25` }}>
-                      <span className="text-xs font-semibold" style={{ color: t.color }}>{t.label}</span>
-                      <span className="text-lg font-bold font-mono" style={{ color: t.color }}>{t.v}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* EM Map */}
-              <div className="rounded-xl px-4 py-3 flex items-center justify-between mt-4"
+              <SectionLabel>نطاق الحركة المتوقعة — Expected Move</SectionLabel>
+              <div className="rounded-xl px-4 py-3 flex items-center justify-between"
                 style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
                 <div className="text-center">
                   <div className="text-xs font-mono mb-1" style={{ color: '#EF4444' }}>EM Lower</div>
@@ -687,59 +785,46 @@ function AnalyzeContent() {
               </div>
             )}
 
-            {/* ── Risk Management ── */}
-            {analysis.targets && (() => {
-              const entryTotal = analysis.entry_balanced_total
-              const maxLoss    = entryTotal  // full premium at risk
-              const t1Profit   = analysis.targets.t1.pnl
-              const t2Profit   = analysis.targets.t2.pnl
-              const stopLoss   = analysis.targets.stop.pnl  // negative number
-              const rr1 = maxLoss > 0 && t1Profit > 0 ? (t1Profit / maxLoss).toFixed(1) : '—'
-              const rr2 = maxLoss > 0 && t2Profit > 0 ? (t2Profit / maxLoss).toFixed(1) : '—'
+            {/* ── Risk Management (strategy-driven) ── */}
+            {analysis.strategy && (() => {
+              const s         = analysis.strategy!
+              const entryTot  = s.entryBalancedTotal
+              const rr1 = entryTot > 0 && s.t1Profit > 0 ? (s.t1Profit / entryTot).toFixed(1) : '—'
+              const rr2 = entryTot > 0 && s.t2Profit > 0 ? (s.t2Profit / entryTot).toFixed(1) : '—'
               return (
                 <Card>
                   <SectionLabel>إدارة المخاطر — عقد واحد (100 سهم)</SectionLabel>
                   <div className="space-y-3">
-
-                    {/* Entry */}
                     <div className="rounded-xl p-3 flex items-center justify-between"
                          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
                       <div>
                         <div className="text-xs font-mono" style={{ color: '#4A5568' }}>تكلفة الدخول (دخول متوازن)</div>
                         <div className="text-xs font-mono mt-0.5" style={{ color: '#2D3748' }}>
-                          ${n(analysis.entry_balanced)} / سهم × 100
+                          ${n(s.entryBalanced)} / سهم × 100
                         </div>
                       </div>
                       <div className="text-xl font-bold font-mono" style={{ color: '#60A5FA' }}>
-                        ${entryTotal.toLocaleString()}
+                        ${entryTot.toLocaleString()}
                       </div>
                     </div>
-
-                    {/* P&L grid */}
                     <div className="grid grid-cols-3 gap-2">
-                      <div className="rounded-xl p-3" style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)' }}>
-                        <div className="text-xs font-mono mb-1" style={{ color: '#10B981' }}>ربح هدف ١</div>
-                        <div className="text-lg font-bold font-mono" style={{ color: '#10B981' }}>
-                          +${t1Profit.toLocaleString()}
+                      {[
+                        { label: 'ربح هدف ١', val: s.t1Profit, rr: rr1, color: '#10B981', bg: 'rgba(16,185,129,0.07)', border: 'rgba(16,185,129,0.2)' },
+                        { label: 'ربح هدف ٢', val: s.t2Profit, rr: rr2, color: '#60A5FA', bg: 'rgba(96,165,250,0.07)', border: 'rgba(96,165,250,0.2)' },
+                        { label: 'خسارة الوقف', val: s.stopLoss, rr: null, color: '#EF4444', bg: 'rgba(239,68,68,0.07)', border: 'rgba(239,68,68,0.2)' },
+                      ].map(row => (
+                        <div key={row.label} className="rounded-xl p-3"
+                             style={{ background: row.bg, border: `1px solid ${row.border}` }}>
+                          <div className="text-xs font-mono mb-1" style={{ color: row.color }}>{row.label}</div>
+                          <div className="text-lg font-bold font-mono" style={{ color: row.color }}>
+                            {row.val >= 0 ? '+' : ''}${Math.abs(row.val).toLocaleString()}
+                          </div>
+                          {row.rr && (
+                            <div className="text-xs font-mono mt-0.5" style={{ color: '#4A5568' }}>R:R 1:{row.rr}</div>
+                          )}
                         </div>
-                        <div className="text-xs font-mono mt-0.5" style={{ color: '#4A5568' }}>R:R 1:{rr1}</div>
-                      </div>
-                      <div className="rounded-xl p-3" style={{ background: 'rgba(96,165,250,0.07)', border: '1px solid rgba(96,165,250,0.2)' }}>
-                        <div className="text-xs font-mono mb-1" style={{ color: '#60A5FA' }}>ربح هدف ٢</div>
-                        <div className="text-lg font-bold font-mono" style={{ color: '#60A5FA' }}>
-                          +${t2Profit.toLocaleString()}
-                        </div>
-                        <div className="text-xs font-mono mt-0.5" style={{ color: '#4A5568' }}>R:R 1:{rr2}</div>
-                      </div>
-                      <div className="rounded-xl p-3" style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)' }}>
-                        <div className="text-xs font-mono mb-1" style={{ color: '#EF4444' }}>خسارة عند الوقف</div>
-                        <div className="text-lg font-bold font-mono" style={{ color: '#EF4444' }}>
-                          ${stopLoss.toLocaleString()}
-                        </div>
-                        <div className="text-xs font-mono mt-0.5" style={{ color: '#4A5568' }}>أقصى خسارة</div>
-                      </div>
+                      ))}
                     </div>
-
                     <div className="rounded-xl px-4 py-3 text-xs font-mono leading-relaxed" dir="rtl"
                       style={{ background: 'rgba(201,148,58,0.06)', border: '1px solid rgba(201,148,58,0.15)', color: '#C9943A' }}>
                       ⚠ لعقد واحد فقط — لا تخاطر بأكثر من 1-2% من رأس المال في صفقة واحدة.
