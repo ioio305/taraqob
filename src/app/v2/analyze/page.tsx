@@ -211,10 +211,14 @@ function AnalyzeContent() {
   const [input, setInput]       = useState(params.get('symbol') ?? '')
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [loading, setLoading]   = useState(false)
-  const [refreshing, setRefreshing] = useState(false)  // silent background refresh
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError]       = useState<string | null>(null)
-  const [liveUrl, setLiveUrl]   = useState<string | null>(null)  // URL for live polling
+  const [liveUrl, setLiveUrl]   = useState<string | null>(null)
   const liveTimerRef            = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // ── Frozen plan: locked on first analysis, never auto-updated ────────────
+  const [frozenStrategy, setFrozenStrategy] = useState<StrategyResult | null>(null)
+  // ── Live mode toggle: OFF by default (plan is frozen until user enables) ─
+  const [liveMode, setLiveMode] = useState(false)
 
   function buildUrl(sym: string, strike?: string, type?: string): string | null {
     const s = sym.trim().toUpperCase()
@@ -233,18 +237,24 @@ function AnalyzeContent() {
     const url = buildUrl(sym ?? input, strike, type)
     if (!url) { setError('أدخل رقم الستريك (مثال: 7350) أو رمز OCC الكامل'); return }
     setLoading(true); setError(null); setAnalysis(null); setLiveUrl(null)
+    setFrozenStrategy(null)  // reset frozen plan on new analysis
     try {
       const res  = await fetch(url)
       const data = await res.json()
       if (!data.success) { setError(data.error ?? 'خطأ غير معروف') }
-      else { setAnalysis(data.analysis); setLiveUrl(url) }
+      else {
+        setAnalysis(data.analysis)
+        // Lock the strategy at the moment of first analysis
+        if (data.analysis.strategy) setFrozenStrategy(data.analysis.strategy)
+        setLiveUrl(url)
+      }
     } catch { setError('خطأ في الاتصال بالخادم') }
     setLoading(false)
   }, [input]) // eslint-disable-line
 
-  // ── Live polling — silent refresh every 3 seconds ─────────────────────
+  // ── Live polling — only runs when liveMode is ON ──────────────────────
   useEffect(() => {
-    if (!liveUrl) return
+    if (!liveUrl || !liveMode) return
     let cancelled = false
 
     async function poll() {
@@ -253,7 +263,17 @@ function AnalyzeContent() {
       try {
         const res  = await fetch(liveUrl)
         const data = await res.json()
-        if (!cancelled && data.success) setAnalysis(data.analysis)
+        if (!cancelled && data.success) {
+          // In live mode: update market data / price / score, but keep strategy frozen
+          setAnalysis(prev => {
+            if (!prev) return data.analysis
+            return {
+              ...data.analysis,
+              // Always preserve the frozen strategy levels even in live mode
+              strategy: frozenStrategy ?? data.analysis.strategy,
+            }
+          })
+        }
       } catch {}
       setRefreshing(false)
       if (!cancelled) liveTimerRef.current = setTimeout(poll, 3000)
@@ -264,7 +284,7 @@ function AnalyzeContent() {
       cancelled = true
       if (liveTimerRef.current) clearTimeout(liveTimerRef.current)
     }
-  }, [liveUrl])
+  }, [liveUrl, liveMode, frozenStrategy])
 
   useEffect(() => {
     const sym    = params.get('symbol')
@@ -299,13 +319,36 @@ function AnalyzeContent() {
             {loading ? 'جاري...' : 'تحليل →'}
           </button>
         </div>
-        <div className="flex items-center justify-between mt-2">
+        <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
           <p className="text-xs font-mono" style={{ color: '#2D3748' }}>
             يقبل: رقم الستريك (7350) أو رمز OCC الكامل
           </p>
-          <Link href="/v2" className="text-xs shrink-0 mr-4" style={{ color: '#4A5568' }}>
-            ← الداشبورد
-          </Link>
+          <div className="flex items-center gap-3">
+            {/* Live mode toggle — advanced option, off by default */}
+            {analysis && (
+              <button
+                onClick={() => setLiveMode(v => !v)}
+                className="flex items-center gap-2 px-3 py-1 rounded-lg text-xs font-bold transition-all"
+                style={{
+                  background: liveMode ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.04)',
+                  border:     liveMode ? '1px solid rgba(16,185,129,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                  color:      liveMode ? '#10B981' : '#4A5568',
+                }}>
+                <span className={liveMode ? 'animate-pulse' : ''}>◉</span>
+                تحديث حي للخطة
+                <span className="font-mono text-[10px] opacity-60">{liveMode ? 'مفعّل' : 'مغلق'}</span>
+              </button>
+            )}
+            {frozenStrategy && (
+              <span className="text-xs font-mono px-2 py-0.5 rounded-lg"
+                    style={{ background: 'rgba(201,148,58,0.1)', color: '#C9943A60', border: '1px solid rgba(201,148,58,0.2)' }}>
+                🔒 الخطة مثبّتة
+              </span>
+            )}
+            <Link href="/v2" className="text-xs shrink-0" style={{ color: '#4A5568' }}>
+              ← الداشبورد
+            </Link>
+          </div>
         </div>
       </Card>
 

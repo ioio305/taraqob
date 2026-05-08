@@ -32,6 +32,17 @@ type ContractStrategy = {
   t3Price: number | null; t3Total: number | null; t3Profit: number | null
   t3SpxLevel: number | null; t3InEM: boolean | null
 }
+// Frozen plan — locked at the moment a recommendation is first issued
+type LockedPlan = {
+  lockedAt:    number    // Date.now()
+  spxAtLock:   number
+  scoreAtLock: number
+  strategy:    ContractStrategy
+}
+type LiveSnap = {
+  mid: number; bid: number; ask: number
+  score: number; status: Contract['status']
+}
 type Contract  = {
   symbol: string; type: string; strike: number; expiration: string; dte: number
   bid: number; ask: number; mid: number; volume: number; openInterest: number
@@ -80,7 +91,11 @@ export default function V2Dashboard() {
   const [countdown, setCd]  = useState(REFRESH_SEC)
   const [strike, setStrike] = useState('')
   const [ctype, setCtype]   = useState<'auto' | 'call' | 'put'>('auto')
-  const cdRef               = useRef<ReturnType<typeof setInterval> | null>(null)
+  const cdRef        = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Frozen plans: locked when a contract is first seen — never auto-updated
+  const lockedPlans  = useRef<Map<string, LockedPlan>>(new Map())
+  // Live snapshots: updated every poll (price / score only)
+  const liveSnaps    = useRef<Map<string, LiveSnap>>(new Map())
 
   const load = useCallback(async () => {
     setLoad(true)
@@ -88,11 +103,34 @@ export default function V2Dashboard() {
     try {
       const res  = await fetch('/api/v2/recommend')
       const json = await res.json()
+      // ── Freeze plan on first sight; update live snap every poll ──────────
+      const contracts: Contract[] = json.contracts ?? []
+      for (const c of contracts) {
+        if (c.strategy && !lockedPlans.current.has(c.symbol)) {
+          lockedPlans.current.set(c.symbol, {
+            lockedAt:    Date.now(),
+            spxAtLock:   json.market?.spx?.price ?? 0,
+            scoreAtLock: c.score,
+            strategy:    c.strategy,
+          })
+        }
+        liveSnaps.current.set(c.symbol, {
+          mid: c.mid, bid: c.bid, ask: c.ask,
+          score: c.score, status: c.status,
+        })
+      }
       setData(json)
       setTs(new Date())
     } catch {}
     setLoad(false)
   }, [])
+
+  // Re-analyze: clears the frozen plan so next poll locks a fresh one
+  function reanalyze(symbol: string) {
+    lockedPlans.current.delete(symbol)
+    liveSnaps.current.delete(symbol)
+    load()
+  }
 
   useEffect(() => {
     load()
@@ -409,21 +447,50 @@ export default function V2Dashboard() {
             </div>
           )}
 
-          {/* Decision + strategy cards */}
+          {/* Decision + strategy cards — frozen plan */}
           {!loading && (data?.contracts ?? []).map((c, i) => {
-            const lc    = RANK_COLORS[i] ?? '#4A5568'
-            const sm    = statusMeta(c.status)
-            const sc    = scoreColor(c.score ?? 0)
+            const lc     = RANK_COLORS[i] ?? '#4A5568'
             const isCall = c.type === 'call'
-            const strat  = c.strategy
+
+            // ── Frozen plan + live snapshot ────────────────────────────────
+            const plan  = lockedPlans.current.get(c.symbol)
+            const live  = liveSnaps.current.get(c.symbol)
+            const strat = plan?.strategy ?? c.strategy        // always frozen
+            const liveMid   = live?.mid   ?? c.mid
+            const liveScore = live?.score ?? c.score
+            const liveStatus = live?.status ?? c.status
+
+            // ── Trade status relative to frozen levels ─────────────────────
+            const t2Hit   = strat && liveMid >= strat.t2Price
+            const t1Hit   = strat && !t2Hit && liveMid >= strat.t1Price
+            const stopHit = strat && liveMid <= strat.stopPrice
+            const isStale = plan && liveScore < plan.scoreAtLock - 15
+
+            const tradeStatus = t2Hit   ? { label: 'هدف ٢ تحقق', color: '#60A5FA' }
+              : t1Hit   ? { label: 'هدف ١ تحقق',  color: '#10B981' }
+              : stopHit ? { label: 'وقف الخسارة', color: '#EF4444' }
+              :           { label: 'فعّالة',        color: '#C9943A' }
+
+            // ── Live P&L (vs frozen conservative entry) ────────────────────
+            const livePnL  = strat ? Math.round((liveMid - strat.entryConservative) * 100) : null
+            const pnlColor = livePnL == null ? '#4A5568' : livePnL >= 0 ? '#10B981' : '#EF4444'
+
+            // ── Locked time ───────────────────────────────────────────────
+            const lockedTimeStr = plan
+              ? new Date(plan.lockedAt).toLocaleTimeString('en-US',
+                  { hour: '2-digit', minute: '2-digit', hour12: false })
+              : null
+
             const stratColor = strat?.strategy === 'strong' ? '#10B981'
               : strat?.strategy === 'balanced' ? '#C9943A' : '#60A5FA'
+            const sm = statusMeta(liveStatus)
+            const sc = scoreColor(liveScore ?? 0)
 
             return (
               <div key={c.symbol} className="rounded-xl overflow-hidden"
-                   style={{ border: `1px solid ${lc}25` }}>
+                   style={{ border: `1px solid ${isStale ? '#F59E0B' : lc}25` }}>
 
-                {/* ── Header: type · strike · score · status ── */}
+                {/* ── Header ── */}
                 <div className="flex items-center justify-between gap-2 px-4 py-3 flex-wrap"
                      style={{ background: `${lc}08`, borderBottom: `1px solid ${lc}18` }}>
                   <div className="flex items-center gap-2">
@@ -435,16 +502,21 @@ export default function V2Dashboard() {
                           }}>
                       {isCall ? '▲ CALL' : '▼ PUT'}
                     </span>
-                    <span className="text-xl font-bold font-mono text-white">
-                      {c.strike.toLocaleString()}
-                    </span>
+                    <span className="text-xl font-bold font-mono text-white">{c.strike.toLocaleString()}</span>
                     <span className="text-xs font-mono" style={{ color: '#4A5568' }}>DTE {c.dte}</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Locked badge */}
+                    {plan && (
+                      <span className="text-xs font-mono px-2 py-0.5 rounded-lg flex items-center gap-1"
+                            style={{ background: 'rgba(201,148,58,0.1)', color: '#C9943A60', border: '1px solid rgba(201,148,58,0.2)' }}>
+                        🔒 {lockedTimeStr} · SPX {plan.spxAtLock.toFixed(0)}
+                      </span>
+                    )}
                     <div className="flex items-center gap-1 px-2 py-1 rounded-lg"
                          style={{ background: 'rgba(0,0,0,0.3)', border: `1px solid ${sc}30` }}>
                       <span className="text-xs font-mono" style={{ color: '#4A5568' }}>Score</span>
-                      <span className="text-sm font-bold font-mono" style={{ color: sc }}>{c.score ?? '—'}</span>
+                      <span className="text-sm font-bold font-mono" style={{ color: sc }}>{liveScore ?? '—'}</span>
                     </div>
                     <span className="text-xs font-bold px-3 py-1 rounded-lg"
                           style={{ background: sm.bg, color: sm.color, border: `1px solid ${sm.border}` }}>
@@ -455,20 +527,61 @@ export default function V2Dashboard() {
 
                 <div className="p-4 space-y-3" style={{ background: 'rgba(0,0,0,0.2)' }}>
 
-                  {/* ── Strategy badge + reason ── */}
+                  {/* ── Stale warning ── */}
+                  {isStale && (
+                    <div className="rounded-lg px-3 py-2.5 flex items-center justify-between gap-3"
+                         style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)' }}>
+                      <div>
+                        <div className="text-xs font-bold" style={{ color: '#F59E0B' }}>
+                          ⚠ الخطة السابقة لم تعد مناسبة
+                        </div>
+                        <div className="text-xs mt-0.5" style={{ color: '#92400E' }}>
+                          Score انخفض من {plan?.scoreAtLock} إلى {liveScore} — أعد التحليل لخطة محدّثة
+                        </div>
+                      </div>
+                      <button onClick={() => reanalyze(c.symbol)}
+                              className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap"
+                              style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)', color: '#F59E0B' }}>
+                        إعادة تحليل ↺
+                      </button>
+                    </div>
+                  )}
+
+                  {/* ── Live price bar ── */}
+                  {strat && (
+                    <div className="rounded-lg px-3 py-2.5 flex items-center justify-between gap-3"
+                         style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <div>
+                          <div className="text-xs font-mono" style={{ color: '#4A5568' }}>السعر الحالي</div>
+                          <div className="text-base font-bold font-mono text-white">${n(liveMid)}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-mono" style={{ color: '#4A5568' }}>ربح / خسارة</div>
+                          <div className="text-base font-bold font-mono" style={{ color: pnlColor }}>
+                            {livePnL == null ? '—' : (livePnL >= 0 ? '+' : '') + '$' + Math.abs(livePnL)}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-xs font-bold px-2 py-1 rounded-lg"
+                            style={{ background: `${tradeStatus.color}15`, color: tradeStatus.color, border: `1px solid ${tradeStatus.color}35` }}>
+                        {tradeStatus.label}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* ── Strategy badge + reason (from frozen plan) ── */}
                   {strat && (
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-bold px-2.5 py-1 rounded-lg"
                             style={{ background: `${stratColor}15`, color: stratColor, border: `1px solid ${stratColor}35` }}>
                         استراتيجية {strat.strategyLabel}
                       </span>
-                      <span className="text-xs leading-snug" style={{ color: '#64748B' }}>
-                        {c.reason}
-                      </span>
+                      <span className="text-xs leading-snug" style={{ color: '#64748B' }}>{c.reason}</span>
                     </div>
                   )}
 
-                  {/* ── Entry: conservative + balanced ── */}
+                  {/* ── Entry: conservative + balanced — FROZEN ── */}
                   {strat && (
                     <div className="grid grid-cols-2 gap-2">
                       <div className="rounded-lg p-3"
@@ -490,73 +603,26 @@ export default function V2Dashboard() {
                     </div>
                   )}
 
-                  {/* ── Targets + Stop (compact 3-row) ── */}
+                  {/* ── Targets + Stop — FROZEN plan levels ── */}
                   {strat && (
                     <div className="space-y-1.5">
                       {[
-                        {
-                          label:  `هدف ١ — ${(strat.t1Pct * 100).toFixed(0)}%`,
-                          price:  strat.t1Price,
-                          total:  strat.t1Total,
-                          profit: strat.t1Profit,
-                          spx:    strat.t1SpxLevel,
-                          inEM:   strat.t1InEM,
-                          color:  '#10B981',
-                          bg:     'rgba(16,185,129,0.07)',
-                          border: 'rgba(16,185,129,0.2)',
-                          icon:   '◎',
-                        },
-                        {
-                          label:  `هدف ٢ — ${(strat.t2Pct * 100).toFixed(0)}%`,
-                          price:  strat.t2Price,
-                          total:  strat.t2Total,
-                          profit: strat.t2Profit,
-                          spx:    strat.t2SpxLevel,
-                          inEM:   strat.t2InEM,
-                          color:  '#60A5FA',
-                          bg:     'rgba(96,165,250,0.07)',
-                          border: 'rgba(96,165,250,0.2)',
-                          icon:   '◎',
-                        },
-                        ...(strat.t3Price ? [{
-                          label:  `هدف ٣ — ${((strat.t3Pct ?? 0) * 100).toFixed(0)}%`,
-                          price:  strat.t3Price,
-                          total:  strat.t3Total ?? 0,
-                          profit: strat.t3Profit ?? 0,
-                          spx:    strat.t3SpxLevel,
-                          inEM:   strat.t3InEM ?? false,
-                          color:  '#A78BFA',
-                          bg:     'rgba(167,139,250,0.07)',
-                          border: 'rgba(167,139,250,0.2)',
-                          icon:   '◎',
-                        }] : []),
-                        {
-                          label:  `وقف الخسارة — ${(strat.stopPct * 100).toFixed(0)}%`,
-                          price:  strat.stopPrice,
-                          total:  strat.stopTotal,
-                          profit: strat.stopLoss,
-                          spx:    strat.stopSpxLevel,
-                          inEM:   null,
-                          color:  '#EF4444',
-                          bg:     'rgba(239,68,68,0.07)',
-                          border: 'rgba(239,68,68,0.2)',
-                          icon:   '⊘',
-                        },
+                        { label: `هدف ١ — ${(strat.t1Pct*100).toFixed(0)}%`, price: strat.t1Price, total: strat.t1Total, profit: strat.t1Profit, spx: strat.t1SpxLevel, inEM: strat.t1InEM, color: '#10B981', bg: 'rgba(16,185,129,0.07)', border: 'rgba(16,185,129,0.2)', icon: '◎', hit: t1Hit || t2Hit },
+                        { label: `هدف ٢ — ${(strat.t2Pct*100).toFixed(0)}%`, price: strat.t2Price, total: strat.t2Total, profit: strat.t2Profit, spx: strat.t2SpxLevel, inEM: strat.t2InEM, color: '#60A5FA', bg: 'rgba(96,165,250,0.07)', border: 'rgba(96,165,250,0.2)', icon: '◎', hit: t2Hit },
+                        ...(strat.t3Price ? [{ label: `هدف ٣ — ${((strat.t3Pct??0)*100).toFixed(0)}%`, price: strat.t3Price, total: strat.t3Total??0, profit: strat.t3Profit??0, spx: strat.t3SpxLevel, inEM: strat.t3InEM??false, color: '#A78BFA', bg: 'rgba(167,139,250,0.07)', border: 'rgba(167,139,250,0.2)', icon: '◎', hit: false }] : []),
+                        { label: `وقف الخسارة — ${(strat.stopPct*100).toFixed(0)}%`, price: strat.stopPrice, total: strat.stopTotal, profit: strat.stopLoss, spx: strat.stopSpxLevel, inEM: null, color: '#EF4444', bg: 'rgba(239,68,68,0.07)', border: 'rgba(239,68,68,0.2)', icon: '⊘', hit: stopHit },
                       ].map(row => (
                         <div key={row.label} className="rounded-lg px-3 py-2"
-                             style={{ background: row.bg, border: `1px solid ${row.border}` }}>
+                             style={{ background: row.hit ? `${row.color}18` : row.bg, border: `1px solid ${row.hit ? row.color : row.border}` }}>
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-xs font-semibold shrink-0" style={{ color: row.color }}>
-                              {row.icon} {row.label}
-                              {row.inEM === false && (
-                                <span className="mr-1 text-xs font-mono" style={{ color: '#F59E0B' }}>⚠ خارج EM</span>
-                              )}
+                              {row.hit && '✓ '}{row.icon} {row.label}
+                              {row.inEM === false && <span className="mr-1 text-xs font-mono" style={{ color: '#F59E0B' }}>⚠ خارج EM</span>}
                             </span>
                             <div className="flex items-center gap-3 font-mono text-xs text-left">
                               <span className="font-bold" style={{ color: row.color }}>${n(row.price)}</span>
                               <span style={{ color: '#4A5568' }}>(×100 = ${row.total})</span>
-                              <span className="font-semibold"
-                                    style={{ color: row.profit >= 0 ? '#10B981' : '#EF4444' }}>
+                              <span className="font-semibold" style={{ color: row.profit >= 0 ? '#10B981' : '#EF4444' }}>
                                 {row.profit >= 0 ? '+' : ''}${row.profit}
                               </span>
                             </div>
@@ -571,21 +637,28 @@ export default function V2Dashboard() {
                     </div>
                   )}
 
-                  {/* ── Post-T1 action + analyze button ── */}
-                  <div className="flex items-center justify-between gap-3 pt-0.5">
+                  {/* ── Post-T1 + buttons ── */}
+                  <div className="flex items-center justify-between gap-3 pt-0.5 flex-wrap">
                     {strat && (
                       <div className="flex items-start gap-1.5 min-w-0 flex-1">
                         <span className="shrink-0 mt-0.5 text-xs" style={{ color: '#F59E0B' }}>↑</span>
-                        <div className="text-xs leading-snug" style={{ color: '#64748B' }}>
-                          {strat.postT1Action}
-                        </div>
+                        <div className="text-xs leading-snug" style={{ color: '#64748B' }}>{strat.postT1Action}</div>
                       </div>
                     )}
-                    <Link href={`/v2/analyze?symbol=${encodeURIComponent(c.symbol)}`}
-                          className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap"
-                          style={{ background: `${lc}15`, border: `1px solid ${lc}35`, color: lc }}>
-                      تحليل كامل ←
-                    </Link>
+                    <div className="flex gap-2 shrink-0">
+                      {!isStale && (
+                        <button onClick={() => reanalyze(c.symbol)}
+                                className="px-3 py-1.5 rounded-lg text-xs font-bold"
+                                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#4A5568' }}>
+                          ↺ إعادة تحليل
+                        </button>
+                      )}
+                      <Link href={`/v2/analyze?symbol=${encodeURIComponent(c.symbol)}`}
+                            className="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap"
+                            style={{ background: `${lc}15`, border: `1px solid ${lc}35`, color: lc }}>
+                        تحليل كامل ←
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </div>
