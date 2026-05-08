@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
   if (!parsed) {
     return NextResponse.json({
       success: false,
-      error: `صيغة الرمز غير صحيحة: "${symbolRaw}" — الصيغة المطلوبة: SPXW260507C07350000 (root + YYMMDD + C/P + strike×1000)`,
+      error: `صيغة الرمز غير صحيحة: "${symbolRaw}" — الصيغة: SPXWYYMMDDC/P + ستريك × 1000 (مثال: SPXW + تاريخ + C07350000)`,
     })
   }
 

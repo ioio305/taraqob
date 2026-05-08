@@ -203,7 +203,7 @@ function AnalyzeContent() {
     } else if (s) {
       url = `/api/v2/analyze?symbol=${encodeURIComponent(s)}`
     } else {
-      setError('أدخل رمز OCC أو رقم الستريك — مثال: SPXW260507C07350000 أو 7350')
+      setError('أدخل رقم الستريك (مثال: 7350) أو رمز OCC الكامل')
       return
     }
     setLoading(true); setError(null); setAnalysis(null)
@@ -238,7 +238,7 @@ function AnalyzeContent() {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && runAnalysis()}
-            placeholder="7350  أو  SPXW260507C07350000"
+            placeholder="رقم الستريك مثال: 7350"
             className="flex-1 rounded-xl px-4 py-3 text-sm text-white outline-none font-mono"
             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
             dir="ltr"
@@ -253,7 +253,7 @@ function AnalyzeContent() {
         </div>
         <div className="flex items-center justify-between mt-2">
           <p className="text-xs font-mono" style={{ color: '#2D3748' }}>
-            يقبل: رقم الستريك (7350) أو رمز OCC الكامل (SPXW260507C07350000)
+            يقبل: رقم الستريك (7350) أو رمز OCC الكامل
           </p>
           <Link href="/v2" className="text-xs shrink-0 mr-4" style={{ color: '#4A5568' }}>
             ← الداشبورد

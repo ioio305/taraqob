@@ -166,7 +166,7 @@ export default function V2Dashboard() {
       </div>
 
       {/* ── Market Metrics Row ── */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
 
         {/* SPX */}
         <div className="rounded-2xl p-4 space-y-2"
@@ -254,7 +254,7 @@ export default function V2Dashboard() {
       )}
 
       {/* ── Session Levels: London + Tokyo ── */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {([
           { name: 'لندن',   flag: '🇬🇧', sess: data?.sessions?.london },
           { name: 'طوكيو', flag: '🇯🇵', sess: data?.sessions?.tokyo  },

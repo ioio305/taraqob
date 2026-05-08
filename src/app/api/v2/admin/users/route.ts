@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('user_profiles')
-    .select('id, full_name, full_name_ar, email, role, is_active, created_at', { count: 'exact' })
+    .select('id, full_name, full_name_ar, email, role, is_active, created_at, preferences', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range((page - 1) * limit, page * limit - 1)
 
@@ -74,5 +74,8 @@ export async function POST(request: NextRequest) {
     new_values: { email, role },
   })
 
-  return NextResponse.json({ success: true, token })
+  const appUrl     = process.env.NEXT_PUBLIC_APP_URL || 'https://taraqob.vercel.app'
+  const inviteLink = `${appUrl}/auth/accept-invite?token=${token}`
+
+  return NextResponse.json({ success: true, inviteLink })
 }
