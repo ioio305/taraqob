@@ -140,86 +140,99 @@ function prevTradingDayET(todayET: string): string {
   return d.toISOString().slice(0, 10)
 }
 
-// ── Yahoo Finance ES Futures: 15-min candles, session slicing ─────────────
-async function fetchSPXSessions() {
+// ── Yesterday's SPX H/L/C from ^GSPC daily (accurate, no ES proxy) ────────
+async function fetchYesterdaySPX(): Promise<{ high: number; low: number; close: number } | null> {
   try {
-    // 15-minute ES=F data — precise enough for session H/L/C without gaps
     const res = await fetch(
-      'https://query1.finance.yahoo.com/v8/finance/chart/ES%3DF?interval=15m&range=2d',
+      'https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?interval=1d&range=5d',
       { headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' }, cache: 'no-store' }
     )
-    if (!res.ok) throw new Error('Yahoo Finance error')
+    if (!res.ok) return null
     const json = await res.json()
     const result = json?.chart?.result?.[0]
-    if (!result?.timestamp) throw new Error('No data')
+    if (!result?.timestamp?.length) return null
 
     const timestamps: number[] = result.timestamp
     const highs:  number[] = result.indicators.quote[0].high  ?? []
     const lows:   number[] = result.indicators.quote[0].low   ?? []
     const closes: number[] = result.indicators.quote[0].close ?? []
+    const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
 
-    const todayET     = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-    const yesterdayET = prevTradingDayET(todayET)
+    // Find the latest COMPLETE trading day — skip today if it hasn't closed
+    for (let i = timestamps.length - 1; i >= 0; i--) {
+      const c = closes[i], h = highs[i], l = lows[i]
+      if (!c || !h || !l || isNaN(c)) continue
+      const dateKey = new Date(timestamps[i] * 1000)
+        .toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+      if (dateKey === todayET) continue   // skip today (incomplete)
+      return { high: Math.round(h), low: Math.round(l), close: Math.round(c) }
+    }
+    return null
+  } catch { return null }
+}
 
-    const tokyoH: number[] = [], tokyoL: number[] = [], tokyoC: number[] = []
-    const londonH: number[] = [], londonL: number[] = [], londonC: number[] = []
+// ── London pre-market from SPY × 10 (03:00–09:29 ET, includePrePost) ──────
+async function fetchLondonSession(): Promise<{ high: number | null; low: number | null; close: number | null; changePct: number | null }> {
+  try {
+    const res = await fetch(
+      'https://query1.finance.yahoo.com/v8/finance/chart/SPY?interval=5m&range=1d&includePrePost=true',
+      { headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' }, cache: 'no-store' }
+    )
+    if (!res.ok) return { high: null, low: null, close: null, changePct: null }
+    const json = await res.json()
+    const result = json?.chart?.result?.[0]
+    if (!result?.timestamp?.length) return { high: null, low: null, close: null, changePct: null }
+
+    const timestamps: number[] = result.timestamp
+    const highs:  number[] = result.indicators.quote[0].high  ?? []
+    const lows:   number[] = result.indicators.quote[0].low   ?? []
+    const closes: number[] = result.indicators.quote[0].close ?? []
+    const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+
+    const H: number[] = [], L: number[] = [], C: number[] = []
 
     for (let i = 0; i < timestamps.length; i++) {
       const h = highs[i], l = lows[i], c = closes[i]
       if (!h || !l || isNaN(h) || isNaN(l)) continue
 
       const { dateKey, hourET, minuteET } = etParts(timestamps[i])
+      if (dateKey !== todayET) continue
 
-      // Tokyo: yesterday 19:00–23:59 ET + today 00:00–01:44 ET
-      // (Nikkei closes ~01:30 ET; use strict end so US after-hours not mixed in)
-      const inTokyo =
-        (dateKey === yesterdayET && hourET >= 19) ||
-        (dateKey === todayET     && hourET <= 1)
-      if (inTokyo) {
-        tokyoH.push(h); tokyoL.push(l)
-        if (c && !isNaN(c)) tokyoC.push(c)
-      }
+      // London window: 03:00–09:29 ET
+      const inLondon = (hourET >= 3 && hourET <= 8) || (hourET === 9 && minuteET < 30)
+      if (!inLondon) continue
 
-      // London: today 03:00–09:29 ET (before US open)
-      const inLondon = dateKey === todayET && (
-        (hourET >= 3 && hourET <= 8) ||
-        (hourET === 9 && minuteET < 30)
-      )
-      if (inLondon) {
-        londonH.push(h); londonL.push(l)
-        if (c && !isNaN(c)) londonC.push(c)
-      }
+      H.push(h * 10); L.push(l * 10)
+      if (c && !isNaN(c)) C.push(c * 10)
     }
 
-    // changePct = session move: open → close
-    const pct = (arr: number[], last: number | null) => {
-      if (!last || arr.length < 2) return null
-      const open = arr[0]
-      return open > 0 ? Math.round(((last - open) / open) * 10000) / 100 : null
-    }
+    if (!H.length) return { high: null, low: null, close: null, changePct: null }
 
-    const tokyoClose  = tokyoC.length  ? Math.round(tokyoC[tokyoC.length - 1])  : null
-    const londonClose = londonC.length ? Math.round(londonC[londonC.length - 1]) : null
+    const high  = Math.round(Math.max(...H))
+    const low   = Math.round(Math.min(...L))
+    const close = C.length ? Math.round(C[C.length - 1]) : null
+    const open  = C.length >= 2 ? C[0] : null
+    const changePct = open && close && open > 0
+      ? Math.round(((close - open) / open) * 10000) / 100 : null
 
-    return {
-      tokyo: {
-        high:      tokyoH.length ? Math.round(Math.max(...tokyoH)) : null,
-        low:       tokyoL.length ? Math.round(Math.min(...tokyoL)) : null,
-        close:     tokyoClose,
-        changePct: pct(tokyoC, tokyoClose),
-      },
-      london: {
-        high:      londonH.length ? Math.round(Math.max(...londonH)) : null,
-        low:       londonL.length ? Math.round(Math.min(...londonL)) : null,
-        close:     londonClose,
-        changePct: pct(londonC, londonClose),
-      },
-    }
-  } catch {
-    return {
-      tokyo:  { high: null, low: null, close: null, changePct: null },
-      london: { high: null, low: null, close: null, changePct: null },
-    }
+    return { high, low, close, changePct }
+  } catch { return { high: null, low: null, close: null, changePct: null } }
+}
+
+// ── Session data: combine yesterday SPX + London pre-market ───────────────
+async function fetchSPXSessions() {
+  const [yesterday, london] = await Promise.all([
+    fetchYesterdaySPX(),
+    fetchLondonSession(),
+  ])
+
+  return {
+    // "طوكيو" box = yesterday's US session (accurate SPX H/L/C, no ES proxy noise)
+    tokyo: yesterday
+      ? { high: yesterday.high, low: yesterday.low, close: yesterday.close, changePct: null }
+      : { high: null, low: null, close: null, changePct: null },
+    // "لندن" box = today's London/pre-market window from SPY × 10
+    london,
   }
 }
 
@@ -259,8 +272,9 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const spxPrice  = spxQ?.last      ?? 0
-    const spxPrev   = spxQ?.prevclose ?? spxPrice
+    const spxPrice  = spxQ?.last ?? 0
+    // Use yesterday's SPX close from ^GSPC (accurate) instead of Tradier prevclose (often stale)
+    const spxPrev   = sessions.tokyo.close ?? spxQ?.prevclose ?? spxPrice
     const spxChgPct = spxPrev > 0 ? ((spxPrice - spxPrev) / spxPrev) * 100 : 0
     // VIX: try last → prevclose → VIXY proxy → conservative default 17
     const vixRaw    = vixQ?.last ?? vixQ?.prevclose ?? 0

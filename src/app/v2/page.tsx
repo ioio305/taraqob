@@ -261,8 +261,8 @@ export default function V2Dashboard() {
       {/* ── Session Levels: London + Tokyo ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {([
-          { name: 'لندن',   flag: '🇬🇧', sess: data?.sessions?.london },
-          { name: 'طوكيو', flag: '🇯🇵', sess: data?.sessions?.tokyo  },
+          { name: 'لندن / قبل الافتتاح', flag: '🇬🇧', sess: data?.sessions?.london },
+          { name: 'أمس — US Session',    flag: '🇺🇸', sess: data?.sessions?.tokyo  },
         ] as const).map(m => (
           <div key={m.name} className="rounded-2xl p-4"
                style={{ background: 'rgba(13,27,42,0.6)', border: '1px solid rgba(255,255,255,0.04)' }}>
