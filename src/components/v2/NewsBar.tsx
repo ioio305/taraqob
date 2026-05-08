@@ -139,7 +139,8 @@ function EventRow({ ev }: { ev: NewsEvent }) {
       </div>
       {/* Info */}
       <div className="min-w-0 flex-1">
-        <div className="text-xs text-white leading-tight mb-0.5 truncate">{ev.title}</div>
+        <div className="text-xs text-white leading-tight mb-0.5">{ev.titleAr}</div>
+        <div className="text-[10px] font-mono truncate mb-0.5" style={{ color: '#2D3748' }}>{ev.title}</div>
         <div className="text-[10px] font-mono" style={{ color: '#4A5568' }}>
           {ev.source} · {ev.category} · {timeStr}
           {ev.isUpcoming && <span style={{ color }} className="mr-2">⬆ قادم</span>}

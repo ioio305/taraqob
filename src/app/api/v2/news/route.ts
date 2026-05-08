@@ -7,6 +7,7 @@ export const revalidate = 0
 export type NewsEvent = {
   id:          string
   title:       string
+  titleAr:     string       // Arabic headline (auto-generated)
   source:      string
   publishedAt: string       // ISO
   isUpcoming:  boolean
@@ -15,6 +16,141 @@ export type NewsEvent = {
   spxImpact:   number       // 0–100 estimated SPX price impact
   category:    string
   reason:      string       // Arabic explanation
+}
+
+// ── Arabic title generation ───────────────────────────────────────────────────
+const ENTITIES_AR: [RegExp, string][] = [
+  [/\bUS[-\s]?China\b/gi,             'أمريكا والصين'],
+  [/\bFederal Open Market Committee\b/gi, 'لجنة السوق المفتوحة'],
+  [/\bFederal Reserve\b/gi,           'الاحتياطي الفيدرالي'],
+  [/\bFed\b/g,                        'الفيدرالي'],
+  [/\bPowell\b/gi,                    'باول (رئيس الفيدرالي)'],
+  [/\bTrump\b/gi,                     'ترامب'],
+  [/\bBiden\b/gi,                     'بايدن'],
+  [/\bRubio\b/gi,                     'روبيو'],
+  [/\bBessent\b/gi,                   'بيسينت'],
+  [/\bYellen\b/gi,                    'يلين'],
+  [/\bChina\b/gi,                     'الصين'],
+  [/\bIran\b/gi,                      'إيران'],
+  [/\bRussia\b/gi,                    'روسيا'],
+  [/\bUkraine\b/gi,                   'أوكرانيا'],
+  [/\bIsrael\b/gi,                    'إسرائيل'],
+  [/\bGaza\b/gi,                      'غزة'],
+  [/\bEurope(an)?\b/gi,              'أوروبا'],
+  [/\bECB\b/g,                        'البنك المركزي الأوروبي'],
+  [/\bBank of England\b/gi,           'بنك إنجلترا'],
+  [/\bJapan(ese)?\b/gi,              'اليابان'],
+  [/\bIndia(n)?\b/gi,               'الهند'],
+  [/\bItaly\b/gi,                     'إيطاليا'],
+  [/\bGermany\b/gi,                   'ألمانيا'],
+  [/\bFrance\b/gi,                    'فرنسا'],
+  [/\bMexico\b/gi,                    'المكسيك'],
+  [/\bCanada\b/gi,                    'كندا'],
+  [/\bG7\b/g,                         'مجموعة السبع'],
+  [/\bG20\b/g,                        'مجموعة العشرين'],
+  [/\bIMF\b/g,                        'صندوق النقد الدولي'],
+  [/\bWorld Bank\b/gi,                'البنك الدولي'],
+  [/\bWTO\b/g,                        'منظمة التجارة العالمية'],
+  [/\bNATO\b/g,                       'حلف الناتو'],
+  [/\bWall St(reet)?\b/gi,           'وول ستريت'],
+  [/\bS&P 500\b/gi,                   'مؤشر S&P 500'],
+  [/\bNasdaq\b/gi,                    'ناسداك'],
+  [/\bDow Jones\b/gi,                 'داو جونز'],
+  [/\bDow\b/gi,                       'مؤشر داو'],
+  [/\bNYSE\b/g,                       'بورصة نيويورك'],
+  [/\bS&P\b/gi,                       'مؤشر S&P'],
+  [/\bTreasur(y|ies)\b/gi,          'سندات الخزانة الأمريكية'],
+  [/\bOil\b/gi,                       'النفط'],
+  [/\bCrude\b/gi,                     'النفط الخام'],
+  [/\bOPEC\b/g,                       'أوبك'],
+  [/\bGold\b/gi,                      'الذهب'],
+  [/\bSilver\b/gi,                    'الفضة'],
+  [/\bDollar\b/gi,                    'الدولار'],
+  [/\bEuro\b/gi,                      'اليورو'],
+  [/\bYen\b/gi,                       'الين الياباني'],
+  [/\bBitcoin\b/gi,                   'بيتكوين'],
+  [/\bCrypto(currency)?\b/gi,        'العملات الرقمية'],
+  [/\bTariff(s)?\b/gi,               'الرسوم الجمركية'],
+  [/\bTrade [Ww]ar\b/gi,             'حرب التجارة'],
+  [/\bTrade [Dd]eal\b/gi,            'اتفاقية التجارة'],
+  [/\bSanction(s)?\b/gi,             'العقوبات الاقتصادية'],
+  [/\bInflation\b/gi,                 'التضخم'],
+  [/\bInterest [Rr]ate(s)?\b/gi,    'أسعار الفائدة'],
+  [/\bRate [Cc]ut(s)?\b/gi,         'خفض أسعار الفائدة'],
+  [/\bRate [Hh]ike(s)?\b/gi,        'رفع أسعار الفائدة'],
+  [/\bRecession\b/gi,                 'الركود الاقتصادي'],
+  [/\bGDP\b/g,                        'الناتج المحلي الإجمالي'],
+  [/\bCPI\b/g,                        'مؤشر أسعار المستهلك CPI'],
+  [/\bPCE\b/g,                        'مؤشر PCE'],
+  [/\bPPI\b/g,                        'مؤشر أسعار المنتجين PPI'],
+  [/\bNonfarm [Pp]ayroll(s)?\b/gi,  'بيانات الرواتب غير الزراعية'],
+  [/\bJobless [Cc]laims\b/gi,        'طلبات إعانة البطالة'],
+  [/\bUnemployment\b/gi,              'معدل البطالة'],
+  [/\bRetail [Ss]ales\b/gi,          'مبيعات التجزئة'],
+  [/\bHousing\b/gi,                   'قطاع الإسكان'],
+  [/\bPMI\b/g,                        'مؤشر PMI'],
+  [/\bISM\b/g,                        'مؤشر ISM'],
+  [/\bEarning(s)?\b/gi,              'الأرباح الفصلية'],
+  [/\bStocks?\b/gi,                   'الأسهم'],
+  [/\bMarket(s)?\b/gi,               'السوق'],
+  [/\bRally\b/gi,                     'ارتفاع السوق'],
+  [/\bSelloff\b/gi,                   'موجة بيع'],
+  [/\bVolatilit(y|ies)\b/gi,        'التقلبات'],
+  [/\bAllies\b/gi,                    'الحلفاء'],
+  [/\bTalks?\b/gi,                    'المحادثات'],
+  [/\bDeal\b/gi,                      'الاتفاقية'],
+  [/\bWeek [Aa]head\b/gi,            'الأسبوع القادم'],
+  [/\bIn [Ff]ocus\b/gi,             'في دائرة الاهتمام'],
+  [/\bScorching\b/gi,                 'المتصاعد'],
+  [/\bBlowout\b/gi,                   'النتائج المفاجئة'],
+]
+
+const ACTIONS_AR: [RegExp, string][] = [
+  [/\braise[sd]?\b/gi,    'يرفع'],
+  [/\bhike[sd]?\b/gi,     'يرفع'],
+  [/\bcut[s]?\b/gi,       'يخفض'],
+  [/\blower[sd]?\b/gi,    'يخفض'],
+  [/\bquestion[sd]?\b/gi, 'يشكك في'],
+  [/\bwarn[sd]?\b/gi,     'يحذر من'],
+  [/\bboost[sd]?\b/gi,    'يعزز'],
+  [/\bdrop[sd]?\b/gi,     'يتراجع'],
+  [/\brise[sd]?\b/gi,     'يرتفع'],
+  [/\bfall[s]?\b/gi,      'يتراجع'],
+  [/\bgain[sd]?\b/gi,     'يحقق مكاسب'],
+  [/\blose[sd]?\b/gi,     'يخسر'],
+  [/\bplunge[sd]?\b/gi,   'يتهاوى'],
+  [/\bsurge[sd]?\b/gi,    'يقفز'],
+  [/\bslump[sd]?\b/gi,    'يتراجع حاداً'],
+  [/\bsign[sd]?\b/gi,     'يوقع'],
+  [/\bimpose[sd]?\b/gi,   'يفرض'],
+  [/\blift[sd]?\b/gi,     'يرفع'],
+  [/\bexpect[sd]?\b/gi,   'يتوقع'],
+  [/\bfocus(es)?\b/gi,   'يتمحور حول'],
+  [/\bsupport[sd]?\b/gi,  'يدعم'],
+  [/\btarget[sd]?\b/gi,   'يستهدف'],
+  [/\breport[sd]?\b/gi,   'يُعلن'],
+]
+
+function generateArabicTitle(title: string, category: string): string {
+  // Strip source attribution
+  let t = title.replace(/\s*[-–|]\s*(Reuters|Bloomberg|CNBC|WSJ|FT|AP|MarketWatch|Dow Jones|Barron's?|Yahoo Finance|Investing\.com|The Wall Street Journal|Financial Times)\s*$/i, '').trim()
+
+  // Apply entity replacements
+  for (const [pat, ar] of ENTITIES_AR) t = t.replace(pat, ar)
+  for (const [pat, ar] of ACTIONS_AR)  t = t.replace(pat, ar)
+
+  // Check how much Arabic we managed to inject
+  const arChars  = (t.match(/[؀-ۿ]/g) ?? []).length
+  const allChars = t.replace(/\s/g, '').length
+  const ratio    = arChars / Math.max(allChars, 1)
+
+  // If mostly still English, fall back to category + short English hint
+  if (ratio < 0.25) {
+    const short = t.length > 60 ? t.slice(0, 57) + '…' : t
+    return `${category} — ${short}`
+  }
+
+  return t
 }
 
 export type NewsResult = {
@@ -121,9 +257,11 @@ async function fetchFinnhub(): Promise<NewsEvent[]> {
         if (Math.abs(minutesAway) > 480) continue
         const { base, category } = scoreCategory(item.event ?? '')
         const impact = Math.min(100, base + proximityBonus(minutesAway))
+        const rawTitle = item.event ?? 'Economic Event'
         events.push({
           id:          `fh-cal-${item.event}-${item.time}`,
-          title:       item.event ?? 'Economic Event',
+          title:       rawTitle,
+          titleAr:     generateArabicTitle(rawTitle, category),
           source:      'Finnhub Calendar',
           publishedAt: new Date(eventTime).toISOString(),
           isUpcoming:  minutesAway > 0,
@@ -152,9 +290,11 @@ async function fetchFinnhub(): Promise<NewsEvent[]> {
         const { base, category } = scoreCategory(item.headline ?? '')
         const impact = Math.min(100, base + proximityBonus(minutesAway))
         if (impact < 20) continue  // skip low-noise items
+        const rawTitle = item.headline ?? 'Market News'
         events.push({
           id:          `fh-news-${item.id}`,
-          title:       item.headline ?? 'Market News',
+          title:       rawTitle,
+          titleAr:     generateArabicTitle(rawTitle, category),
           source:      item.source ?? 'Finnhub News',
           publishedAt: new Date(eventTime).toISOString(),
           isUpcoming:  false,
@@ -197,9 +337,11 @@ async function fetchFMP(): Promise<NewsEvent[]> {
         const base    = fmpImpact[item.impact] ?? 10
         const { category } = scoreCategory(item.event ?? '')
         const impact  = Math.min(100, base + proximityBonus(minutesAway))
+        const rawTitle = item.event ?? 'Economic Event'
         events.push({
           id:          `fmp-${item.event}-${item.date}`,
-          title:       item.event ?? 'Economic Event',
+          title:       rawTitle,
+          titleAr:     generateArabicTitle(rawTitle, category),
           source:      'FMP Economic Calendar',
           publishedAt: new Date(eventTime).toISOString(),
           isUpcoming:  minutesAway > 0,
