@@ -1,9 +1,8 @@
 // ============================================================
 // TARAQOB — Types
-// Updated Role System
 // ============================================================
 
-export type UserRole = 'admin' | 'moderator' | 'free' | 'pro' | 'quant'
+export type UserRole = 'admin' | 'moderator' | 'user'
 
 export type UserProfile = {
   id:           string
@@ -14,70 +13,23 @@ export type UserProfile = {
   is_active:    boolean
   invited_by:   string | null
   avatar_url:   string | null
-  preferences:  { language: string; theme: string }
+  preferences:  Record<string, unknown>
   joined_at:    string
   last_seen_at: string | null
   created_at:   string
   updated_at:   string
 }
 
-export type PlanFeatures = {
-  indicators:     number   // كم مؤشر يرى
-  entryZone:      boolean  // منطقة الدخول
-  exitTarget:     boolean  // هدف الخروج
-  stopLoss:       boolean  // وقف الخسارة
-  holdDays:       boolean  // مدة الاحتفاظ
-  riskProfile:    boolean  // تصنيف المخاطرة
-  breakEven:      boolean  // معادلة التعادل
-  compareContracts: boolean // مقارنة العقود
-  sharedRooms:    boolean  // غرف مشتركة
-  alerts:         boolean  // تنبيهات
-  history:        boolean  // سجل التحليلات
-  unlimited:      boolean  // تحليلات غير محدودة
-}
-
-export const PLAN_FEATURES: Record<UserRole, PlanFeatures> = {
-  admin: {
-    indicators: 10, entryZone: true, exitTarget: true, stopLoss: true,
-    holdDays: true, riskProfile: true, breakEven: true, compareContracts: true,
-    sharedRooms: true, alerts: true, history: true, unlimited: true,
-  },
-  moderator: {
-    indicators: 10, entryZone: true, exitTarget: true, stopLoss: true,
-    holdDays: true, riskProfile: true, breakEven: true, compareContracts: true,
-    sharedRooms: true, alerts: true, history: true, unlimited: true,
-  },
-  free: {
-    indicators: 10, entryZone: true, exitTarget: true, stopLoss: false,
-    holdDays: false, riskProfile: false, breakEven: false, compareContracts: false,
-    sharedRooms: false, alerts: false, history: false, unlimited: false,
-  },
-  pro: {
-    indicators: 10, entryZone: true, exitTarget: true, stopLoss: true,
-    holdDays: true, riskProfile: true, breakEven: false, compareContracts: true,
-    sharedRooms: false, alerts: true, history: true, unlimited: true,
-  },
-  quant: {
-    indicators: 10, entryZone: true, exitTarget: true, stopLoss: true,
-    holdDays: true, riskProfile: true, breakEven: true, compareContracts: true,
-    sharedRooms: true, alerts: true, history: true, unlimited: true,
-  },
-}
-
 export const ROLE_LABELS: Record<UserRole, string> = {
   admin:     'مدير النظام',
   moderator: 'مشرف',
-  free:      'مجاني',
-  pro:       'محترف',
-  quant:     'متقدم',
+  user:      'مستخدم',
 }
 
 export const ROLE_COLORS: Record<UserRole, string> = {
-  admin:     'text-gold-700 bg-gold-50 border-gold-200',
-  moderator: 'text-purple-700 bg-purple-50 border-purple-200',
-  free:      'text-surface-600 bg-surface-50 border-surface-200',
-  pro:       'text-teal-700 bg-teal-50 border-teal-200',
-  quant:     'text-navy-700 bg-navy-50 border-navy-200',
+  admin:     'text-amber-700 bg-amber-50 border-amber-200',
+  moderator: 'text-blue-700 bg-blue-50 border-blue-200',
+  user:      'text-slate-600 bg-slate-50 border-slate-200',
 }
 
 // Legacy types kept for compatibility

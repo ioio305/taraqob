@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, type ReactNode } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -61,41 +61,53 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
 }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
-  // Role switcher: active view role (stored in localStorage)
-  const [activeRole, setActiveRole] = useState(userRole)
+  // Admin-only view preview (purely cosmetic, never affects access)
+  const [previewRole, setPreviewRole] = useState<string | null>(null)
   const [switcherOpen, setSwitcherOpen] = useState(false)
 
-  // All roles this user can switch between
-  const allRoles = [userRole, ...userSecondaryRoles.filter(r => r !== userRole)]
-
-  useEffect(() => {
-    const stored = localStorage.getItem('taraqob_view_as')
-    if (stored && allRoles.includes(stored)) setActiveRole(stored)
-    else setActiveRole(userRole)
-  }, [userRole]) // eslint-disable-line
-
-  function switchRole(r: string) {
-    setActiveRole(r)
-    localStorage.setItem('taraqob_view_as', r)
-    setSwitcherOpen(false)
-    // Refresh to apply role context
-    window.location.reload()
-  }
-
-  // Use activeRole for rendering decisions
-  const effectiveRole = activeRole
-  const isAdmin = effectiveRole === 'admin'
-  const isMod   = effectiveRole === 'moderator'
+  // ── Security: ALWAYS from DB prop, never localStorage ─────────
+  const isAdmin = userRole === 'admin'
+  const isMod   = userRole === 'moderator'
   const isStaff = isAdmin || isMod
 
+  // Role preview: only admins can switch view cosmetically
+  const canPreview   = isAdmin
+  const effectiveRole = canPreview && previewRole ? previewRole : userRole
+  const isPreviewing  = canPreview && previewRole !== null && previewRole !== userRole
+
+  // Nav visibility: admin can preview user view
+  const showAdminNav = isAdmin
+    ? (effectiveRole === 'admin' || effectiveRole === 'moderator')
+    : isMod
+
   const roleColor = ROLE_COLOR_MAP[effectiveRole] ?? '#4A5568'
+
+  useEffect(() => {
+    if (!isAdmin) {
+      // Non-admins: clear any stale localStorage value
+      localStorage.removeItem('taraqob_view_as')
+      return
+    }
+    const stored = localStorage.getItem('taraqob_view_as')
+    const valid  = ['admin', 'moderator', 'user']
+    if (stored && valid.includes(stored) && stored !== userRole) {
+      setPreviewRole(stored)
+    }
+  }, [userRole, isAdmin]) // eslint-disable-line
+
+  function switchPreview(r: string) {
+    setSwitcherOpen(false)
+    const next = r === userRole ? null : r
+    setPreviewRole(next)
+    if (next) localStorage.setItem('taraqob_view_as', next)
+    else      localStorage.removeItem('taraqob_view_as')
+  }
 
   async function logout() {
     setLoggingOut(true)
     try {
       await createClient().auth.signOut()
     } finally {
-      // force full reload to clear all cached auth state
       window.location.href = '/login'
     }
   }
@@ -107,7 +119,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
       {/* Logo */}
       <div className="px-5 pt-5 pb-4 shrink-0"
         style={{ borderBottom: '1px solid rgba(201,148,58,0.1)' }}>
-        <Link href={isStaff ? '/v2/admin' : '/v2'} className="flex items-center gap-3">
+        <Link href={showAdminNav ? '/v2/admin' : '/v2'} className="flex items-center gap-3">
           <img src="/logo.png" alt="ترقّب" className="w-9 h-9 object-contain shrink-0" />
           <div>
             <div className="font-bold text-white text-sm tracking-wider">ترقّب</div>
@@ -116,61 +128,30 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
         </Link>
       </div>
 
-      {/* Role badge + switcher */}
+      {/* Role badge */}
       <div className="px-4 py-3 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-        {allRoles.length > 1 ? (
-          <div className="relative">
-            <button onClick={() => setSwitcherOpen(v => !v)}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all"
-                    style={{ background: `${roleColor}0A`, border: `1px solid ${roleColor}20` }}>
-              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: roleColor }} />
-              <span className="text-xs font-mono" style={{ color: roleColor }}>
-                {ROLE_LABEL_MAP[effectiveRole] ?? effectiveRole}
-              </span>
-              {effectiveRole !== userRole && (
-                <span className="text-xs font-mono px-1.5 py-0.5 rounded"
-                      style={{ background: 'rgba(96,165,250,0.15)', color: '#60A5FA', marginRight: 'auto' }}>
-                  وضع {ROLE_LABEL_MAP[effectiveRole]}
-                </span>
-              )}
-              <span className="mr-auto text-xs" style={{ color: '#2D3748' }}>⇅</span>
-            </button>
-            {switcherOpen && (
-              <div className="absolute top-full right-0 left-0 mt-1 rounded-xl overflow-hidden z-50"
-                   style={{ background: '#0D1B2A', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
-                {allRoles.map(r => (
-                  <button key={r} onClick={() => switchRole(r)}
-                          className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-mono transition-all"
-                          style={{
-                            background: r === effectiveRole ? `${ROLE_COLOR_MAP[r] ?? '#4A5568'}12` : 'transparent',
-                            color:      r === effectiveRole ? ROLE_COLOR_MAP[r] ?? '#4A5568' : '#4A5568',
-                            borderBottom: '1px solid rgba(255,255,255,0.04)',
-                          }}>
-                    <span>{ROLE_ICON_MAP[r] ?? '◎'}</span>
-                    <span>{ROLE_LABEL_MAP[r] ?? r}</span>
-                    {r === userRole && <span className="mr-auto text-xs" style={{ color: '#1A2A3A' }}>أساسي</span>}
-                    {r === effectiveRole && <span className="mr-auto text-xs" style={{ color: ROLE_COLOR_MAP[r] }}>● نشط</span>}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
-               style={{ background: `${roleColor}0A`, border: `1px solid ${roleColor}20` }}>
-            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: roleColor }} />
-            <span className="text-xs font-mono" style={{ color: roleColor }}>{ROLE_LABEL_MAP[userRole] ?? userRole}</span>
-            {isStaff && (
-              <span className="mr-auto text-xs font-mono" style={{ color: '#1A2A3A' }}>
-                {isAdmin ? 'وصول كامل' : 'وصول محدود'}
-              </span>
-            )}
-          </div>
-        )}
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
+             style={{ background: `${roleColor}0A`, border: `1px solid ${roleColor}20` }}>
+          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: roleColor }} />
+          <span className="text-xs font-mono" style={{ color: roleColor }}>
+            {ROLE_LABEL_MAP[effectiveRole] ?? effectiveRole}
+          </span>
+          {isPreviewing && (
+            <span className="text-xs font-mono px-1.5 py-0.5 rounded mr-auto"
+                  style={{ background: 'rgba(96,165,250,0.15)', color: '#60A5FA' }}>
+              معاينة
+            </span>
+          )}
+          {!isPreviewing && isStaff && (
+            <span className="mr-auto text-xs font-mono" style={{ color: '#1A2A3A' }}>
+              {isAdmin ? 'وصول كامل' : 'وصول محدود'}
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* ── Admin nav (staff only, shown first) ── */}
-      {isStaff && (
+      {/* ── Admin nav ── */}
+      {showAdminNav && (
         <div className="px-3 pt-4 pb-2 shrink-0">
           <SectionTitle color="#C9943A40">الإدارة</SectionTitle>
           <div className="space-y-0.5 mt-1">
@@ -182,16 +163,16 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
       )}
 
       {/* Divider */}
-      {isStaff && (
+      {showAdminNav && (
         <div className="mx-4 my-2 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }} />
       )}
 
       {/* ── Trading nav ── */}
       <div className="px-3 pt-2 pb-2 shrink-0">
-        <SectionTitle>{isStaff ? 'التداول' : 'التحليل'}</SectionTitle>
+        <SectionTitle>{showAdminNav ? 'التداول' : 'التحليل'}</SectionTitle>
         <div className="space-y-0.5 mt-1">
-          {NAV_TRADING.slice(0, isStaff ? 4 : 4).map(item => (
-            <NavLink key={item.href} {...item} accent={isStaff ? '#60A5FA' : '#C9943A'} />
+          {NAV_TRADING.slice(0, 4).map(item => (
+            <NavLink key={item.href} {...item} accent={showAdminNav ? '#60A5FA' : '#C9943A'} />
           ))}
         </div>
       </div>
@@ -200,7 +181,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
         <SectionTitle>البيانات</SectionTitle>
         <div className="space-y-0.5 mt-1">
           {NAV_TRADING.slice(4).map(item => (
-            <NavLink key={item.href} {...item} accent={isStaff ? '#60A5FA' : '#C9943A'} />
+            <NavLink key={item.href} {...item} accent={showAdminNav ? '#60A5FA' : '#C9943A'} />
           ))}
         </div>
       </div>
@@ -210,21 +191,16 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
       {/* ── User footer ── */}
       <div className="px-4 py-4 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
         <div className="flex items-center gap-3">
-          {/* Avatar */}
           <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
-            style={{ background: `${roleColor}15`, color: roleColor, border: `1px solid ${roleColor}30` }}>
+            style={{ background: `${ROLE_COLOR_MAP[userRole] ?? '#4A5568'}15`, color: ROLE_COLOR_MAP[userRole] ?? '#4A5568', border: `1px solid ${ROLE_COLOR_MAP[userRole] ?? '#4A5568'}30` }}>
             {userName.charAt(0).toUpperCase()}
           </div>
-
-          {/* Name */}
           <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold text-white truncate leading-tight">{userName}</div>
             <div className="text-xs font-mono mt-0.5" style={{ color: '#2D3748' }}>
-              {ROLE_LABEL_MAP[effectiveRole] ?? effectiveRole}
+              {ROLE_LABEL_MAP[userRole] ?? userRole}
             </div>
           </div>
-
-          {/* Logout */}
           <button
             onClick={logout}
             disabled={loggingOut}
@@ -282,7 +258,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
         {/* Top bar */}
-        <header className="flex items-center justify-between px-4 h-12 shrink-0"
+        <header className="flex items-center justify-between px-4 h-12 shrink-0 gap-3"
           style={{ background: 'rgba(8,16,26,0.95)', borderBottom: '1px solid rgba(255,255,255,0.04)', backdropFilter: 'blur(10px)' }}>
 
           <button onClick={() => setMobileOpen(true)} className="lg:hidden p-1.5 rounded-lg"
@@ -294,8 +270,60 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
 
           <MarketClock />
 
-          {/* Staff toggle: go to admin or trading view */}
-          {isStaff && (
+          {/* ── Admin role preview switcher (header, admin-only) ── */}
+          {canPreview && (
+            <div className="relative flex items-center gap-2">
+              {/* Preview mode banner */}
+              {isPreviewing && (
+                <button onClick={() => switchPreview(userRole)}
+                        className="text-xs px-2.5 py-1 rounded-lg font-mono transition-all"
+                        style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.25)', color: '#60A5FA' }}>
+                  ← مدير
+                </button>
+              )}
+
+              <button onClick={() => setSwitcherOpen(v => !v)}
+                      className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg font-mono transition-all"
+                      style={{
+                        background: isPreviewing ? 'rgba(96,165,250,0.08)' : 'rgba(201,148,58,0.08)',
+                        border:     isPreviewing ? '1px solid rgba(96,165,250,0.2)' : '1px solid rgba(201,148,58,0.2)',
+                        color:      isPreviewing ? '#60A5FA' : '#C9943A',
+                      }}>
+                <span>{ROLE_ICON_MAP[effectiveRole] ?? '◎'}</span>
+                <span>{ROLE_LABEL_MAP[effectiveRole] ?? effectiveRole}</span>
+                <span style={{ color: '#2D3748' }}>⇅</span>
+              </button>
+
+              {switcherOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setSwitcherOpen(false)} />
+                  <div className="absolute top-full left-0 mt-2 w-44 rounded-xl overflow-hidden z-50"
+                       style={{ background: '#0D1B2A', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
+                    <div className="px-3 py-2 text-xs font-mono" style={{ color: '#2D3748', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      معاينة كـ…
+                    </div>
+                    {(['admin', 'moderator', 'user'] as const).map(r => (
+                      <button key={r} onClick={() => switchPreview(r)}
+                              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-mono transition-all"
+                              style={{
+                                background: r === effectiveRole ? `${ROLE_COLOR_MAP[r] ?? '#4A5568'}12` : 'transparent',
+                                color:      r === effectiveRole ? ROLE_COLOR_MAP[r] ?? '#4A5568' : '#4A5568',
+                                borderBottom: '1px solid rgba(255,255,255,0.04)',
+                              }}>
+                        <span>{ROLE_ICON_MAP[r] ?? '◎'}</span>
+                        <span>{ROLE_LABEL_MAP[r] ?? r}</span>
+                        {r === userRole && <span className="mr-auto text-xs" style={{ color: '#1A2A3A' }}>أساسي</span>}
+                        {r === effectiveRole && <span className="mr-auto text-xs" style={{ color: ROLE_COLOR_MAP[r] }}>●</span>}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Non-preview: quick admin/trading links for staff */}
+          {isStaff && !canPreview && (
             <div className="hidden sm:flex items-center gap-2">
               <Link href="/v2"
                 className="text-xs px-3 py-1.5 rounded-lg transition-all font-mono"
@@ -319,7 +347,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
         {/* Mobile bottom nav */}
         <nav className="lg:hidden shrink-0 flex items-center justify-around px-1 py-2"
           style={{ background: '#08101A', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-          {(isStaff ? [
+          {(showAdminNav ? [
             { href: '/v2/admin',   icon: '⊞', label: 'الإدارة',  exact: true  },
             { href: '/v2',         icon: '◈', label: 'التداول',  exact: true  },
             { href: '/v2/analyze', icon: '⬡', label: 'التحليل', exact: false },
@@ -367,7 +395,7 @@ function MarketClock() {
   }, [])
 
   return (
-    <div className="flex items-center gap-2 text-xs">
+    <div className="flex items-center gap-2 text-xs flex-1">
       {info.status === 'مفتوح' && (
         <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: info.color }} />
       )}

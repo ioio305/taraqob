@@ -276,6 +276,12 @@ export default function V2Dashboard() {
                 <Sk w="w-full" h="h-10" />
                 <Sk w="w-full" h="h-10" />
               </div>
+            ) : m.sess?.high == null && m.sess?.low == null ? (
+              <div className="py-4 text-center">
+                <div className="text-xs font-mono" style={{ color: '#2D3748' }}>
+                  لا تتوفر بيانات قبل افتتاح الجلسة
+                </div>
+              </div>
             ) : (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between rounded-lg px-3 py-2.5"
