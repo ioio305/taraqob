@@ -7,55 +7,69 @@ import {
   IChartApi, ISeriesApi, Time,
 } from 'lightweight-charts'
 import Link from 'next/link'
+import type { StrategyResult } from '@/lib/v2/strategyEngine'
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-interface Strategy {
-  strategyLabel: string
-  strategyReason: string
-  entry: number
-  entryConservative: number
-  entryBalanced: number
-  entryConservativeTotal: number
-  entryBalancedTotal: number
-  stopPrice: number
-  stopTotal: number
-  stopLoss: number
-  stopSpxLevel: number | null
-  t1Price: number; t1Total: number; t1Profit: number; t1SpxLevel: number | null; t1InEM: boolean
-  t2Price: number; t2Total: number; t2Profit: number; t2SpxLevel: number | null; t2InEM: boolean
-  t3Price: number | null; t3Total: number | null; t3Profit: number | null; t3SpxLevel: number | null; t3InEM: boolean | null
-  cancelCondition: string
-  earlyExitCondition: string
-  postT1Action: string
-}
-interface Snap {
-  symbol: string; type: 'call' | 'put'; strike: number; expiration: string; dte: number
-  is_estimated: boolean
-  bid: number; ask: number; mid: number; last: number | null
-  spread_abs: number; spread_pct: number
-  volume: number; open_interest: number
-  delta: number | null; gamma: number | null; theta: number | null; vega: number | null; iv: number | null
-  spx_price: number; spx_change_pct: number; vix: number
-  vwap: number | null; em_upper: number; em_lower: number; em_intraday: number
+// ── Types ──────────────────────────────────────────────────────────────────────
+
+interface ConsoleSnap {
+  symbol: string
+  type: 'call' | 'put'
+  strike: number
+  expiration: string
+  dte: number
+  market_open: boolean
+  bid: number | null
+  ask: number | null
+  mid: number | null
+  last: number | null
+  spread_abs: number | null
+  spread_pct: number | null
+  volume: number
+  open_interest: number
+  delta: number | null
+  gamma: number | null
+  theta: number | null
+  vega: number | null
+  iv: number | null
+  spx_price: number
+  spx_change_pct: number
+  vix: number
+  vwap: number | null
+  or_high: number | null
+  or_low: number | null
+  em_upper: number
+  em_lower: number
+  em_intraday: number
   is_itm: boolean
   total_score: number
-  decision: 'execute' | 'conditional' | 'watch' | 'reject'
+  score_breakdown: { e1: number; e2: number; e3: number; e4: number; e5: number; e6: number; e7: number }
+  decision: 'conditional' | 'watch' | 'no_entry'
   decision_reason: string
-  liquidity_label: string; spread_label: string
-  risk_flags: string[]
-  strategy: Strategy
+  liquidity_label: string
+  spread_label: string
+  warnings: string[]
+  strategy: StrategyResult
   ts: number
 }
+
+interface FrozenPlan {
+  snap: ConsoleSnap
+  entryMid: number
+  spxAtLock: number
+}
+
 interface MidPoint { ts: number; mid: number }
-interface Candle1m { time: number; open: number; high: number; low: number; close: number }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function minuteKey(ts: number) { return Math.floor(ts / 60000) * 60000 }
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
-function buildCandles(history: MidPoint[]): Candle1m[] {
-  const map = new Map<number, Candle1m>()
+const TF_OPTIONS = [1, 3, 5, 15, 30] as const
+type TF = typeof TF_OPTIONS[number]
+
+function buildCandles(history: MidPoint[], tfMinutes: number) {
+  const bucketMs = tfMinutes * 60 * 1000
+  const map = new Map<number, { time: number; open: number; high: number; low: number; close: number }>()
   for (const { ts, mid } of history) {
-    const key = minuteKey(ts)
+    const key = Math.floor(ts / bucketMs) * bucketMs
     const ex = map.get(key)
     if (!ex) map.set(key, { time: key, open: mid, high: mid, low: mid, close: mid })
     else { ex.high = Math.max(ex.high, mid); ex.low = Math.min(ex.low, mid); ex.close = mid }
@@ -84,77 +98,111 @@ function scoreColor(s: number) {
   return '#ef4444'
 }
 
-function decisionMeta(d: Snap['decision']) {
-  if (d === 'execute')     return { label: 'نفّذ الآن', bg: 'bg-emerald-500/20', border: 'border-emerald-500', text: 'text-emerald-300', icon: '▲' }
-  if (d === 'conditional') return { label: 'مشروط', bg: 'bg-yellow-500/20', border: 'border-yellow-500', text: 'text-yellow-300', icon: '◎' }
+function decisionMeta(d: ConsoleSnap['decision']) {
+  if (d === 'conditional') return { label: 'دخول مشروط', bg: 'bg-yellow-500/20', border: 'border-yellow-500', text: 'text-yellow-300', icon: '◎' }
   if (d === 'watch')       return { label: 'راقب', bg: 'bg-blue-500/20', border: 'border-blue-500', text: 'text-blue-300', icon: '◷' }
   return { label: 'لا تدخل', bg: 'bg-red-500/20', border: 'border-red-600', text: 'text-red-300', icon: '✕' }
 }
 
 function pnlColor(v: number) { return v >= 0 ? 'text-emerald-400' : 'text-red-400' }
-function fmt(v: number | null, d = 2) { return v == null ? '—' : v.toFixed(d) }
-function fmtPnl(v: number | null) {
-  if (v == null) return '—'
-  return (v >= 0 ? '+$' : '-$') + Math.abs(v).toLocaleString()
-}
+function fmt(v: number | null, d = 2) { return v == null ? 'غير متاح' : v.toFixed(d) }
+function fmtPnl(v: number) { return (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(0) }
 
-// ── Main component ────────────────────────────────────────────────────────────
+// ── Component ──────────────────────────────────────────────────────────────────
+
 export default function ConsolePage() {
-  // Input state
+  // Expiry
+  const [expirations, setExpirations] = useState<string[]>([])
+  const [expiry, setExpiry]           = useState('')
+  const [expLoading, setExpLoading]   = useState(true)
+
+  // Input
   const [inputMode, setInputMode] = useState<'strike' | 'occ'>('strike')
   const [strike, setStrike]       = useState('')
-  const [type, setType]           = useState<'call' | 'put'>('call')
+  const [optType, setOptType]     = useState<'call' | 'put'>('call')
   const [occInput, setOccInput]   = useState('')
-  const [queried, setQueried]     = useState(false)
+  const [tf, setTf]               = useState<TF>(1)
 
-  // Data state
-  const [snap, setSnap]           = useState<Snap | null>(null)
-  const [loading, setLoading]     = useState(false)
-  const [error, setError]         = useState('')
+  // Data
+  const [frozenPlan, setFrozenPlan] = useState<FrozenPlan | null>(null)
+  const [liveSnap, setLiveSnap]     = useState<ConsoleSnap | null>(null)
+  const [loading, setLoading]       = useState(false)
+  const [error, setError]           = useState('')
+  const [isStale, setIsStale]       = useState(false)
+  const [chartResetKey, setChartResetKey] = useState(0)
 
-  // Candle accumulation (client-side)
-  const midHistory  = useRef<MidPoint[]>([])
-  const pollTimer   = useRef<ReturnType<typeof setInterval> | null>(null)
-  const contractKey = useRef('')   // resets chart when contract changes
+  // Refs
+  const midHistory    = useRef<MidPoint[]>([])
+  const pollTimer     = useRef<ReturnType<typeof setInterval> | null>(null)
+  const planRef       = useRef<FrozenPlan | null>(null)
+  const planLocked    = useRef(false)
+  const contractKey   = useRef('')
 
   // Chart refs
-  const chartRef    = useRef<HTMLDivElement>(null)
-  const chartInst   = useRef<IChartApi | null>(null)
-  const candleS     = useRef<ISeriesApi<'Candlestick'> | null>(null)
-  const ema9S       = useRef<ISeriesApi<'Line'> | null>(null)
-  const ema21S      = useRef<ISeriesApi<'Line'> | null>(null)
-  const ema50S      = useRef<ISeriesApi<'Line'> | null>(null)
+  const chartRef  = useRef<HTMLDivElement>(null)
+  const chartInst = useRef<IChartApi | null>(null)
+  const candleS   = useRef<ISeriesApi<'Candlestick'> | null>(null)
+  const ema9S     = useRef<ISeriesApi<'Line'> | null>(null)
+  const ema21S    = useRef<ISeriesApi<'Line'> | null>(null)
 
-  // ── Trend / momentum from history ────────────────────────────────────────
-  const last5 = midHistory.current.slice(-5)
-  const midDelta = last5.length >= 2 ? last5[last5.length - 1].mid - last5[0].mid : 0
-  const midDeltaPct = last5[0]?.mid > 0 ? midDelta / last5[0].mid : 0
-  const trend = last5.length < 3 ? 'انتظار'
-    : midDeltaPct > 0.005 ? 'صاعد'
-    : midDeltaPct < -0.005 ? 'هابط'
-    : 'متذبذب'
-  const trendColor = trend === 'صاعد' ? 'text-emerald-400' : trend === 'هابط' ? 'text-red-400' : trend === 'متذبذب' ? 'text-yellow-400' : 'text-gray-400'
-  const momentum = Math.abs(midDeltaPct) > 0.02 ? 'قوي' : Math.abs(midDeltaPct) > 0.005 ? 'متوسط' : 'ضعيف'
-  const momentumColor = momentum === 'قوي' ? 'text-emerald-400' : momentum === 'متوسط' ? 'text-yellow-400' : 'text-gray-400'
+  // Keep planRef in sync
+  useEffect(() => { planRef.current = frozenPlan }, [frozenPlan])
 
-  // ── API fetch ─────────────────────────────────────────────────────────────
+  // Fetch expirations on mount
+  useEffect(() => {
+    fetch('/api/v2/console?mode=expirations')
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d.expirations) && d.expirations.length > 0) {
+          setExpirations(d.expirations)
+          setExpiry(d.expirations[0])
+        }
+      })
+      .catch(() => {})
+      .finally(() => setExpLoading(false))
+  }, [])
+
+  // Build API URL
   const buildUrl = useCallback(() => {
-    if (inputMode === 'occ') return `/api/v2/console?occ=${encodeURIComponent(occInput.trim())}`
-    return `/api/v2/console?strike=${encodeURIComponent(strike.trim())}&type=${type}`
-  }, [inputMode, occInput, strike, type])
+    if (inputMode === 'occ')
+      return `/api/v2/console?occ=${encodeURIComponent(occInput.trim())}`
+    const p = new URLSearchParams({ strike: strike.trim(), type: optType })
+    if (expiry) p.set('expiry', expiry)
+    return `/api/v2/console?${p}`
+  }, [inputMode, occInput, strike, optType, expiry])
 
-  const fetchSnap = useCallback(async (isFirst = false) => {
+  // Fetch one snap
+  const fetchSnap = useCallback(async (isFirst: boolean) => {
     if (isFirst) setLoading(true)
     setError('')
     try {
       const res = await fetch(buildUrl())
-      const d = await res.json()
-      if (d.error) { setError(d.error); return }
-      setSnap(d as Snap)
-      midHistory.current.push({ ts: Date.now(), mid: d.mid })
-      // trim to 2 hours of data
-      const cutoff = Date.now() - 2 * 60 * 60 * 1000
-      midHistory.current = midHistory.current.filter(p => p.ts >= cutoff)
+      const d   = await res.json()
+      if (d.error) {
+        setError(d.error)
+        return
+      }
+      const snap = d as ConsoleSnap
+
+      // Accumulate mid history
+      if (snap.mid != null) {
+        midHistory.current.push({ ts: Date.now(), mid: snap.mid })
+        const cutoff = Date.now() - 2 * 60 * 60 * 1000
+        midHistory.current = midHistory.current.filter(p => p.ts >= cutoff)
+      }
+
+      setLiveSnap(snap)
+
+      if (!planLocked.current) {
+        planLocked.current = true
+        const plan: FrozenPlan = { snap, entryMid: snap.mid ?? 0, spxAtLock: snap.spx_price }
+        setFrozenPlan(plan)
+        planRef.current = plan
+        setIsStale(false)
+      } else if (planRef.current) {
+        const drift = Math.abs(snap.spx_price - planRef.current.spxAtLock)
+        setIsStale(drift > planRef.current.snap.em_intraday * 0.30)
+      }
     } catch {
       setError('فشل الاتصال بالخادم')
     } finally {
@@ -162,53 +210,66 @@ export default function ConsolePage() {
     }
   }, [buildUrl])
 
+  const stopPolling = useCallback(() => {
+    if (pollTimer.current) { clearInterval(pollTimer.current); pollTimer.current = null }
+  }, [])
+
   const startLive = useCallback(() => {
-    if (pollTimer.current) clearInterval(pollTimer.current)
-    midHistory.current = []
+    stopPolling()
     fetchSnap(true)
     pollTimer.current = setInterval(() => fetchSnap(false), 2000)
-  }, [fetchSnap])
+  }, [fetchSnap, stopPolling])
 
   const handleSearch = useCallback(() => {
-    setQueried(true)
-    const key = inputMode === 'occ' ? occInput : `${strike}-${type}`
+    const key = inputMode === 'occ' ? occInput.trim() : `${strike}-${optType}-${expiry}`
     if (key !== contractKey.current) {
       contractKey.current = key
-      setSnap(null)
-      midHistory.current = []
+      midHistory.current  = []
+      planLocked.current  = false
+      planRef.current     = null
+      setFrozenPlan(null)
+      setLiveSnap(null)
+      setIsStale(false)
+      setChartResetKey(k => k + 1)
     }
     startLive()
-  }, [inputMode, occInput, strike, type, startLive])
+  }, [inputMode, occInput, strike, optType, expiry, startLive])
 
-  useEffect(() => () => { if (pollTimer.current) clearInterval(pollTimer.current) }, [])
+  const handleReanalyze = useCallback(() => {
+    midHistory.current = []
+    planLocked.current = false
+    planRef.current    = null
+    setFrozenPlan(null)
+    setIsStale(false)
+    setChartResetKey(k => k + 1)
+    startLive()
+  }, [startLive])
 
-  // ── Chart: build / update ─────────────────────────────────────────────────
+  useEffect(() => () => stopPolling(), [stopPolling])
+
+  // Init chart (resets on contract change)
   useEffect(() => {
     if (!chartRef.current) return
-
-    // Destroy old chart when contract changes
     if (chartInst.current) { chartInst.current.remove(); chartInst.current = null }
 
     const chart = createChart(chartRef.current, {
-      width:   chartRef.current.clientWidth,
-      height:  340,
-      layout:  { background: { type: ColorType.Solid, color: '#060D14' }, textColor: '#94a3b8' },
-      grid:    { vertLines: { color: '#0f1f2e' }, horzLines: { color: '#0f1f2e' } },
+      width:  chartRef.current.clientWidth,
+      height: 300,
+      layout: { background: { type: ColorType.Solid, color: '#060D14' }, textColor: '#94a3b8' },
+      grid:   { vertLines: { color: '#0f1f2e' }, horzLines: { color: '#0f1f2e' } },
       crosshair: { mode: CrosshairMode.Normal },
       timeScale: { borderColor: '#1e3a50', timeVisible: true },
       rightPriceScale: { borderColor: '#1e3a50' },
       localization: { priceFormatter: (v: number) => '$' + v.toFixed(2) },
     })
     chartInst.current = chart
-
-    candleS.current  = chart.addSeries(CandlestickSeries, {
+    candleS.current   = chart.addSeries(CandlestickSeries, {
       upColor: '#22c55e', downColor: '#ef4444',
       borderUpColor: '#22c55e', borderDownColor: '#ef4444',
       wickUpColor: '#22c55e', wickDownColor: '#ef4444',
     })
-    ema9S.current    = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 1, title: 'EMA9' })
-    ema21S.current   = chart.addSeries(LineSeries, { color: '#06b6d4', lineWidth: 1, title: 'EMA21' })
-    ema50S.current   = chart.addSeries(LineSeries, { color: '#a855f7', lineWidth: 1, title: 'EMA50' })
+    ema9S.current  = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 1, title: 'EMA9'  })
+    ema21S.current = chart.addSeries(LineSeries, { color: '#06b6d4', lineWidth: 1, title: 'EMA21' })
 
     const ro = new ResizeObserver(() => {
       if (chartRef.current) chart.applyOptions({ width: chartRef.current.clientWidth })
@@ -216,73 +277,57 @@ export default function ConsolePage() {
     ro.observe(chartRef.current)
     return () => { ro.disconnect(); chart.remove(); chartInst.current = null }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queried])
+  }, [chartResetKey])
 
-  // Update chart data when history changes
+  // Update chart when snap or TF changes
   useEffect(() => {
-    if (!snap || !candleS.current || !ema9S.current) return
-    const candles = buildCandles(midHistory.current)
+    if (!liveSnap || !candleS.current) return
+    const candles = buildCandles(midHistory.current, tf)
     if (candles.length === 0) return
 
-    const cdata = candles.map(c => ({
-      time:  (c.time / 1000) as Time,
-      open:  c.open, high: c.high, low: c.low, close: c.close,
-    }))
-    candleS.current.setData(cdata)
+    candleS.current.setData(candles.map(c => ({
+      time: (c.time / 1000) as Time,
+      open: c.open, high: c.high, low: c.low, close: c.close,
+    })))
 
     const closes = candles.map(c => c.close)
     const e9  = emaArr(closes, 9)
     const e21 = emaArr(closes, 21)
-    const e50 = emaArr(closes, 50)
-
     ema9S.current?.setData(
-      candles.filter((_, i) => e9[i] != null).map((c, ii) => ({ time: (c.time/1000) as Time, value: e9[ii]! }))
+      candles.filter((_, i) => e9[i]  != null).map((c, i) => ({ time: (c.time/1000) as Time, value: e9[i]!  }))
     )
     ema21S.current?.setData(
-      candles.filter((_, i) => e21[i] != null).map((c, ii) => ({ time: (c.time/1000) as Time, value: e21[ii]! }))
-    )
-    ema50S.current?.setData(
-      candles.filter((_, i) => e50[i] != null).map((c, ii) => ({ time: (c.time/1000) as Time, value: e50[ii]! }))
+      candles.filter((_, i) => e21[i] != null).map((c, i) => ({ time: (c.time/1000) as Time, value: e21[i]! }))
     )
 
-    // Price lines: entry / T1 / T2 / stop
-    const s = snap.strategy
-    if (s && candleS.current) {
+    // Price lines from frozen plan (only added once — ignore errors on repeat)
+    if (frozenPlan && candleS.current) {
+      const s = frozenPlan.snap.strategy
       try {
-        // Remove all existing price lines by recreating the series is not ideal
-        // Instead just update (lightweight-charts doesn't have removeAllPriceLines)
-        // We rely on the series being rebuilt on contract change
         candleS.current.createPriceLine({ price: s.entryConservative, color: '#60a5fa', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'دخول' })
-        candleS.current.createPriceLine({ price: s.t1Price,  color: '#22c55e', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'هدف١' })
+        candleS.current.createPriceLine({ price: s.t1Price,  color: '#22c55e', lineWidth: 1, lineStyle: LineStyle.Dashed,       axisLabelVisible: true, title: 'هدف١' })
         candleS.current.createPriceLine({ price: s.t2Price,  color: '#a3e635', lineWidth: 1, lineStyle: LineStyle.SparseDotted, axisLabelVisible: true, title: 'هدف٢' })
-        candleS.current.createPriceLine({ price: s.stopPrice,color: '#ef4444', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'وقف' })
-      } catch { /* lines already exist */ }
+        candleS.current.createPriceLine({ price: s.stopPrice,color: '#ef4444', lineWidth: 1, lineStyle: LineStyle.Dashed,       axisLabelVisible: true, title: 'وقف'  })
+      } catch { /* lines already drawn */ }
     }
 
     chartInst.current?.timeScale().fitContent()
-
-    // Signal markers
-    if (candles.length > 0 && candleS.current) {
-      const last = candles[candles.length - 1]
-      const markers: any[] = []
-      if (snap.decision === 'execute') {
-        markers.push({ time: (last.time/1000) as Time, position: 'belowBar', color: '#22c55e', shape: 'arrowUp', text: 'دخول' })
-      } else if (snap.decision === 'reject') {
-        markers.push({ time: (last.time/1000) as Time, position: 'aboveBar', color: '#ef4444', shape: 'arrowDown', text: 'خروج' })
-      }
-      if (snap.spread_pct > 30) {
-        markers.push({ time: (last.time/1000) as Time, position: 'aboveBar', color: '#f59e0b', shape: 'circle', text: 'Spread' })
-      }
-      if (markers.length > 0) candleS.current.setMarkers(markers)
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snap])
+  }, [liveSnap, tf, frozenPlan])
 
-  // ── Render ────────────────────────────────────────────────────────────────
-  const dm = snap ? decisionMeta(snap.decision) : null
-  const st = snap?.strategy
-  const hasCandles = midHistory.current.length >= 2
+  // ── Derived ─────────────────────────────────────────────────────────────────
+  const snap = liveSnap
+  const plan = frozenPlan
+  const dm   = snap ? decisionMeta(snap.decision) : null
+  const st   = plan?.snap.strategy ?? null
 
+  const liveMid    = snap?.mid ?? null
+  const entryMid   = plan?.entryMid ?? null
+  const livePnl    = liveMid != null && entryMid != null ? (liveMid - entryMid) * 100 : null
+  const livePnlPct = liveMid != null && entryMid != null && entryMid > 0
+    ? (liveMid - entryMid) / entryMid * 100 : null
+
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#060D14] text-white" dir="rtl">
       <div className="max-w-3xl mx-auto p-4 space-y-4">
@@ -292,48 +337,92 @@ export default function ConsolePage() {
           <Link href="/v2" className="text-[#C9943A] hover:text-[#E8D5A3] text-sm">← لوحة التحكم</Link>
           <div>
             <h1 className="text-xl font-bold text-[#E8D5A3]">كونسول عقود SPX</h1>
-            <p className="text-xs text-gray-500">تحليل لحظي لأي عقد خيارات SPX</p>
+            <p className="text-xs text-gray-500">تحليل لحظي — تحديث كل 2 ثانية</p>
           </div>
         </div>
 
-        {/* Input card */}
+        {/* ── Input ──────────────────────────────────────────────────────────── */}
         <div className="bg-[#0d1f2e] rounded-2xl p-4 border border-[#1e3a50] space-y-3">
-          {/* Mode toggle */}
+          {/* Input mode toggle */}
           <div className="flex gap-2">
-            <button onClick={() => setInputMode('strike')}
-              className={`px-3 py-1 rounded-lg text-sm font-bold transition-colors ${inputMode==='strike' ? 'bg-[#C9943A] text-[#060D14]' : 'bg-[#1a3a54] text-gray-300'}`}>
-              رقم السترايك
-            </button>
-            <button onClick={() => setInputMode('occ')}
-              className={`px-3 py-1 rounded-lg text-sm font-bold transition-colors ${inputMode==='occ' ? 'bg-[#C9943A] text-[#060D14]' : 'bg-[#1a3a54] text-gray-300'}`}>
-              رمز العقد الكامل
-            </button>
+            {(['strike', 'occ'] as const).map(m => (
+              <button key={m} onClick={() => setInputMode(m)}
+                className={`px-3 py-1 rounded-lg text-sm font-bold transition-colors ${inputMode === m ? 'bg-[#C9943A] text-[#060D14]' : 'bg-[#1a3a54] text-gray-300'}`}>
+                {m === 'strike' ? 'رقم السترايك' : 'رمز العقد OCC'}
+              </button>
+            ))}
           </div>
 
           {inputMode === 'strike' ? (
             <div className="flex gap-2 flex-wrap">
-              <input type="number" value={strike} onChange={e => setStrike(e.target.value)}
-                placeholder="مثال: 5500" onKeyDown={e => e.key==='Enter' && handleSearch()}
-                className="flex-1 min-w-32 bg-[#060D14] border border-[#1e3a50] rounded-xl px-3 py-2 text-white text-sm placeholder-gray-600 text-left" />
-              <button onClick={() => setType('call')}
-                className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${type==='call' ? 'bg-emerald-600 text-white' : 'bg-[#1a3a54] text-gray-300'}`}>
+              <span className="flex items-center px-3 bg-[#1a3a54] rounded-xl text-[#C9943A] font-bold text-sm shrink-0">
+                SPX
+              </span>
+              <input
+                type="text" inputMode="numeric"
+                value={strike}
+                onChange={e => setStrike(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="5500"
+                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                className="flex-1 min-w-24 bg-[#060D14] border border-[#1e3a50] rounded-xl px-3 py-2 text-white text-sm placeholder-gray-600 text-left"
+              />
+              <button onClick={() => setOptType('call')}
+                className={`px-3 py-2 rounded-xl text-sm font-bold transition-colors ${optType === 'call' ? 'bg-emerald-600 text-white' : 'bg-[#1a3a54] text-gray-300'}`}>
                 Call ▲
               </button>
-              <button onClick={() => setType('put')}
-                className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${type==='put' ? 'bg-red-600 text-white' : 'bg-[#1a3a54] text-gray-300'}`}>
+              <button onClick={() => setOptType('put')}
+                className={`px-3 py-2 rounded-xl text-sm font-bold transition-colors ${optType === 'put' ? 'bg-red-600 text-white' : 'bg-[#1a3a54] text-gray-300'}`}>
                 Put ▼
               </button>
             </div>
           ) : (
-            <input type="text" value={occInput} onChange={e => setOccInput(e.target.value)}
-              placeholder="مثال: SPXW241220C05500000" onKeyDown={e => e.key==='Enter' && handleSearch()}
-              className="w-full bg-[#060D14] border border-[#1e3a50] rounded-xl px-3 py-2 text-white text-sm placeholder-gray-600 font-mono text-left" />
+            <input
+              type="text" value={occInput}
+              onChange={e => setOccInput(e.target.value.toUpperCase())}
+              placeholder="SPXW250620C05500000"
+              onKeyDown={e => e.key === 'Enter' && handleSearch()}
+              className="w-full bg-[#060D14] border border-[#1e3a50] rounded-xl px-3 py-2 text-white text-sm placeholder-gray-600 font-mono text-left"
+            />
           )}
 
-          <button onClick={handleSearch} disabled={loading || (!strike && !occInput)}
+          {/* Expiry selector (strike mode only) */}
+          {inputMode === 'strike' && (
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500 text-xs shrink-0">تاريخ الانتهاء:</span>
+              {expLoading ? (
+                <span className="text-gray-600 text-xs">جارٍ التحميل...</span>
+              ) : (
+                <select
+                  value={expiry}
+                  onChange={e => setExpiry(e.target.value)}
+                  className="flex-1 bg-[#060D14] border border-[#1e3a50] rounded-xl px-3 py-1.5 text-white text-sm font-mono"
+                >
+                  {expirations.map(d => <option key={d} value={d}>{d}</option>)}
+                  {expirations.length === 0 && <option value="">لا تواريخ متاحة</option>}
+                </select>
+              )}
+            </div>
+          )}
+
+          {/* Candle TF selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-gray-500 text-xs shrink-0">فريم الشمعة:</span>
+            <div className="flex gap-1">
+              {TF_OPTIONS.map(t => (
+                <button key={t} onClick={() => setTf(t)}
+                  className={`px-2 py-1 rounded-lg text-xs font-bold transition-colors ${tf === t ? 'bg-[#C9943A] text-[#060D14]' : 'bg-[#1a3a54] text-gray-300'}`}>
+                  {t}م
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button
+            onClick={handleSearch}
+            disabled={loading || (inputMode === 'strike' ? !strike : !occInput)}
             className="w-full py-2.5 rounded-xl font-bold text-sm transition-colors disabled:opacity-50"
             style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
-            {loading ? 'جارٍ التحليل...' : '🔍 تحليل العقد — تحديث كل 2 ثانية'}
+            {loading ? 'جارٍ التحليل...' : '🔍 تحليل العقد'}
           </button>
         </div>
 
@@ -343,138 +432,153 @@ export default function ConsolePage() {
 
         {snap && (
           <>
-            {/* Warnings */}
-            {snap.is_estimated && (
-              <div className="bg-yellow-900/20 border border-yellow-700 rounded-xl p-3 text-sm text-yellow-300">
-                ⚡ البيانات غير كافية للتحليل اللحظي — تحليل تقديري (Black-Scholes)
-              </div>
-            )}
-            {snap.ask > 5 && (
-              <div className="bg-orange-900/20 border border-orange-600 rounded-xl p-3 text-sm text-orange-300">
-                ⚠ خارج نطاق السعر المفضل ($0.50–$5.00) — السعر ${snap.ask.toFixed(2)}
-              </div>
-            )}
-            {!hasCandles && (
-              <div className="bg-blue-900/20 border border-blue-700 rounded-xl p-3 text-sm text-blue-300">
-                ℹ لا تتوفر شموع حقيقية — يتم بناء شموع لحظية من تغير السعر الأوسط كل دقيقة
-              </div>
-            )}
-
-            {/* Contract badge */}
-            <div className="flex flex-wrap gap-2 text-xs">
-              <span className="px-2 py-1 rounded-lg bg-[#1a3a54] text-gray-300 font-mono">{snap.symbol}</span>
-              <span className={`px-2 py-1 rounded-lg font-bold ${snap.type==='call' ? 'bg-emerald-900/40 text-emerald-400' : 'bg-red-900/40 text-red-400'}`}>
-                {snap.type==='call' ? 'Call ▲' : 'Put ▼'} {snap.strike}
+            {/* ── Market status ──────────────────────────────────────────────── */}
+            <div className={`rounded-xl p-2.5 border text-xs flex items-center gap-2 ${
+              snap.market_open
+                ? 'bg-emerald-900/20 border-emerald-700 text-emerald-300'
+                : 'bg-gray-800/40 border-gray-700 text-gray-400'
+            }`}>
+              <span className={`w-2 h-2 rounded-full inline-block shrink-0 ${snap.market_open ? 'bg-emerald-400 animate-pulse' : 'bg-gray-500'}`} />
+              <span>{snap.market_open ? 'السوق مفتوح — بيانات لحظية' : 'السوق مغلق — آخر أسعار متاحة'}</span>
+              <span className="mr-auto font-mono text-[11px]">
+                SPX {snap.spx_price.toFixed(1)} ({snap.spx_change_pct >= 0 ? '+' : ''}{snap.spx_change_pct.toFixed(2)}%)
+                · VIX {snap.vix.toFixed(1)}
               </span>
-              <span className="px-2 py-1 rounded-lg bg-[#1a3a54] text-gray-400">{snap.expiration} · DTE {snap.dte}</span>
-              <span className="px-2 py-1 rounded-lg bg-[#1a3a54] text-gray-400">SPX {snap.spx_price.toFixed(0)}</span>
             </div>
 
-            {/* ── Decision Card ───────────────────────────────────────────── */}
-            {dm && (
-              <div className={`rounded-2xl p-4 border ${dm.bg} ${dm.border}`}>
-                <div className="flex items-center gap-3 mb-2">
-                  <span className={`text-4xl font-black leading-none`} style={{ color: scoreColor(snap.total_score) }}>
-                    {snap.total_score}
-                  </span>
-                  <div>
-                    <div className={`text-xl font-black ${dm.text}`}>{dm.icon} {dm.label}</div>
-                    <div className="text-xs text-gray-400 mt-0.5">{snap.decision_reason}</div>
-                  </div>
-                  <div className="mr-auto text-right">
-                    <div className="text-xs text-gray-500">آخر تحديث</div>
-                    <div className="text-xs font-mono text-gray-400">{new Date(snap.ts).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</div>
-                  </div>
-                </div>
-                {st && (
-                  <div className="text-xs text-gray-400 border-t border-white/10 pt-2 mt-2">
-                    استراتيجية: <span className="text-[#E8D5A3] font-bold">{st.strategyLabel}</span> — {st.strategyReason}
-                  </div>
-                )}
+            {/* Stale plan warning */}
+            {isStale && (
+              <div className="bg-orange-900/30 border border-orange-500 text-orange-300 rounded-xl p-3 text-sm flex items-center gap-3">
+                <span>⚠ تحركت SPX بشكل ملحوظ عن سعر الخطة — يُنصح بإعادة التحليل</span>
+                <button onClick={handleReanalyze}
+                  className="mr-auto bg-orange-500 text-black px-3 py-1 rounded-lg text-xs font-bold shrink-0">
+                  أعد التحليل
+                </button>
               </div>
             )}
 
-            {/* ── Chart ──────────────────────────────────────────────────── */}
+            {/* Contract badges */}
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className="px-2 py-1 rounded-lg bg-[#1a3a54] text-gray-300 font-mono">{snap.symbol}</span>
+              <span className={`px-2 py-1 rounded-lg font-bold ${snap.type === 'call' ? 'bg-emerald-900/40 text-emerald-400' : 'bg-red-900/40 text-red-400'}`}>
+                {snap.type === 'call' ? 'Call ▲' : 'Put ▼'} · {snap.strike.toLocaleString()}
+              </span>
+              <span className="px-2 py-1 rounded-lg bg-[#1a3a54] text-gray-400">{snap.expiration} · DTE {snap.dte}</span>
+              {snap.is_itm && (
+                <span className="px-2 py-1 rounded-lg bg-red-900/50 text-red-400 font-bold">ITM ⚠</span>
+              )}
+            </div>
+
+            {/* ── Decision card ──────────────────────────────────────────────── */}
+            {dm && plan && (
+              <div className={`rounded-2xl p-4 border ${dm.bg} ${dm.border}`}>
+                <div className="flex items-start gap-4">
+                  <div className="text-5xl font-black leading-none shrink-0" style={{ color: scoreColor(plan.snap.total_score) }}>
+                    {plan.snap.total_score}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className={`text-2xl font-black ${dm.text}`}>{dm.icon} {dm.label}</div>
+                    <div className="text-xs text-gray-400 mt-1">{plan.snap.decision_reason}</div>
+                    {st && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        استراتيجية: <span className="text-[#E8D5A3] font-bold">{st.strategyLabel}</span> — {st.strategyReason}
+                      </div>
+                    )}
+                  </div>
+                  {/* Live P&L */}
+                  {livePnl != null && (
+                    <div className={`text-right shrink-0 ${pnlColor(livePnl)}`}>
+                      <div className="text-lg font-black">{fmtPnl(livePnl)}</div>
+                      {livePnlPct != null && (
+                        <div className="text-[10px] text-gray-500">
+                          {livePnlPct >= 0 ? '+' : ''}{livePnlPct.toFixed(1)}%
+                        </div>
+                      )}
+                      <div className="text-[10px] text-gray-600">ربح/خسارة</div>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-2 text-[10px] text-gray-700 font-mono text-left">
+                  {new Date(snap.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </div>
+              </div>
+            )}
+
+            {/* ── Chart ─────────────────────────────────────────────────────── */}
             <div className="rounded-2xl overflow-hidden border border-[#1e3a50]">
-              <div className="px-3 py-2 border-b border-[#1e3a50] flex items-center gap-4 text-xs text-gray-400">
-                <span className="text-[#E8D5A3] font-bold text-sm">شموع العقد — 1 دقيقة</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#f59e0b] inline-block"></span>EMA 9</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#06b6d4] inline-block"></span>EMA 21</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#a855f7] inline-block"></span>EMA 50</span>
-                <span className="mr-auto text-gray-600 text-[11px]">مبنية من بيانات لحظية مجمعة</span>
+              <div className="px-3 py-2 border-b border-[#1e3a50] flex items-center gap-3 text-xs text-gray-400">
+                <span className="text-[#E8D5A3] font-bold text-sm">شموع العقد</span>
+                <span className="bg-[#1a3a54] px-2 py-0.5 rounded text-gray-300 font-bold">{tf}م</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#f59e0b] inline-block" />EMA9</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#06b6d4] inline-block" />EMA21</span>
+                <span className="mr-auto text-gray-700 text-[11px]">مبنية من تغير السعر الأوسط</span>
               </div>
               <div ref={chartRef} className="w-full" />
-              {!hasCandles && (
-                <div className="text-center text-gray-600 text-xs py-6">
+              {midHistory.current.length < 2 && (
+                <div className="text-center text-gray-700 text-xs py-4 border-t border-[#1e3a50]">
                   جارٍ جمع البيانات — ستظهر الشموع تلقائياً
                 </div>
               )}
             </div>
 
-            {/* ── Quick readings ──────────────────────────────────────────── */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[
-                { label: 'الاتجاه', value: trend, color: trendColor },
-                { label: 'الزخم', value: momentum, color: momentumColor },
-                { label: 'السيولة', value: snap.liquidity_label, color: snap.liquidity_label==='جيدة' ? 'text-emerald-400' : snap.liquidity_label==='متوسطة' ? 'text-yellow-400' : 'text-red-400' },
-                { label: 'فرق السعر', value: snap.spread_label, color: snap.spread_label==='مقبول' ? 'text-emerald-400' : snap.spread_label==='مرتفع' ? 'text-yellow-400' : 'text-red-400' },
-              ].map(r => (
-                <div key={r.label} className="bg-[#0d1f2e] rounded-xl p-3 text-center border border-[#1e3a50]">
-                  <div className={`text-lg font-bold ${r.color}`}>{r.value}</div>
-                  <div className="text-xs text-gray-500 mt-1">{r.label}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* ── Current quote ────────────────────────────────────────────── */}
+            {/* ── Current price ─────────────────────────────────────────────── */}
             <div className="bg-[#0d1f2e] rounded-2xl p-4 border border-[#1e3a50]">
               <div className="text-sm font-bold text-[#E8D5A3] mb-3">سعر العقد الحالي</div>
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 text-center">
                 {[
-                  { label: 'العرض (Bid)', value: `$${fmt(snap.bid)}` },
-                  { label: 'الطلب (Ask)', value: `$${fmt(snap.ask)}` },
-                  { label: 'الوسط (Mid)', value: `$${fmt(snap.mid)}`, highlight: true },
-                  { label: 'آخر سعر', value: snap.last != null ? `$${fmt(snap.last)}` : '—' },
-                  { label: 'الحجم', value: snap.volume.toLocaleString() },
-                  { label: 'المراكز المفتوحة', value: snap.open_interest.toLocaleString() },
+                  { label: 'Bid', v: snap.bid != null ? `$${snap.bid.toFixed(2)}` : 'غير متاح' },
+                  { label: 'Ask', v: snap.ask != null ? `$${snap.ask.toFixed(2)}` : 'غير متاح' },
+                  { label: 'Mid', v: snap.mid != null ? `$${snap.mid.toFixed(2)}` : 'غير متاح', hl: true },
+                  { label: 'Last', v: snap.last != null ? `$${snap.last.toFixed(2)}` : 'غير متاح' },
+                  { label: 'Volume', v: snap.volume.toLocaleString() },
+                  { label: 'OI', v: snap.open_interest.toLocaleString() },
                 ].map(q => (
-                  <div key={q.label} className="text-center">
-                    <div className={`text-base font-bold ${q.highlight ? 'text-[#C9943A]' : 'text-white'}`}>{q.value}</div>
+                  <div key={q.label}>
+                    <div className={`text-base font-bold ${q.hl ? 'text-[#C9943A]' : 'text-white'}`}>{q.v}</div>
                     <div className="text-[10px] text-gray-500 mt-0.5">{q.label}</div>
                   </div>
                 ))}
               </div>
-              <div className="mt-3 flex gap-4 text-xs text-gray-500">
-                <span>الفرق: ${snap.spread_abs} ({snap.spread_pct.toFixed(1)}%)</span>
-                <span>SPX: {snap.spx_price.toFixed(1)} ({snap.spx_change_pct >= 0 ? '+' : ''}{snap.spx_change_pct.toFixed(2)}%)</span>
-                <span>VIX: {snap.vix.toFixed(1)}</span>
+              <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-500">
+                {snap.spread_abs != null && (
+                  <span>الفرق: ${snap.spread_abs} · {snap.spread_label}</span>
+                )}
+                {snap.vwap != null && <span>VWAP: <span className="text-blue-300">{snap.vwap.toFixed(1)}</span></span>}
+                {snap.or_high != null && <span>OR H: <span className="text-emerald-400">{snap.or_high}</span></span>}
+                {snap.or_low  != null && <span>OR L: <span className="text-red-400">{snap.or_low}</span></span>}
               </div>
             </div>
 
-            {/* ── Execution points ─────────────────────────────────────────── */}
-            {st && (
+            {/* ── Execution levels ───────────────────────────────────────────── */}
+            {st && plan && (
               <div className="bg-[#0d1f2e] rounded-2xl p-4 border border-[#1e3a50] space-y-3">
-                <div className="text-sm font-bold text-[#E8D5A3]">نقاط التنفيذ</div>
+                <div className="flex items-center gap-2">
+                  <div className="text-sm font-bold text-[#E8D5A3]">نقاط التنفيذ</div>
+                  <div className="text-[10px] text-gray-600 mr-auto">
+                    مقفلة على Mid = ${plan.entryMid.toFixed(2)} · SPX {plan.spxAtLock.toFixed(0)}
+                  </div>
+                </div>
 
-                {/* Entry */}
+                {/* Entry prices */}
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { label: 'دخول محافظ', price: st.entryConservative, total: st.entryConservativeTotal, color: '#60a5fa' },
+                    { label: 'دخول محافظ',  price: st.entryConservative, total: st.entryConservativeTotal, color: '#60a5fa' },
                     { label: 'دخول متوازن', price: st.entryBalanced,     total: st.entryBalancedTotal,     color: '#818cf8' },
                   ].map(e => (
-                    <div key={e.label} className="rounded-xl p-3 border" style={{ borderColor: e.color + '44', background: e.color + '11' }}>
+                    <div key={e.label} className="rounded-xl p-3 border"
+                      style={{ borderColor: e.color + '44', background: e.color + '11' }}>
                       <div className="text-xs text-gray-400 mb-1">{e.label}</div>
-                      <div className="text-lg font-bold" style={{ color: e.color }}>${e.price.toFixed(2)}</div>
+                      <div className="text-xl font-bold" style={{ color: e.color }}>${e.price.toFixed(2)}</div>
                       <div className="text-xs text-gray-500">×100 = ${e.total.toLocaleString()}</div>
                     </div>
                   ))}
                 </div>
 
-                {/* Targets table */}
+                {/* Levels table */}
                 <div className="rounded-xl overflow-hidden border border-[#1e3a50]">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="border-b border-[#1e3a50] text-gray-500">
+                      <tr className="border-b border-[#1e3a50] text-gray-500 bg-[#060D14]">
                         <td className="p-2">المستوى</td>
                         <td className="p-2 text-center">سعر العقد</td>
                         <td className="p-2 text-center">القيمة ×100</td>
@@ -484,19 +588,25 @@ export default function ConsolePage() {
                     </thead>
                     <tbody>
                       {[
-                        { label: 'هدف ١', price: st.t1Price, total: st.t1Total, pnl: st.t1Profit, spx: st.t1SpxLevel, inEM: st.t1InEM, color: '#22c55e' },
-                        { label: 'هدف ٢', price: st.t2Price, total: st.t2Total, pnl: st.t2Profit, spx: st.t2SpxLevel, inEM: st.t2InEM, color: '#a3e635' },
-                        ...(st.t3Price != null ? [{ label: 'هدف ٣', price: st.t3Price, total: st.t3Total!, pnl: st.t3Profit!, spx: st.t3SpxLevel, inEM: st.t3InEM!, color: '#facc15' }] : []),
+                        { label: 'هدف ١',      price: st.t1Price,   total: st.t1Total,   pnl: st.t1Profit,  spx: st.t1SpxLevel, inEM: st.t1InEM,   color: '#22c55e' },
+                        { label: 'هدف ٢',      price: st.t2Price,   total: st.t2Total,   pnl: st.t2Profit,  spx: st.t2SpxLevel, inEM: st.t2InEM,   color: '#a3e635' },
+                        ...(st.t3Price != null ? [{
+                          label: 'هدف ٣', price: st.t3Price, total: st.t3Total!, pnl: st.t3Profit!, spx: st.t3SpxLevel, inEM: st.t3InEM!, color: '#facc15'
+                        }] : []),
                         { label: 'وقف الخسارة', price: st.stopPrice, total: st.stopTotal, pnl: st.stopLoss, spx: st.stopSpxLevel, inEM: null, color: '#ef4444' },
                       ].map(r => (
                         <tr key={r.label} className="border-b border-[#1e3a50]/50">
                           <td className="p-2 font-bold" style={{ color: r.color }}>{r.label}</td>
-                          <td className="p-2 text-center text-white font-mono">${r.price.toFixed(2)}</td>
+                          <td className="p-2 text-center font-mono text-white">${r.price.toFixed(2)}</td>
                           <td className="p-2 text-center text-gray-300">${r.total.toLocaleString()}</td>
                           <td className={`p-2 text-center font-bold ${pnlColor(r.pnl)}`}>{fmtPnl(r.pnl)}</td>
                           <td className="p-2 text-center">
-                            {r.spx ? (
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${r.inEM===false ? 'bg-red-900/40 text-red-400' : r.inEM ? 'bg-emerald-900/40 text-emerald-400' : 'bg-[#1a3a54] text-gray-300'}`}>
+                            {r.spx != null ? (
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                r.inEM === false ? 'bg-red-900/40 text-red-400' :
+                                r.inEM          ? 'bg-emerald-900/40 text-emerald-400' :
+                                                  'bg-[#1a3a54] text-gray-300'
+                              }`}>
                                 {r.spx.toLocaleString()}
                               </span>
                             ) : '—'}
@@ -508,33 +618,31 @@ export default function ConsolePage() {
                 </div>
 
                 {/* Conditions */}
-                <div className="grid grid-cols-1 gap-2 text-xs">
-                  <div className="bg-[#1a3a54] rounded-lg p-2.5">
-                    <span className="text-gray-500">بعد هدف ١: </span>
-                    <span className="text-blue-300">{st.postT1Action}</span>
-                  </div>
-                  <div className="bg-[#1a3a54] rounded-lg p-2.5">
-                    <span className="text-gray-500">شرط الإلغاء: </span>
-                    <span className="text-yellow-300">{st.cancelCondition}</span>
-                  </div>
-                  <div className="bg-[#1a3a54] rounded-lg p-2.5">
-                    <span className="text-gray-500">الخروج المبكر: </span>
-                    <span className="text-orange-300">{st.earlyExitCondition}</span>
-                  </div>
+                <div className="space-y-1.5 text-xs">
+                  {[
+                    { label: 'بعد هدف ١:', value: st.postT1Action, color: 'text-blue-300' },
+                    { label: 'شرط الإلغاء:', value: st.cancelCondition, color: 'text-yellow-300' },
+                    { label: 'خروج مبكر:', value: st.earlyExitCondition, color: 'text-orange-300' },
+                  ].map(c => (
+                    <div key={c.label} className="bg-[#1a3a54] rounded-lg p-2.5">
+                      <span className="text-gray-500">{c.label} </span>
+                      <span className={c.color}>{c.value}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
 
             {/* ── Greeks ────────────────────────────────────────────────────── */}
             <div className="bg-[#0d1f2e] rounded-2xl p-4 border border-[#1e3a50]">
-              <div className="text-sm font-bold text-[#E8D5A3] mb-3">حساسيات العقد</div>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <div className="text-sm font-bold text-[#E8D5A3] mb-3">حساسيات العقد (Greeks)</div>
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
                 {[
-                  { label: 'Delta (Δ)', value: fmt(snap.delta, 3), sub: 'الحساسية' },
-                  { label: 'Gamma (Γ)', value: fmt(snap.gamma, 4), sub: 'التسارع' },
-                  { label: 'Theta (Θ)', value: fmt(snap.theta, 2), sub: 'التآكل اليومي' },
-                  { label: 'Vega (V)', value: fmt(snap.vega, 2), sub: 'حساسية IV' },
-                  { label: 'IV', value: snap.iv != null ? `${(snap.iv * 100).toFixed(1)}%` : '—', sub: 'التذبذب الضمني' },
+                  { label: 'Delta Δ', value: fmt(snap.delta, 3), sub: 'الحساسية' },
+                  { label: 'Gamma Γ', value: fmt(snap.gamma, 4), sub: 'التسارع' },
+                  { label: 'Theta Θ', value: fmt(snap.theta, 2), sub: 'التآكل اليومي' },
+                  { label: 'Vega V',  value: fmt(snap.vega, 2),  sub: 'حساسية IV' },
+                  { label: 'IV',      value: snap.iv != null ? `${(snap.iv * 100).toFixed(1)}%` : 'غير متاح', sub: 'التذبذب الضمني' },
                 ].map(g => (
                   <div key={g.label} className="text-center bg-[#060D14] rounded-xl p-2.5">
                     <div className="text-sm font-bold text-white font-mono">{g.value}</div>
@@ -545,23 +653,50 @@ export default function ConsolePage() {
               </div>
             </div>
 
-            {/* ── EM context ────────────────────────────────────────────────── */}
+            {/* ── EM context ─────────────────────────────────────────────────── */}
             <div className="bg-[#0d1f2e] rounded-xl p-3 border border-[#1e3a50] text-xs">
-              <div className="text-gray-400 mb-1 font-bold text-[#E8D5A3] text-sm">نطاق الحركة المتوقع (SPX)</div>
-              <div className="flex gap-4 flex-wrap">
+              <div className="text-[#E8D5A3] font-bold text-sm mb-2">نطاق الحركة المتوقع (SPX اليوم)</div>
+              <div className="flex flex-wrap gap-4">
                 <span>الحد العلوي: <span className="text-emerald-400 font-bold">{snap.em_upper}</span></span>
                 <span>الحد السفلي: <span className="text-red-400 font-bold">{snap.em_lower}</span></span>
                 <span>EM اليومي: <span className="text-[#C9943A] font-bold">±{snap.em_intraday.toFixed(0)}</span> نقطة</span>
-                {snap.vwap && <span>VWAP: <span className="text-blue-300 font-bold">{snap.vwap.toFixed(1)}</span></span>}
               </div>
             </div>
 
-            {/* ── Risk flags ───────────────────────────────────────────────── */}
-            {snap.risk_flags.length > 0 && (
+            {/* ── Score breakdown ────────────────────────────────────────────── */}
+            {plan && (
+              <div className="bg-[#0d1f2e] rounded-xl p-3 border border-[#1e3a50]">
+                <div className="text-[#E8D5A3] font-bold text-sm mb-2">
+                  توزيع الدرجات · مجموع: {plan.snap.total_score}/100
+                </div>
+                <div className="grid grid-cols-7 gap-1 text-center text-[10px]">
+                  {[
+                    { key: 'E1', val: plan.snap.score_breakdown.e1, label: 'اتجاه', max: 15 },
+                    { key: 'E2', val: plan.snap.score_breakdown.e2, label: 'VWAP', max: 15 },
+                    { key: 'E3', val: plan.snap.score_breakdown.e3, label: 'EM', max: 15 },
+                    { key: 'E4', val: plan.snap.score_breakdown.e4, label: 'عقد', max: 20 },
+                    { key: 'E5', val: plan.snap.score_breakdown.e5, label: 'سيولة', max: 15 },
+                    { key: 'E6', val: plan.snap.score_breakdown.e6, label: 'مخاطر', max: 10 },
+                    { key: 'E7', val: plan.snap.score_breakdown.e7, label: 'تنفيذ', max: 10 },
+                  ].map(s => (
+                    <div key={s.key} className="bg-[#060D14] rounded-lg p-2">
+                      <div className="font-bold text-white text-sm">{s.val}</div>
+                      <div className="text-gray-600">/{s.max}</div>
+                      <div className="text-gray-500 mt-0.5">{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── Warnings ──────────────────────────────────────────────────── */}
+            {snap.warnings.length > 0 && (
               <div className="space-y-1.5">
-                <div className="text-xs text-gray-500 font-bold">تنبيهات المخاطر</div>
-                {snap.risk_flags.map((f, i) => (
-                  <div key={i} className="bg-yellow-900/20 border border-yellow-700/40 rounded-lg p-2 text-xs text-yellow-300">{f}</div>
+                <div className="text-xs text-gray-500 font-bold">تنبيهات</div>
+                {snap.warnings.map((w, i) => (
+                  <div key={i} className="bg-yellow-900/20 border border-yellow-700/40 rounded-lg p-2 text-xs text-yellow-300">
+                    ⚠ {w}
+                  </div>
                 ))}
               </div>
             )}
