@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { HomepageNewsBar } from '@/components/HomepageNewsBar'
 
 export default async function RootPage() {
   const supabase = createClient()
@@ -232,6 +233,14 @@ export default async function RootPage() {
               filter: 'blur(4px)',
             }} />
         </div>
+      </section>
+
+      {/* ── Market News Status ── */}
+      <section className="max-w-4xl mx-auto px-6 pb-8">
+        <div className="text-xs font-mono mb-2 text-center" style={{ color: '#2D3748' }}>
+          حالة السوق الآن
+        </div>
+        <HomepageNewsBar />
       </section>
 
       {/* ── Stats Bar ── */}

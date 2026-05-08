@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { NewsBar, NewsImpactBadge, useNews } from '@/components/v2/NewsBar'
@@ -89,11 +89,35 @@ const REFRESH_SEC = 30
 const TIER_LABEL: Record<string, string> = { signal: 'سيجنال', edge: 'إيدج', alpha: 'ألفا' }
 const TIER_COLOR: Record<string, string> = { signal: '#60A5FA', edge: '#C9943A', alpha: '#A78BFA' }
 
-export default function V2Dashboard() {
+function UpgradeBanner() {
   const searchParams = useSearchParams()
   const upgradedTier = searchParams.get('upgraded')
-  const [showUpgradeBanner, setShowUpgradeBanner] = useState(!!upgradedTier)
+  const [show, setShow] = useState(!!upgradedTier)
+  if (!show || !upgradedTier) return null
+  return (
+    <div className="rounded-2xl px-5 py-4 flex items-center justify-between"
+      style={{
+        background: `linear-gradient(135deg, ${TIER_COLOR[upgradedTier] ?? '#C9943A'}12, rgba(13,27,42,0.9))`,
+        border: `1px solid ${TIER_COLOR[upgradedTier] ?? '#C9943A'}35`,
+      }}>
+      <div className="flex items-center gap-3">
+        <span className="text-xl">🎉</span>
+        <div>
+          <div className="text-sm font-bold text-white">
+            تم تفعيل باقة {TIER_LABEL[upgradedTier] ?? upgradedTier} بنجاح
+          </div>
+          <div className="text-xs mt-0.5" style={{ color: '#4A5568' }}>
+            يمكنك الآن الوصول لجميع ميزات باقتك
+          </div>
+        </div>
+      </div>
+      <button onClick={() => setShow(false)}
+        className="text-lg leading-none shrink-0" style={{ color: '#2D3748' }}>✕</button>
+    </div>
+  )
+}
 
+export default function V2Dashboard() {
   const [data, setData]     = useState<Data | null>(null)
   const [loading, setLoad]  = useState(true)
   const [ts, setTs]         = useState<Date | null>(null)
@@ -193,27 +217,9 @@ export default function V2Dashboard() {
       <NewsBar news={news} loading={newsLoading} failed={newsFailed} />
 
       {/* ── Upgrade success banner ── */}
-      {showUpgradeBanner && upgradedTier && (
-        <div className="rounded-2xl px-5 py-4 flex items-center justify-between"
-          style={{
-            background: `linear-gradient(135deg, ${TIER_COLOR[upgradedTier] ?? '#C9943A'}12, rgba(13,27,42,0.9))`,
-            border: `1px solid ${TIER_COLOR[upgradedTier] ?? '#C9943A'}35`,
-          }}>
-          <div className="flex items-center gap-3">
-            <span className="text-xl">🎉</span>
-            <div>
-              <div className="text-sm font-bold text-white">
-                تم تفعيل باقة {TIER_LABEL[upgradedTier] ?? upgradedTier} بنجاح
-              </div>
-              <div className="text-xs mt-0.5" style={{ color: '#4A5568' }}>
-                يمكنك الآن الوصول لجميع ميزات باقتك
-              </div>
-            </div>
-          </div>
-          <button onClick={() => setShowUpgradeBanner(false)}
-            className="text-lg leading-none shrink-0" style={{ color: '#2D3748' }}>✕</button>
-        </div>
-      )}
+      <Suspense fallback={null}>
+        <UpgradeBanner />
+      </Suspense>
 
       {/* ── Direction Banner ── */}
       <div className="rounded-2xl px-5 py-4 flex items-center justify-between"
