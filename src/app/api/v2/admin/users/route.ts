@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 // DB enum values that map to the "user" role in the UI
 const USER_LIKE_ROLES = ['free', 'pro', 'quant', 'beta_user', 'analyst']
 

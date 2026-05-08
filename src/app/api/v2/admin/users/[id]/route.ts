@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const supabase      = createClient()
   const serviceClient = createServiceClient()

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { computeStrategy } from '@/lib/v2/strategyEngine'
 
+export const dynamic = 'force-dynamic'
+
 const TRADIER_KEY = process.env.TRADIER_API_KEY
 const BASE = 'https://api.tradier.com/v1'
 

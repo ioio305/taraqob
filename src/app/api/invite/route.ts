@@ -2,6 +2,8 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 const VALID_ROLES = ['user', 'moderator']
 
 const ROLE_NAMES: Record<string, string> = {

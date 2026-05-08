@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 const TRADIER_KEY = process.env.TRADIER_API_KEY
 const BASE        = 'https://api.tradier.com/v1'
 
