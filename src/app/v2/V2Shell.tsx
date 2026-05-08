@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, type ReactNode } from 'react'
+import { useState, useEffect, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -8,6 +8,11 @@ import { createClient } from '@/lib/supabase/client'
 const ROLE_LABEL_MAP: Record<string, string>  = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
 const ROLE_COLOR_MAP: Record<string, string>  = { admin: '#C9943A', moderator: '#60A5FA', user: '#4A5568' }
 const ROLE_ICON_MAP:  Record<string, string>  = { admin: '⊞', moderator: '◎', user: '◈' }
+
+const TIER_LABEL: Record<string, string> = { radar: 'Radar', signal: 'Signal', edge: 'Edge', alpha: 'Alpha' }
+const TIER_COLOR: Record<string, string> = { radar: '#4A5568', signal: '#60A5FA', edge: '#C9943A', alpha: '#A78BFA' }
+
+type Notification = { id: string; title: string; body: string; type: string; is_read: boolean; action_url?: string; created_at: string }
 
 // ── Nav definitions ────────────────────────────────────────────
 const NAV_TRADING = [
@@ -59,8 +64,8 @@ function SectionTitle({ children, color = '#1A2A3A' }: { children: string; color
 }
 
 // ── Main Shell ─────────────────────────────────────────────────
-export default function V2Shell({ children, userName, userRole, userSecondaryRoles = [] }: {
-  children: ReactNode; userName: string; userRole: string; userSecondaryRoles?: string[]
+export default function V2Shell({ children, userName, userRole, userSecondaryRoles = [], subscriptionTier = 'radar' }: {
+  children: ReactNode; userName: string; userRole: string; userSecondaryRoles?: string[]; subscriptionTier?: string
 }) {
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -68,6 +73,10 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
   // Admin-only view preview (purely cosmetic, never affects access)
   const [previewRole, setPreviewRole] = useState<string | null>(null)
   const [switcherOpen, setSwitcherOpen] = useState(false)
+  // Notifications
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [bellOpen, setBellOpen] = useState(false)
+  const bellRef = useRef<HTMLDivElement>(null)
 
   // ── Security: ALWAYS from DB prop, never localStorage ─────────
   const isAdmin = userRole === 'admin'
@@ -88,7 +97,6 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
 
   useEffect(() => {
     if (!isAdmin) {
-      // Non-admins: clear any stale localStorage value
       localStorage.removeItem('taraqob_view_as')
       return
     }
@@ -98,6 +106,33 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
       setPreviewRole(stored)
     }
   }, [userRole, isAdmin]) // eslint-disable-line
+
+  // Load notifications on mount, refresh every 60 s
+  useEffect(() => {
+    async function fetchNotifications() {
+      try {
+        const res = await fetch('/api/v2/notifications')
+        if (res.ok) setNotifications(await res.json())
+      } catch { /* silent */ }
+    }
+    fetchNotifications()
+    const id = setInterval(fetchNotifications, 60_000)
+    return () => clearInterval(id)
+  }, [])
+
+  // Close bell dropdown on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) setBellOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  async function markAllRead() {
+    try { await fetch('/api/v2/notifications', { method: 'PATCH' }) } catch { /* silent */ }
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+  }
 
   function switchPreview(r: string) {
     setSwitcherOpen(false)
@@ -139,8 +174,9 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
         </Link>
       </div>
 
-      {/* Role badge */}
-      <div className="px-4 py-3 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+      {/* Role + Tier badges */}
+      <div className="px-4 py-3 shrink-0 space-y-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+        {/* Role */}
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
              style={{ background: `${roleColor}0A`, border: `1px solid ${roleColor}20` }}>
           <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: roleColor }} />
@@ -159,6 +195,25 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
             </span>
           )}
         </div>
+        {/* Subscription tier */}
+        {!isStaff && (() => {
+          const tc = TIER_COLOR[subscriptionTier] ?? '#4A5568'
+          const tl = TIER_LABEL[subscriptionTier] ?? subscriptionTier
+          return (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
+                 style={{ background: `${tc}0A`, border: `1px solid ${tc}20` }}>
+              <span className="text-xs font-mono font-bold" style={{ color: tc }}>{tl}</span>
+              {subscriptionTier === 'radar' && (
+                <Link href="/#plans" className="mr-auto text-xs font-mono transition-colors"
+                      style={{ color: '#2D3748' }}
+                      onMouseEnter={e => { e.currentTarget.style.color = '#C9943A' }}
+                      onMouseLeave={e => { e.currentTarget.style.color = '#2D3748' }}>
+                  ترقية ↗
+                </Link>
+              )}
+            </div>
+          )
+        })()}
       </div>
 
       {/* ── Admin nav ── */}
@@ -358,6 +413,71 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
               </Link>
             </div>
           )}
+
+          {/* ── Notification bell ── */}
+          <div className="relative flex-shrink-0" ref={bellRef}>
+            <button
+              onClick={() => { setBellOpen(v => !v); if (!bellOpen && notifications.some(n => !n.is_read)) markAllRead() }}
+              className="relative w-8 h-8 flex items-center justify-center rounded-lg transition-all"
+              style={{ background: bellOpen ? 'rgba(201,148,58,0.1)' : 'transparent', border: bellOpen ? '1px solid rgba(201,148,58,0.2)' : '1px solid transparent', color: '#4A5568' }}
+              title="الإشعارات">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+              </svg>
+              {notifications.some(n => !n.is_read) && (
+                <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full animate-pulse" style={{ background: '#EF4444' }} />
+              )}
+            </button>
+
+            {bellOpen && (
+              <div className="absolute top-full left-0 mt-2 w-80 rounded-xl overflow-hidden z-50"
+                   style={{ background: '#0D1B2A', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
+                <div className="flex items-center justify-between px-4 py-3"
+                     style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  <span className="text-xs font-mono font-semibold" style={{ color: '#94A3B8' }}>الإشعارات</span>
+                  {notifications.length > 0 && (
+                    <button onClick={markAllRead} className="text-xs font-mono transition-colors"
+                            style={{ color: '#2D3748' }}
+                            onMouseEnter={e => { e.currentTarget.style.color = '#C9943A' }}
+                            onMouseLeave={e => { e.currentTarget.style.color = '#2D3748' }}>
+                      تعليم الكل كمقروء
+                    </button>
+                  )}
+                </div>
+
+                <div className="max-h-72 overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="px-4 py-8 text-center text-xs font-mono" style={{ color: '#1A2A3A' }}>
+                      لا توجد إشعارات
+                    </div>
+                  ) : notifications.map(n => (
+                    <div key={n.id}
+                         className="px-4 py-3 transition-all"
+                         style={{
+                           background: n.is_read ? 'transparent' : 'rgba(201,148,58,0.04)',
+                           borderBottom: '1px solid rgba(255,255,255,0.04)',
+                         }}>
+                      <div className="flex items-start gap-2">
+                        {!n.is_read && (
+                          <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: '#C9943A' }} />
+                        )}
+                        <div className={!n.is_read ? '' : 'pl-3.5'}>
+                          <div className="text-xs font-semibold text-white leading-snug">{n.title}</div>
+                          <div className="text-xs mt-0.5 leading-relaxed" style={{ color: '#4A5568' }}>{n.body}</div>
+                          {n.action_url && (
+                            <Link href={n.action_url} className="text-xs font-mono mt-1 inline-block transition-colors"
+                                  style={{ color: '#C9943A' }} onClick={() => setBellOpen(false)}>
+                              عرض ←
+                            </Link>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </header>
 
         {/* Content */}

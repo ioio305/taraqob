@@ -14,17 +14,23 @@ export default async function V2Layout({ children }: { children: ReactNode }) {
 
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('role, full_name, full_name_ar, is_active, preferences')
+    .select('role, full_name, full_name_ar, is_active, preferences, subscription_tier')
     .eq('id', user.id)
     .single()
 
   if (!profile || profile.is_active === false) redirect('/login?error=inactive')
 
-  const displayName     = profile.full_name_ar || profile.full_name || user.email || ''
-  const secondaryRoles  = (profile.preferences as any)?.secondary_roles ?? []
+  const displayName      = profile.full_name_ar || profile.full_name || user.email || ''
+  const secondaryRoles   = (profile.preferences as any)?.secondary_roles ?? []
+  const subscriptionTier = (profile as any).subscription_tier ?? 'radar'
 
   return (
-    <V2Shell userName={displayName} userRole={profile.role} userSecondaryRoles={secondaryRoles}>
+    <V2Shell
+      userName={displayName}
+      userRole={profile.role}
+      userSecondaryRoles={secondaryRoles}
+      subscriptionTier={subscriptionTier}
+    >
       {children}
     </V2Shell>
   )
