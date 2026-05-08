@@ -1,9 +1,13 @@
 'use client'
 
-import { useState, useEffect, type ReactNode } from 'react'
+import { useState, useEffect, useCallback, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+
+const ROLE_LABEL_MAP: Record<string, string>  = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
+const ROLE_COLOR_MAP: Record<string, string>  = { admin: '#C9943A', moderator: '#60A5FA', user: '#4A5568' }
+const ROLE_ICON_MAP:  Record<string, string>  = { admin: '⊞', moderator: '◎', user: '◈' }
 
 // ── Nav definitions ────────────────────────────────────────────
 const NAV_TRADING = [
@@ -52,27 +56,39 @@ function SectionTitle({ children, color = '#1A2A3A' }: { children: string; color
 }
 
 // ── Main Shell ─────────────────────────────────────────────────
-export default function V2Shell({ children, userName, userRole }: {
-  children: ReactNode; userName: string; userRole: string
+export default function V2Shell({ children, userName, userRole, userSecondaryRoles = [] }: {
+  children: ReactNode; userName: string; userRole: string; userSecondaryRoles?: string[]
 }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
+  // Role switcher: active view role (stored in localStorage)
+  const [activeRole, setActiveRole] = useState(userRole)
+  const [switcherOpen, setSwitcherOpen] = useState(false)
 
-  const isAdmin = userRole === 'admin'
-  const isMod   = userRole === 'moderator'
+  // All roles this user can switch between
+  const allRoles = [userRole, ...userSecondaryRoles.filter(r => r !== userRole)]
+
+  useEffect(() => {
+    const stored = localStorage.getItem('taraqob_view_as')
+    if (stored && allRoles.includes(stored)) setActiveRole(stored)
+    else setActiveRole(userRole)
+  }, [userRole]) // eslint-disable-line
+
+  function switchRole(r: string) {
+    setActiveRole(r)
+    localStorage.setItem('taraqob_view_as', r)
+    setSwitcherOpen(false)
+    // Refresh to apply role context
+    window.location.reload()
+  }
+
+  // Use activeRole for rendering decisions
+  const effectiveRole = activeRole
+  const isAdmin = effectiveRole === 'admin'
+  const isMod   = effectiveRole === 'moderator'
   const isStaff = isAdmin || isMod
 
-  const ROLE_LABEL: Record<string, string> = {
-    admin:     'مدير',
-    moderator: 'مشرف',
-    user:      'مستخدم',
-  }
-  const ROLE_COLOR: Record<string, string> = {
-    admin:     '#C9943A',
-    moderator: '#60A5FA',
-    user:      '#4A5568',
-  }
-  const roleColor = ROLE_COLOR[userRole] ?? '#4A5568'
+  const roleColor = ROLE_COLOR_MAP[effectiveRole] ?? '#4A5568'
 
   async function logout() {
     setLoggingOut(true)
@@ -100,18 +116,57 @@ export default function V2Shell({ children, userName, userRole }: {
         </Link>
       </div>
 
-      {/* Role badge */}
+      {/* Role badge + switcher */}
       <div className="px-4 py-3 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
-          style={{ background: `${roleColor}0A`, border: `1px solid ${roleColor}20` }}>
-          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: roleColor }} />
-          <span className="text-xs font-mono" style={{ color: roleColor }}>{ROLE_LABEL[userRole] ?? userRole}</span>
-          {isStaff && (
-            <span className="mr-auto text-xs font-mono" style={{ color: '#1A2A3A' }}>
-              {isAdmin ? 'وصول كامل' : 'وصول محدود'}
-            </span>
-          )}
-        </div>
+        {allRoles.length > 1 ? (
+          <div className="relative">
+            <button onClick={() => setSwitcherOpen(v => !v)}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all"
+                    style={{ background: `${roleColor}0A`, border: `1px solid ${roleColor}20` }}>
+              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: roleColor }} />
+              <span className="text-xs font-mono" style={{ color: roleColor }}>
+                {ROLE_LABEL_MAP[effectiveRole] ?? effectiveRole}
+              </span>
+              {effectiveRole !== userRole && (
+                <span className="text-xs font-mono px-1.5 py-0.5 rounded"
+                      style={{ background: 'rgba(96,165,250,0.15)', color: '#60A5FA', marginRight: 'auto' }}>
+                  وضع {ROLE_LABEL_MAP[effectiveRole]}
+                </span>
+              )}
+              <span className="mr-auto text-xs" style={{ color: '#2D3748' }}>⇅</span>
+            </button>
+            {switcherOpen && (
+              <div className="absolute top-full right-0 left-0 mt-1 rounded-xl overflow-hidden z-50"
+                   style={{ background: '#0D1B2A', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
+                {allRoles.map(r => (
+                  <button key={r} onClick={() => switchRole(r)}
+                          className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-mono transition-all"
+                          style={{
+                            background: r === effectiveRole ? `${ROLE_COLOR_MAP[r] ?? '#4A5568'}12` : 'transparent',
+                            color:      r === effectiveRole ? ROLE_COLOR_MAP[r] ?? '#4A5568' : '#4A5568',
+                            borderBottom: '1px solid rgba(255,255,255,0.04)',
+                          }}>
+                    <span>{ROLE_ICON_MAP[r] ?? '◎'}</span>
+                    <span>{ROLE_LABEL_MAP[r] ?? r}</span>
+                    {r === userRole && <span className="mr-auto text-xs" style={{ color: '#1A2A3A' }}>أساسي</span>}
+                    {r === effectiveRole && <span className="mr-auto text-xs" style={{ color: ROLE_COLOR_MAP[r] }}>● نشط</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
+               style={{ background: `${roleColor}0A`, border: `1px solid ${roleColor}20` }}>
+            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: roleColor }} />
+            <span className="text-xs font-mono" style={{ color: roleColor }}>{ROLE_LABEL_MAP[userRole] ?? userRole}</span>
+            {isStaff && (
+              <span className="mr-auto text-xs font-mono" style={{ color: '#1A2A3A' }}>
+                {isAdmin ? 'وصول كامل' : 'وصول محدود'}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Admin nav (staff only, shown first) ── */}
@@ -165,7 +220,7 @@ export default function V2Shell({ children, userName, userRole }: {
           <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold text-white truncate leading-tight">{userName}</div>
             <div className="text-xs font-mono mt-0.5" style={{ color: '#2D3748' }}>
-              {ROLE_LABEL[userRole] ?? userRole}
+              {ROLE_LABEL_MAP[effectiveRole] ?? effectiveRole}
             </div>
           </div>
 
