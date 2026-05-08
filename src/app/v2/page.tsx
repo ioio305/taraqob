@@ -352,11 +352,17 @@ export default function V2Dashboard() {
               </span>
             )}
           </div>
-          {!loading && ts && (
-            <span className="text-xs font-mono" style={{ color: '#2D3748' }}>
-              {ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-            </span>
-          )}
+          <div className="flex items-center gap-3">
+            <Link href="/v2/chart" className="text-xs px-2 py-1 rounded-lg font-bold transition-colors"
+                  style={{ background: 'rgba(201,148,58,0.12)', color: '#C9943A', border: '1px solid rgba(201,148,58,0.25)' }}>
+              📈 الشارت
+            </Link>
+            {!loading && ts && (
+              <span className="text-xs font-mono" style={{ color: '#2D3748' }}>
+                {ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="p-4 space-y-3">
