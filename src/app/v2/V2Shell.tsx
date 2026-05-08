@@ -17,6 +17,11 @@ const NAV_TRADING = [
   { href: '/v2/performance', label: 'الأداء',      icon: '◫', exact: false },
 ]
 
+const NAV_TOOLS = [
+  { href: '/v2/console', label: 'كونسول العقود', icon: '🖥', exact: false },
+  { href: '/v2/chart',   label: 'الشارت',         icon: '📈', exact: false },
+]
+
 const NAV_ADMIN = [
   { href: '/v2/admin',       label: 'نظرة عامة',        icon: '⊞', exact: true  },
   { href: '/v2/admin/users', label: 'المستخدمون',       icon: '◎', exact: false },
@@ -175,18 +180,18 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
 
       {/* ── Trading nav ── */}
       <div className="px-3 pt-2 pb-2 shrink-0">
-        <SectionTitle>{showAdminNav ? 'التداول' : 'التحليل'}</SectionTitle>
+        <SectionTitle>{showAdminNav ? 'التداول' : 'التداول'}</SectionTitle>
         <div className="space-y-0.5 mt-1">
-          {NAV_TRADING.slice(0, 4).map(item => (
+          {NAV_TRADING.map(item => (
             <NavLink key={item.href} {...item} accent={showAdminNav ? '#60A5FA' : '#C9943A'} />
           ))}
         </div>
       </div>
 
       <div className="px-3 pt-1 pb-2 shrink-0">
-        <SectionTitle>البيانات</SectionTitle>
+        <SectionTitle>الأدوات</SectionTitle>
         <div className="space-y-0.5 mt-1">
-          {NAV_TRADING.slice(4).map(item => (
+          {NAV_TOOLS.map(item => (
             <NavLink key={item.href} {...item} accent={showAdminNav ? '#60A5FA' : '#C9943A'} />
           ))}
         </div>
