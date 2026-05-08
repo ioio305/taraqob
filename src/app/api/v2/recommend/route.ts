@@ -446,6 +446,48 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // ── Enrich top3 with trading signals ─────────────────────────────────
+    function generateReason(o: any, chgPct: number, vix: number, isWatchMode: boolean, status: string): string {
+      if (vix > 28)         return `VIX مرتفع (${vix.toFixed(0)}) — بيئة متقلبة، توقف عن الدخول`
+      if (isWatchMode)      return 'السوق عرضي — الدخول غير مُوصى به، مراقبة فقط'
+      const dir  = chgPct >= 0.5 ? 'صاعد بقوة' : chgPct >= 0.15 ? 'صاعد معتدل' : chgPct <= -0.5 ? 'هابط بقوة' : 'هابط معتدل'
+      const d    = `Δ${Math.abs(o.delta ?? 0).toFixed(2)}`
+      const a    = `Ask $${(o.ask ?? 0).toFixed(2)}`
+      if (status === 'execute') return `${dir} · ${d} · ${a} — الشروط مكتملة للدخول`
+      if (status === 'watch')   return `${dir} · ${d} · ${a} — انتظر تأكيداً إضافياً`
+      return `${dir} · ${a} — الفرصة ضعيفة، انتظر ظروفاً أفضل`
+    }
+
+    const enrichedTop3 = top3.map(o => {
+      const spread    = (o.ask ?? 0) - (o.bid ?? 0)
+      const entryCons = Math.round(((o.bid ?? 0) + 0.35 * spread) * 100) / 100
+      const entryBal  = Math.round(((o.bid ?? 0) + 0.60 * spread) * 100) / 100
+      const isCall    = o.type === 'call'
+      const t1Spx     = isCall
+        ? Math.round(spxPrice + (em ?? 0) * 0.40)
+        : Math.round(spxPrice - (em ?? 0) * 0.40)
+      const stopSpx   = o.stop_spx ?? Math.round(spxPrice + (isCall ? -1 : 1) * (em ?? 0) * 0.35)
+      const score     = o._score ?? 0
+
+      let status: 'execute' | 'watch' | 'no-trade'
+      if (watchMode || vixPrice >= 28)  status = score >= 50 ? 'watch' : 'no-trade'
+      else if (score >= 75)              status = 'execute'
+      else if (score >= 40)              status = 'watch'
+      else                               status = 'no-trade'
+
+      const { _score, ...rest } = o
+      return {
+        ...rest,
+        score,
+        status,
+        reason:             generateReason(o, spxChgPct, vixPrice, watchMode, status),
+        entry_conservative: entryCons,
+        entry_balanced:     entryBal,
+        target1_spx:        t1Spx,
+        stop_spx:           stopSpx,
+      }
+    })
+
     // OTM range description
     const STEP  = 5
     const base2 = contractType && spxPrice ? Math.ceil(spxPrice / STEP) * STEP : 0
@@ -472,7 +514,7 @@ export async function GET(request: NextRequest) {
       },
       direction:   { type: dir.type, label: dir.label, color: dir.color, reason: dir.reason },
       watchMode,
-      contracts:   top3,
+      contracts:   enrichedTop3,
       shortlist:   shortlist.map(({ _score, ...rest }) => rest),
       expiration:  usedExp,
       expirations: expirations.slice(0, 8),
