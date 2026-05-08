@@ -331,7 +331,7 @@ export default function V2Dashboard() {
             ) : (
               <span className="text-xs px-2 py-0.5 rounded-full font-mono"
                     style={{ background: 'rgba(201,148,58,0.1)', color: '#C9943A', border: '1px solid rgba(201,148,58,0.2)' }}>
-                $5–$500 · OTM صارم
+                Ask $0.50–$5.00 · OTM
               </span>
             )}
           </div>

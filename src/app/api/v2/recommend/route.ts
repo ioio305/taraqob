@@ -35,82 +35,67 @@ function getDirection(changePct: number, vix: number) {
 }
 
 // ── Live Strike Rotation Engine ─────────────────────────────────────────
-// Scores each OTM contract 0-100 based on live market conditions.
-// Returns -1 to hard-reject a contract.
+// Target: OTM contracts with Ask $0.50–$5.00 (cost $50–$500 per contract)
+// Returns -1 to hard-reject, otherwise 0-100 score.
 function liveScore(
   o: any,
   spxPrice: number,
   type: 'call' | 'put',
   em: number | null,
 ): number {
-  const mid    = o.bid != null && o.ask != null ? (o.bid + o.ask) / 2 : 0
+  const ask    = o.ask  ?? 0
+  const bid    = o.bid  ?? 0
+  const mid    = ask > 0 && bid > 0 ? (bid + ask) / 2 : 0
   const delta  = Math.abs(o.greeks?.delta ?? 0)
-  const gamma  = Math.abs(o.greeks?.gamma ?? 0)
   const volume = o.volume ?? 0
-  const spread = mid > 0 ? (o.ask - o.bid) / mid : 99
+  const spread = mid > 0 ? (ask - bid) / mid : 99
 
   // ── Hard rejects ───────────────────────────────────────────────
   if (type === 'call' && o.strike <= spxPrice) return -1   // ITM
   if (type === 'put'  && o.strike >= spxPrice) return -1   // ITM
-  if (mid < 1 || mid > 1500)                   return -1   // price out of range
-  if (!o.bid || !o.ask || o.ask <= o.bid)      return -1   // invalid quotes
-  if (spread > 0.35)                            return -1   // spread too wide
-  if (gamma > 0.020)                            return -1   // gamma explosion risk
-  if (delta > 0.52)                             return -1   // too deep, near ITM
-  if (volume < 5)                               return -1   // no liquidity
+  if (ask < 0.50 || ask > 5.00)               return -1   // Ask must be $0.50–$5.00
+  if (!bid || !ask || ask <= bid)              return -1   // invalid quotes
+  if (spread > 0.50)                           return -1   // spread too wide for cheap contracts
+  if (delta > 0.35)                            return -1   // too close to ATM (too expensive)
+  if (volume < 5)                              return -1   // no liquidity
 
   let score = 0
 
-  // ── 1. Delta Quality (25 pts) — 0DTE ideal range: 0.22–0.32 ───
-  if      (delta >= 0.22 && delta <= 0.32) score += 25
-  else if (delta >= 0.18 && delta <  0.22) score += 17
-  else if (delta >  0.32 && delta <= 0.40) score += 15
-  else if (delta >= 0.10 && delta <  0.18) score += 7
-  else if (delta >  0.40 && delta <= 0.50) score += 5
-  else                                     score += 0
+  // ── 1. Ask Price Quality (35 pts) — $1–$3 is the sweet spot ───
+  if      (ask >= 1.00 && ask <= 3.00) score += 35
+  else if (ask >= 0.50 && ask <  1.00) score += 22
+  else if (ask >  3.00 && ask <= 5.00) score += 16
 
-  // ── 2. EM Fit (25 pts) — distance of strike from SPX relative to EM
+  // ── 2. EM Fit (30 pts) — cheap OTM = 0.8x–2.5x EM from ATM ──
   if (em && em > 0) {
     const dist = Math.abs(o.strike - spxPrice)
-    const pct  = dist / em          // 0.0 = ATM, 1.0 = full EM away
-    if      (pct >= 0.25 && pct <= 0.55) score += 25   // sweet spot
-    else if (pct >= 0.15 && pct <  0.25) score += 18
-    else if (pct >  0.55 && pct <= 0.75) score += 14
-    else if (pct >= 0.05 && pct <  0.15) score += 8    // too close to ATM
-    else if (pct >  0.75 && pct <= 1.00) score += 6    // approaching full EM
-    else                                 score += 0    // >1× EM = low probability
+    const pct  = dist / em
+    if      (pct >= 0.80 && pct <= 1.60) score += 30   // sweet spot: 1–2× EM
+    else if (pct >= 0.50 && pct <  0.80) score += 20   // closer, slightly pricier
+    else if (pct >  1.60 && pct <= 2.50) score += 14   // very far OTM, low prob
+    else if (pct >= 0.30 && pct <  0.50) score += 8    // too close = too expensive
+    else                                 score += 0    // >2.5× EM = lottery ticket
   } else {
-    // fallback: mid-price proxy for EM fit
-    if (mid >= 10 && mid <= 120) score += 15
-    else if (mid >= 5 && mid < 10) score += 8
+    // fallback when no EM data
+    if (ask >= 0.75 && ask <= 2.50) score += 20
+    else if (ask < 0.75)            score += 12
+    else                            score += 8
   }
 
-  // ── 3. Spread Tightness (20 pts) — tighter = better execution ──
-  if      (spread < 0.04) score += 20
-  else if (spread < 0.08) score += 15
-  else if (spread < 0.15) score += 9
-  else if (spread < 0.25) score += 4
+  // ── 3. Spread Tightness (20 pts) ───────────────────────────────
+  if      (spread < 0.05) score += 20
+  else if (spread < 0.10) score += 15
+  else if (spread < 0.20) score += 8
+  else if (spread < 0.35) score += 3
   else                    score += 0
 
-  // ── 4. Mid-Price Range (15 pts) — $5-300 optimal R/R for SPX ──
-  if      (mid >= 5   && mid <= 300)  score += 15
-  else if (mid >= 2   && mid <  5)    score += 9
-  else if (mid >  300 && mid <= 600)  score += 6
-  else if (mid >  600 && mid <= 1000) score += 3
-  else                                score += 0
-
-  // ── 5. Volume / Liquidity (10 pts) ─────────────────────────────
-  if      (volume >= 500) score += 10
-  else if (volume >= 200) score += 7
-  else if (volume >= 50)  score += 4
-  else if (volume >= 10)  score += 2
-  else                    score += 1
-
-  // ── 6. Gamma Safety (5 pts) — lower gamma = less explosion risk ─
-  if      (gamma < 0.004)  score += 5
-  else if (gamma < 0.008)  score += 3
-  else if (gamma < 0.014)  score += 1
-  else                     score += 0
+  // ── 4. Volume / Liquidity (15 pts) ─────────────────────────────
+  if      (volume >= 1000) score += 15
+  else if (volume >= 500)  score += 11
+  else if (volume >= 200)  score += 7
+  else if (volume >= 50)   score += 4
+  else if (volume >= 10)   score += 2
+  else                     score += 1
 
   return score
 }
@@ -339,8 +324,9 @@ export async function GET(request: NextRequest) {
     // Helper: score + collect best N contracts for a given type from chain
     function collectBest(opts: any[], type: 'call' | 'put', base: number, n: number) {
       const STEP      = 5
-      const searchLow  = type === 'call' ? base            : base - STEP * 8
-      const searchHigh = type === 'call' ? base + STEP * 7 : base - STEP
+      // Search wide range: up to 200 pts OTM to find $0.50–$5 contracts
+      const searchLow  = type === 'call' ? base            : base - STEP * 40
+      const searchHigh = type === 'call' ? base + STEP * 40 : base - STEP
 
       return opts
         .filter(o => o.option_type === type && o.strike >= searchLow && o.strike <= searchHigh)
@@ -428,11 +414,11 @@ export async function GET(request: NextRequest) {
     const STEP  = 5
     const base2 = contractType && spxPrice ? Math.ceil(spxPrice / STEP) * STEP : 0
     const otmRange = contractType && base2 ? {
-      low:  contractType === 'call' ? base2 : base2 - STEP * 8,
-      high: contractType === 'call' ? base2 + STEP * 7 : base2 - STEP,
+      low:  contractType === 'call' ? base2 : base2 - STEP * 40,
+      high: contractType === 'call' ? base2 + STEP * 40 : base2 - STEP,
       note: contractType === 'call'
-        ? `${base2}–${base2 + STEP * 7} (أول 8 OTM فوق SPX ${Math.round(spxPrice)})`
-        : `${base2 - STEP * 8}–${base2 - STEP} (أول 8 OTM تحت SPX ${Math.round(spxPrice)})`,
+        ? `${base2}–${base2 + STEP * 40} (Ask $0.50–$5.00 فوق SPX ${Math.round(spxPrice)})`
+        : `${base2 - STEP * 40}–${base2 - STEP} (Ask $0.50–$5.00 تحت SPX ${Math.round(spxPrice)})`,
     } : null
 
     return NextResponse.json({
