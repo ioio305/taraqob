@@ -575,22 +575,35 @@ export default function V2Dashboard() {
       <div className="rounded-2xl p-5"
            style={{ background: 'rgba(13,27,42,0.7)', border: '1px solid rgba(255,255,255,0.06)' }}>
         <div className="text-xs font-mono tracking-widest mb-3" style={{ color: '#2D3748' }}>QUICK ANALYZE</div>
+
+        {/* Type selector buttons */}
+        <div className="flex gap-1.5 mb-3">
+          {([
+            { v: 'auto', label: 'تلقائي',  color: '#C9943A' },
+            { v: 'call', label: '▲ CALL',  color: '#10B981' },
+            { v: 'put',  label: '▼ PUT',   color: '#EF4444' },
+          ] as const).map(opt => (
+            <button key={opt.v} onClick={() => setCtype(opt.v)}
+                    className="flex-1 py-2 rounded-lg text-xs font-bold font-mono transition-all"
+                    style={{
+                      background: ctype === opt.v ? `${opt.color}20` : 'rgba(255,255,255,0.03)',
+                      border:     ctype === opt.v ? `1px solid ${opt.color}50` : '1px solid rgba(255,255,255,0.06)',
+                      color:      ctype === opt.v ? opt.color : '#4A5568',
+                    }}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
         <div className="flex gap-2">
           <input
             value={strike} onChange={e => setStrike(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && goAnalyze()}
-            placeholder="SPXW260507C07350000 — رمز OCC أو رقم الستريك"
+            placeholder="رقم الستريك مثال: 7350"
             className="flex-1 rounded-xl px-4 py-2.5 text-sm text-white outline-none font-mono"
             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
             dir="ltr"
           />
-          <select value={ctype} onChange={e => setCtype(e.target.value as 'auto' | 'call' | 'put')}
-                  className="rounded-xl px-3 py-2.5 text-sm text-white outline-none"
-                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <option value="auto">تلقائي</option>
-            <option value="call">Call</option>
-            <option value="put">Put</option>
-          </select>
           <button onClick={goAnalyze}
                   className="px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap"
                   style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>

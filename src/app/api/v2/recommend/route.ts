@@ -128,23 +128,26 @@ async function fetchSPXSessions() {
     if (!result?.timestamp) throw new Error('No data')
 
     const timestamps: number[] = result.timestamp
-    const highs: number[]      = result.indicators.quote[0].high  ?? []
-    const lows:  number[]      = result.indicators.quote[0].low   ?? []
+    const highs:  number[] = result.indicators.quote[0].high  ?? []
+    const lows:   number[] = result.indicators.quote[0].low   ?? []
+    const closes: number[] = result.indicators.quote[0].close ?? []
 
-    // Build ET date string for today
-    const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-    const d = new Date(todayET + 'T00:00:00')
+    // Build ET date strings for today and yesterday
+    const todayET     = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+    const d = new Date(todayET + 'T12:00:00')
     d.setDate(d.getDate() - 1)
     const yesterdayET = d.toISOString().slice(0, 10)
 
-    const tokyoHighs:  number[] = []
-    const tokyoLows:   number[] = []
-    const londonHighs: number[] = []
-    const londonLows:  number[] = []
+    const tokyoHighs:   number[] = []
+    const tokyoLows:    number[] = []
+    const tokyoCloses:  number[] = []
+    const londonHighs:  number[] = []
+    const londonLows:   number[] = []
+    const londonCloses: number[] = []
 
     for (let i = 0; i < timestamps.length; i++) {
       if (!highs[i] || !lows[i]) continue
-      const dt    = new Date(timestamps[i] * 1000)
+      const dt     = new Date(timestamps[i] * 1000)
       const dateET = dt.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
       const hourET = parseInt(dt.toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/New_York' }))
 
@@ -152,25 +155,31 @@ async function fetchSPXSessions() {
       if ((dateET === yesterdayET && hourET >= 19) || (dateET === todayET && hourET < 2)) {
         tokyoHighs.push(highs[i])
         tokyoLows.push(lows[i])
+        if (closes[i]) tokyoCloses.push(closes[i])
       }
       // London session: today 03:00–09:29 ET
       if (dateET === todayET && hourET >= 3 && hourET < 10) {
         londonHighs.push(highs[i])
         londonLows.push(lows[i])
+        if (closes[i]) londonCloses.push(closes[i])
       }
     }
+
+    // Last close in each session window
+    const tokyoClose  = tokyoCloses.length  ? Math.round(tokyoCloses[tokyoCloses.length - 1])   : null
+    const londonClose = londonCloses.length ? Math.round(londonCloses[londonCloses.length - 1]) : null
 
     return {
       tokyo: {
         high:      tokyoHighs.length  ? Math.round(Math.max(...tokyoHighs))  : null,
         low:       tokyoLows.length   ? Math.round(Math.min(...tokyoLows))   : null,
-        close:     null,
+        close:     tokyoClose,
         changePct: null,
       },
       london: {
         high:      londonHighs.length ? Math.round(Math.max(...londonHighs)) : null,
         low:       londonLows.length  ? Math.round(Math.min(...londonLows))  : null,
-        close:     null,
+        close:     londonClose,
         changePct: null,
       },
     }
