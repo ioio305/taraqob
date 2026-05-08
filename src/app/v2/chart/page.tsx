@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+import Link from 'next/link'
 import {
   createChart,
   CandlestickSeries,
@@ -109,12 +110,17 @@ function qualityBadge(q: string) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ChartPage() {
-  const [tf, setTf]           = useState('1d')
-  const [data, setData]       = useState<ChartData | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
-  const [showAdv, setShowAdv] = useState(false)
-  const [support, setSupport] = useState<SupportQuote[]>([])
+  const [tf, setTf]               = useState('1d')
+  const [data, setData]           = useState<ChartData | null>(null)
+  const [loading, setLoading]     = useState(false)
+  const [error, setError]         = useState('')
+  const [showAdv, setShowAdv]     = useState(false)
+  const [support, setSupport]     = useState<SupportQuote[]>([])
+
+  // Strike input state
+  const [strike, setStrike]           = useState('')
+  const [optionType, setOptionType]   = useState<'call' | 'put'>('call')
+  const [strikeError, setStrikeError] = useState('')
 
   // 5 chart container refs
   const trendRef = useRef<HTMLDivElement>(null)
@@ -161,6 +167,13 @@ export default function ChartPage() {
       })
       .catch(() => {})
   }, [])
+
+  // ── Auto-set option type from market bias ──────────────────────────────────
+  useEffect(() => {
+    const bias = data?.analysis?.summary?.bias
+    if (bias === 'صاعد') setOptionType('call')
+    else if (bias === 'هابط') setOptionType('put')
+  }, [data])
 
   // ── Build / rebuild all charts ──────────────────────────────────────────────
   useEffect(() => {
@@ -362,30 +375,115 @@ export default function ChartPage() {
     <div className="min-h-screen bg-[#060D14] text-white p-4 space-y-4" dir="rtl">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-bold text-[#E8D5A3]">تحليل SPX</h1>
-          <span className="text-xs text-gray-500 bg-[#0d1f2e] px-2 py-1 rounded-full">S&P 500 Index</span>
-          {last && (
-            <span className="text-sm font-mono text-white">{last.close.toLocaleString()}</span>
-          )}
+      <div className="space-y-3">
+
+        {/* Title row */}
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-bold text-[#E8D5A3]">تحليل SPX</h1>
+            <span className="text-xs text-gray-500 bg-[#0d1f2e] px-2 py-1 rounded-full">S&P 500 Index</span>
+            {last && (
+              <span className="text-sm font-mono text-white">{last.close.toLocaleString()}</span>
+            )}
+          </div>
+
+          {/* Timeframe selector */}
+          <div className="flex gap-1 flex-wrap">
+            {TIMEFRAMES.map(t => (
+              <button
+                key={t}
+                onClick={() => setTf(t)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                  tf === t
+                    ? 'bg-[#C9943A] text-[#060D14]'
+                    : 'bg-[#0d1f2e] text-gray-400 hover:bg-[#1a3a54]'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Timeframe selector */}
-        <div className="flex gap-1 flex-wrap">
-          {TIMEFRAMES.map(t => (
-            <button
-              key={t}
-              onClick={() => setTf(t)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                tf === t
-                  ? 'bg-[#C9943A] text-[#060D14]'
-                  : 'bg-[#0d1f2e] text-gray-400 hover:bg-[#1a3a54]'
-              }`}
+        {/* Strike input row */}
+        <div className="flex items-end gap-3 flex-wrap">
+
+          {/* SPX badge — fixed asset */}
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-gray-500">الأصل</span>
+            <div className="flex items-center gap-2 bg-[#C9943A]/10 border border-[#C9943A]/40 rounded-xl px-4 py-2 h-10">
+              <span className="text-[#C9943A] font-black text-base">SPX</span>
+              <span className="text-xs text-gray-600">ثابت</span>
+            </div>
+          </div>
+
+          {/* Strike number input */}
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-gray-500">رقم السترايك</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={strike}
+              onChange={e => {
+                const cleaned = e.target.value.replace(/[^0-9]/g, '')
+                setStrike(cleaned)
+                setStrikeError('')
+              }}
+              onBlur={() => {
+                if (strike && !/^\d+$/.test(strike)) {
+                  setStrikeError('أدخل رقم سترايك صحيح')
+                }
+              }}
+              placeholder="مثال: 7410"
+              className="w-32 h-10 bg-[#0d1f2e] border border-[#1e3a50] rounded-xl px-3 text-sm text-white placeholder-gray-600 text-left font-mono focus:border-[#C9943A] focus:outline-none transition-colors"
+            />
+            {strikeError && <span className="text-xs text-red-400">{strikeError}</span>}
+          </div>
+
+          {/* Call / Put toggle */}
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-gray-500">نوع العقد</span>
+            <div className="flex rounded-xl overflow-hidden border border-[#1e3a50] h-10">
+              <button
+                onClick={() => setOptionType('call')}
+                className={`px-4 text-xs font-bold transition-colors ${
+                  optionType === 'call'
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-[#0d1f2e] text-gray-400 hover:bg-[#1a3a54]'
+                }`}
+              >
+                CALL
+              </button>
+              <button
+                onClick={() => setOptionType('put')}
+                className={`px-4 text-xs font-bold transition-colors border-r border-[#1e3a50] ${
+                  optionType === 'put'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-[#0d1f2e] text-gray-400 hover:bg-[#1a3a54]'
+                }`}
+              >
+                PUT
+              </button>
+            </div>
+          </div>
+
+          {/* Analyze button — only shows when strike is filled */}
+          {strike.length >= 3 && (
+            <Link
+              href={`/v2/analyze?symbol=SPX&strike=${strike}&expiry=&type=${optionType}`}
+              className="h-10 px-5 bg-[#C9943A] text-[#060D14] rounded-xl text-sm font-bold hover:bg-[#E8D5A3] transition-colors flex items-center gap-1.5"
             >
-              {t}
-            </button>
-          ))}
+              <span>تحليل العقد</span>
+              <span className="text-xs">←</span>
+            </Link>
+          )}
+
+          {/* Hint when no strike entered */}
+          {!strike && (
+            <span className="text-xs text-gray-600 self-center pb-0.5">
+              أدخل رقم السترايك لتحليل عقد SPX
+            </span>
+          )}
         </div>
       </div>
 
