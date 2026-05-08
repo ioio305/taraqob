@@ -1,12 +1,15 @@
 'use client'
 
-import { Suspense, useEffect, useState, useCallback } from 'react'
+import { Suspense, useEffect, useState, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type ScoreEntry = { score: number; max: number; label: string }
 
+type TargetLevel = {
+  spx: number; exit_price: number; exit_total: number; pnl: number
+}
 type ShortlistRow = {
   symbol: string; strike: number
   bid: number; ask: number; mid: number; volume: number
@@ -36,8 +39,12 @@ type Analysis = {
   total_score: number
   decision: 'execute' | 'conditional' | 'watch' | 'reject'
   decision_reason_ar: string
-  entry_conservative: number | null; entry_balanced: number | null
+  entry_conservative: number | null
+  entry_conservative_total: number | null
+  entry_balanced: number | null
+  entry_balanced_total: number
   stop_spx: number; target1_spx: number; target2_spx: number; target3_spx: number
+  targets?: { t1: TargetLevel; t2: TargetLevel; t3: TargetLevel; stop: TargetLevel }
   risk_flags: string[]
   shortlist: ShortlistRow[]
   analysis_duration_ms: number
@@ -188,42 +195,66 @@ function AnalyzeContent() {
   const [input, setInput]       = useState(params.get('symbol') ?? '')
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [loading, setLoading]   = useState(false)
+  const [refreshing, setRefreshing] = useState(false)  // silent background refresh
   const [error, setError]       = useState<string | null>(null)
+  const [liveUrl, setLiveUrl]   = useState<string | null>(null)  // URL for live polling
+  const liveTimerRef            = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function buildUrl(sym: string, strike?: string, type?: string): string | null {
+    const s = sym.trim().toUpperCase()
+    if (s && /^(SPXW|SPX)\d{6}[CP]\d{8}$/i.test(s))
+      return `/api/v2/analyze?symbol=${encodeURIComponent(s)}`
+    if (strike)
+      return `/api/v2/analyze?strike=${encodeURIComponent(strike)}&type=${encodeURIComponent(type ?? 'call')}`
+    if (s && /^\d+(\.\d+)?$/.test(s))
+      return `/api/v2/analyze?strike=${encodeURIComponent(s)}&type=call`
+    if (s)
+      return `/api/v2/analyze?symbol=${encodeURIComponent(s)}`
+    return null
+  }
 
   const runAnalysis = useCallback(async (sym?: string, strike?: string, type?: string) => {
-    const s = (sym ?? input).trim().toUpperCase()
-    // Build query: prefer full OCC symbol, fallback to strike+type
-    let url = ''
-    if (s && /^(SPXW|SPX)\d{6}[CP]\d{8}$/i.test(s)) {
-      url = `/api/v2/analyze?symbol=${encodeURIComponent(s)}`
-    } else if (strike) {
-      url = `/api/v2/analyze?strike=${encodeURIComponent(strike)}&type=${encodeURIComponent(type ?? 'call')}`
-    } else if (s && /^\d+(\.\d+)?$/.test(s)) {
-      // User typed a plain number in the input box — treat as strike
-      url = `/api/v2/analyze?strike=${encodeURIComponent(s)}&type=call`
-    } else if (s) {
-      url = `/api/v2/analyze?symbol=${encodeURIComponent(s)}`
-    } else {
-      setError('أدخل رقم الستريك (مثال: 7350) أو رمز OCC الكامل')
-      return
-    }
-    setLoading(true); setError(null); setAnalysis(null)
+    const url = buildUrl(sym ?? input, strike, type)
+    if (!url) { setError('أدخل رقم الستريك (مثال: 7350) أو رمز OCC الكامل'); return }
+    setLoading(true); setError(null); setAnalysis(null); setLiveUrl(null)
     try {
       const res  = await fetch(url)
       const data = await res.json()
-      if (!data.success) setError(data.error ?? 'خطأ غير معروف')
-      else setAnalysis(data.analysis)
-    } catch {
-      setError('خطأ في الاتصال بالخادم')
-    }
+      if (!data.success) { setError(data.error ?? 'خطأ غير معروف') }
+      else { setAnalysis(data.analysis); setLiveUrl(url) }
+    } catch { setError('خطأ في الاتصال بالخادم') }
     setLoading(false)
-  }, [input])
+  }, [input]) // eslint-disable-line
+
+  // ── Live polling — silent refresh every 3 seconds ─────────────────────
+  useEffect(() => {
+    if (!liveUrl) return
+    let cancelled = false
+
+    async function poll() {
+      if (cancelled) return
+      setRefreshing(true)
+      try {
+        const res  = await fetch(liveUrl)
+        const data = await res.json()
+        if (!cancelled && data.success) setAnalysis(data.analysis)
+      } catch {}
+      setRefreshing(false)
+      if (!cancelled) liveTimerRef.current = setTimeout(poll, 3000)
+    }
+
+    liveTimerRef.current = setTimeout(poll, 3000)
+    return () => {
+      cancelled = true
+      if (liveTimerRef.current) clearTimeout(liveTimerRef.current)
+    }
+  }, [liveUrl])
 
   useEffect(() => {
     const sym    = params.get('symbol')
     const strike = params.get('strike')
     const type   = params.get('type') ?? 'call'
-    if (sym)    { setInput(sym);    runAnalysis(sym) }
+    if (sym)         { setInput(sym);    runAnalysis(sym) }
     else if (strike) { setInput(strike); runAnalysis('', strike, type) }
   }, []) // eslint-disable-line
 
@@ -377,10 +408,20 @@ function AnalyzeContent() {
                   {n(analysis.em_intraday, 1)}
                 </span>
               </div>
-              <div className="mr-auto text-xs font-mono" style={{ color: '#4A5568' }}>
-                {analysis.dte === 0 ? '0DTE' : `${analysis.dte}DTE`}
-                {' · '}{analysis.type.toUpperCase()}
-                {' · '}Strike {n(analysis.strike, 0)}
+              <div className="mr-auto flex items-center gap-2">
+                <span className="text-xs font-mono" style={{ color: '#4A5568' }}>
+                  {analysis.dte === 0 ? '0DTE' : `${analysis.dte}DTE`}
+                  {' · '}{analysis.type.toUpperCase()}
+                  {' · '}Strike {n(analysis.strike, 0)}
+                </span>
+                {liveUrl && (
+                  <span className="flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded"
+                    style={{ background: refreshing ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.08)', color: '#10B981', border: '1px solid rgba(16,185,129,0.3)' }}>
+                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${refreshing ? 'animate-ping' : 'animate-pulse'}`}
+                          style={{ background: '#10B981' }} />
+                    LIVE · 3s
+                  </span>
+                )}
               </div>
             </div>
 
@@ -463,50 +504,119 @@ function AnalyzeContent() {
               </div>
             </Card>
 
-            {/* ── Entry + Targets ── */}
+            {/* ── Entry + Targets (redesigned) ── */}
             <Card>
-              <SectionLabel>الدخول والأهداف — مستويات SPX</SectionLabel>
+              <SectionLabel>الدخول والأهداف — سعر العقد · القيمة الفعلية · الربح/الخسارة</SectionLabel>
 
-              {/* Entry prices */}
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <div className="rounded-xl p-4"
-                     style={{ background: 'rgba(201,148,58,0.08)', border: '1px solid rgba(201,148,58,0.2)' }}>
-                  <div className="text-xs mb-1 font-mono" style={{ color: '#C9943A' }}>دخول محافظ</div>
-                  <div className="text-2xl font-bold font-mono" style={{ color: '#C9943A' }}>
-                    ${n(analysis.entry_conservative)}
-                  </div>
-                  <div className="text-xs mt-0.5 font-mono" style={{ color: '#4A5568' }}>Bid + 35% Spread</div>
-                </div>
-                <div className="rounded-xl p-4"
-                     style={{ background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.2)' }}>
-                  <div className="text-xs mb-1 font-mono" style={{ color: '#60A5FA' }}>دخول متوازن</div>
-                  <div className="text-2xl font-bold font-mono" style={{ color: '#60A5FA' }}>
-                    ${n(analysis.entry_balanced)}
-                  </div>
-                  <div className="text-xs mt-0.5 font-mono" style={{ color: '#4A5568' }}>Bid + 60% Spread</div>
-                </div>
-              </div>
-
-              {/* SPX Targets */}
-              <div className="space-y-2 mb-4">
+              {/* ── Entry rows ── */}
+              <div className="grid grid-cols-2 gap-3 mb-5">
                 {[
-                  { label: 'هدف ١ — SPX', v: n(analysis.target1_spx, 0), color: '#4ADE80', bg: 'rgba(74,222,128,0.08)'  },
-                  { label: 'هدف ٢ — SPX', v: n(analysis.target2_spx, 0), color: '#10B981', bg: 'rgba(16,185,129,0.08)' },
-                  { label: 'هدف ٣ — SPX', v: n(analysis.target3_spx, 0), color: '#059669', bg: 'rgba(5,150,105,0.08)'  },
-                  { label: 'وقف — SPX',   v: n(analysis.stop_spx, 0),    color: '#EF4444', bg: 'rgba(239,68,68,0.08)'  },
-                ].map(t => (
-                  <div key={t.label} className="flex items-center justify-between rounded-xl px-4 py-3"
-                       style={{ background: t.bg, border: `1px solid ${t.color}25` }}>
-                    <span className="text-xs font-semibold" style={{ color: t.color }}>
-                      {t.label === 'وقف — SPX' ? '⊘' : '◎'} {t.label}
-                    </span>
-                    <span className="text-lg font-bold font-mono" style={{ color: t.color }}>{t.v}</span>
+                  { label: 'دخول محافظ', sub: 'Bid + 35% Spread', px: analysis.entry_conservative, tot: analysis.entry_conservative_total, color: '#C9943A', bg: 'rgba(201,148,58,0.08)', border: 'rgba(201,148,58,0.25)' },
+                  { label: 'دخول متوازن', sub: 'Bid + 60% Spread', px: analysis.entry_balanced,     tot: analysis.entry_balanced_total,     color: '#60A5FA', bg: 'rgba(96,165,250,0.08)',  border: 'rgba(96,165,250,0.25)' },
+                ].map(e => (
+                  <div key={e.label} className="rounded-xl p-4"
+                       style={{ background: e.bg, border: `1px solid ${e.border}` }}>
+                    <div className="text-xs font-mono mb-2" style={{ color: e.color }}>{e.label}</div>
+                    <div className="text-2xl font-bold font-mono leading-none" style={{ color: e.color }}>
+                      ${n(e.px)}
+                    </div>
+                    <div className="text-xs font-mono mt-1" style={{ color: '#4A5568' }}>سعر السهم</div>
+                    <div className="mt-2 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                      <div className="text-xs font-mono" style={{ color: '#2D3748' }}>القيمة الفعلية (×100)</div>
+                      <div className="text-base font-bold font-mono" style={{ color: e.color }}>
+                        ${e.tot != null ? e.tot.toLocaleString() : '—'}
+                      </div>
+                    </div>
+                    <div className="text-xs font-mono mt-1" style={{ color: '#2D3748' }}>{e.sub}</div>
                   </div>
                 ))}
               </div>
 
+              {/* ── Target rows with full details ── */}
+              {analysis.targets ? (() => {
+                const entryTotal = analysis.entry_balanced_total
+                const rows = [
+                  { label: 'هدف ١', icon: '◎', tgt: analysis.targets.t1, color: '#4ADE80', bg: 'rgba(74,222,128,0.06)',  isStop: false },
+                  { label: 'هدف ٢', icon: '◎', tgt: analysis.targets.t2, color: '#10B981', bg: 'rgba(16,185,129,0.06)', isStop: false },
+                  { label: 'هدف ٣', icon: '◎', tgt: analysis.targets.t3, color: '#059669', bg: 'rgba(5,150,105,0.06)',  isStop: false },
+                  { label: 'وقف الخسارة', icon: '⊘', tgt: analysis.targets.stop, color: '#EF4444', bg: 'rgba(239,68,68,0.06)', isStop: true },
+                ]
+                return (
+                  <div className="space-y-2">
+                    {/* Column headers */}
+                    <div className="grid grid-cols-4 gap-2 px-2 pb-1">
+                      {['مستوى SPX', 'سعر الخروج', 'القيمة (×100)', 'الربح/الخسارة'].map(h => (
+                        <div key={h} className="text-xs font-mono text-center" style={{ color: '#2D3748' }}>{h}</div>
+                      ))}
+                    </div>
+                    {rows.map(r => {
+                      const pnlSign = r.tgt.pnl >= 0 ? '+' : ''
+                      return (
+                        <div key={r.label} className="rounded-xl px-4 py-3"
+                             style={{ background: r.bg, border: `1px solid ${r.color}20` }}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-xs font-bold" style={{ color: r.color }}>{r.icon} {r.label}</span>
+                            <span className="text-xs font-mono" style={{ color: '#2D3748' }}>
+                              (Strike {n(analysis.strike, 0)} · {analysis.dte}DTE)
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-4 gap-2">
+                            <div className="text-center">
+                              <div className="text-lg font-bold font-mono" style={{ color: r.color }}>
+                                {r.tgt.spx.toLocaleString()}
+                              </div>
+                              <div className="text-xs font-mono" style={{ color: '#2D3748' }}>SPX</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-base font-bold font-mono text-white">
+                                ${n(r.tgt.exit_price)}
+                              </div>
+                              <div className="text-xs font-mono" style={{ color: '#2D3748' }}>/ سهم</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-base font-bold font-mono text-white">
+                                ${r.tgt.exit_total.toLocaleString()}
+                              </div>
+                              <div className="text-xs font-mono" style={{ color: '#2D3748' }}>قيمة العقد</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-base font-bold font-mono"
+                                   style={{ color: r.tgt.pnl >= 0 ? '#10B981' : '#EF4444' }}>
+                                {pnlSign}${Math.abs(r.tgt.pnl).toLocaleString()}
+                              </div>
+                              <div className="text-xs font-mono" style={{ color: '#2D3748' }}>
+                                {r.tgt.pnl >= 0 ? 'ربح' : 'خسارة'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    <div className="text-xs font-mono px-2 pt-1" style={{ color: '#2D3748' }}>
+                      * الأسعار تقديرية بناءً على Delta-Gamma (Taylor expansion) · تتغير مع تحركات SPX
+                    </div>
+                  </div>
+                )
+              })() : (
+                /* Fallback: old SPX-only display if targets not in response */
+                <div className="space-y-2">
+                  {[
+                    { label: 'هدف ١ — SPX', v: n(analysis.target1_spx, 0), color: '#4ADE80', bg: 'rgba(74,222,128,0.08)'  },
+                    { label: 'هدف ٢ — SPX', v: n(analysis.target2_spx, 0), color: '#10B981', bg: 'rgba(16,185,129,0.08)' },
+                    { label: 'هدف ٣ — SPX', v: n(analysis.target3_spx, 0), color: '#059669', bg: 'rgba(5,150,105,0.08)'  },
+                    { label: 'وقف — SPX',   v: n(analysis.stop_spx, 0),    color: '#EF4444', bg: 'rgba(239,68,68,0.08)'  },
+                  ].map(t => (
+                    <div key={t.label} className="flex items-center justify-between rounded-xl px-4 py-3"
+                         style={{ background: t.bg, border: `1px solid ${t.color}25` }}>
+                      <span className="text-xs font-semibold" style={{ color: t.color }}>{t.label}</span>
+                      <span className="text-lg font-bold font-mono" style={{ color: t.color }}>{t.v}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* EM Map */}
-              <div className="rounded-xl px-4 py-3 flex items-center justify-between"
+              <div className="rounded-xl px-4 py-3 flex items-center justify-between mt-4"
                 style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
                 <div className="text-center">
                   <div className="text-xs font-mono mb-1" style={{ color: '#EF4444' }}>EM Lower</div>
@@ -578,47 +688,67 @@ function AnalyzeContent() {
             )}
 
             {/* ── Risk Management ── */}
-            <Card>
-              <SectionLabel>إدارة المخاطر — مشروط بحجم المركز</SectionLabel>
-              {(() => {
-                const contractCost = Math.round((analysis.entry_balanced ?? analysis.mid) * 100)
-                const maxLoss      = contractCost
-                const t1PremEst    = analysis.dte === 0
-                  ? Math.round(contractCost * 1.5)
-                  : Math.round(contractCost * 2.0)
-                const t2PremEst    = analysis.dte === 0
-                  ? Math.round(contractCost * 2.5)
-                  : Math.round(contractCost * 3.5)
-                const rr1 = contractCost > 0 ? (t1PremEst / contractCost).toFixed(1) : '—'
-                const rr2 = contractCost > 0 ? (t2PremEst / contractCost).toFixed(1) : '—'
-                return (
+            {analysis.targets && (() => {
+              const entryTotal = analysis.entry_balanced_total
+              const maxLoss    = entryTotal  // full premium at risk
+              const t1Profit   = analysis.targets.t1.pnl
+              const t2Profit   = analysis.targets.t2.pnl
+              const stopLoss   = analysis.targets.stop.pnl  // negative number
+              const rr1 = maxLoss > 0 && t1Profit > 0 ? (t1Profit / maxLoss).toFixed(1) : '—'
+              const rr2 = maxLoss > 0 && t2Profit > 0 ? (t2Profit / maxLoss).toFixed(1) : '—'
+              return (
+                <Card>
+                  <SectionLabel>إدارة المخاطر — عقد واحد (100 سهم)</SectionLabel>
                   <div className="space-y-3">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      <div className="rounded-xl p-3" style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)' }}>
-                        <div className="text-xs font-mono mb-1" style={{ color: '#EF4444' }}>أقصى خسارة / عقد</div>
-                        <div className="text-xl font-bold font-mono" style={{ color: '#EF4444' }}>${maxLoss.toLocaleString()}</div>
-                        <div className="text-xs font-mono mt-0.5" style={{ color: '#4A5568' }}>تكلفة العقد × 100 سهم</div>
+
+                    {/* Entry */}
+                    <div className="rounded-xl p-3 flex items-center justify-between"
+                         style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div>
+                        <div className="text-xs font-mono" style={{ color: '#4A5568' }}>تكلفة الدخول (دخول متوازن)</div>
+                        <div className="text-xs font-mono mt-0.5" style={{ color: '#2D3748' }}>
+                          ${n(analysis.entry_balanced)} / سهم × 100
+                        </div>
                       </div>
+                      <div className="text-xl font-bold font-mono" style={{ color: '#60A5FA' }}>
+                        ${entryTotal.toLocaleString()}
+                      </div>
+                    </div>
+
+                    {/* P&L grid */}
+                    <div className="grid grid-cols-3 gap-2">
                       <div className="rounded-xl p-3" style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)' }}>
-                        <div className="text-xs font-mono mb-1" style={{ color: '#10B981' }}>هدف ١ — ربح متوقع</div>
-                        <div className="text-xl font-bold font-mono" style={{ color: '#10B981' }}>${t1PremEst.toLocaleString()}</div>
-                        <div className="text-xs font-mono mt-0.5" style={{ color: '#4A5568' }}>R:R ≈ 1:{rr1}</div>
+                        <div className="text-xs font-mono mb-1" style={{ color: '#10B981' }}>ربح هدف ١</div>
+                        <div className="text-lg font-bold font-mono" style={{ color: '#10B981' }}>
+                          +${t1Profit.toLocaleString()}
+                        </div>
+                        <div className="text-xs font-mono mt-0.5" style={{ color: '#4A5568' }}>R:R 1:{rr1}</div>
                       </div>
                       <div className="rounded-xl p-3" style={{ background: 'rgba(96,165,250,0.07)', border: '1px solid rgba(96,165,250,0.2)' }}>
-                        <div className="text-xs font-mono mb-1" style={{ color: '#60A5FA' }}>هدف ٢ — ربح متوقع</div>
-                        <div className="text-xl font-bold font-mono" style={{ color: '#60A5FA' }}>${t2PremEst.toLocaleString()}</div>
-                        <div className="text-xs font-mono mt-0.5" style={{ color: '#4A5568' }}>R:R ≈ 1:{rr2}</div>
+                        <div className="text-xs font-mono mb-1" style={{ color: '#60A5FA' }}>ربح هدف ٢</div>
+                        <div className="text-lg font-bold font-mono" style={{ color: '#60A5FA' }}>
+                          +${t2Profit.toLocaleString()}
+                        </div>
+                        <div className="text-xs font-mono mt-0.5" style={{ color: '#4A5568' }}>R:R 1:{rr2}</div>
+                      </div>
+                      <div className="rounded-xl p-3" style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                        <div className="text-xs font-mono mb-1" style={{ color: '#EF4444' }}>خسارة عند الوقف</div>
+                        <div className="text-lg font-bold font-mono" style={{ color: '#EF4444' }}>
+                          ${stopLoss.toLocaleString()}
+                        </div>
+                        <div className="text-xs font-mono mt-0.5" style={{ color: '#4A5568' }}>أقصى خسارة</div>
                       </div>
                     </div>
+
                     <div className="rounded-xl px-4 py-3 text-xs font-mono leading-relaxed" dir="rtl"
                       style={{ background: 'rgba(201,148,58,0.06)', border: '1px solid rgba(201,148,58,0.15)', color: '#C9943A' }}>
-                      ⚠ المخاطر المقدرة لعقد واحد فقط — لا تخاطر بأكثر من 1-2% من رأس المال في صفقة واحدة.
-                      عقود 0DTE عالية المخاطر وقد تنتهي بلا قيمة خلال ساعات.
+                      ⚠ لعقد واحد فقط — لا تخاطر بأكثر من 1-2% من رأس المال في صفقة واحدة.
+                      {analysis.dte === 0 && ' عقود 0DTE قد تنتهي بلا قيمة في ساعات.'}
                     </div>
                   </div>
-                )
-              })()}
-            </Card>
+                </Card>
+              )
+            })()}
 
             {/* ── Shortlist ── */}
             {analysis.shortlist.length > 0 && (

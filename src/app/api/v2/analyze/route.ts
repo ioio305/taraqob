@@ -437,6 +437,7 @@ export async function GET(request: NextRequest) {
     // ── أسعار الدخول ──────────────────────────────────────────────────────
     const entryConservative = bid > 0 && ask > 0 ? Math.round((bid + 0.35 * spreadAbs) * 100) / 100 : mid || null
     const entryBalanced     = bid > 0 && ask > 0 ? Math.round((bid + 0.60 * spreadAbs) * 100) / 100 : mid || null
+    const entryPx           = entryBalanced ?? mid
 
     // ── أهداف بناءً على Expected Move ────────────────────────────────────
     const emRef = emIntraday
@@ -448,6 +449,18 @@ export async function GET(request: NextRequest) {
     const t2 = type === 'call' ? Math.round(spxPrice + emRef * f2) : Math.round(spxPrice - emRef * f2)
     const t3 = type === 'call' ? Math.round(spxPrice + emRef * f3) : Math.round(spxPrice - emRef * f3)
     const stopSPX = type === 'call' ? Math.round(spxPrice - emRef * fs) : Math.round(spxPrice + emRef * fs)
+
+    // ── سعر الخروج المتوقع عند كل هدف (تقريب Delta-Gamma) ───────────────
+    // dP ≈ delta × dSPX + 0.5 × gamma × dSPX²  (Taylor expansion, first+second order)
+    function estExit(targetSPX: number): number {
+      const dS  = targetSPX - spxPrice
+      const est = mid + (delta ?? 0) * dS + 0.5 * (gamma ?? 0) * dS * dS
+      return Math.max(0.01, Math.round(est * 100) / 100)
+    }
+    const exitT1   = estExit(t1)
+    const exitT2   = estExit(t2)
+    const exitT3   = estExit(t3)
+    const exitStop = estExit(stopSPX)
 
     // ── قائمة مختصرة من السلسلة ───────────────────────────────────────────
     let shortlist: any[] = []
@@ -509,10 +522,18 @@ export async function GET(request: NextRequest) {
         total_score: total,
         decision,
         decision_reason_ar: decisionReasonAr,
-        entry_conservative: entryConservative,
-        entry_balanced:     entryBalanced,
+        entry_conservative:       entryConservative,
+        entry_conservative_total: entryConservative ? Math.round(entryConservative * 100) : null,
+        entry_balanced:           entryBalanced,
+        entry_balanced_total:     Math.round(entryPx * 100),
         stop_spx: stopSPX,
         target1_spx: t1, target2_spx: t2, target3_spx: t3,
+        targets: {
+          t1:   { spx: t1,      exit_price: exitT1,   exit_total: Math.round(exitT1   * 100), pnl: Math.round((exitT1   - entryPx) * 100) },
+          t2:   { spx: t2,      exit_price: exitT2,   exit_total: Math.round(exitT2   * 100), pnl: Math.round((exitT2   - entryPx) * 100) },
+          t3:   { spx: t3,      exit_price: exitT3,   exit_total: Math.round(exitT3   * 100), pnl: Math.round((exitT3   - entryPx) * 100) },
+          stop: { spx: stopSPX, exit_price: exitStop, exit_total: Math.round(exitStop * 100), pnl: Math.round((exitStop - entryPx) * 100) },
+        },
         risk_flags: riskFlags,
         shortlist,
         analysis_duration_ms: Date.now() - start,

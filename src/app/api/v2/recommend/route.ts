@@ -341,9 +341,10 @@ export async function GET(request: NextRequest) {
     }
 
     // ── 3. Live Strike Rotation: fetch + score + rank ────────────
-    let top3: any[]   = []
-    let usedExp        = ''
-    let watchMode      = false   // true when market is neutral — show best available as watchlist
+    let top3: any[]      = []
+    let shortlist: any[] = []   // all qualifying OTM contracts from best expiration
+    let usedExp          = ''
+    let watchMode        = false
 
     const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
 
@@ -422,11 +423,20 @@ export async function GET(request: NextRequest) {
               collected = [...bestCall, ...bestPut]
               if (collected.length > 0) watchMode = true
             } else {
-              collected = collectBest(opts, contractType, base, 3)
+              // Fetch up to 15 to populate shortlist; top3 = first 3
+              collected = collectBest(opts, contractType, base, 15)
             }
 
             if (collected.length > 0) {
-              top3    = collected
+              top3 = contractType ? collected.slice(0, 3) : collected
+              // Enrich shortlist with stop_spx level (EM-based, same as analyze page)
+              const stopDir = contractType === 'call' ? -1 : 1
+              shortlist = contractType
+                ? collected.map(o => ({
+                    ...o,
+                    stop_spx: Math.round(spxPrice + stopDir * (em ?? 0) * 0.35),
+                  }))
+                : []
               usedExp = exp
               break
             }
@@ -463,6 +473,7 @@ export async function GET(request: NextRequest) {
       direction:   { type: dir.type, label: dir.label, color: dir.color, reason: dir.reason },
       watchMode,
       contracts:   top3,
+      shortlist:   shortlist.map(({ _score, ...rest }) => rest),
       expiration:  usedExp,
       expirations: expirations.slice(0, 8),
       otmRange,

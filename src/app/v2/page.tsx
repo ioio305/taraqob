@@ -20,12 +20,19 @@ type Contract  = {
   bid: number; ask: number; mid: number; volume: number; openInterest: number
   delta: number | null; gamma: number | null; theta: number | null; iv: number | null
 }
+type ShortlistItem = {
+  symbol: string; type: string; strike: number; expiration: string; dte: number
+  bid: number; ask: number; mid: number; volume: number; openInterest: number
+  delta: number | null; gamma: number | null; iv: number | null
+  stop_spx: number
+}
 type Data = {
   success: boolean; error?: string
   marketClosed?: boolean; marketStatus?: string
   watchMode?: boolean
   market: Market; sessions: Sessions; direction: Direction
-  contracts: Contract[]; expiration: string; expirations: string[]
+  contracts: Contract[]; shortlist: ShortlistItem[]
+  expiration: string; expirations: string[]
   otmRange: { low: number; high: number; note: string } | null
 }
 
@@ -616,6 +623,99 @@ export default function V2Dashboard() {
           </button>
         </div>
       </div>
+
+      {/* ── Shortlist Table ── */}
+      {!loading && (data?.shortlist ?? []).length > 0 && (
+        <div className="rounded-2xl overflow-hidden"
+             style={{ background: 'rgba(13,27,42,0.7)', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="flex items-center justify-between px-5 py-3"
+               style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            <div className="flex items-center gap-2">
+              <span style={{ color: data?.direction?.color ?? '#C9943A' }}>
+                {data?.direction?.type === 'call' ? '▲' : '▼'}
+              </span>
+              <span className="text-sm font-medium text-white">
+                قائمة العقود OTM المؤهلة
+              </span>
+              <span className="text-xs font-mono px-2 py-0.5 rounded"
+                    style={{ background: 'rgba(201,148,58,0.1)', color: '#C9943A', border: '1px solid rgba(201,148,58,0.2)' }}>
+                Ask $0.50–$5.00 · OTM فقط
+              </span>
+            </div>
+            <span className="text-xs font-mono" style={{ color: '#2D3748' }}>
+              {data.expiration} · {(data.shortlist ?? []).length} عقد
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs font-mono" style={{ borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: 'rgba(0,0,0,0.3)' }}>
+                  {['Strike', 'Bid', 'Ask', 'Mid', 'Delta', 'IV', 'Volume', 'وقف SPX', ''].map(h => (
+                    <th key={h} className="py-2.5 px-3 text-left font-semibold"
+                        style={{ color: '#2D3748', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(data.shortlist ?? []).map((row, idx) => {
+                  const isTop = idx < 3
+                  const rankColor = idx === 0 ? '#C9943A' : idx === 1 ? '#34D399' : idx === 2 ? '#60A5FA' : '#4A5568'
+                  return (
+                    <tr key={row.symbol}
+                        style={{
+                          background: isTop
+                            ? `rgba(${idx===0?'201,148,58':idx===1?'52,211,153':'96,165,250'},0.05)`
+                            : idx % 2 === 0 ? 'rgba(255,255,255,0.01)' : 'transparent',
+                          borderRight: isTop ? `2px solid ${rankColor}50` : '2px solid transparent',
+                        }}>
+                      <td className="py-2.5 px-3 font-bold" style={{ color: isTop ? rankColor : 'white' }}>
+                        {row.strike.toLocaleString()}
+                        {isTop && (
+                          <span className="mr-1 text-xs" style={{ color: rankColor }}>
+                            {idx === 0 ? ' ★' : idx === 1 ? ' ·' : ''}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3" style={{ color: '#94A3B8' }}>{n(row.bid)}</td>
+                      <td className="py-2.5 px-3 font-semibold"
+                          style={{ color: row.ask <= 2 ? '#10B981' : row.ask <= 4 ? '#F59E0B' : '#94A3B8' }}>
+                        ${n(row.ask)}
+                      </td>
+                      <td className="py-2.5 px-3 font-semibold" style={{ color: '#60A5FA' }}>${n(row.mid)}</td>
+                      <td className="py-2.5 px-3"
+                          style={{ color: Math.abs(row.delta ?? 0) >= 0.05 && Math.abs(row.delta ?? 0) <= 0.20 ? '#10B981' : '#94A3B8' }}>
+                        {n(row.delta, 3)}
+                      </td>
+                      <td className="py-2.5 px-3" style={{ color: '#94A3B8' }}>
+                        {row.iv != null ? n(row.iv * 100, 1) + '%' : '—'}
+                      </td>
+                      <td className="py-2.5 px-3"
+                          style={{ color: (row.volume ?? 0) >= 500 ? '#10B981' : '#94A3B8' }}>
+                        {(row.volume ?? 0).toLocaleString()}
+                      </td>
+                      <td className="py-2.5 px-3 font-bold" style={{ color: '#EF4444' }}>
+                        {row.stop_spx ? row.stop_spx.toLocaleString() : '—'}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <a href={`/v2/analyze?symbol=${encodeURIComponent(row.symbol)}`}
+                           className="px-2 py-1 rounded text-xs font-bold transition-all"
+                           style={{ background: `${rankColor}15`, color: rankColor, border: `1px solid ${rankColor}30` }}>
+                          تحليل
+                        </a>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-5 py-2 text-xs font-mono" style={{ color: '#1A2A3A', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+            ★ أفضل 3 · Delta 0.05–0.20 مُميَّز بالأخضر · وقف SPX = SPX الحالي ∓ 35% من EM · OTM صارم
+          </div>
+        </div>
+      )}
 
       {/* ── Compliance Disclaimer ── */}
       <div className="rounded-xl px-4 py-3 text-xs leading-relaxed font-mono" dir="rtl"
