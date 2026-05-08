@@ -60,7 +60,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     if (me.role === 'moderator' && body.role === 'admin') {
       return NextResponse.json({ error: 'المشرف لا يمكنه منح صلاحية المدير' }, { status: 403 })
     }
-    profileUpdates.role = body.role
+    // Map UI role 'user' → 'free' for DB enum compatibility
+    profileUpdates.role = body.role === 'user' ? 'free' : body.role
   }
 
   if (typeof body.full_name === 'string')    profileUpdates.full_name    = body.full_name.trim()

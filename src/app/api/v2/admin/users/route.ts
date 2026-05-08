@@ -2,6 +2,21 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+// DB enum values that map to the "user" role in the UI
+const USER_LIKE_ROLES = ['free', 'pro', 'quant', 'beta_user', 'analyst']
+
+// Normalize DB role → UI role (collapse all non-staff roles to 'user')
+function normalizeRole(role: string): string {
+  if (role === 'admin' || role === 'moderator') return role
+  return 'user'
+}
+
+// Normalize UI role → DB role ('user' → 'free' until migration runs)
+function dbRole(role: string): string {
+  if (role === 'user') return 'free'
+  return role
+}
+
 // GET — قائمة المستخدمين مع فلترة
 export async function GET(request: NextRequest) {
   const supabase = createClient()
@@ -14,11 +29,11 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url)
-  const role   = searchParams.get('role')
-  const status = searchParams.get('status')
-  const search = searchParams.get('q')
-  const page   = parseInt(searchParams.get('page') ?? '1')
-  const limit  = 20
+  const roleFilter = searchParams.get('role')
+  const status     = searchParams.get('status')
+  const search     = searchParams.get('q')
+  const page       = parseInt(searchParams.get('page') ?? '1')
+  const limit      = 20
 
   let query = supabase
     .from('user_profiles')
@@ -26,7 +41,12 @@ export async function GET(request: NextRequest) {
     .order('created_at', { ascending: false })
     .range((page - 1) * limit, page * limit - 1)
 
-  if (role)   query = query.eq('role', role)
+  // When filtering by 'user', expand to all non-staff DB roles
+  if (roleFilter === 'user') {
+    query = query.in('role', USER_LIKE_ROLES)
+  } else if (roleFilter) {
+    query = query.eq('role', roleFilter)
+  }
   if (status === 'active')   query = query.neq('is_active', false)
   if (status === 'inactive') query = query.eq('is_active', false)
   if (search) query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`)
@@ -34,7 +54,10 @@ export async function GET(request: NextRequest) {
   const { data, count, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ users: data ?? [], total: count ?? 0, page, limit })
+  // Normalize roles in response so UI always sees admin | moderator | user
+  const users = (data ?? []).map(u => ({ ...u, role: normalizeRole(u.role) }))
+
+  return NextResponse.json({ users, total: count ?? 0, page, limit })
 }
 
 // POST — دعوة مستخدم جديد
@@ -49,7 +72,8 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { email, role = 'user' } = body
+  const { email, role: roleRaw = 'user' } = body
+  const role = dbRole(roleRaw) // map 'user' → 'free' for DB enum compatibility
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ error: 'البريد الإلكتروني غير صحيح' }, { status: 400 })

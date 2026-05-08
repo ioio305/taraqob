@@ -11,12 +11,10 @@ const ROLE_ICON_MAP:  Record<string, string>  = { admin: '⊞', moderator: '◎'
 
 // ── Nav definitions ────────────────────────────────────────────
 const NAV_TRADING = [
-  { href: '/v2',             label: 'الداشبورد',        icon: '◈', exact: true  },
-  { href: '/v2/analyze',     label: 'تحليل العقد',      icon: '⬡', exact: false },
-  { href: '/v2/market',      label: 'Market Regime',    icon: '◐', exact: false },
-  { href: '/v2/contract',    label: 'Contract Quality', icon: '◇', exact: false },
-  { href: '/v2/signals',     label: 'الإشارات',          icon: '◉', exact: false },
-  { href: '/v2/performance', label: 'الأداء',            icon: '◫', exact: false },
+  { href: '/v2',             label: 'الداشبورد',   icon: '◈', exact: true  },
+  { href: '/v2/analyze',     label: 'تحليل العقد', icon: '⬡', exact: false },
+  { href: '/v2/signals',     label: 'الإشارات',    icon: '◉', exact: false },
+  { href: '/v2/performance', label: 'الأداء',      icon: '◫', exact: false },
 ]
 
 const NAV_ADMIN = [
