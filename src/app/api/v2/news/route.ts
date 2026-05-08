@@ -19,28 +19,43 @@ export type NewsEvent = {
 }
 
 // ── Arabic title generation ───────────────────────────────────────────────────
-const ENTITIES_AR: [RegExp, string][] = [
-  [/\bUS[-\s]?China\b/gi,             'أمريكا والصين'],
+// Strategy: extract entities → build fresh Arabic sentence (no word-for-word replace)
+
+// Subjects: who/what is acting (persons, institutions, indices)
+const AR_SUBJECTS: [RegExp, string][] = [
+  [/\bFOMC\b/i,                       'لجنة الفيدرالي (FOMC)'],
   [/\bFederal Open Market Committee\b/gi, 'لجنة السوق المفتوحة'],
   [/\bFederal Reserve\b/gi,           'الاحتياطي الفيدرالي'],
   [/\bFed\b/g,                        'الفيدرالي'],
-  [/\bPowell\b/gi,                    'باول (رئيس الفيدرالي)'],
+  [/\bPowell\b/gi,                    'باول'],
   [/\bTrump\b/gi,                     'ترامب'],
   [/\bBiden\b/gi,                     'بايدن'],
   [/\bRubio\b/gi,                     'روبيو'],
   [/\bBessent\b/gi,                   'بيسينت'],
   [/\bYellen\b/gi,                    'يلين'],
+  [/\bECB\b/g,                        'البنك المركزي الأوروبي'],
+  [/\bBank of England\b/gi,           'بنك إنجلترا'],
+  [/\bIMF\b/g,                        'صندوق النقد الدولي'],
+  [/\bOPEC\b/g,                       'أوبك'],
+  [/\bWall St(reet)?\b/gi,            'وول ستريت'],
+  [/\bNYSE\b/g,                       'بورصة نيويورك'],
+  [/\bWhite House\b/gi,               'البيت الأبيض'],
+  [/\bCongress\b/gi,                  'الكونغرس'],
+  [/\bSenate\b/gi,                    'مجلس الشيوخ'],
+]
+
+// Objects: what the news is about (countries, indicators, assets)
+const AR_OBJECTS: [RegExp, string][] = [
+  [/\bUS[-\s]?China\b/gi,             'العلاقات الأمريكية الصينية'],
   [/\bChina\b/gi,                     'الصين'],
   [/\bIran\b/gi,                      'إيران'],
   [/\bRussia\b/gi,                    'روسيا'],
   [/\bUkraine\b/gi,                   'أوكرانيا'],
   [/\bIsrael\b/gi,                    'إسرائيل'],
   [/\bGaza\b/gi,                      'غزة'],
-  [/\bEurope(an)?\b/gi,              'أوروبا'],
-  [/\bECB\b/g,                        'البنك المركزي الأوروبي'],
-  [/\bBank of England\b/gi,           'بنك إنجلترا'],
-  [/\bJapan(ese)?\b/gi,              'اليابان'],
-  [/\bIndia(n)?\b/gi,               'الهند'],
+  [/\bEurope(an union)?\b/gi,         'أوروبا'],
+  [/\bJapan\b/gi,                     'اليابان'],
+  [/\bIndia\b/gi,                     'الهند'],
   [/\bItaly\b/gi,                     'إيطاليا'],
   [/\bGermany\b/gi,                   'ألمانيا'],
   [/\bFrance\b/gi,                    'فرنسا'],
@@ -48,109 +63,140 @@ const ENTITIES_AR: [RegExp, string][] = [
   [/\bCanada\b/gi,                    'كندا'],
   [/\bG7\b/g,                         'مجموعة السبع'],
   [/\bG20\b/g,                        'مجموعة العشرين'],
-  [/\bIMF\b/g,                        'صندوق النقد الدولي'],
-  [/\bWorld Bank\b/gi,                'البنك الدولي'],
-  [/\bWTO\b/g,                        'منظمة التجارة العالمية'],
   [/\bNATO\b/g,                       'حلف الناتو'],
-  [/\bWall St(reet)?\b/gi,           'وول ستريت'],
-  [/\bS&P 500\b/gi,                   'مؤشر S&P 500'],
-  [/\bNasdaq\b/gi,                    'ناسداك'],
-  [/\bDow Jones\b/gi,                 'داو جونز'],
-  [/\bDow\b/gi,                       'مؤشر داو'],
-  [/\bNYSE\b/g,                       'بورصة نيويورك'],
-  [/\bS&P\b/gi,                       'مؤشر S&P'],
-  [/\bTreasur(y|ies)\b/gi,          'سندات الخزانة الأمريكية'],
+  [/\bAllies\b/gi,                    'الحلفاء'],
+  [/\bRate [Cc]ut(s)?\b/gi,           'خفض أسعار الفائدة'],
+  [/\bRate [Hh]ike(s)?\b/gi,          'رفع أسعار الفائدة'],
+  [/\bInterest [Rr]ate(s)?\b/gi,      'أسعار الفائدة'],
+  [/\bInflation\b/gi,                 'التضخم'],
+  [/\bRecession\b/gi,                 'الركود الاقتصادي'],
+  [/\bGDP\b/g,                        'الناتج المحلي الإجمالي'],
+  [/\bCPI\b/g,                        'مؤشر CPI'],
+  [/\bPCE\b/g,                        'مؤشر PCE'],
+  [/\bPPI\b/g,                        'مؤشر PPI'],
+  [/\bNonfarm [Pp]ayroll(s)?\b/gi,    'بيانات الوظائف'],
+  [/\bJobless [Cc]laims\b/gi,         'إعانات البطالة'],
+  [/\bUnemployment\b/gi,              'معدل البطالة'],
+  [/\bRetail [Ss]ales\b/gi,           'مبيعات التجزئة'],
+  [/\bHousing\b/gi,                   'قطاع الإسكان'],
+  [/\bPMI\b/g,                        'مؤشر PMI'],
+  [/\bISM\b/g,                        'مؤشر ISM'],
+  [/\bEarning(s)?\b/gi,               'الأرباح الفصلية'],
+  [/\bTariff(s)?\b/gi,                'الرسوم الجمركية'],
+  [/\bTrade [Ww]ar\b/gi,              'حرب التجارة'],
+  [/\bTrade [Dd]eal\b/gi,             'اتفاقية تجارية'],
+  [/\bSanction(s)?\b/gi,              'العقوبات الاقتصادية'],
+  [/\bTreasur(y|ies)\b/gi,            'سندات الخزانة'],
+  [/\bBond(s)?\b/gi,                  'السندات'],
   [/\bOil\b/gi,                       'النفط'],
   [/\bCrude\b/gi,                     'النفط الخام'],
-  [/\bOPEC\b/g,                       'أوبك'],
   [/\bGold\b/gi,                      'الذهب'],
   [/\bSilver\b/gi,                    'الفضة'],
   [/\bDollar\b/gi,                    'الدولار'],
   [/\bEuro\b/gi,                      'اليورو'],
   [/\bYen\b/gi,                       'الين الياباني'],
   [/\bBitcoin\b/gi,                   'بيتكوين'],
-  [/\bCrypto(currency)?\b/gi,        'العملات الرقمية'],
-  [/\bTariff(s)?\b/gi,               'الرسوم الجمركية'],
-  [/\bTrade [Ww]ar\b/gi,             'حرب التجارة'],
-  [/\bTrade [Dd]eal\b/gi,            'اتفاقية التجارة'],
-  [/\bSanction(s)?\b/gi,             'العقوبات الاقتصادية'],
-  [/\bInflation\b/gi,                 'التضخم'],
-  [/\bInterest [Rr]ate(s)?\b/gi,    'أسعار الفائدة'],
-  [/\bRate [Cc]ut(s)?\b/gi,         'خفض أسعار الفائدة'],
-  [/\bRate [Hh]ike(s)?\b/gi,        'رفع أسعار الفائدة'],
-  [/\bRecession\b/gi,                 'الركود الاقتصادي'],
-  [/\bGDP\b/g,                        'الناتج المحلي الإجمالي'],
-  [/\bCPI\b/g,                        'مؤشر أسعار المستهلك CPI'],
-  [/\bPCE\b/g,                        'مؤشر PCE'],
-  [/\bPPI\b/g,                        'مؤشر أسعار المنتجين PPI'],
-  [/\bNonfarm [Pp]ayroll(s)?\b/gi,  'بيانات الرواتب غير الزراعية'],
-  [/\bJobless [Cc]laims\b/gi,        'طلبات إعانة البطالة'],
-  [/\bUnemployment\b/gi,              'معدل البطالة'],
-  [/\bRetail [Ss]ales\b/gi,          'مبيعات التجزئة'],
-  [/\bHousing\b/gi,                   'قطاع الإسكان'],
-  [/\bPMI\b/g,                        'مؤشر PMI'],
-  [/\bISM\b/g,                        'مؤشر ISM'],
-  [/\bEarning(s)?\b/gi,              'الأرباح الفصلية'],
-  [/\bStocks?\b/gi,                   'الأسهم'],
-  [/\bMarket(s)?\b/gi,               'السوق'],
-  [/\bRally\b/gi,                     'ارتفاع السوق'],
-  [/\bSelloff\b/gi,                   'موجة بيع'],
-  [/\bVolatilit(y|ies)\b/gi,        'التقلبات'],
-  [/\bAllies\b/gi,                    'الحلفاء'],
-  [/\bTalks?\b/gi,                    'المحادثات'],
-  [/\bDeal\b/gi,                      'الاتفاقية'],
-  [/\bWeek [Aa]head\b/gi,            'الأسبوع القادم'],
-  [/\bIn [Ff]ocus\b/gi,             'في دائرة الاهتمام'],
-  [/\bScorching\b/gi,                 'المتصاعد'],
-  [/\bBlowout\b/gi,                   'النتائج المفاجئة'],
+  [/\bCrypto(currency)?\b/gi,         'العملات الرقمية'],
+  [/\bS&P 500\b/gi,                   'مؤشر S&P 500'],
+  [/\bNasdaq\b/gi,                    'ناسداك'],
+  [/\bDow Jones\b/gi,                 'داو جونز'],
+  [/\bDow\b/gi,                       'مؤشر داو'],
+  [/\bStock(s| market)\b/gi,          'الأسهم'],
+  [/\bMarket(s)?\b/gi,                'الأسواق'],
+  [/\bVolutilit(y|ies)\b/gi,          'التقلبات'],
 ]
 
-const ACTIONS_AR: [RegExp, string][] = [
-  [/\braise[sd]?\b/gi,    'يرفع'],
-  [/\bhike[sd]?\b/gi,     'يرفع'],
-  [/\bcut[s]?\b/gi,       'يخفض'],
-  [/\blower[sd]?\b/gi,    'يخفض'],
-  [/\bquestion[sd]?\b/gi, 'يشكك في'],
-  [/\bwarn[sd]?\b/gi,     'يحذر من'],
-  [/\bboost[sd]?\b/gi,    'يعزز'],
-  [/\bdrop[sd]?\b/gi,     'يتراجع'],
-  [/\brise[sd]?\b/gi,     'يرتفع'],
-  [/\bfall[s]?\b/gi,      'يتراجع'],
-  [/\bgain[sd]?\b/gi,     'يحقق مكاسب'],
-  [/\blose[sd]?\b/gi,     'يخسر'],
-  [/\bplunge[sd]?\b/gi,   'يتهاوى'],
-  [/\bsurge[sd]?\b/gi,    'يقفز'],
-  [/\bslump[sd]?\b/gi,    'يتراجع حاداً'],
-  [/\bsign[sd]?\b/gi,     'يوقع'],
-  [/\bimpose[sd]?\b/gi,   'يفرض'],
-  [/\blift[sd]?\b/gi,     'يرفع'],
-  [/\bexpect[sd]?\b/gi,   'يتوقع'],
-  [/\bfocus(es)?\b/gi,   'يتمحور حول'],
-  [/\bsupport[sd]?\b/gi,  'يدعم'],
-  [/\btarget[sd]?\b/gi,   'يستهدف'],
-  [/\breport[sd]?\b/gi,   'يُعلن'],
+// Action verbs
+const AR_ACTIONS: [RegExp, string][] = [
+  [/\b(raises?|raised|hiking?|hiked)\b/gi,         'يرفع'],
+  [/\b(cuts?|cutting|lowered?|lowers?)\b/gi,        'يخفض'],
+  [/\b(questions?|questioned)\b/gi,                 'يشكك في'],
+  [/\b(warns?|warned|cautions?)\b/gi,               'يحذر من'],
+  [/\b(imposes?|imposed)\b/gi,                      'يفرض'],
+  [/\b(surges?|surged|jumps?|jumped|soars?|soared)\b/gi, 'يقفز'],
+  [/\b(plunges?|plunged|crashes?|crashed)\b/gi,     'يتهاوى'],
+  [/\b(falls?|fell|drops?|dropped|slumps?|slumped)\b/gi, 'يتراجع'],
+  [/\b(rises?|rose|climbs?|climbed|gains?|gained)\b/gi,  'يرتفع'],
+  [/\b(signals?|signaled)\b/gi,                     'يُلمح إلى'],
+  [/\b(says?|said|states?|stated|claims?|claimed)\b/gi,  'يصرح بأن'],
+  [/\b(expects?|expected)\b/gi,                     'يتوقع'],
+  [/\b(pauses?|paused|halts?|halted)\b/gi,          'يُعلق'],
+  [/\b(signs?|signed)\b/gi,                         'يوقع'],
+  [/\b(boosts?|boosted|supports?|supported)\b/gi,   'يعزز'],
+  [/\b(targets?|targeted)\b/gi,                     'يستهدف'],
+  [/\b(eases?|eased|relaxes?|relaxed)\b/gi,         'يخفف'],
+  [/\b(tightens?|tightened)\b/gi,                   'يشدد'],
+  [/\b(holds?|held|keeps?|kept)\b/gi,               'يُبقي على'],
+]
+
+// Context patterns → Arabic connectors
+const AR_CONTEXT: [RegExp, string][] = [
+  [/\bfollowing\b/gi,              'عقب'],
+  [/\bamid\b/gi,                   'وسط'],
+  [/\bafter\b/gi,                  'بعد'],
+  [/\bahead of\b/gi,               'قبيل'],
+  [/\bdue to\b/gi,                 'بسبب'],
+  [/\bover\b/gi,                   'بشأن'],
+  [/\bconcerns? (over|about)\b/gi, 'مخاوف حول'],
+  [/\btalks?\b/gi,                 'محادثات'],
+  [/\bsummit\b/gi,                 'قمة'],
+  [/\bmeeting\b/gi,                'اجتماع'],
+  [/\bdeal\b/gi,                   'اتفاقية'],
 ]
 
 function generateArabicTitle(title: string, category: string): string {
-  // Strip source attribution
-  let t = title.replace(/\s*[-–|]\s*(Reuters|Bloomberg|CNBC|WSJ|FT|AP|MarketWatch|Dow Jones|Barron's?|Yahoo Finance|Investing\.com|The Wall Street Journal|Financial Times)\s*$/i, '').trim()
+  const t = title
+    .replace(/\s*[-–|]\s*(Reuters|Bloomberg|CNBC|WSJ|FT|AP|MarketWatch|Dow Jones|Barron's?|Yahoo Finance|Investing\.com|The Wall Street Journal|Financial Times)\s*$/i, '')
+    .trim()
 
-  // Apply entity replacements
-  for (const [pat, ar] of ENTITIES_AR) t = t.replace(pat, ar)
-  for (const [pat, ar] of ACTIONS_AR)  t = t.replace(pat, ar)
-
-  // Check how much Arabic we managed to inject
-  const arChars  = (t.match(/[؀-ۿ]/g) ?? []).length
-  const allChars = t.replace(/\s/g, '').length
-  const ratio    = arChars / Math.max(allChars, 1)
-
-  // If mostly still English, fall back to category + short English hint
-  if (ratio < 0.25) {
-    const short = t.length > 60 ? t.slice(0, 57) + '…' : t
-    return `${category} — ${short}`
+  // ── Special composite patterns ────────────────────────────────────────────
+  if (/week ahead/i.test(t)) {
+    const objs: string[] = []
+    for (const [p, ar] of AR_OBJECTS) { if (p.test(t)) { objs.push(ar); if (objs.length === 3) break } }
+    if (objs.length) return `توقعات الأسبوع القادم: ${objs.join(' و')}`
+    return `توقعات الأسبوع القادم — ${category}`
+  }
+  if (/in focus/i.test(t)) {
+    const all: string[] = []
+    for (const [p, ar] of [...AR_SUBJECTS, ...AR_OBJECTS]) { if (p.test(t) && !all.includes(ar)) { all.push(ar); if (all.length === 3) break } }
+    if (all.length) return `في دائرة الاهتمام: ${all.join(' و')}`
   }
 
-  return t
+  // ── Extract entities ──────────────────────────────────────────────────────
+  const subjects: string[] = []
+  for (const [p, ar] of AR_SUBJECTS) { if (p.test(t) && !subjects.includes(ar)) subjects.push(ar) }
+
+  const objects: string[] = []
+  for (const [p, ar] of AR_OBJECTS)  { if (p.test(t) && !objects.includes(ar))  objects.push(ar)  }
+
+  let action = ''
+  for (const [p, ar] of AR_ACTIONS) { if (p.test(t)) { action = ar; break } }
+
+  let context = ''
+  for (const [p, ar] of AR_CONTEXT) { if (p.test(t)) { context = ar; break } }
+
+  // ── Build natural Arabic sentence ─────────────────────────────────────────
+  const subj = subjects.slice(0, 2).join(' و')
+  const obj  = objects.slice(0, 2).join(' و')
+
+  // Subject + action + object [+ context + object2]
+  if (subj && action && obj) {
+    const ctx = context && objects.length > 2 ? ` ${context} ${objects[2]}` : ''
+    return `${subj} ${action} ${obj}${ctx}`
+  }
+  // Subject + action only
+  if (subj && action) {
+    return obj ? `${subj} ${action} ${obj}` : `${subj} ${action} — ${category}`
+  }
+  // Subject only → category clarifies context
+  if (subj && obj) return `${subj}: ${obj}`
+  if (subj)        return `${subj} — ${category}`
+  // Objects only (no clear actor)
+  if (objects.length >= 2) return `${objects.slice(0, 3).join(' · ')} — ${category}`
+  if (objects.length === 1) return `${objects[0]} — ${category}`
+
+  // Nothing recognized → category
+  return category
 }
 
 export type NewsResult = {
