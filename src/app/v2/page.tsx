@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
 
 type Market = {
-  spx: { price: number; changePct: number; high: number; low: number }
+  spx: { price: number; prevClose?: number; changePct: number; high: number; low: number }
   vix: { price: number; estimated?: boolean }
   expectedMove: number | null
   emUpper: number | null
@@ -182,7 +182,12 @@ export default function V2Dashboard() {
               <div className="text-sm font-bold font-mono" style={{ color: clr(spx?.changePct) }}>
                 {pct(spx?.changePct)}
               </div>
-              {spx?.high != null && (
+              {spx?.prevClose != null && (
+                <div className="text-xs font-mono" style={{ color: '#4A5568' }}>
+                  إغلاق الأمس {n(spx.prevClose, 0)}
+                </div>
+              )}
+              {spx?.high != null && spx.high > 0 && (
                 <div className="flex gap-2 text-xs font-mono">
                   <span style={{ color: '#10B981' }}>H {n(spx.high, 0)}</span>
                   <span style={{ color: '#2D3748' }}>·</span>

@@ -115,11 +115,37 @@ function liveScore(
   return score
 }
 
-// ── Yahoo Finance: SPX session data (ES futures) ───────────────────────
+// ── Parse ET hour/date cleanly from a Unix timestamp ──────────────────────
+function etParts(ts: number): { dateKey: string; hourET: number; minuteET: number } {
+  const d = new Date(ts * 1000)
+  // Use toLocaleString to get ET components without TZ bugs
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(d)
+  const get = (t: string) => parts.find(p => p.type === t)?.value ?? '0'
+  const hourRaw = parseInt(get('hour')) % 24   // handle '24' midnight edge case
+  return {
+    dateKey:  `${get('year')}-${get('month')}-${get('day')}`,
+    hourET:   hourRaw,
+    minuteET: parseInt(get('minute')),
+  }
+}
+
+// Build "last trading day" date string (skip weekends)
+function prevTradingDayET(todayET: string): string {
+  const d = new Date(todayET + 'T12:00:00')
+  do { d.setDate(d.getDate() - 1) } while (d.getDay() === 0 || d.getDay() === 6)
+  return d.toISOString().slice(0, 10)
+}
+
+// ── Yahoo Finance ES Futures: 15-min candles, session slicing ─────────────
 async function fetchSPXSessions() {
   try {
+    // 15-minute ES=F data — precise enough for session H/L/C without gaps
     const res = await fetch(
-      'https://query1.finance.yahoo.com/v8/finance/chart/ES%3DF?interval=1h&range=2d',
+      'https://query1.finance.yahoo.com/v8/finance/chart/ES%3DF?interval=15m&range=2d',
       { headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' }, cache: 'no-store' }
     )
     if (!res.ok) throw new Error('Yahoo Finance error')
@@ -132,55 +158,61 @@ async function fetchSPXSessions() {
     const lows:   number[] = result.indicators.quote[0].low   ?? []
     const closes: number[] = result.indicators.quote[0].close ?? []
 
-    // Build ET date strings for today and yesterday
     const todayET     = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-    const d = new Date(todayET + 'T12:00:00')
-    d.setDate(d.getDate() - 1)
-    const yesterdayET = d.toISOString().slice(0, 10)
+    const yesterdayET = prevTradingDayET(todayET)
 
-    const tokyoHighs:   number[] = []
-    const tokyoLows:    number[] = []
-    const tokyoCloses:  number[] = []
-    const londonHighs:  number[] = []
-    const londonLows:   number[] = []
-    const londonCloses: number[] = []
+    const tokyoH: number[] = [], tokyoL: number[] = [], tokyoC: number[] = []
+    const londonH: number[] = [], londonL: number[] = [], londonC: number[] = []
 
     for (let i = 0; i < timestamps.length; i++) {
-      if (!highs[i] || !lows[i]) continue
-      const dt     = new Date(timestamps[i] * 1000)
-      const dateET = dt.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-      const hourET = parseInt(dt.toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/New_York' }))
+      const h = highs[i], l = lows[i], c = closes[i]
+      if (!h || !l || isNaN(h) || isNaN(l)) continue
 
-      // Tokyo session: yesterday 19:00–23:59 ET + today 00:00–01:59 ET
-      if ((dateET === yesterdayET && hourET >= 19) || (dateET === todayET && hourET < 2)) {
-        tokyoHighs.push(highs[i])
-        tokyoLows.push(lows[i])
-        if (closes[i]) tokyoCloses.push(closes[i])
+      const { dateKey, hourET, minuteET } = etParts(timestamps[i])
+
+      // Tokyo: yesterday 19:00–23:59 ET + today 00:00–01:44 ET
+      // (Nikkei closes ~01:30 ET; use strict end so US after-hours not mixed in)
+      const inTokyo =
+        (dateKey === yesterdayET && hourET >= 19) ||
+        (dateKey === todayET     && hourET <= 1)
+      if (inTokyo) {
+        tokyoH.push(h); tokyoL.push(l)
+        if (c && !isNaN(c)) tokyoC.push(c)
       }
-      // London session: today 03:00–09:29 ET
-      if (dateET === todayET && hourET >= 3 && hourET < 10) {
-        londonHighs.push(highs[i])
-        londonLows.push(lows[i])
-        if (closes[i]) londonCloses.push(closes[i])
+
+      // London: today 03:00–09:29 ET (before US open)
+      const inLondon = dateKey === todayET && (
+        (hourET >= 3 && hourET <= 8) ||
+        (hourET === 9 && minuteET < 30)
+      )
+      if (inLondon) {
+        londonH.push(h); londonL.push(l)
+        if (c && !isNaN(c)) londonC.push(c)
       }
     }
 
-    // Last close in each session window
-    const tokyoClose  = tokyoCloses.length  ? Math.round(tokyoCloses[tokyoCloses.length - 1])   : null
-    const londonClose = londonCloses.length ? Math.round(londonCloses[londonCloses.length - 1]) : null
+    // changePct = session move: open → close
+    const pct = (arr: number[], last: number | null) => {
+      if (!last || arr.length < 2) return null
+      const open = arr[0]
+      return open > 0 ? Math.round(((last - open) / open) * 10000) / 100 : null
+    }
+
+    const tokyoClose  = tokyoC.length  ? Math.round(tokyoC[tokyoC.length - 1])  : null
+    const londonClose = londonC.length ? Math.round(londonC[londonC.length - 1]) : null
 
     return {
       tokyo: {
-        high:      tokyoHighs.length  ? Math.round(Math.max(...tokyoHighs))  : null,
-        low:       tokyoLows.length   ? Math.round(Math.min(...tokyoLows))   : null,
+        high:      tokyoH.length ? Math.round(Math.max(...tokyoH)) : null,
+        low:       tokyoL.length ? Math.round(Math.min(...tokyoL)) : null,
         close:     tokyoClose,
-        changePct: null,
+        changePct: pct(tokyoC, tokyoClose),
       },
       london: {
-        high:      londonHighs.length ? Math.round(Math.max(...londonHighs)) : null,
-        low:       londonLows.length  ? Math.round(Math.min(...londonLows))  : null,
+        high:      londonH.length ? Math.round(Math.max(...londonH)) : null,
+        low:       londonL.length ? Math.round(Math.min(...londonL)) : null,
         close:     londonClose,
-        changePct: null,
+        changePct: pct(londonC, londonClose),
       },
     }
   } catch {
@@ -255,7 +287,7 @@ export async function GET(request: NextRequest) {
         marketClosed: true,
         marketStatus: mktStatus.label,
         market: {
-          spx:          { price: spxPrice, changePct: spxChgPct, high: spxHigh, low: spxLow },
+          spx:          { price: spxPrice, prevClose: spxPrev, changePct: spxChgPct, high: spxHigh, low: spxLow },
           vix:          { price: vixPrice, estimated: vixEstimated },
           expectedMove: em,
           emUpper:      em && spxPrice ? Math.round(spxPrice + em) : null,
@@ -392,7 +424,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       market: {
-        spx:          { price: spxPrice, changePct: spxChgPct, high: spxHigh, low: spxLow },
+        spx:          { price: spxPrice, prevClose: spxPrev, changePct: spxChgPct, high: spxHigh, low: spxLow },
         vix:          { price: vixPrice, estimated: vixEstimated },
         expectedMove: em,
         emUpper:      em && spxPrice ? Math.round(spxPrice + em) : null,
