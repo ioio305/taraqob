@@ -22,7 +22,7 @@ const TIER_COLOR: Record<string, string> = { radar: '#4A5568', signal: '#60A5FA'
 function EditModal({ user, onClose, onSaved }: {
   user: User; onClose: () => void; onSaved: () => void
 }) {
-  const [tab, setTab]       = useState<'info' | 'role' | 'tier' | 'password'>('info')
+  const [tab, setTab]       = useState<'info' | 'role' | 'tier' | 'notif' | 'password'>('info')
   const [saving, setSaving] = useState(false)
   const [msg, setMsg]       = useState<{ text: string; ok: boolean } | null>(null)
 
@@ -38,10 +38,16 @@ function EditModal({ user, onClose, onSaved }: {
   const [newPw, setNewPw]         = useState('')
   const [resetLink, setResetLink] = useState<string | null>(null)
 
+  const [notifTitle, setNotifTitle] = useState('')
+  const [notifBody, setNotifBody]   = useState('')
+  const [notifType, setNotifType]   = useState('info')
+  const [notifUrl, setNotifUrl]     = useState('')
+
   const TABS = [
     { key: 'info',     label: 'المعلومات',   icon: '◎' },
     { key: 'role',     label: 'الدور',        icon: '◈' },
     { key: 'tier',     label: 'الباقة',       icon: '◉' },
+    { key: 'notif',    label: 'إشعار',        icon: '🔔' },
     { key: 'password', label: 'كلمة المرور', icon: '🔑' },
   ] as const
 
@@ -60,6 +66,21 @@ function EditModal({ user, onClose, onSaved }: {
     }
     if (tab === 'tier') {
       payload.subscription_tier = tier
+    }
+    if (tab === 'notif') {
+      if (!notifTitle.trim() || !notifBody.trim()) {
+        setMsg({ text: 'العنوان والمحتوى مطلوبان', ok: false }); setSaving(false); return
+      }
+      const res = await fetch('/api/v2/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.id, title: notifTitle.trim(), body: notifBody.trim(), type: notifType, action_url: notifUrl.trim() || undefined }),
+      })
+      const d = await res.json()
+      setSaving(false)
+      setMsg(d.id ? { text: 'تم إرسال الإشعار ✓', ok: true } : { text: d.error ?? 'خطأ', ok: false })
+      if (d.id) { setNotifTitle(''); setNotifBody(''); setNotifUrl('') }
+      return
     }
     if (tab === 'password') {
       payload.action   = pwMode === 'link' ? 'reset_password_link' : 'set_password'
@@ -207,6 +228,43 @@ function EditModal({ user, onClose, onSaved }: {
             </Field>
           )}
 
+          {/* Notification Tab */}
+          {tab === 'notif' && (
+            <div className="space-y-3">
+              <Field label="نوع الإشعار">
+                <div className="flex gap-2 flex-wrap">
+                  {[['info','معلومة','#60A5FA'],['warning','تحذير','#F59E0B'],['signal','إشارة','#10B981'],['strategy','استراتيجية','#C9943A'],['system','نظام','#A78BFA']].map(([k, lbl, c]) => (
+                    <button key={k} onClick={() => setNotifType(k)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-mono transition-all"
+                      style={{
+                        background: notifType === k ? `${c}20` : 'rgba(255,255,255,0.03)',
+                        color:      notifType === k ? c : '#2D3748',
+                        border:     `1px solid ${notifType === k ? c + '50' : 'rgba(255,255,255,0.06)'}`,
+                      }}>
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+              <Field label="العنوان">
+                <Input value={notifTitle} onChange={setNotifTitle} placeholder="عنوان الإشعار" />
+              </Field>
+              <Field label="المحتوى">
+                <textarea value={notifBody} onChange={e => setNotifBody(e.target.value)}
+                  placeholder="نص الإشعار..."
+                  rows={3}
+                  className="w-full rounded-xl px-3 py-2.5 text-sm text-white outline-none resize-none"
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', fontFamily: 'inherit' }} />
+              </Field>
+              <Field label="رابط (اختياري)">
+                <Input value={notifUrl} onChange={setNotifUrl} placeholder="/v2/signals" dir="ltr" />
+              </Field>
+              <div className="rounded-xl px-3 py-2 text-xs font-mono" style={{ background: 'rgba(201,148,58,0.06)', border: '1px solid rgba(201,148,58,0.15)', color: '#C9943A' }}>
+                سيصل الإشعار لـ <span className="font-bold">{user.full_name_ar || user.full_name || user.email}</span> فور الإرسال
+              </div>
+            </div>
+          )}
+
           {/* Password Tab */}
           {tab === 'password' && (
             <>
@@ -271,7 +329,7 @@ function EditModal({ user, onClose, onSaved }: {
                     disabled={saving || (tab === 'password' && pwMode === 'set' && newPw.length < 6)}
                     className="flex-1 py-2.5 rounded-xl text-sm font-bold disabled:opacity-40 transition-all"
                     style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
-              {saving ? 'جاري...' : tab === 'password' ? (pwMode === 'link' ? 'إنشاء الرابط' : 'تعيين كلمة المرور') : 'حفظ'}
+              {saving ? 'جاري...' : tab === 'notif' ? 'إرسال الإشعار 🔔' : tab === 'password' ? (pwMode === 'link' ? 'إنشاء الرابط' : 'تعيين كلمة المرور') : 'حفظ'}
             </button>
             <button onClick={onClose}
                     className="px-5 py-2.5 rounded-xl text-sm font-medium"
@@ -324,6 +382,34 @@ export default function UsersPage() {
   const [inviting, setInviting]       = useState(false)
   const [inviteMsg, setInviteMsg]     = useState<{ text: string; ok: boolean; link?: string } | null>(null)
 
+  // Broadcast notification
+  const [broadcastOpen, setBroadcastOpen]   = useState(false)
+  const [broadcastTitle, setBroadcastTitle] = useState('')
+  const [broadcastBody, setBroadcastBody]   = useState('')
+  const [broadcastType, setBroadcastType]   = useState('info')
+  const [broadcastUrl, setBroadcastUrl]     = useState('')
+  const [broadcasting, setBroadcasting]     = useState(false)
+  const [broadcastMsg, setBroadcastMsg]     = useState<{ text: string; ok: boolean } | null>(null)
+
+  async function sendBroadcast() {
+    if (!broadcastTitle.trim() || !broadcastBody.trim()) return
+    setBroadcasting(true); setBroadcastMsg(null)
+    // Send to all loaded users (max 20 per page — for a true broadcast you'd need a backend job)
+    let success = 0
+    for (const u of users) {
+      try {
+        const res = await fetch('/api/v2/notifications', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: u.id, title: broadcastTitle.trim(), body: broadcastBody.trim(), type: broadcastType, action_url: broadcastUrl.trim() || undefined }),
+        })
+        if ((await res.json()).id) success++
+      } catch {}
+    }
+    setBroadcasting(false)
+    setBroadcastMsg({ text: `تم الإرسال لـ ${success} من ${users.length} مستخدم`, ok: success > 0 })
+    if (success > 0) { setBroadcastTitle(''); setBroadcastBody(''); setBroadcastUrl('') }
+  }
+
   const load = useCallback(async () => {
     setLoading(true)
     const p = new URLSearchParams({ page: String(page) })
@@ -375,6 +461,84 @@ export default function UsersPage() {
       {editUser && (
         <EditModal user={editUser} onClose={() => setEditUser(null)}
                    onSaved={() => { load(); setEditUser(null) }} />
+      )}
+
+      {/* ── Broadcast Modal ── */}
+      {broadcastOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4"
+             style={{ background: 'rgba(0,0,0,0.8)' }}
+             onClick={e => e.target === e.currentTarget && setBroadcastOpen(false)}>
+          <div className="rounded-2xl p-6 w-full max-w-md" dir="rtl"
+               style={{ background: '#0D1B2A', border: '1px solid rgba(201,148,58,0.25)' }}>
+            <div className="text-base font-bold text-white mb-1">📢 إشعار جماعي</div>
+            <div className="text-xs font-mono mb-5" style={{ color: '#4A5568' }}>يُرسَل لكل المستخدمين في الصفحة الحالية ({users.length})</div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-mono block mb-1.5" style={{ color: '#4A5568' }}>نوع الإشعار</label>
+                <div className="flex gap-2 flex-wrap">
+                  {[['info','معلومة','#60A5FA'],['warning','تحذير','#F59E0B'],['signal','إشارة','#10B981'],['strategy','استراتيجية','#C9943A'],['system','نظام','#A78BFA']].map(([k, lbl, c]) => (
+                    <button key={k} onClick={() => setBroadcastType(k)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-mono transition-all"
+                      style={{
+                        background: broadcastType === k ? `${c}20` : 'rgba(255,255,255,0.03)',
+                        color:      broadcastType === k ? c : '#2D3748',
+                        border:     `1px solid ${broadcastType === k ? c + '50' : 'rgba(255,255,255,0.06)'}`,
+                      }}>
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-mono block mb-1.5" style={{ color: '#4A5568' }}>العنوان</label>
+                <input value={broadcastTitle} onChange={e => setBroadcastTitle(e.target.value)}
+                       placeholder="عنوان الإشعار"
+                       className="w-full rounded-xl px-3 py-2.5 text-sm text-white outline-none"
+                       style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', fontFamily: 'inherit' }} />
+              </div>
+              <div>
+                <label className="text-xs font-mono block mb-1.5" style={{ color: '#4A5568' }}>المحتوى</label>
+                <textarea value={broadcastBody} onChange={e => setBroadcastBody(e.target.value)}
+                  placeholder="نص الإشعار..." rows={3}
+                  className="w-full rounded-xl px-3 py-2.5 text-sm text-white outline-none resize-none"
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', fontFamily: 'inherit' }} />
+              </div>
+              <div>
+                <label className="text-xs font-mono block mb-1.5" style={{ color: '#4A5568' }}>رابط (اختياري)</label>
+                <input value={broadcastUrl} onChange={e => setBroadcastUrl(e.target.value)}
+                       placeholder="/v2/signals" dir="ltr"
+                       className="w-full rounded-xl px-3 py-2.5 text-sm text-white outline-none"
+                       style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', fontFamily: 'inherit' }} />
+              </div>
+
+              {broadcastMsg && (
+                <div className="rounded-lg px-4 py-2.5 text-sm font-mono"
+                     style={{
+                       background: broadcastMsg.ok ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
+                       color:      broadcastMsg.ok ? '#10B981' : '#EF4444',
+                       border:     `1px solid ${broadcastMsg.ok ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}`,
+                     }}>
+                  {broadcastMsg.text}
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                <button onClick={sendBroadcast}
+                        disabled={broadcasting || !broadcastTitle.trim() || !broadcastBody.trim()}
+                        className="flex-1 py-2.5 rounded-xl text-sm font-bold disabled:opacity-40 transition-all"
+                        style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
+                  {broadcasting ? 'جاري الإرسال...' : '📢 إرسال للكل'}
+                </button>
+                <button onClick={() => { setBroadcastOpen(false); setBroadcastMsg(null) }}
+                        className="px-5 py-2.5 rounded-xl text-sm"
+                        style={{ background: 'rgba(255,255,255,0.04)', color: '#4A5568' }}>
+                  إغلاق
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Invite Modal ── */}
@@ -473,11 +637,18 @@ export default function UsersPage() {
             {total}
           </span>
         </div>
-        <button onClick={() => { setInviteOpen(true); setInviteMsg(null) }}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold shrink-0"
-                style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
-          + دعوة
-        </button>
+        <div className="flex gap-2 shrink-0">
+          <button onClick={() => { setBroadcastOpen(true); setBroadcastMsg(null) }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold"
+                  style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)', color: '#60A5FA' }}>
+            📢 إشعار جماعي
+          </button>
+          <button onClick={() => { setInviteOpen(true); setInviteMsg(null) }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold"
+                  style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
+            + دعوة
+          </button>
+        </div>
       </div>
 
       {/* ── Filters ── */}
