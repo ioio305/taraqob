@@ -115,16 +115,82 @@ function liveScore(
   return score
 }
 
+// ── Yahoo Finance: SPX session data (ES futures) ───────────────────────
+async function fetchSPXSessions() {
+  try {
+    const res = await fetch(
+      'https://query1.finance.yahoo.com/v8/finance/chart/ES%3DF?interval=1h&range=2d',
+      { headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' }, cache: 'no-store' }
+    )
+    if (!res.ok) throw new Error('Yahoo Finance error')
+    const json = await res.json()
+    const result = json?.chart?.result?.[0]
+    if (!result?.timestamp) throw new Error('No data')
+
+    const timestamps: number[] = result.timestamp
+    const highs: number[]      = result.indicators.quote[0].high  ?? []
+    const lows:  number[]      = result.indicators.quote[0].low   ?? []
+
+    // Build ET date string for today
+    const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+    const d = new Date(todayET + 'T00:00:00')
+    d.setDate(d.getDate() - 1)
+    const yesterdayET = d.toISOString().slice(0, 10)
+
+    const tokyoHighs:  number[] = []
+    const tokyoLows:   number[] = []
+    const londonHighs: number[] = []
+    const londonLows:  number[] = []
+
+    for (let i = 0; i < timestamps.length; i++) {
+      if (!highs[i] || !lows[i]) continue
+      const dt    = new Date(timestamps[i] * 1000)
+      const dateET = dt.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+      const hourET = parseInt(dt.toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/New_York' }))
+
+      // Tokyo session: yesterday 19:00–23:59 ET + today 00:00–01:59 ET
+      if ((dateET === yesterdayET && hourET >= 19) || (dateET === todayET && hourET < 2)) {
+        tokyoHighs.push(highs[i])
+        tokyoLows.push(lows[i])
+      }
+      // London session: today 03:00–09:29 ET
+      if (dateET === todayET && hourET >= 3 && hourET < 10) {
+        londonHighs.push(highs[i])
+        londonLows.push(lows[i])
+      }
+    }
+
+    return {
+      tokyo: {
+        high:      tokyoHighs.length  ? Math.round(Math.max(...tokyoHighs))  : null,
+        low:       tokyoLows.length   ? Math.round(Math.min(...tokyoLows))   : null,
+        close:     null,
+        changePct: null,
+      },
+      london: {
+        high:      londonHighs.length ? Math.round(Math.max(...londonHighs)) : null,
+        low:       londonLows.length  ? Math.round(Math.min(...londonLows))  : null,
+        close:     null,
+        changePct: null,
+      },
+    }
+  } catch {
+    return {
+      tokyo:  { high: null, low: null, close: null, changePct: null },
+      london: { high: null, low: null, close: null, changePct: null },
+    }
+  }
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const forceType = searchParams.get('type') as 'call' | 'put' | null
 
   try {
     // ── 1. Fetch SPX, VIX, sessions in parallel ──────────────────
-    // Include VIXY as VIX proxy (VIXY × 3.4 ≈ VIX when VIX is low-mid range)
-    const [mktData, sessData] = await Promise.all([
+    const [mktData, sessions] = await Promise.all([
       tGet('/markets/quotes?symbols=$SPX.X,$VIX.X,VIX,SPY,VIXY&greeks=false').catch(() => null),
-      tGet('/markets/quotes?symbols=EWJ,EWU&greeks=false').catch(() => null),
+      fetchSPXSessions(),
     ])
 
     // Extract SPX + VIX
@@ -164,13 +230,6 @@ export async function GET(request: NextRequest) {
 
     if (!spxPrice) return NextResponse.json({ success: false, error: 'تعذر جلب سعر SPX', contracts: [] })
 
-    // Sessions (London = EWU, Tokyo = EWJ)
-    const sessQs: any[] = sessData?.quotes?.quote
-      ? (Array.isArray(sessData.quotes.quote) ? sessData.quotes.quote : [sessData.quotes.quote])
-      : []
-    const ewjQ = sessQs.find((q: any) => q.symbol === 'EWJ')
-    const ewuQ = sessQs.find((q: any) => q.symbol === 'EWU')
-
     // Expected Move (intraday)
     const em: number | null = spxPrice > 0 && vixPrice > 0
       ? Math.round(spxPrice * (vixPrice / 100) * Math.sqrt(1 / 252))
@@ -194,8 +253,8 @@ export async function GET(request: NextRequest) {
           emLower:      em && spxPrice ? Math.round(spxPrice - em) : null,
         },
         sessions: {
-          london: { high: ewuQ?.high ?? null, low: ewuQ?.low ?? null, close: ewuQ?.last ?? null, changePct: ewuQ?.change_percentage ?? null },
-          tokyo:  { high: ewjQ?.high ?? null, low: ewjQ?.low ?? null, close: ewjQ?.last ?? null, changePct: ewjQ?.change_percentage ?? null },
+          london: sessions.london,
+          tokyo:  sessions.tokyo,
         },
         direction:   { type: null, label: mktStatus.label, color: '#4A5568', reason: 'لا تداول خارج أوقات السوق' },
         contracts:   [],

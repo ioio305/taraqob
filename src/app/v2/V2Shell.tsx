@@ -2,7 +2,7 @@
 
 import { useState, useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 const ROLE_LABEL_MAP: Record<string, string>  = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
@@ -59,6 +59,7 @@ function SectionTitle({ children, color = '#1A2A3A' }: { children: string; color
 export default function V2Shell({ children, userName, userRole, userSecondaryRoles = [] }: {
   children: ReactNode; userName: string; userRole: string; userSecondaryRoles?: string[]
 }) {
+  const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
   // Admin-only view preview (purely cosmetic, never affects access)
@@ -99,8 +100,15 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
     setSwitcherOpen(false)
     const next = r === userRole ? null : r
     setPreviewRole(next)
-    if (next) localStorage.setItem('taraqob_view_as', next)
-    else      localStorage.removeItem('taraqob_view_as')
+    if (next) {
+      localStorage.setItem('taraqob_view_as', next)
+      // Navigate to user dashboard when previewing as non-admin
+      router.push('/v2')
+    } else {
+      localStorage.removeItem('taraqob_view_as')
+      // Return to admin panel
+      router.push('/v2/admin')
+    }
   }
 
   async function logout() {
