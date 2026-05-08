@@ -350,217 +350,79 @@ export default async function RootPage() {
         </div>
       </section>
 
-      {/* ── Pricing ── */}
-      <section id="plans" className="max-w-6xl mx-auto px-6 py-24">
-        <div className="text-center mb-6">
-          <div className="text-xs font-mono tracking-widest mb-3" style={{ color: '#C9943A' }}>مستويات الوصول</div>
-          <h2 className="text-3xl font-bold text-white mb-3">اختر مستوى رؤيتك</h2>
-          <p className="text-sm max-w-md mx-auto" style={{ color: '#4A5568' }}>
-            ليس اشتراكاً تدفعه — قرار تتخذه. كل مستوى يمنحك ميزة معلوماتية حقيقية.
-          </p>
-        </div>
-
-        {/* Toggle note */}
-        <div className="flex justify-center mb-12">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-mono"
-            style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', color: '#10B981' }}>
-            <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#10B981' }} />
-            3 أيام وصول كامل لمستوى Edge مجاناً عند التسجيل
-          </div>
+      {/* ── Plans ── */}
+      <section id="plans" className="max-w-5xl mx-auto px-6 py-24">
+        <div className="text-center mb-14">
+          <div className="text-xs font-mono tracking-widest mb-3" style={{ color: '#C9943A' }}>الباقات</div>
+          <h2 className="text-3xl font-bold text-white mb-3">اختر ما يناسبك</h2>
+          <p className="text-sm" style={{ color: '#4A5568' }}>كل الأرقام حقيقية · كل الإشارات موثّقة · لا وعود فارغة</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-
-          {/* Radar */}
           {[
             {
-              name: 'Radar',
-              nameAr: 'مراقب',
-              price: 'مجاني',
-              priceNote: 'للأبد',
-              tagline: 'ابدأ من هنا — يرى السوق من بعيد',
+              key: 'radar', label: 'رادار', price: 'مجاني', period: '',
               color: '#4A5568',
-              colorBg: 'rgba(74,85,104,0.08)',
-              colorBorder: 'rgba(74,85,104,0.25)',
-              popular: false,
-              features: [
-                { label: 'مؤشرات SPX وVIX',         available: true  },
-                { label: 'تحليل عقد واحد يومياً',    available: true  },
-                { label: 'الشارت — إطار زمني واحد', available: true  },
-                { label: 'آخر 3 إشارات',             available: true  },
-                { label: 'كونسول العقود',            available: false },
-                { label: 'محرك الاستراتيجيات',       available: false },
-                { label: 'إشعارات فورية',            available: false },
-              ],
-              cta: 'ابدأ مجاناً',
-              ctaStyle: { background: 'rgba(74,85,104,0.15)', border: '1px solid rgba(74,85,104,0.3)', color: '#94A3B8' },
+              desc: 'للمبتدئين — الداشبورد وتحليل العقود',
+              features: ['داشبورد SPX الحي', 'تحليل العقد الفوري', 'قائمة مختصرة', 'درجة القرار'],
             },
             {
-              name: 'Signal',
-              nameAr: 'محلل',
-              price: '$29',
-              priceNote: 'شهرياً',
-              tagline: 'أداة كاملة للمتداول الجاد',
+              key: 'signal', label: 'سيجنال', price: '$29', period: '/شهر',
               color: '#60A5FA',
-              colorBg: 'rgba(96,165,250,0.08)',
-              colorBorder: 'rgba(96,165,250,0.25)',
-              popular: false,
-              features: [
-                { label: 'كل ما في Radar',           available: true  },
-                { label: 'تحليل عقود غير محدود',     available: true  },
-                { label: 'الشارت بكل الإطارات',      available: true  },
-                { label: 'كونسول العقود كاملاً',     available: true  },
-                { label: 'الإشارات والأداء كاملاً',  available: true  },
-                { label: 'محرك الاستراتيجيات',       available: false },
-                { label: 'إشعارات فورية',            available: false },
-              ],
-              cta: 'ابدأ 3 أيام مجاناً',
-              ctaStyle: { background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.3)', color: '#60A5FA' },
+              desc: 'إشارات موثّقة وأدوات تحليل متقدمة',
+              features: ['إشارات موثّقة بدخول وخروج', 'صفحة الأداء التاريخي', 'كونسول العقود', 'كل ميزات رادار'],
             },
             {
-              name: 'Edge',
-              nameAr: 'استراتيجي',
-              price: '$89',
-              priceNote: 'شهرياً',
-              tagline: 'الميزة المعلوماتية الحقيقية',
-              color: '#C9943A',
-              colorBg: 'rgba(201,148,58,0.08)',
-              colorBorder: 'rgba(201,148,58,0.4)',
-              popular: true,
-              features: [
-                { label: 'كل ما في Signal',          available: true  },
-                { label: 'محرك الاستراتيجيات',       available: true  },
-                { label: 'إشعارات فورية',            available: true  },
-                { label: 'تقارير أسبوعية موثّقة',    available: true  },
-                { label: 'وصول مبكر للمزايا',        available: true  },
-                { label: 'شارة Edge في المجتمع',     available: true  },
-                { label: 'لوحة المحلل المعتمد',      available: false },
-              ],
-              cta: 'ابدأ 3 أيام مجاناً',
-              ctaStyle: { background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' },
+              key: 'edge', label: 'إيدج', price: '$79', period: '/شهر',
+              color: '#C9943A', badge: 'الأكثر شعبية',
+              desc: 'تحليل معمّق وأدوات الشارت الكاملة',
+              features: ['الشارت المتقدم', 'تحليل معمّق للاستراتيجيات', 'وصول مبكر للميزات', 'كل ميزات سيجنال'],
             },
             {
-              name: 'Alpha',
-              nameAr: 'خبير',
-              price: 'دعوة',
-              priceNote: 'فقط',
-              tagline: 'النخبة الموثّقة — جزء من المنصة',
+              key: 'alpha', label: 'ألفا', price: '$199', period: '/شهر',
               color: '#A78BFA',
-              colorBg: 'rgba(167,139,250,0.08)',
-              colorBorder: 'rgba(167,139,250,0.25)',
-              popular: false,
-              features: [
-                { label: 'كل ما في Edge',            available: true  },
-                { label: 'لوحة المحلل المعتمد',      available: true  },
-                { label: 'نشر تحليلاتك داخل ترقّب',  available: true  },
-                { label: 'عمولة على الاشتراكات',     available: true  },
-                { label: 'شهادة موثّقة بالأرقام',    available: true  },
-                { label: 'اجتماع شهري مع الفريق',    available: true  },
-                { label: 'وصول كامل غير محدود',      available: true  },
-              ],
-              cta: 'تواصل مع الفريق',
-              ctaStyle: { background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', color: '#A78BFA' },
+              desc: 'وصول كامل غير محدود + أولوية الدعم',
+              features: ['وصول كامل لكل الميزات', 'أولوية في الدعم', 'تقارير مخصصة', 'كل ميزات إيدج'],
             },
-          ].map(plan => (
-            <div key={plan.name}
-              className="relative rounded-2xl p-5 flex flex-col"
+          ].map(tier => (
+            <div key={tier.key} className="rounded-2xl p-5 flex flex-col relative"
               style={{
-                background: plan.popular ? 'rgba(13,27,42,0.95)' : 'rgba(13,27,42,0.6)',
-                border: `1px solid ${plan.colorBorder}`,
-                boxShadow: plan.popular ? `0 0 40px ${plan.color}15` : 'none',
+                background: `linear-gradient(160deg, ${tier.color}06 0%, rgba(13,27,42,0.9) 100%)`,
+                border: `1px solid ${tier.color}25`,
               }}>
-
-              {plan.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span className="px-3 py-1 rounded-full text-xs font-bold font-mono"
-                    style={{ background: '#C9943A', color: '#060D14' }}>
-                    الأكثر اختياراً
-                  </span>
+              {(tier as any).badge && (
+                <div className="absolute -top-3 right-4 text-[10px] font-mono px-2.5 py-1 rounded-full font-bold"
+                  style={{ background: tier.color, color: '#060D14' }}>
+                  {(tier as any).badge}
                 </div>
               )}
-
-              {/* Header */}
               <div className="mb-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-bold font-mono px-2 py-0.5 rounded"
-                    style={{ background: `${plan.color}18`, color: plan.color }}>
-                    {plan.name}
-                  </span>
+                <div className="text-xs font-mono mb-1" style={{ color: tier.color }}>{tier.label}</div>
+                <div className="flex items-baseline gap-1 mb-2">
+                  <span className="text-2xl font-bold font-mono text-white">{tier.price}</span>
+                  {tier.period && <span className="text-xs" style={{ color: '#4A5568' }}>{tier.period}</span>}
                 </div>
-                <div className="text-lg font-bold text-white">{plan.nameAr}</div>
-                <div className="text-xs mt-1" style={{ color: '#4A5568' }}>{plan.tagline}</div>
+                <p className="text-xs leading-relaxed" style={{ color: '#4A5568' }}>{tier.desc}</p>
               </div>
-
-              {/* Price */}
-              <div className="mb-5 pb-5" style={{ borderBottom: `1px solid ${plan.colorBorder}` }}>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-black" style={{ color: plan.color }}>{plan.price}</span>
-                  <span className="text-xs" style={{ color: '#4A5568' }}>{plan.priceNote}</span>
-                </div>
-              </div>
-
-              {/* Features */}
-              <ul className="space-y-2 flex-1 mb-6">
-                {plan.features.map(f => (
-                  <li key={f.label} className="flex items-center gap-2 text-xs">
-                    <span className="shrink-0 w-4 text-center font-bold"
-                      style={{ color: f.available ? '#10B981' : '#1A2A3A' }}>
-                      {f.available ? '✓' : '×'}
-                    </span>
-                    <span style={{ color: f.available ? '#94A3B8' : '#2D3748' }}>{f.label}</span>
+              <ul className="space-y-2 flex-1 mb-5">
+                {tier.features.map(f => (
+                  <li key={f} className="flex items-start gap-2 text-xs">
+                    <span className="mt-0.5 shrink-0" style={{ color: tier.color }}>✓</span>
+                    <span style={{ color: '#64748B' }}>{f}</span>
                   </li>
                 ))}
               </ul>
-
-              {/* CTA */}
-              <Link href="/login"
+              <Link href={tier.key === 'radar' ? '/login' : `/login?plan=${tier.key}`}
                 className="block text-center py-2.5 rounded-xl text-sm font-bold transition-all"
-                style={plan.ctaStyle}>
-                {plan.cta}
+                style={{
+                  background: tier.key === 'radar' ? 'rgba(255,255,255,0.04)' : `${tier.color}18`,
+                  border: `1px solid ${tier.color}30`,
+                  color: tier.key === 'radar' ? '#4A5568' : tier.color,
+                }}>
+                {tier.key === 'radar' ? 'ابدأ مجاناً' : 'اشترك الآن'}
               </Link>
             </div>
           ))}
-        </div>
-
-        <p className="text-center text-xs mt-8" style={{ color: '#1A2A3A' }}>
-          الأسعار بالدولار الأمريكي · يمكن الإلغاء في أي وقت · البيانات من Tradier API · ليست توصيات استثمارية
-        </p>
-      </section>
-
-      {/* ── Social proof ── */}
-      <section style={{ background: 'rgba(13,27,42,0.4)', borderTop: '1px solid rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-        <div className="max-w-4xl mx-auto px-6 py-12">
-          <div className="text-center mb-8">
-            <div className="text-xs font-mono tracking-widest" style={{ color: '#C9943A' }}>لماذا ترقّب بدل جروبات التيليجرام؟</div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {[
-              {
-                icon: '⊞',
-                title: 'أداء موثّق بالأرقام الحقيقية',
-                desc: 'لا نخفي الخسائر. كل إشارة مسجّلة بوقتها وسعرها ونتيجتها — رابح أو خاسر. الشفافية هي ميزتنا.',
-                color: '#C9943A',
-              },
-              {
-                icon: '◎',
-                title: 'تحليل لا توصية',
-                desc: 'ترقّب تعطيك الدرجة، السبب، الشرط، والإلغاء — لا "ادخل الآن". القرار النهائي لك دائماً.',
-                color: '#10B981',
-              },
-              {
-                icon: '◈',
-                title: 'بيانات Tradier الحية لا الاستنتاج',
-                desc: 'Greeks حقيقية، أسعار حية، VWAP من timesales — لا بيانات متأخرة ولا تقديرات.',
-                color: '#60A5FA',
-              },
-            ].map(p => (
-              <div key={p.title} className="text-center px-4">
-                <div className="text-2xl mb-3" style={{ color: p.color }}>{p.icon}</div>
-                <div className="text-sm font-bold text-white mb-2">{p.title}</div>
-                <div className="text-xs leading-relaxed" style={{ color: '#4A5568' }}>{p.desc}</div>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
@@ -568,26 +430,19 @@ export default async function RootPage() {
       <section className="max-w-3xl mx-auto px-6 py-24 text-center">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono mb-6"
           style={{ background: 'rgba(201,148,58,0.08)', border: '1px solid rgba(201,148,58,0.2)', color: '#C9943A' }}>
-          3 أيام وصول كامل — مجاناً
+          بالدعوة فقط
         </div>
         <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4 leading-tight">
           جاهز لتداول أكثر احترافية؟
         </h2>
         <p className="text-base mb-10 max-w-sm mx-auto" style={{ color: '#4A5568' }}>
-          ابدأ بـ Radar مجاناً أو جرّب Edge 3 أيام كاملة — لا بطاقة ائتمانية مطلوبة
+          المنصة تعمل بالدعوة فقط — تواصل مع المدير للحصول على وصول
         </p>
-        <div className="flex flex-wrap items-center justify-center gap-4">
-          <Link href="/login"
-            className="inline-flex items-center gap-2 px-10 py-4 rounded-xl text-base font-bold transition-all"
-            style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
-            ابدأ الآن — مجاناً ←
-          </Link>
-          <a href="#plans"
-            className="inline-flex items-center gap-2 px-8 py-4 rounded-xl text-base font-medium"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#94A3B8' }}>
-            مقارنة الباقات
-          </a>
-        </div>
+        <Link href="/login"
+          className="inline-flex items-center gap-2 px-10 py-4 rounded-xl text-base font-bold transition-all"
+          style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
+          تسجيل الدخول ←
+        </Link>
       </section>
 
       {/* ── Footer ── */}

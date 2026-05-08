@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
+import { NewsBar, NewsImpactBadge, useNews } from '@/components/v2/NewsBar'
 
 type Market = {
   spx: { price: number; prevClose?: number; changePct: number; high: number; low: number }
@@ -84,13 +86,21 @@ const RANK_LABELS      = ['الأفضل', 'بديل', 'محافظ']
 const WATCH_RANK_LABEL: Record<string, string> = { call: '▲ Call — مراقبة', put: '▼ Put — مراقبة' }
 const REFRESH_SEC = 30
 
+const TIER_LABEL: Record<string, string> = { signal: 'سيجنال', edge: 'إيدج', alpha: 'ألفا' }
+const TIER_COLOR: Record<string, string> = { signal: '#60A5FA', edge: '#C9943A', alpha: '#A78BFA' }
+
 export default function V2Dashboard() {
+  const searchParams = useSearchParams()
+  const upgradedTier = searchParams.get('upgraded')
+  const [showUpgradeBanner, setShowUpgradeBanner] = useState(!!upgradedTier)
+
   const [data, setData]     = useState<Data | null>(null)
   const [loading, setLoad]  = useState(true)
   const [ts, setTs]         = useState<Date | null>(null)
   const [countdown, setCd]  = useState(REFRESH_SEC)
   const [strike, setStrike] = useState('')
   const [ctype, setCtype]   = useState<'auto' | 'call' | 'put'>('auto')
+  const { news, loading: newsLoading, failed: newsFailed } = useNews()
   const cdRef        = useRef<ReturnType<typeof setInterval> | null>(null)
   // Frozen plans: locked when a contract is first seen — never auto-updated
   const lockedPlans  = useRef<Map<string, LockedPlan>>(new Map())
@@ -178,6 +188,32 @@ export default function V2Dashboard() {
   return (
     <div className="min-h-full p-4 pb-10 space-y-4 max-w-4xl mx-auto"
          style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }} dir="rtl">
+
+      {/* ── News bar ── */}
+      <NewsBar news={news} loading={newsLoading} failed={newsFailed} />
+
+      {/* ── Upgrade success banner ── */}
+      {showUpgradeBanner && upgradedTier && (
+        <div className="rounded-2xl px-5 py-4 flex items-center justify-between"
+          style={{
+            background: `linear-gradient(135deg, ${TIER_COLOR[upgradedTier] ?? '#C9943A'}12, rgba(13,27,42,0.9))`,
+            border: `1px solid ${TIER_COLOR[upgradedTier] ?? '#C9943A'}35`,
+          }}>
+          <div className="flex items-center gap-3">
+            <span className="text-xl">🎉</span>
+            <div>
+              <div className="text-sm font-bold text-white">
+                تم تفعيل باقة {TIER_LABEL[upgradedTier] ?? upgradedTier} بنجاح
+              </div>
+              <div className="text-xs mt-0.5" style={{ color: '#4A5568' }}>
+                يمكنك الآن الوصول لجميع ميزات باقتك
+              </div>
+            </div>
+          </div>
+          <button onClick={() => setShowUpgradeBanner(false)}
+            className="text-lg leading-none shrink-0" style={{ color: '#2D3748' }}>✕</button>
+        </div>
+      )}
 
       {/* ── Direction Banner ── */}
       <div className="rounded-2xl px-5 py-4 flex items-center justify-between"
@@ -546,6 +582,9 @@ export default function V2Dashboard() {
                       </button>
                     </div>
                   )}
+
+                  {/* ── News impact ── */}
+                  <NewsImpactBadge news={news} />
 
                   {/* ── Live price bar ── */}
                   {strat && (

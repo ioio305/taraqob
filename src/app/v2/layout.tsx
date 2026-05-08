@@ -25,12 +25,8 @@ export default async function V2Layout({ children }: { children: ReactNode }) {
   const subscriptionTier = (profile as any).subscription_tier ?? 'radar'
 
   return (
-    <V2Shell
-      userName={displayName}
-      userRole={profile.role}
-      userSecondaryRoles={secondaryRoles}
-      subscriptionTier={subscriptionTier}
-    >
+    <V2Shell userName={displayName} userRole={profile.role}
+             userSecondaryRoles={secondaryRoles} subscriptionTier={subscriptionTier}>
       {children}
     </V2Shell>
   )

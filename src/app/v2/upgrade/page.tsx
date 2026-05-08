@@ -1,81 +1,158 @@
+'use client'
+
+import { useState } from 'react'
 import Link from 'next/link'
 
+const TIERS = [
+  {
+    key:   'signal',
+    label: 'سيجنال',
+    color: '#60A5FA',
+    price: '$29',
+    period: '/شهر',
+    desc:  'للمتداولين الجادين الذين يريدون إشارات موثّقة وأدوات تحليل متقدمة',
+    features: [
+      'الإشارات الموثّقة مع دخول وخروج حقيقي',
+      'صفحة الأداء التاريخي',
+      'كونسول العقود المتقدم',
+      'جميع ميزات رادار',
+    ],
+  },
+  {
+    key:   'edge',
+    label: 'إيدج',
+    color: '#C9943A',
+    price: '$79',
+    period: '/شهر',
+    desc:  'للمحترفين الذين يحتاجون إلى تحليل معمّق وأدوات الشارت الكاملة',
+    features: [
+      'الشارت المتقدم مع جميع المؤشرات',
+      'تحليل معمّق للعقود والاستراتيجيات',
+      'وصول مبكر للميزات الجديدة',
+      'جميع ميزات سيجنال',
+    ],
+    badge: 'الأكثر شعبية',
+  },
+  {
+    key:   'alpha',
+    label: 'ألفا',
+    color: '#A78BFA',
+    price: '$199',
+    period: '/شهر',
+    desc:  'للمؤسسات وكبار المتداولين — وصول كامل وغير محدود',
+    features: [
+      'وصول كامل لجميع الميزات',
+      'أولوية في الدعم الفني',
+      'تقارير مخصصة',
+      'جميع ميزات إيدج',
+    ],
+  },
+]
+
 export default function UpgradePage() {
+  const [loading, setLoading] = useState<string | null>(null)
+  const [error,   setError]   = useState<string | null>(null)
+
+  async function checkout(tier: string) {
+    setLoading(tier); setError(null)
+    try {
+      const res  = await fetch('/api/v2/stripe/checkout', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier }),
+      })
+      const data = await res.json()
+      if (data.url) {
+        window.location.href = data.url
+      } else {
+        setError(data.error ?? 'حدث خطأ')
+        setLoading(null)
+      }
+    } catch {
+      setError('تعذّر الاتصال بخادم الدفع')
+      setLoading(null)
+    }
+  }
+
   return (
-    <div className="min-h-full flex items-center justify-center px-6 py-16" dir="rtl"
-      style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
-      <div className="max-w-lg w-full text-center space-y-8">
+    <div className="min-h-full px-4 sm:px-6 py-8 max-w-4xl mx-auto"
+      style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }} dir="rtl">
 
-        {/* Icon */}
-        <div className="inline-flex w-20 h-20 rounded-2xl items-center justify-center text-3xl mx-auto"
-          style={{ background: 'rgba(201,148,58,0.08)', border: '1px solid rgba(201,148,58,0.2)' }}>
-          🔒
+      {/* Header */}
+      <div className="text-center mb-10">
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-4 text-xs font-mono"
+          style={{ background: 'rgba(201,148,58,0.1)', border: '1px solid rgba(201,148,58,0.2)', color: '#C9943A' }}>
+          ترقية الباقة
         </div>
-
-        <div>
-          <h1 className="text-2xl font-bold text-white mb-3">هذه الميزة تحتاج ترقية</h1>
-          <p className="text-sm leading-relaxed" style={{ color: '#4A5568' }}>
-            المستوى الحالي لحسابك لا يشمل هذه الأداة.
-            ارقّ إلى <span style={{ color: '#60A5FA' }}>Signal</span> أو{' '}
-            <span style={{ color: '#C9943A' }}>Edge</span> للوصول الكامل.
-          </p>
-        </div>
-
-        {/* Tier comparison */}
-        <div className="grid grid-cols-2 gap-3 text-right">
-          {[
-            {
-              name: 'Signal', nameAr: 'محلل', price: '$29', color: '#60A5FA',
-              features: ['كونسول العقود كاملاً', 'الشارت بكل الإطارات', 'الإشارات والأداء كاملاً'],
-            },
-            {
-              name: 'Edge', nameAr: 'استراتيجي', price: '$89', color: '#C9943A', popular: true,
-              features: ['كل ما في Signal', 'محرك الاستراتيجيات', 'إشعارات فورية + تقارير'],
-            },
-          ].map(plan => (
-            <div key={plan.name} className="rounded-2xl p-4 flex flex-col gap-3"
-              style={{
-                background: plan.popular ? 'rgba(13,27,42,0.95)' : 'rgba(13,27,42,0.6)',
-                border: `1px solid ${plan.color}40`,
-                boxShadow: plan.popular ? `0 0 24px ${plan.color}12` : 'none',
-              }}>
-              {plan.popular && (
-                <span className="text-xs font-bold font-mono px-2 py-0.5 rounded-full self-start"
-                  style={{ background: plan.color, color: '#060D14' }}>الأكثر اختياراً</span>
-              )}
-              <div>
-                <div className="text-xs font-mono font-bold mb-0.5" style={{ color: plan.color }}>{plan.name}</div>
-                <div className="text-sm font-bold text-white">{plan.nameAr}</div>
-                <div className="text-xl font-black mt-1" style={{ color: plan.color }}>{plan.price}<span className="text-xs font-normal text-gray-500">/شهر</span></div>
-              </div>
-              <ul className="space-y-1.5 flex-1">
-                {plan.features.map(f => (
-                  <li key={f} className="flex items-center gap-1.5 text-xs" style={{ color: '#94A3B8' }}>
-                    <span style={{ color: '#10B981' }}>✓</span> {f}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-
-        {/* Actions */}
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Link href="/#plans"
-            className="px-8 py-3 rounded-xl text-sm font-bold transition-all"
-            style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
-            عرض جميع الباقات ←
-          </Link>
-          <Link href="/v2"
-            className="px-8 py-3 rounded-xl text-sm font-medium transition-all"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#94A3B8' }}>
-            العودة للوحة المستخدم
-          </Link>
-        </div>
-
-        <p className="text-xs font-mono" style={{ color: '#1A2A3A' }}>
-          تواصل مع الدعم إذا كنت تعتقد أن وصولك لا يعمل بشكل صحيح
+        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-3">افتح الوصول الكامل</h1>
+        <p className="text-sm max-w-md mx-auto leading-relaxed" style={{ color: '#4A5568' }}>
+          كل الأرقام حقيقية، كل الإشارات موثّقة. اختر الباقة التي تناسب مستوى تداولك.
         </p>
+      </div>
+
+      {error && (
+        <div className="mb-6 rounded-xl px-4 py-3 text-sm text-center font-mono"
+          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#EF4444' }}>
+          {error}
+        </div>
+      )}
+
+      {/* Tier cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        {TIERS.map(tier => (
+          <div key={tier.key} className="rounded-2xl p-5 flex flex-col relative"
+            style={{
+              background: `linear-gradient(160deg, ${tier.color}06 0%, rgba(13,27,42,0.9) 100%)`,
+              border: `1px solid ${tier.color}25`,
+            }}>
+            {tier.badge && (
+              <div className="absolute -top-3 right-4 text-[10px] font-mono px-2.5 py-1 rounded-full font-bold"
+                style={{ background: tier.color, color: '#060D14' }}>
+                {tier.badge}
+              </div>
+            )}
+
+            <div className="mb-4">
+              <div className="text-xs font-mono mb-1" style={{ color: tier.color }}>{tier.label}</div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-bold font-mono" style={{ color: 'white' }}>{tier.price}</span>
+                <span className="text-xs" style={{ color: '#4A5568' }}>{tier.period}</span>
+              </div>
+              <p className="text-xs mt-2 leading-relaxed" style={{ color: '#4A5568' }}>{tier.desc}</p>
+            </div>
+
+            <ul className="space-y-2 flex-1 mb-5">
+              {tier.features.map(f => (
+                <li key={f} className="flex items-start gap-2 text-xs">
+                  <span className="mt-0.5 shrink-0" style={{ color: tier.color }}>✓</span>
+                  <span style={{ color: '#64748B' }}>{f}</span>
+                </li>
+              ))}
+            </ul>
+
+            <button
+              onClick={() => checkout(tier.key)}
+              disabled={loading !== null}
+              className="block w-full text-center py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-60"
+              style={{
+                background: `${tier.color}15`,
+                border: `1px solid ${tier.color}30`,
+                color: tier.color,
+              }}>
+              {loading === tier.key ? '...' : 'اشترك الآن'}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Current plan reminder */}
+      <div className="rounded-xl p-4 text-center"
+        style={{ background: 'rgba(13,27,42,0.5)', border: '1px solid rgba(255,255,255,0.04)' }}>
+        <p className="text-xs" style={{ color: '#2D3748' }}>
+          أنت حالياً على باقة <span style={{ color: '#4A5568' }}>رادار</span> — الباقة المجانية تتضمن الداشبورد وتحليل العقود
+        </p>
+        <Link href="/v2" className="inline-block mt-2 text-xs" style={{ color: '#1A2A3A' }}>
+          العودة للداشبورد ←
+        </Link>
       </div>
     </div>
   )

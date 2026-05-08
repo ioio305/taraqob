@@ -11,16 +11,16 @@ export default async function ConsoleLayout({ children }: { children: ReactNode 
 
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('role, subscription_tier')
+    .select('role, subscription_tier, is_active')
     .eq('id', user.id)
     .single()
 
-  if (!profile) redirect('/login')
+  if (!profile || profile.is_active === false) redirect('/login?error=inactive')
 
   const isStaff = profile.role === 'admin' || profile.role === 'moderator'
-  const tier = (profile as any).subscription_tier ?? 'radar'
+  const tier    = (profile as any).subscription_tier ?? 'radar'
 
-  if (!isStaff && (TIER_RANK[tier] ?? 1) < 2) redirect('/v2/upgrade')
+  if (!isStaff && (TIER_RANK[tier] ?? 1) < TIER_RANK.signal) redirect('/v2/upgrade')
 
   return <>{children}</>
 }
