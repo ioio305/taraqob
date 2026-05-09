@@ -138,7 +138,7 @@ export default async function RootPage() {
               <span className="w-3 h-3 rounded-full" style={{ background: '#FEBC2E' }} />
               <span className="w-3 h-3 rounded-full" style={{ background: '#28C840' }} />
               <span className="text-xs font-mono mx-auto" style={{ color: '#2D3748' }}>
-                TARAQOB PRO — تحليل العقد
+                TARAQOB PRO — الداشبورد
               </span>
             </div>
 
@@ -152,9 +152,9 @@ export default async function RootPage() {
                   <span style={{ color: '#10B981' }}>▲ صاعد — Call فقط</span>
                 </div>
                 <span style={{ color: '#2D3748' }}>·</span>
-                <span style={{ color: '#4A5568' }}>SPX <span style={{ color: 'white' }}>5,827</span></span>
-                <span style={{ color: '#4A5568' }}>VIX <span style={{ color: '#10B981' }}>16.4</span></span>
-                <span style={{ color: '#4A5568' }}>EM <span style={{ color: '#C9943A' }}>±23</span></span>
+                <span style={{ color: '#4A5568' }}>SPX <span style={{ color: 'white' }}>7,376</span></span>
+                <span style={{ color: '#4A5568' }}>VIX <span style={{ color: '#10B981' }}>17.2</span></span>
+                <span style={{ color: '#4A5568' }}>EM <span style={{ color: '#C9943A' }}>±80</span></span>
               </div>
 
               {/* Mock contract card */}
@@ -172,16 +172,16 @@ export default async function RootPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-3 text-sm font-mono">
-                    <span style={{ color: '#4A5568' }}>0DTE · Spread 8.2%</span>
-                    <span className="text-white font-bold">5,850</span>
+                    <span style={{ color: '#4A5568' }}>0DTE · Spread 7.4%</span>
+                    <span className="text-white font-bold">7,460</span>
                   </div>
                 </div>
                 <div className="p-4" style={{ background: 'rgba(0,0,0,0.3)' }}>
                   <div className="grid grid-cols-3 gap-2 mb-3">
                     {[
-                      { l: 'Bid', v: '$3.20', hl: false },
-                      { l: 'Mid', v: '$3.45', hl: true },
-                      { l: 'Ask', v: '$3.70', hl: false },
+                      { l: 'Bid', v: '$3.90', hl: false },
+                      { l: 'Mid', v: '$4.20', hl: true },
+                      { l: 'Ask', v: '$4.50', hl: false },
                     ].map(b => (
                       <div key={b.l} className="rounded-lg p-2.5 text-center"
                         style={b.hl
@@ -194,10 +194,10 @@ export default async function RootPage() {
                   </div>
                   <div className="space-y-1.5">
                     {[
-                      { l: '◎ هدف ١ — EM ×33%', v: 'SPX 5,858', c: '#10B981', bg: 'rgba(16,185,129,0.08)' },
-                      { l: '◎ هدف ٢ — EM ×50%', v: 'SPX 5,865', c: '#C9943A', bg: 'rgba(201,148,58,0.08)' },
-                      { l: '◎ هدف ٣ — EM كامل', v: 'SPX 5,877', c: '#60A5FA', bg: 'rgba(96,165,250,0.08)' },
-                      { l: '⊘ وقف الخسارة',       v: 'SPX 5,821', c: '#EF4444', bg: 'rgba(239,68,68,0.08)' },
+                      { l: '◎ هدف ١ — EM ×33%', v: 'SPX 7,402', c: '#10B981', bg: 'rgba(16,185,129,0.08)' },
+                      { l: '◎ هدف ٢ — EM ×50%', v: 'SPX 7,416', c: '#C9943A', bg: 'rgba(201,148,58,0.08)' },
+                      { l: '◎ هدف ٣ — EM كامل', v: 'SPX 7,456', c: '#60A5FA', bg: 'rgba(96,165,250,0.08)' },
+                      { l: '⊘ وقف الخسارة',      v: 'SPX 7,340', c: '#EF4444', bg: 'rgba(239,68,68,0.08)' },
                     ].map(t => (
                       <div key={t.l} className="flex items-center justify-between rounded-lg px-3 py-2"
                         style={{ background: t.bg, border: `1px solid ${t.c}25` }}>
@@ -213,9 +213,9 @@ export default async function RootPage() {
               <div className="flex items-center gap-4 text-xs font-mono">
                 <span style={{ color: '#4A5568' }}>Decision Score</span>
                 <div className="flex-1 h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                  <div className="h-full rounded-full" style={{ width: '78%', background: 'linear-gradient(90deg,#C9943A,#10B981)' }} />
+                  <div className="h-full rounded-full" style={{ width: '76%', background: 'linear-gradient(90deg,#C9943A,#10B981)' }} />
                 </div>
-                <span className="font-bold" style={{ color: '#10B981' }}>78/100</span>
+                <span className="font-bold" style={{ color: '#10B981' }}>76/100</span>
                 <span className="px-2 py-0.5 rounded font-bold"
                   style={{ background: 'rgba(201,148,58,0.1)', color: '#C9943A', border: '1px solid rgba(201,148,58,0.2)' }}>
                   فرصة مشروطة
