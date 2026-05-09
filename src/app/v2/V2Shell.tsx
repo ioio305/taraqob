@@ -177,7 +177,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
 
   async function logout() {
     setLoggingOut(true)
-    try { await createClient().auth.signOut() } finally { window.location.href = '/login' }
+    try { await createClient().auth.signOut() } finally { window.location.href = '/' }
   }
 
   // ── Tier-aware nav renderer ────────────────────────────────
