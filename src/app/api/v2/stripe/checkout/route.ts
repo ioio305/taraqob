@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+﻿import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
@@ -29,9 +29,9 @@ export async function POST(request: NextRequest) {
   const { tier } = body
 
   const priceId = PRICE_IDS[tier]
-  if (!priceId) return NextResponse.json({ error: 'باقة غير صحيحة' }, { status: 400 })
+  if (!priceId) return NextResponse.json({ error: 'ط¨ط§ظ‚ط© ط؛ظٹط± طµط­ظٹط­ط©' }, { status: 400 })
 
-  const stripe = new Stripe(stripeKey, { apiVersion: '2025-04-30.basil' })
+  const stripe = new Stripe(stripeKey, { apiVersion: '2026-04-22.dahlia' })
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://taraqob.vercel.app'
 
   const session = await stripe.checkout.sessions.create({
@@ -49,3 +49,4 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ url: session.url })
 }
+

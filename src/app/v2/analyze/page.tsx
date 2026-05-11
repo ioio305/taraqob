@@ -255,13 +255,14 @@ function AnalyzeContent() {
   // ── Live polling — only runs when liveMode is ON ──────────────────────
   useEffect(() => {
     if (!liveUrl || !liveMode) return
+    const activeUrl = liveUrl
     let cancelled = false
 
     async function poll() {
       if (cancelled) return
       setRefreshing(true)
       try {
-        const res  = await fetch(liveUrl)
+        const res  = await fetch(activeUrl)
         const data = await res.json()
         if (!cancelled && data.success) {
           // In live mode: update market data / price / score, but keep strategy frozen

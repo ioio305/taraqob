@@ -21,13 +21,14 @@ export default function PerformancePage() {
 
   useEffect(() => {
     import('@/lib/supabase/client').then(({ createClient }) => {
-      createClient()
-        .from('v2_signals')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50)
-        .then(({ data }) => { setSignals(data ?? []); setLoading(false) })
-        .catch(() => setLoading(false))
+      Promise.resolve(
+        createClient()
+          .from('v2_signals')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(50)
+      ).then(({ data }) => { setSignals(data ?? []); setLoading(false) })
+       .catch(() => setLoading(false))
     })
   }, [])
 

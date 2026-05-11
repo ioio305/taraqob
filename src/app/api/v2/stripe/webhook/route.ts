@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+﻿import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import Stripe from 'stripe'
 import { createServiceClient } from '@/lib/supabase/server'
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
   const body      = await request.text()
   const signature = request.headers.get('stripe-signature') ?? ''
 
-  const stripe = new Stripe(stripeKey, { apiVersion: '2025-04-30.basil' })
+  const stripe = new Stripe(stripeKey, { apiVersion: '2026-04-22.dahlia' })
 
   let event: Stripe.Event
   try {
@@ -51,8 +51,8 @@ export async function POST(request: NextRequest) {
     await serviceClient.from('notifications').insert({
       user_id: userId,
       type:    'system',
-      title:   `تم تفعيل باقة ${tier === 'signal' ? 'سيجنال' : tier === 'edge' ? 'إيدج' : 'ألفا'} ✓`,
-      body:    'يمكنك الآن الوصول لجميع ميزات باقتك. مرحباً بك!',
+      title:   `طھظ… طھظپط¹ظٹظ„ ط¨ط§ظ‚ط© ${tier === 'signal' ? 'ط³ظٹط¬ظ†ط§ظ„' : tier === 'edge' ? 'ط¥ظٹط¯ط¬' : 'ط£ظ„ظپط§'} âœ“`,
+      body:    'ظٹظ…ظƒظ†ظƒ ط§ظ„ط¢ظ† ط§ظ„ظˆطµظˆظ„ ظ„ط¬ظ…ظٹط¹ ظ…ظٹط²ط§طھ ط¨ط§ظ‚طھظƒ. ظ…ط±ط­ط¨ط§ظ‹ ط¨ظƒ!',
       url:     '/v2',
     })
   }
@@ -70,8 +70,8 @@ export async function POST(request: NextRequest) {
       await serviceClient.from('notifications').insert({
         user_id: userId,
         type:    'alert',
-        title:   'انتهى اشتراكك',
-        body:    'تم تخفيض حسابك إلى باقة رادار. يمكنك التجديد في أي وقت.',
+        title:   'ط§ظ†طھظ‡ظ‰ ط§ط´طھط±ط§ظƒظƒ',
+        body:    'طھظ… طھط®ظپظٹط¶ ط­ط³ط§ط¨ظƒ ط¥ظ„ظ‰ ط¨ط§ظ‚ط© ط±ط§ط¯ط§ط±. ظٹظ…ظƒظ†ظƒ ط§ظ„طھط¬ط¯ظٹط¯ ظپظٹ ط£ظٹ ظˆظ‚طھ.',
         url:     '/v2/upgrade',
       })
     }
@@ -79,3 +79,4 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ received: true })
 }
+
