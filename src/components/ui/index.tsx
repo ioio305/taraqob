@@ -29,7 +29,7 @@ export function SignalStatusBadge({ status }: { status: SignalStatus }) {
       <span className={clsx('w-1.5 h-1.5 rounded-full', cfg.dotColor,
         status === 'active' && 'animate-pulse'
       )} />
-      {cfg.label_ar}
+      {cfg.ar}
     </span>
   )
 }
@@ -43,7 +43,7 @@ export function RiskBadge({ level }: { level: RiskLevel }) {
       'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold',
       cfg.color, cfg.bgColor
     )}>
-      {cfg.label_ar}
+      {cfg.ar}
     </span>
   )
 }
