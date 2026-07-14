@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { evaluateNewsRisk, type NewsRiskDecision } from '@/lib/v2/newsRisk'
+import { getNewsProviderStatus, type NewsProviderStatus } from '@/lib/v2/newsProviders'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -207,6 +209,8 @@ export type NewsResult = {
   events:      NewsEvent[]   // top events (max 5)
   fetchedAt:   string
   source:      'finnhub' | 'fmp' | 'fallback'
+  decision:    NewsRiskDecision
+  providers:   NewsProviderStatus[]
 }
 
 // ── Category scoring ──────────────────────────────────────────────────────────
@@ -416,8 +420,7 @@ function merge(a: NewsEvent[], b: NewsEvent[]): NewsEvent[] {
   return all.sort((x, y) => y.impact - x.impact).slice(0, 5)
 }
 
-// ── Main handler ──────────────────────────────────────────────────────────────
-export async function GET() {
+export async function getNewsResult(): Promise<NewsResult> {
   const [finnhubEvents, fmpEvents] = await Promise.all([fetchFinnhub(), fetchFMP()])
 
   let events: NewsEvent[]
@@ -440,15 +443,25 @@ export async function GET() {
   // Overall reason: pick the top event's reason or generic
   const topReason = events[0]?.reason ?? 'لا توجد أخبار مؤثرة في نطاق 8 ساعات.'
 
+  const fetchedAt = new Date()
   const result: NewsResult = {
     score,
     level,
     label:     labelFromLevel(level),
     reason:    topReason,
     events,
-    fetchedAt: new Date().toISOString(),
+    fetchedAt: fetchedAt.toISOString(),
     source:    sourceLabel,
+    decision:  evaluateNewsRisk(events, fetchedAt),
+    providers: getNewsProviderStatus(),
   }
+
+  return result
+}
+
+// ── Main handler ──────────────────────────────────────────────────────────────
+export async function GET() {
+  const result = await getNewsResult()
 
   return NextResponse.json(result, {
     headers: { 'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=30' },

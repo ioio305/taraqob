@@ -45,6 +45,7 @@ type Analysis = {
   vwap: number | null; or_high: number | null; or_low: number | null
   spx_vs_vwap: 'above' | 'below' | null
   em_intraday: number; em_daily: number; em_upper: number; em_lower: number
+  expected_move_live?: { points: number | null; source: string; label: string; atmStrike: number | null; callMid: number | null; putMid: number | null }
   is_itm: boolean; dist_from_atm: number
   scores: {
     market_direction: ScoreEntry; momentum: ScoreEntry; em_fit: ScoreEntry
@@ -61,6 +62,14 @@ type Analysis = {
   stop_spx: number; target1_spx: number; target2_spx: number; target3_spx: number
   targets?: { t1: TargetLevel; t2: TargetLevel; t3: TargetLevel; stop: TargetLevel }
   strategy?: StrategyResult
+  focus?: {
+    action: 'enter' | 'wait' | 'avoid'
+    label: string
+    confidence: number
+    primaryReason: string
+    nextStep: string
+    blockers: string[]
+  }
   risk_flags: string[]
   shortlist: ShortlistRow[]
   analysis_duration_ms: number
@@ -474,8 +483,11 @@ function AnalyzeContent() {
               <div>
                 <span className="text-xs font-mono" style={{ color: '#2D3748' }}>EM±</span>
                 <span className="text-sm font-mono" style={{ color: '#A78BFA' }}>
-                  {n(analysis.em_intraday, 1)}
+                  {n(analysis.expected_move_live?.points ?? analysis.em_intraday, 1)}
                 </span>
+                {analysis.expected_move_live?.source === 'atm_straddle' && (
+                  <span className="text-[10px] font-mono mr-1" style={{ color: '#10B981' }}>Straddle</span>
+                )}
               </div>
               <div className="mr-auto flex items-center gap-2">
                 <span className="text-xs font-mono" style={{ color: '#4A5568' }}>
@@ -535,6 +547,24 @@ function AnalyzeContent() {
                   </div>
                 </div>
               </div>
+
+              {analysis.focus && (
+                <div className="mt-4 rounded-xl px-4 py-3"
+                     style={{
+                       background: analysis.focus.action === 'enter' ? 'rgba(16,185,129,0.10)' : analysis.focus.action === 'wait' ? 'rgba(245,158,11,0.10)' : 'rgba(239,68,68,0.10)',
+                       border: analysis.focus.action === 'enter' ? '1px solid rgba(16,185,129,0.35)' : analysis.focus.action === 'wait' ? '1px solid rgba(245,158,11,0.35)' : '1px solid rgba(239,68,68,0.35)',
+                     }}>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="text-base font-bold"
+                         style={{ color: analysis.focus.action === 'enter' ? '#10B981' : analysis.focus.action === 'wait' ? '#F59E0B' : '#EF4444' }}>
+                      {analysis.focus.label}
+                    </div>
+                    <div className="text-xs font-mono" style={{ color: '#94A3B8' }}>ثقة {analysis.focus.confidence}/100</div>
+                  </div>
+                  <div className="text-xs mt-1 leading-relaxed" style={{ color: '#94A3B8' }}>{analysis.focus.primaryReason}</div>
+                  <div className="text-xs mt-1 leading-relaxed font-semibold" style={{ color: '#C9943A' }}>{analysis.focus.nextStep}</div>
+                </div>
+              )}
             </div>
 
             {/* ── Strategy Engine — Full Detail ── */}

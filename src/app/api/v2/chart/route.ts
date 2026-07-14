@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { getNewsResult } from '@/app/api/v2/news/route'
+import type { NewsRiskDecision } from '@/lib/v2/newsRisk'
+import { evaluateMarketReaction, type MarketReactionDecision } from '@/lib/v2/marketReaction'
+import { getIntradayBars, getHistoryBars } from '@/lib/v2/marketData'
 
 export const dynamic = 'force-dynamic'
-
-const TRADIER_TOKEN = process.env.TRADIER_API_KEY ?? ''
-const TRADIER_BASE  = 'https://api.tradier.com/v1'
-const HDR = { Authorization: `Bearer ${TRADIER_TOKEN}`, Accept: 'application/json' }
 
 // ─── Timeframe config ─────────────────────────────────────────────────────────
 
@@ -78,6 +78,131 @@ export interface AnalysisResult {
     t2Level:         number | null
     stopLevel:       number | null
   }
+  sr: {
+    zones: SRZone[]
+    signals: SRSignal[]
+    summary: string
+  }
+  newsRisk: NewsRiskDecision | null
+  marketReaction: MarketReactionDecision | null
+}
+
+export interface SRZone {
+  id: string
+  type: 'supply' | 'demand'
+  top: number
+  bottom: number
+  startTime: string
+  endTime: string
+  strength: number
+  volume: number
+  boundary: 'solid' | 'dashed'
+  retests: number
+  label: string
+}
+
+export interface SRSignal {
+  time: string
+  type: 'call' | 'put'
+  price: number
+  zoneId: string
+  label: string
+}
+
+function computeSRZones(bars: RawBar[], atrArr: (number | null)[]): { zones: SRZone[]; signals: SRSignal[]; summary: string } {
+  if (bars.length < 20) return { zones: [], signals: [], summary: 'بيانات غير كافية لمناطق العرض والطلب' }
+
+  const pivot = 3
+  const recentBars = bars.slice(-120)
+  const offset = bars.length - recentBars.length
+  const avgVolumes = bars.map((_, i) => {
+    const from = Math.max(0, i - 2)
+    const to = Math.min(bars.length, i + 3)
+    const slice = bars.slice(from, to)
+    return slice.reduce((s, b) => s + (b.volume ?? 0), 0) / Math.max(1, slice.length)
+  })
+  const maxAvgVolume = Math.max(...avgVolumes.slice(offset), 1)
+  const lastTime = bars[bars.length - 1].time
+  const zones: SRZone[] = []
+
+  for (let local = pivot; local < recentBars.length - pivot; local++) {
+    const i = offset + local
+    const b = bars[i]
+    const left = bars.slice(i - pivot, i)
+    const right = bars.slice(i + 1, i + pivot + 1)
+    const isSwingHigh = left.every(x => b.high >= x.high) && right.every(x => b.high > x.high)
+    const isSwingLow = left.every(x => b.low <= x.low) && right.every(x => b.low < x.low)
+    if (!isSwingHigh && !isSwingLow) continue
+
+    const atr = atrArr[i] ?? Math.max(4, (b.high - b.low) * 1.5)
+    const half = Math.max(2, atr * 0.28)
+    const avgVol = avgVolumes[i]
+    const strength = Math.max(0.2, Math.min(1, avgVol / maxAvgVolume))
+    const type = isSwingHigh ? 'supply' : 'demand'
+    const top = +(type === 'supply' ? b.high + half * 0.15 : b.low + half).toFixed(2)
+    const bottom = +(type === 'supply' ? b.high - half : b.low - half * 0.15).toFixed(2)
+
+    let retests = 0
+    let held = false
+    let broken = false
+    for (let j = i + pivot + 1; j < bars.length; j++) {
+      const c = bars[j]
+      const touches = c.high >= bottom && c.low <= top
+      if (touches) {
+        retests++
+        if (type === 'supply' && c.close < bottom) held = true
+        if (type === 'demand' && c.close > top) held = true
+      }
+      if (type === 'supply' && c.close > top) broken = true
+      if (type === 'demand' && c.close < bottom) broken = true
+    }
+
+    if (broken && !held) continue
+
+    zones.push({
+      id: `${type}-${i}`,
+      type,
+      top,
+      bottom,
+      startTime: b.time,
+      endTime: lastTime,
+      strength: +strength.toFixed(2),
+      volume: Math.round(avgVol),
+      boundary: held || retests >= 2 ? 'dashed' : 'solid',
+      retests,
+      label: `${type === 'supply' ? 'عرض / PUT' : 'طلب / CALL'} · Vol ${Math.round(avgVol)}`,
+    })
+  }
+
+  const filtered = zones
+    .sort((a, b) => b.strength - a.strength)
+    .filter((z, idx, arr) => arr.findIndex(x => x.type === z.type && Math.abs(((x.top + x.bottom) / 2) - ((z.top + z.bottom) / 2)) < Math.max(3, (z.top - z.bottom))) === idx)
+    .slice(0, 8)
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+
+  const signals: SRSignal[] = []
+  const latestStart = Math.max(1, bars.length - 100)
+  for (let i = latestStart; i < bars.length; i++) {
+    const c = bars[i]
+    const prev = bars[i - 1]
+    for (const z of filtered) {
+      const inside = c.high >= z.bottom && c.low <= z.top
+      if (!inside) continue
+      if (z.type === 'demand' && c.close > c.open && c.close > prev.high) {
+        signals.push({ time: c.time, type: 'call', price: Math.max(z.bottom, Math.min(z.top, c.low)), zoneId: z.id, label: 'CALL داخل صندوق الطلب' })
+      }
+      if (z.type === 'supply' && c.close < c.open && c.close < prev.low) {
+        signals.push({ time: c.time, type: 'put', price: Math.max(z.bottom, Math.min(z.top, c.high)), zoneId: z.id, label: 'PUT داخل صندوق العرض' })
+      }
+    }
+  }
+
+  const strongest = filtered[0]
+  const summary = strongest
+    ? `أقوى منطقة حالياً: ${strongest.label} — قتامة اللون تعكس سيولة أعلى، والحد المتقطع يعني Retest مؤكد.`
+    : 'لا توجد مناطق عرض/طلب كافية حالياً.'
+
+  return { zones: filtered, signals: signals.slice(-12), summary }
 }
 
 // ─── Indicator functions ──────────────────────────────────────────────────────
@@ -242,6 +367,7 @@ function analyzeMarket(
   const bbW   = inds.bbWidth[n]
   const atrV  = inds.atrArr[n]
   const vwap  = inds.vwapArr[n]
+  const sr = computeSRZones(bars, inds.atrArr)
 
   // ── Trend ────────────────────────────────────────────────────────────────────
   let trendScore = 0
@@ -406,6 +532,9 @@ function analyzeMarket(
       bearishScenario: stop     ? `SPX يتراجع تحت ${stop.toFixed(0)} — وقف الخسارة` : 'SPX يتراجع عن المستوى الحالي',
       entryLevel: entry, t1Level: t1, t2Level: t2, stopLevel: stop,
     },
+    sr,
+    newsRisk: null,
+    marketReaction: null,
   }
 }
 
@@ -420,6 +549,9 @@ function defaultAnalysis(): AnalysisResult {
       bullishScenario: '—', bearishScenario: '—',
       entryLevel: null, t1Level: null, t2Level: null, stopLevel: null,
     },
+    sr: { zones: [], signals: [], summary: 'لا توجد مناطق عرض/طلب' },
+    newsRisk: null,
+    marketReaction: null,
   }
 }
 
@@ -430,57 +562,21 @@ export async function GET(request: NextRequest) {
   const tf  = (searchParams.get('tf') ?? '1d') as TfId
   const cfg = TF_CONFIG[tf] ?? TF_CONFIG['1d']
 
-  const start = new Date(Date.now() - cfg.days * 86400_000).toISOString().slice(0, 10)
-  const end   = new Date().toISOString().slice(0, 10)
-
   let bars: RawBar[] = []
 
   try {
     if (cfg.intraday) {
-      // SPY × 10 as SPX proxy
-      const url = `${TRADIER_BASE}/markets/timesales?symbol=SPY&interval=${cfg.tradierInterval}&start=${start}&end=${end}&session_filter=open`
-      const res  = await fetch(url, { headers: HDR, cache: 'no-store' })
-      if (!res.ok) throw new Error(`Tradier timesales ${res.status}`)
-      const json = await res.json()
-      const raw  = json?.series?.data ?? []
-      const arr  = Array.isArray(raw) ? raw : [raw]
-      bars = arr
-        .filter((d: { time?: string }) => !!d?.time)
-        .map((d: { time: string; open: number; high: number; low: number; close: number; volume: number }) => ({
-          time:   d.time,
-          open:   +(d.open  * 10).toFixed(2),
-          high:   +(d.high  * 10).toFixed(2),
-          low:    +(d.low   * 10).toFixed(2),
-          close:  +(d.close * 10).toFixed(2),
-          volume: d.volume,
-        }))
+      bars = await getIntradayBars(cfg.tradierInterval, cfg.days)
       if (cfg.aggregate > 1) bars = aggregateBars(bars, cfg.aggregate)
     } else {
-      // Use SPY × 10 for historical data — $SPX.X is unreliable on Tradier history endpoint
-      const url = `${TRADIER_BASE}/markets/history?symbol=SPY&interval=${cfg.tradierInterval}&start=${start}&end=${end}`
-      const res  = await fetch(url, { headers: HDR, cache: 'no-store' })
-      if (!res.ok) throw new Error(`Tradier history ${res.status}`)
-      const json = await res.json()
-      // Tradier uses history.day / history.week / history.month depending on interval
-      const hist = json?.history ?? {}
-      const raw  = hist.day ?? hist.week ?? hist.month ?? []
-      bars = (Array.isArray(raw) ? raw : [raw])
-        .filter((d: { date?: string }) => !!d?.date)
-        .map((d: { date: string; open: number; high: number; low: number; close: number; volume?: number }) => ({
-          time:   d.date,
-          open:   +(d.open  * 10).toFixed(2),
-          high:   +(d.high  * 10).toFixed(2),
-          low:    +(d.low   * 10).toFixed(2),
-          close:  +(d.close * 10).toFixed(2),
-          volume: d.volume ?? 0,
-        }))
+      bars = await getHistoryBars(cfg.tradierInterval, cfg.days)
     }
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 502 })
   }
 
   if (bars.length < 10) {
-    return NextResponse.json({ tf, symbol: 'SPX', candles: [], analysis: defaultAnalysis(), error: 'بيانات غير كافية — تحقق من اتصال Tradier' })
+    return NextResponse.json({ tf, symbol: 'SPX', candles: [], analysis: defaultAnalysis(), error: 'بيانات غير كافية — تعذّر جلب الشموع' })
   }
 
   const closes = bars.map(b => b.close)
@@ -524,6 +620,37 @@ export async function GET(request: NextRequest) {
     rsiArr, macdLine, sigLine: signalLine, histArr: histogram,
     bbUpper, bbMid, bbLower, bbWidth, atrArr, vwapArr,
   })
+
+  const reaction = evaluateMarketReaction({
+    bars: bars.map((b, i) => ({ ...b, vwap: vwapArr[i] })),
+    spxChangePct: bars.length >= 2 ? ((bars[bars.length - 1].close - bars[bars.length - 2].close) / bars[bars.length - 2].close) * 100 : null,
+  })
+  analysis.marketReaction = reaction
+
+  const news = await getNewsResult().catch(() => null)
+  if (news?.decision) {
+    analysis.newsRisk = news.decision
+    if (news.decision.action === 'block') {
+      analysis.summary.decisionCode = 'no_entry'
+      analysis.summary.decisionText = 'لا تدخل — التوصيات معلقة بسبب خبر مؤثر'
+      analysis.summary.entryCondition = `انتظر انتهاء نافذة الخطر: ${news.decision.reason}`
+      analysis.summary.cancelCondition = 'إلغاء أي دخول جديد حتى تهدأ ردة فعل السوق بعد الخبر'
+    } else if (news.decision.action === 'caution' && analysis.summary.decisionCode === 'execute') {
+      analysis.summary.decisionCode = 'conditional'
+      analysis.summary.decisionText = 'دخول مشروط — يوجد خطر إخباري'
+      analysis.summary.entryCondition = `${analysis.summary.entryCondition} + تأكيد بعد الخبر`
+    }
+  }
+  if (reaction.action === 'block') {
+    analysis.summary.decisionCode = 'no_entry'
+    analysis.summary.decisionText = 'لا تدخل — رد فعل السوق حاد'
+    analysis.summary.entryCondition = `انتظر هدوء الحركة: ${reaction.reason}`
+    analysis.summary.cancelCondition = 'إلغاء أي دخول جديد عند اندفاع الحجم أو كسر VWAP بعنف'
+  } else if (reaction.action === 'caution' && analysis.summary.decisionCode === 'execute') {
+    analysis.summary.decisionCode = 'conditional'
+    analysis.summary.decisionText = 'دخول مشروط — رد فعل السوق متوتر'
+    analysis.summary.entryCondition = `${analysis.summary.entryCondition} + تأكيد شمعة إضافية بعد الحركة`
+  }
 
   return NextResponse.json({ tf, symbol: 'SPX', candles, analysis })
 }

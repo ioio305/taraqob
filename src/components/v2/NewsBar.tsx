@@ -96,7 +96,12 @@ export function NewsBar({ news, loading, failed }: {
           style={{ color: st.color }}>{news.score}%</span>
 
         {/* Level label */}
-        <span className="text-xs" style={{ color: st.color }}>{news.label}</span>
+        <span className="text-xs" style={{ color: st.color }}>{news.decision?.label ?? news.label}</span>
+        {news.decision?.action === 'block' && news.decision.blockMinutesRemaining && (
+          <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 border border-red-500/30">
+            تعليق {news.decision.blockMinutesRemaining} د
+          </span>
+        )}
 
         {/* Spacer */}
         <span className="flex-1" />
@@ -165,7 +170,7 @@ export function NewsImpactBadge({ news, compact = false }: {
   const score  = news.score
   const color  = score >= 61 ? '#EF4444' : score >= 26 ? '#F59E0B' : '#10B981'
   const levelAr = score >= 61 ? 'خطر مرتفع' : score >= 26 ? 'حذر' : 'هادئ'
-  const reason = news.events[0]?.reason ?? 'لا توجد أخبار مؤثرة قريبة.'
+  const reason = news.decision?.reason ?? news.events[0]?.reason ?? 'لا توجد أخبار مؤثرة قريبة.'
 
   if (compact) {
     return (
@@ -197,7 +202,11 @@ export function NewsImpactBadge({ news, compact = false }: {
           style={{ width: `${score}%`, background: color }} />
       </div>
       <div className="text-[11px] leading-relaxed" style={{ color: '#4A5568' }}>{reason}</div>
-      {score >= 61 && (
+      {news.decision?.action === 'block' ? (
+        <div className="mt-2 text-[11px] leading-relaxed font-mono" style={{ color: '#EF4444' }}>
+          التوصيات معلقة مؤقتاً حتى انتهاء نافذة الخطر الإخباري.
+        </div>
+      ) : score >= 61 && (
         <div className="mt-2 text-[11px] leading-relaxed font-mono"
           style={{ color: '#F59E0B' }}>
           التوصية متاحة، لكن الأخبار ترفع مستوى المخاطرة. القرار النهائي للمستخدم.

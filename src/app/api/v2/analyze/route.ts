@@ -1,20 +1,14 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { computeStrategy } from '@/lib/v2/strategyEngine'
+import { getNewsResult } from '@/app/api/v2/news/route'
+import { evaluateMarketReaction } from '@/lib/v2/marketReaction'
+import { computeStraddleMove } from '@/lib/v2/optionsExpectedMove'
+import { evaluateSessionQuality } from '@/lib/v2/sessionQuality'
+import { buildTradeFocus } from '@/lib/v2/tradeFocus'
+import { getMarketSnapshot, getIntradayBars, getExpirations, getOptionsChain, type MdBar } from '@/lib/v2/marketData'
 
 export const dynamic = 'force-dynamic'
-
-const TRADIER_KEY = process.env.TRADIER_API_KEY
-const BASE = 'https://api.tradier.com/v1'
-
-async function tGet(path: string) {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { Authorization: `Bearer ${TRADIER_KEY}`, Accept: 'application/json' },
-    cache: 'no-store',
-  })
-  if (!res.ok) throw new Error(`Tradier ${res.status}`)
-  return res.json()
-}
 
 // ── Black-Scholes helpers ──────────────────────────────────────────────────
 function normalCDF(x: number): number {
@@ -82,39 +76,36 @@ async function strikeToOCC(strikeRaw: number, type: 'call' | 'put'): Promise<{ s
   const cp  = type === 'call' ? 'C' : 'P'
   const pad = String(Math.round(strike * 1000)).padStart(8, '0')
 
-  for (const sym of ['SPXW', 'SPX']) {
-    try {
-      const d     = await tGet(`/markets/options/expirations?symbol=${sym}&includeAllRoots=true&strikes=false`)
-      const dates = d?.expirations?.date
-      if (!dates) continue
-      const list: string[] = Array.isArray(dates) ? dates : [dates]
-      const nearest = list.find(e => e >= todayStr)
-      if (!nearest) continue
+  try {
+    const list = await getExpirations()
+    const nearest = list.find(e => e >= todayStr) ?? list[0]
+    if (nearest) {
       const [y, mo, da] = nearest.split('-')
-      return { symbol: `${sym}${y.slice(2)}${mo}${da}${cp}${pad}`, root: sym, expiration: nearest }
-    } catch { continue }
-  }
+      return { symbol: `SPXW${y.slice(2)}${mo}${da}${cp}${pad}`, root: 'SPXW', expiration: nearest }
+    }
+  } catch { /* fallthrough */ }
 
   // Fallback: build today's date symbol
   const [y, mo, da] = todayStr.split('-')
   return { symbol: `SPXW${y.slice(2)}${mo}${da}${cp}${pad}`, root: 'SPXW', expiration: todayStr }
 }
 
-// VWAP + Opening Range from SPY 1min timesales
-function computeVWAPandOR(data: any) {
-  const series: any[] = data?.series?.data
-  if (!Array.isArray(series) || series.length === 0) return { vwap: null, orHigh: null, orLow: null }
+// VWAP + Opening Range من شموع الدقيقة (مقيسة مسبقاً إلى نقاط SPX)
+function computeVWAPandOR(bars: MdBar[]) {
+  if (!Array.isArray(bars) || bars.length === 0) return { vwap: null, orHigh: null, orLow: null }
+  // اقتصر على جلسة آخر يوم فقط
+  const lastDay = bars[bars.length - 1].time.slice(0, 10)
+  const series = bars.filter(b => b.time.slice(0, 10) === lastDay)
   let sumPV = 0, sumV = 0
   for (const c of series) {
-    const price = ((c.high ?? c.close) + (c.low ?? c.close) + c.close) / 3
+    const price = (c.high + c.low + c.close) / 3
     sumPV += price * (c.volume ?? 0)
     sumV  += c.volume ?? 0
   }
-  const SPY_MULT = 10
-  const vwap = sumV > 0 ? Math.round((sumPV / sumV) * SPY_MULT * 100) / 100 : null
+  const vwap = sumV > 0 ? Math.round((sumPV / sumV) * 100) / 100 : null
   const orCandles = series.slice(0, 30)
-  const orHigh = orCandles.length > 0 ? Math.round(Math.max(...orCandles.map((c: any) => c.high)) * SPY_MULT * 100) / 100 : null
-  const orLow  = orCandles.length > 0 ? Math.round(Math.min(...orCandles.map((c: any) => c.low))  * SPY_MULT * 100) / 100 : null
+  const orHigh = orCandles.length > 0 ? Math.round(Math.max(...orCandles.map(c => c.high)) * 100) / 100 : null
+  const orLow  = orCandles.length > 0 ? Math.round(Math.min(...orCandles.map(c => c.low))  * 100) / 100 : null
   return { vwap, orHigh, orLow }
 }
 
@@ -212,54 +203,38 @@ export async function GET(request: NextRequest) {
   const { root, expirationStr, strike, type, dte } = parsed
 
   try {
-    // ── جلب متوازٍ: سوق + عقد مباشر + timesales + سلسلة ──────────────────
-    const [mktRes, contractRes, tsRes, chainRes] = await Promise.allSettled([
-      tGet('/markets/quotes?symbols=$SPX.X,$VIX.X,VIX,SPY,VIXY&greeks=false'),
-      tGet(`/markets/quotes?symbols=${encodeURIComponent(symbolRaw.toUpperCase())}&greeks=true`),
-      tGet('/markets/timesales?symbol=SPY&interval=1min&session_filter=open'),
-      tGet(`/markets/options/chains?symbol=${root}&expiration=${expirationStr}&greeks=true`),
+    // ── جلب متوازٍ: لقطة السوق + شموع الدقيقة + الأخبار ─────────────────
+    const [snapshot, minuteBars, newsRes] = await Promise.allSettled([
+      getMarketSnapshot(),
+      getIntradayBars('1min', 2),
+      getNewsResult(),
     ])
+    const newsDecision = newsRes.status === 'fulfilled' ? newsRes.value.decision : null
+    const newsBlocked = newsDecision?.action === 'block'
+    const sessionQuality = evaluateSessionQuality()
+    const sessionBlocked = sessionQuality.action === 'block'
 
     // ── SPX + VIX ────────────────────────────────────────────────────────
-    if (mktRes.status === 'rejected') throw new Error('تعذر جلب بيانات السوق من Tradier — تحقق من مفتاح API')
-    const mkt = mktRes.value
-    const qs: any[] = Array.isArray(mkt?.quotes?.quote)
-      ? mkt.quotes.quote : [mkt?.quotes?.quote].filter(Boolean)
-    let spxQ = qs.find((q: any) => q.symbol === '$SPX.X' || q.symbol === 'SPX') ?? null
-    let vixQ = qs.find((q: any) => q.symbol === '$VIX.X' || q.symbol === 'VIX') ?? null
-    if (!spxQ?.last) {
-      const spy = qs.find((q: any) => q.symbol === 'SPY')
-      if (spy?.last) spxQ = { ...spy, last: spy.last * 10, prevclose: (spy.prevclose ?? spy.last) * 10 }
-    }
-    if (!vixQ?.last && !vixQ?.prevclose) {
-      const vixy = qs.find((q: any) => q.symbol === 'VIXY')
-      if (vixy?.last) vixQ = { last: Math.round(vixy.last * 3.5 * 10) / 10 }
-    }
-    const spxPrice = spxQ?.last ?? spxQ?.prevclose ?? 0
-    if (!spxPrice) throw new Error('تعذر جلب سعر SPX — تحقق من مفتاح Tradier')
-    const spxPrev   = spxQ?.prevclose ?? spxPrice
+    if (snapshot.status === 'rejected') throw new Error('تعذر جلب بيانات السوق — تحقق من الاتصال')
+    const snap = snapshot.value
+    const spxPrice = snap.spxPrice
+    if (!spxPrice) throw new Error('تعذر جلب سعر SPX')
+    const spxPrev   = snap.spxPrev ?? spxPrice
     const spxChgPct = spxPrev > 0 ? ((spxPrice - spxPrev) / spxPrev) * 100 : 0
-    const vixPrice  = vixQ?.last ?? vixQ?.prevclose ?? 17
+    const vixPrice  = snap.vixPrice
 
-    // ── بيانات العقد: حاول المصادر بالترتيب ─────────────────────────────
+    // ── سلسلة العقود (Tradier حقيقية أو Black-Scholes تركيبية) ──────────
+    const { options: chainOpts, estimated: chainEstimated } = await getOptionsChain(expirationStr, spxPrice, vixPrice)
+
+    // ── بيانات العقد: من السلسلة، ثم تقدير Black-Scholes ────────────────
     let cq: any = null
-    let isEstimated = false
+    let isEstimated = chainEstimated || snap.source !== 'tradier'
 
-    // 1. الاقتباس المباشر
-    if (contractRes.status === 'fulfilled') {
-      const cd = contractRes.value
-      cq = Array.isArray(cd?.quotes?.quote) ? cd.quotes.quote[0] : cd?.quotes?.quote
-    }
+    // من السلسلة
+    const inChain = chainOpts.find(o => o.option_type === type && Math.round(o.strike) === Math.round(strike))
+    if (inChain) cq = inChain
 
-    // 2. من السلسلة (chain) — أكثر موثوقية
-    if (!cq && chainRes.status === 'fulfilled') {
-      const opts: any[] = Array.isArray(chainRes.value?.options?.option)
-        ? chainRes.value.options.option : [chainRes.value?.options?.option].filter(Boolean)
-      const inChain = opts.find(o => o.option_type === type && Math.round(o.strike) === Math.round(strike))
-      if (inChain) cq = inChain
-    }
-
-    // 3. Black-Scholes تقديري — إذا لم يُوجد بيانات (السوق مغلق / الرمز غير متداول)
+    // Black-Scholes تقديري — إذا لم يُوجد العقد في السلسلة
     if (!cq) {
       const sigma = vixPrice / 100
       const T = Math.max(dte, 0) / 365
@@ -300,15 +275,23 @@ export async function GET(request: NextRequest) {
     const absTheta = Math.abs(theta ?? 0)
 
     // ── VWAP + Opening Range ─────────────────────────────────────────────
-    const { vwap, orHigh, orLow } = tsRes.status === 'fulfilled'
-      ? computeVWAPandOR(tsRes.value)
-      : { vwap: null, orHigh: null, orLow: null }
+    const bars: MdBar[] = minuteBars.status === 'fulfilled' ? minuteBars.value : []
+    const { vwap, orHigh, orLow } = computeVWAPandOR(bars)
+    const marketReaction = evaluateMarketReaction({
+      spxChangePct: spxChgPct,
+      vixPrice,
+      vixPrev: snap.vixPrev,
+      vwap,
+    })
+    const reactionBlocked = marketReaction.action === 'block'
 
     // ── Expected Move ─────────────────────────────────────────────────────
     const emIntraday = spxPrice * (vixPrice / 100) * Math.sqrt(1 / 252)
     const emDaily    = spxPrice * (vixPrice / 100) * Math.sqrt(Math.max(dte, 1) / 252)
-    const emUpper    = Math.round(spxPrice + emIntraday)
-    const emLower    = Math.round(spxPrice - emIntraday)
+    const straddleMove = computeStraddleMove(chainOpts, spxPrice, Math.round(emIntraday * 100) / 100)
+    const emRefPoints = straddleMove.points ?? emIntraday
+    const emUpper    = Math.round(spxPrice + emRefPoints)
+    const emLower    = Math.round(spxPrice - emRefPoints)
 
     // ── وضعية العقد ──────────────────────────────────────────────────────
     const isITM      = type === 'call' ? strike <= spxPrice : strike >= spxPrice
@@ -414,6 +397,9 @@ export async function GET(request: NextRequest) {
     }
     if (spreadPct > 0.30) { riskFlags.push(`⚠ Spread واسع (${(spreadPct * 100).toFixed(0)}%)`); e6 -= 2 }
     if (vixPrice > 30)    { riskFlags.push(`⚠ VIX مرتفع جداً (${vixPrice.toFixed(1)}) — بيئة عالية المخاطر`); e6 -= 3 }
+    if (newsBlocked && newsDecision) { riskFlags.push(`⚠ ${newsDecision.label}: ${newsDecision.reason}`); e6 -= 4 }
+    if (reactionBlocked) { riskFlags.push(`⚠ ${marketReaction.label}: ${marketReaction.reason}`); e6 -= 4 }
+    if (sessionBlocked) { riskFlags.push(`⚠ ${sessionQuality.label}: ${sessionQuality.reason}`); e6 -= 4 }
     e6 = Math.max(0, Math.min(10, e6))
 
     // ── محرك 7: وضوح التنفيذ (10 نقطة) ──────────────────────────────────
@@ -425,13 +411,19 @@ export async function GET(request: NextRequest) {
 
     // ── الدرجة الكلية والقرار ─────────────────────────────────────────────
     const total = e1 + e2 + e3 + e4 + e5 + e6 + e7
-    const decision: 'execute' | 'conditional' | 'watch' | 'reject' =
+    let decision: 'execute' | 'conditional' | 'watch' | 'reject' =
       total >= 80 ? 'execute' : total >= 65 ? 'conditional' : total >= 50 ? 'watch' : 'reject'
+    if (newsBlocked) decision = 'reject'
+    if (reactionBlocked) decision = 'reject'
+    if (sessionBlocked) decision = 'reject'
 
     const dirAr  = spxChgPct >= 0.3 ? 'صاعد' : spxChgPct <= -0.3 ? 'هابط' : 'محايد'
     const vwapAr = vwap ? (spxPrice > vwap ? '، فوق VWAP' : '، تحت VWAP') : ''
     const decisionReasonAr = isEstimated
       ? `تحليل تقديري — السوق مغلق حالياً، بيانات Black-Scholes بناءً على SPX ${spxPrice.toFixed(0)} و VIX ${vixPrice.toFixed(1)}`
+      : newsBlocked && newsDecision ? `رُفض — ${newsDecision.reason}`
+      : reactionBlocked ? `رُفض — ${marketReaction.reason}`
+      : sessionBlocked ? `رُفض — ${sessionQuality.reason}`
       : decision === 'reject'      ? `رُفض — ${riskFlags[0] ?? 'الدرجة أقل من 50'}`
       : decision === 'watch'     ? `مراقبة — السوق ${dirAr}${vwapAr}، انتظر تأكيداً إضافياً`
       : decision === 'conditional' ? `فرصة مشروطة — السوق ${dirAr}${vwapAr}، الدخول بحذر`
@@ -443,7 +435,7 @@ export async function GET(request: NextRequest) {
     const entryPx           = entryBalanced ?? mid
 
     // ── أهداف بناءً على Expected Move ────────────────────────────────────
-    const emRef = emIntraday
+    const emRef = emRefPoints
     const f1 = dte === 0 ? 0.40 : 0.60
     const f2 = dte === 0 ? 0.65 : 0.85
     const f3 = dte === 0 ? 0.90 : 1.10
@@ -467,10 +459,8 @@ export async function GET(request: NextRequest) {
 
     // ── قائمة مختصرة من السلسلة ───────────────────────────────────────────
     let shortlist: any[] = []
-    if (chainRes.status === 'fulfilled') {
-      const opts: any[] = Array.isArray(chainRes.value?.options?.option)
-        ? chainRes.value.options.option : [chainRes.value?.options?.option].filter(Boolean)
-      shortlist = opts
+    {
+      shortlist = chainOpts
         .filter(o => o.option_type === type)
         .map(o => ({
           symbol:     o.symbol,
@@ -508,6 +498,15 @@ export async function GET(request: NextRequest) {
       chgPct:   spxChgPct,
       vixPrice,
     })
+    const focus = buildTradeFocus({
+      baseStatus: decision,
+      score: total,
+      directionLabel: decisionReasonAr,
+      newsRisk: newsDecision,
+      marketReaction,
+      session: sessionQuality,
+      liquidityOk: bid > 0 && ask > 0 && spreadPct < 0.30,
+    })
 
     return NextResponse.json({
       success: true,
@@ -528,6 +527,7 @@ export async function GET(request: NextRequest) {
         spx_vs_vwap: vwap ? (spxPrice > vwap ? 'above' : 'below') : null,
         em_intraday: Math.round(emIntraday * 100) / 100,
         em_daily:    Math.round(emDaily    * 100) / 100,
+        expected_move_live: straddleMove,
         em_upper: emUpper, em_lower: emLower,
         is_itm: isITM,
         dist_from_atm: Math.round(distFromATM * 100) / 100,
@@ -556,6 +556,10 @@ export async function GET(request: NextRequest) {
           stop: { spx: stopSPX, exit_price: exitStop, exit_total: Math.round(exitStop * 100), pnl: Math.round((exitStop - entryPx) * 100) },
         },
         strategy,
+        focus,
+        news_risk: newsDecision,
+        market_reaction: marketReaction,
+        session_quality: sessionQuality,
         risk_flags: riskFlags,
         shortlist,
         analysis_duration_ms: Date.now() - start,

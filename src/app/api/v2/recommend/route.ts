@@ -1,20 +1,14 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { computeStrategy } from '@/lib/v2/strategyEngine'
+import { getNewsResult } from '@/app/api/v2/news/route'
+import { evaluateMarketReaction } from '@/lib/v2/marketReaction'
+import { computeStraddleMove } from '@/lib/v2/optionsExpectedMove'
+import { evaluateSessionQuality } from '@/lib/v2/sessionQuality'
+import { buildTradeFocus } from '@/lib/v2/tradeFocus'
+import { getMarketSnapshot, getExpirations, getOptionsChain } from '@/lib/v2/marketData'
 
 export const dynamic = 'force-dynamic'
-
-const TRADIER_KEY = process.env.TRADIER_API_KEY
-const BASE        = 'https://api.tradier.com/v1'
-
-async function tGet(path: string) {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { Authorization: `Bearer ${TRADIER_KEY}`, Accept: 'application/json' },
-    cache:   'no-store',
-  })
-  if (!res.ok) throw new Error(`Tradier ${res.status}`)
-  return res.json()
-}
 
 // ── Market hours check (NYSE: Mon-Fri 9:30-16:00 ET) ────────────────────
 function isMarketOpen(): { open: boolean; label: string } {
@@ -256,48 +250,34 @@ export async function GET(request: NextRequest) {
 
   try {
     // ── 1. Fetch SPX, VIX, sessions in parallel ──────────────────
-    const [mktData, sessions] = await Promise.all([
-      tGet('/markets/quotes?symbols=$SPX.X,$VIX.X,VIX,SPY,VIXY&greeks=false').catch(() => null),
+    const [snapshot, sessions, news] = await Promise.all([
+      getMarketSnapshot(),
       fetchSPXSessions(),
+      getNewsResult().catch(() => null),
     ])
+    const newsDecision = news?.decision ?? null
+    const newsBlocked = newsDecision?.action === 'block'
+    const sessionQuality = evaluateSessionQuality()
+    const sessionBlocked = sessionQuality.action === 'block'
 
-    // Extract SPX + VIX
-    let spxQ: any = null, vixQ: any = null
-    if (mktData?.quotes?.quote) {
-      const qs: any[] = Array.isArray(mktData.quotes.quote)
-        ? mktData.quotes.quote : [mktData.quotes.quote]
-      spxQ = qs.find((q: any) => q.symbol === '$SPX.X' || q.symbol === 'SPX') ?? null
-      vixQ = qs.find((q: any) => q.symbol === '$VIX.X' || q.symbol === 'VIX') ?? null
-      // SPY × 10 fallback for SPX
-      if (!spxQ?.last) {
-        const spy = qs.find((q: any) => q.symbol === 'SPY')
-        if (spy?.last) spxQ = {
-          ...spy,
-          last:      spy.last      * 10,
-          prevclose: (spy.prevclose ?? spy.last) * 10,
-          high:      (spy.high ?? 0) * 10,
-          low:       (spy.low  ?? 0) * 10,
-        }
-      }
-      // VIXY proxy fallback if VIX unavailable (VIXY ≈ VIX/3.5 in typical range)
-      if (!vixQ?.last && !vixQ?.prevclose) {
-        const vixy = qs.find((q: any) => q.symbol === 'VIXY')
-        if (vixy?.last) vixQ = { last: Math.round(vixy.last * 3.5 * 10) / 10, prevclose: null }
-      }
-    }
-
-    const spxPrice  = spxQ?.last ?? 0
-    // Use yesterday's SPX close from ^GSPC (accurate) instead of Tradier prevclose (often stale)
-    const spxPrev   = sessions.tokyo.close ?? spxQ?.prevclose ?? spxPrice
+    const spxPrice  = snapshot.spxPrice
+    // Use yesterday's SPX close from ^GSPC (accurate) instead of live prevclose (often stale)
+    const spxPrev   = sessions.tokyo.close ?? snapshot.spxPrev ?? spxPrice
     const spxChgPct = spxPrev > 0 ? ((spxPrice - spxPrev) / spxPrev) * 100 : 0
-    // VIX: try last → prevclose → VIXY proxy → conservative default 17
-    const vixRaw    = vixQ?.last ?? vixQ?.prevclose ?? 0
-    const vixPrice  = vixRaw > 0 ? vixRaw : 17
-    const vixEstimated = vixRaw === 0
-    const spxHigh   = spxQ?.high ?? 0
-    const spxLow    = spxQ?.low  ?? 0
+    const vixPrice  = snapshot.vixPrice
+    const vixEstimated = snapshot.vixEstimated
+    const spxHigh   = snapshot.spxHigh
+    const spxLow    = snapshot.spxLow
+    const dataSource = snapshot.source
 
     if (!spxPrice) return NextResponse.json({ success: false, error: 'تعذر جلب سعر SPX', contracts: [] })
+
+    const marketReaction = evaluateMarketReaction({
+      spxChangePct: spxChgPct,
+      vixPrice,
+      vixPrev: snapshot.vixPrev,
+    })
+    const reactionBlocked = marketReaction.action === 'block'
 
     // Expected Move (intraday)
     const em: number | null = spxPrice > 0 && vixPrice > 0
@@ -320,12 +300,16 @@ export async function GET(request: NextRequest) {
           expectedMove: em,
           emUpper:      em && spxPrice ? Math.round(spxPrice + em) : null,
           emLower:      em && spxPrice ? Math.round(spxPrice - em) : null,
+          dataSource,
         },
         sessions: {
           london: sessions.london,
           tokyo:  sessions.tokyo,
         },
         direction:   { type: null, label: mktStatus.label, color: '#4A5568', reason: 'لا تداول خارج أوقات السوق' },
+        newsRisk:    newsDecision,
+        marketReaction,
+        sessionQuality,
         contracts:   [],
         expiration:  '',
         expirations: [],
@@ -334,20 +318,15 @@ export async function GET(request: NextRequest) {
     }
 
     // ── 2. Fetch expirations ─────────────────────────────────────
-    let expirations: string[] = []
-    for (const sym of ['SPXW', 'SPX']) {
-      try {
-        const d     = await tGet(`/markets/options/expirations?symbol=${sym}&includeAllRoots=true&strikes=false`)
-        const dates = d?.expirations?.date
-        if (dates) { expirations = Array.isArray(dates) ? dates : [dates]; break }
-      } catch { continue }
-    }
+    const expirations = await getExpirations()
+    let chainEstimated = false
 
     // ── 3. Live Strike Rotation: fetch + score + rank ────────────
     let top3: any[]      = []
     let shortlist: any[] = []   // all qualifying OTM contracts from best expiration
     let usedExp          = ''
     let watchMode        = false
+    let straddleMove     = computeStraddleMove([], spxPrice, em)
 
     const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
 
@@ -411,53 +390,53 @@ export async function GET(request: NextRequest) {
         })
         if (!exp) continue
 
-        for (const sym of ['SPXW', 'SPX']) {
-          try {
-            const chain = await tGet(`/markets/options/chains?symbol=${sym}&expiration=${exp}&greeks=true`)
-            const opts: any[] = Array.isArray(chain?.options?.option)
-              ? chain.options.option
-              : [chain?.options?.option].filter(Boolean)
+        try {
+          const { options: opts, estimated } = await getOptionsChain(exp, spxPrice, vixPrice)
+          if (estimated) chainEstimated = true
+          if (straddleMove.source !== 'atm_straddle') {
+            straddleMove = computeStraddleMove(opts, spxPrice, em)
+          }
 
-            let collected: any[] = []
-            if (!contractType) {
-              // Neutral market: 1 best call + 1 best put
-              const bestCall = collectBest(opts, 'call', base, 1)
-              const bestPut  = collectBest(opts, 'put',  base, 1)
-              collected = [...bestCall, ...bestPut]
-              if (collected.length > 0) watchMode = true
-            } else {
-              // Fetch up to 15 to populate shortlist; top3 = first 3
-              collected = collectBest(opts, contractType, base, 15)
-            }
+          let collected: any[] = []
+          if (!contractType) {
+            // Neutral market: 1 best call + 1 best put
+            const bestCall = collectBest(opts, 'call', base, 1)
+            const bestPut  = collectBest(opts, 'put',  base, 1)
+            collected = [...bestCall, ...bestPut]
+            if (collected.length > 0) watchMode = true
+          } else {
+            // Fetch up to 15 to populate shortlist; top3 = first 3
+            collected = collectBest(opts, contractType, base, 15)
+          }
 
-            if (collected.length > 0) {
-              top3 = contractType ? collected.slice(0, 3) : collected
-              // Enrich shortlist with stop_spx level (EM-based, same as analyze page)
-              const stopDir = contractType === 'call' ? -1 : 1
-              shortlist = contractType
-                ? collected.map(o => ({
-                    ...o,
-                    stop_spx: Math.round(spxPrice + stopDir * (em ?? 0) * 0.35),
-                  }))
-                : []
-              usedExp = exp
-              break
-            }
-          } catch { continue }
-        }
+          if (collected.length > 0) {
+            top3 = contractType ? collected.slice(0, 3) : collected
+            // Enrich shortlist with stop_spx level (EM-based, same as analyze page)
+            const stopDir = contractType === 'call' ? -1 : 1
+            shortlist = contractType
+              ? collected.map(o => ({
+                  ...o,
+                  stop_spx: Math.round(spxPrice + stopDir * (em ?? 0) * 0.35),
+                }))
+              : []
+            usedExp = exp
+          }
+        } catch { /* جرّب النطاق التالي */ }
         if (top3.length > 0) break
       }
     }
 
     // ── Enrich top3 with strategy engine ─────────────────────────────────────
-    const emUpper = em ? Math.round(spxPrice + em) : Math.round(spxPrice + 50)
-    const emLower = em ? Math.round(spxPrice - em) : Math.round(spxPrice - 50)
+    const effectiveEM = straddleMove.points ?? em
+    const emUpper = effectiveEM ? Math.round(spxPrice + effectiveEM) : Math.round(spxPrice + 50)
+    const emLower = effectiveEM ? Math.round(spxPrice - effectiveEM) : Math.round(spxPrice - 50)
 
     const enrichedTop3 = top3.map(o => {
       const score = o._score ?? 0
 
       let status: 'execute' | 'watch' | 'no-trade'
-      if (watchMode || vixPrice >= 28) status = score >= 50 ? 'watch' : 'no-trade'
+      if (newsBlocked || reactionBlocked || sessionBlocked) status = 'no-trade'
+      else if (watchMode || vixPrice >= 28) status = score >= 50 ? 'watch' : 'no-trade'
       else if (score >= 80)            status = 'execute'
       else if (score >= 74)            status = 'watch'
       else                             status = 'no-trade'
@@ -482,12 +461,27 @@ export async function GET(request: NextRequest) {
       // One-line display reason for dashboard card
       const reason = watchMode
         ? 'السوق عرضي — مراقبة فقط، لا تدخل دون اتجاه واضح'
+        : newsBlocked
+          ? newsDecision.reason
+        : reactionBlocked
+          ? marketReaction.reason
+        : sessionBlocked
+          ? sessionQuality.reason
         : vixPrice >= 28
           ? `VIX مرتفع (${vixPrice.toFixed(0)}) — توقف عن الدخول`
           : strat.strategyReason
 
       const { _score, ...rest } = o
-      return { ...rest, score, status, reason, strategy: strat }
+      const focus = buildTradeFocus({
+        baseStatus: status === 'execute' ? 'execute' : status === 'watch' ? 'watch' : 'no-trade',
+        score,
+        directionLabel: reason,
+        newsRisk: newsDecision,
+        marketReaction,
+        session: sessionQuality,
+        liquidityOk: (o.mid ?? 0) > 0 && ((o.ask ?? 0) - (o.bid ?? 0)) / (o.mid ?? 1) < 0.30,
+      })
+      return { ...rest, score, status, reason, strategy: strat, focus }
     })
 
     // OTM range description
@@ -506,15 +500,21 @@ export async function GET(request: NextRequest) {
       market: {
         spx:          { price: spxPrice, prevClose: spxPrev, changePct: spxChgPct, high: spxHigh, low: spxLow },
         vix:          { price: vixPrice, estimated: vixEstimated },
-        expectedMove: em,
-        emUpper:      em && spxPrice ? Math.round(spxPrice + em) : null,
-        emLower:      em && spxPrice ? Math.round(spxPrice - em) : null,
-      },
+          expectedMove: em,
+          expectedMoveLive: straddleMove,
+          emUpper:      em && spxPrice ? Math.round(spxPrice + em) : null,
+          emLower:      em && spxPrice ? Math.round(spxPrice - em) : null,
+          dataSource,
+          estimated:    dataSource !== 'tradier' || chainEstimated,
+        },
       sessions: {
         london: sessions.london,
         tokyo:  sessions.tokyo,
       },
       direction:   { type: dir.type, label: dir.label, color: dir.color, reason: dir.reason },
+      newsRisk:    newsDecision,
+      marketReaction,
+      sessionQuality,
       watchMode,
       contracts:   enrichedTop3,
       shortlist:   shortlist.map(({ _score, ...rest }) => rest),

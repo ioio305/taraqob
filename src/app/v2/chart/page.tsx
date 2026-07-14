@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
 import {
   createChart,
+  createSeriesMarkers,
   CandlestickSeries,
   LineSeries,
   HistogramSeries,
@@ -14,7 +15,7 @@ import {
   LineStyle,
   Time,
 } from 'lightweight-charts'
-import type { AnalysisResult } from '@/app/api/v2/chart/route'
+import type { AnalysisResult, SRZone } from '@/app/api/v2/chart/route'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -101,6 +102,17 @@ function scoreColor(s: number) {
   return 'text-red-400'
 }
 
+function zoneColor(zone: SRZone) {
+  const alpha = 0.10 + zone.strength * 0.28
+  return zone.type === 'demand'
+    ? `rgba(34, 197, 94, ${alpha.toFixed(2)})`
+    : `rgba(239, 68, 68, ${alpha.toFixed(2)})`
+}
+
+function zoneBorder(zone: SRZone) {
+  return zone.type === 'demand' ? '#22c55e' : '#ef4444'
+}
+
 function qualityBadge(q: string) {
   if (q === 'ممتاز') return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50'
   if (q === 'سيء')   return 'bg-red-500/20 text-red-300 border border-red-500/50'
@@ -128,6 +140,8 @@ export default function ChartPage() {
   const macdRef  = useRef<HTMLDivElement>(null)
   const volRef   = useRef<HTMLDivElement>(null)
   const decRef   = useRef<HTMLDivElement>(null)
+  const trendSrRef = useRef<HTMLDivElement>(null)
+  const decSrRef   = useRef<HTMLDivElement>(null)
 
   const chartInstances = useRef<IChartApi[]>([])
 
@@ -197,6 +211,74 @@ export default function ChartPage() {
       return chart
     }
 
+    function drawSRZones(
+      chart: IChartApi,
+      series: ISeriesApi<'Candlestick', Time>,
+      overlay: HTMLDivElement | null,
+      zones: SRZone[],
+      visibleCandles: Candle[],
+    ) {
+      if (!overlay) return
+      const paint = () => {
+        overlay.innerHTML = ''
+        const width = overlay.clientWidth
+        const height = overlay.clientHeight
+        if (!width || !height) return
+
+        const first = visibleCandles[0]
+        const lastVisible = visibleCandles[visibleCandles.length - 1]
+        const lastTime = lastVisible ? toTime(lastVisible.time, intraday) : null
+
+        for (const zone of zones) {
+          const zoneEnd = zone.endTime === candles[candles.length - 1]?.time && lastTime ? lastTime : toTime(zone.endTime, intraday)
+          const x1Raw = chart.timeScale().timeToCoordinate(toTime(zone.startTime, intraday))
+          const x2Raw = chart.timeScale().timeToCoordinate(zoneEnd)
+          const yTopRaw = series.priceToCoordinate(zone.top)
+          const yBottomRaw = series.priceToCoordinate(zone.bottom)
+          if (x1Raw == null || x2Raw == null || yTopRaw == null || yBottomRaw == null) continue
+
+          const x1 = Math.max(0, Math.min(x1Raw, x2Raw))
+          const x2 = Math.min(width, Math.max(x1Raw, x2Raw))
+          const y1 = Math.max(0, Math.min(yTopRaw, yBottomRaw))
+          const y2 = Math.min(height, Math.max(yTopRaw, yBottomRaw))
+          if (x2 <= 0 || x1 >= width || y2 <= 0 || y1 >= height) continue
+
+          const box = document.createElement('div')
+          box.style.position = 'absolute'
+          box.style.left = `${x1}px`
+          box.style.top = `${y1}px`
+          box.style.width = `${Math.max(3, x2 - x1)}px`
+          box.style.height = `${Math.max(3, y2 - y1)}px`
+          box.style.background = zoneColor(zone)
+          box.style.border = `1px ${zone.boundary === 'dashed' ? 'dashed' : 'solid'} ${zoneBorder(zone)}`
+          box.style.boxShadow = `0 0 ${8 + zone.strength * 18}px ${zoneBorder(zone)}22`
+          box.style.borderRadius = '2px'
+          overlay.appendChild(box)
+
+          if (x2 - x1 > 72) {
+            const label = document.createElement('div')
+            label.textContent = `${zone.type === 'demand' ? 'طلب/CALL' : 'عرض/PUT'} · Vol ${zone.volume}`
+            label.style.position = 'absolute'
+            label.style.left = `${x1 + 6}px`
+            label.style.top = `${Math.max(0, y1 + 4)}px`
+            label.style.color = zone.type === 'demand' ? '#bbf7d0' : '#fecaca'
+            label.style.font = '10px IBM Plex Mono, monospace'
+            label.style.textShadow = '0 1px 3px #000'
+            overlay.appendChild(label)
+          }
+        }
+
+        if (first) {
+          overlay.dataset.ready = 'true'
+        }
+      }
+
+      paint()
+      requestAnimationFrame(paint)
+      chart.timeScale().subscribeVisibleLogicalRangeChange(paint)
+      roCallbacks.push(() => chart.timeScale().unsubscribeVisibleLogicalRangeChange(paint))
+    }
+
     // ── Chart 1: Trend (candles + EMAs + VWAP) ─────────────────────────────
     if (trendRef.current) {
       const chart = mkChart(trendRef.current, 340)
@@ -209,6 +291,17 @@ export default function ChartPage() {
       cSeries.setData(candles.map(c => ({
         time: toTime(c.time, intraday), open: c.open, high: c.high, low: c.low, close: c.close,
       })))
+
+      const sr = data.analysis.sr
+      if (sr.signals.length > 0) {
+        createSeriesMarkers(cSeries, sr.signals.map(s => ({
+          time: toTime(s.time, intraday),
+          position: s.type === 'call' ? 'belowBar' : 'aboveBar',
+          color: s.type === 'call' ? '#22c55e' : '#ef4444',
+          shape: 'square',
+          text: s.type === 'call' ? '◆ CALL SR' : '◆ PUT SR',
+        })))
+      }
 
       // EMA 9
       const e9 = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 1, title: 'EMA9' })
@@ -233,6 +326,8 @@ export default function ChartPage() {
           vwapS.setData(vwapValid.map(c => ({ time: toTime(c.time, intraday), value: c.vwap! })))
         }
       }
+
+      drawSRZones(chart, cSeries, trendSrRef.current, sr.zones, candles)
 
       chart.timeScale().fitContent()
     }
@@ -334,6 +429,17 @@ export default function ChartPage() {
         time: toTime(c.time, intraday), open: c.open, high: c.high, low: c.low, close: c.close,
       })))
 
+      const decSignals = data.analysis.sr.signals.filter(s => decCandles.some(c => c.time === s.time))
+      if (decSignals.length > 0) {
+        createSeriesMarkers(cSeries, decSignals.map(s => ({
+          time: toTime(s.time, intraday),
+          position: s.type === 'call' ? 'belowBar' : 'aboveBar',
+          color: s.type === 'call' ? '#22c55e' : '#ef4444',
+          shape: 'square',
+          text: s.type === 'call' ? '◆ CALL' : '◆ PUT',
+        })))
+      }
+
       // Price level lines
       if (summary.entryLevel !== null) {
         cSeries.createPriceLine({ price: summary.entryLevel, color: '#f59e0b',  lineWidth: 1, lineStyle: LineStyle.Dotted,  title: 'الدخول' })
@@ -347,6 +453,8 @@ export default function ChartPage() {
       if (summary.stopLevel !== null) {
         cSeries.createPriceLine({ price: summary.stopLevel, color: '#ef4444', lineWidth: 1, lineStyle: LineStyle.Dashed, title: 'Stop' })
       }
+
+      drawSRZones(chart, cSeries, decSrRef.current, data.analysis.sr.zones, decCandles)
 
       chart.timeScale().fitContent()
     }
@@ -534,6 +642,40 @@ export default function ChartPage() {
             </div>
           </div>
 
+          {analysis.newsRisk && analysis.newsRisk.action !== 'allow' && (
+            <div className={`mt-3 rounded-xl px-3 py-2 text-xs border ${
+              analysis.newsRisk.action === 'block'
+                ? 'bg-red-950/40 border-red-500/40 text-red-200'
+                : 'bg-yellow-950/40 border-yellow-500/40 text-yellow-200'
+            }`}>
+              <div className="font-bold mb-0.5">فلتر الأخبار: {analysis.newsRisk.label}</div>
+              <div className="opacity-80">{analysis.newsRisk.reason}</div>
+            </div>
+          )}
+
+          {analysis.marketReaction && analysis.marketReaction.action !== 'normal' && (
+            <div className={`mt-3 rounded-xl px-3 py-2 text-xs border ${
+              analysis.marketReaction.action === 'block'
+                ? 'bg-red-950/40 border-red-500/40 text-red-200'
+                : analysis.marketReaction.action === 'caution'
+                  ? 'bg-yellow-950/40 border-yellow-500/40 text-yellow-200'
+                  : 'bg-blue-950/40 border-blue-500/40 text-blue-200'
+            }`}>
+              <div className="font-bold mb-0.5">رد فعل السوق: {analysis.marketReaction.label}</div>
+              <div className="opacity-80">{analysis.marketReaction.reason}</div>
+              {analysis.marketReaction.signals.length > 0 && (
+                <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {analysis.marketReaction.signals.map(sig => (
+                    <div key={sig.code} className="rounded-lg bg-black/20 px-2 py-1">
+                      <span className="font-bold">{sig.label}: </span>
+                      <span className="opacity-75">{analysis.marketReaction?.glossary[sig.code]}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Levels strip */}
           {analysis.summary.t1Level && (
             <div className="flex gap-4 mt-3 text-xs flex-wrap">
@@ -598,7 +740,23 @@ export default function ChartPage() {
               <p className="text-xs text-gray-700">القراءة الصحيحة: EMA9 {'>'} EMA21 {'>'} EMA50 والسعر فوقها جميعاً = إشارة صاعدة قوية</p>
             </div>
 
-            <div ref={trendRef} className="w-full" />
+            {/* SR guide */}
+            <div className="px-4 pt-2 pb-1 border-t border-[#1e3a50] space-y-2">
+              <div className="flex gap-4 text-xs text-gray-500 flex-wrap">
+                <span className="flex items-center gap-1"><span className="w-5 h-3 rounded-sm bg-emerald-500/35 border border-emerald-500 inline-block" />صندوق طلب — CALL</span>
+                <span className="flex items-center gap-1"><span className="w-5 h-3 rounded-sm bg-red-500/35 border border-red-500 inline-block" />صندوق عرض — PUT</span>
+                <span className="flex items-center gap-1"><span className="w-5 h-3 rounded-sm bg-emerald-500/60 border border-emerald-300 inline-block" />لون أغمق = سيولة أعلى</span>
+                <span className="flex items-center gap-1"><span className="w-5 h-3 rounded-sm border border-dashed border-[#C9943A] inline-block" />حد متقطع = Retest مؤكد</span>
+              </div>
+              {analysis?.sr && (
+                <p className="text-xs text-gray-600">{analysis.sr.summary}</p>
+              )}
+            </div>
+
+            <div className="relative">
+              <div ref={trendRef} className="w-full" />
+              <div ref={trendSrRef} className="absolute inset-0 pointer-events-none z-10" />
+            </div>
 
             {/* Interpretation */}
             {analysis && (
@@ -786,7 +944,10 @@ export default function ChartPage() {
               )}
             </div>
 
-            <div ref={decRef} className="w-full" />
+            <div className="relative">
+              <div ref={decRef} className="w-full" />
+              <div ref={decSrRef} className="absolute inset-0 pointer-events-none z-10" />
+            </div>
 
             {analysis && (
               <div className="px-4 py-3 border-t border-[#1e3a50] bg-[#060D14]/50 space-y-3">

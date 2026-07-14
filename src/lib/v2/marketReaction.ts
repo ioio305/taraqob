@@ -1,0 +1,119 @@
+export type MarketReactionAction = 'normal' | 'confirm' | 'caution' | 'block'
+
+export type MarketReactionSignal = {
+  code: 'vix_spike' | 'vwap_break' | 'volume_surge' | 'wide_candle'
+  label: string
+  description: string
+  severity: 'low' | 'medium' | 'high'
+}
+
+export type MarketReactionDecision = {
+  action: MarketReactionAction
+  score: number
+  label: string
+  reason: string
+  signals: MarketReactionSignal[]
+  glossary: Record<string, string>
+}
+
+export type ReactionBar = {
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+  vwap?: number | null
+}
+
+export const MARKET_REACTION_GLOSSARY: Record<string, string> = {
+  vix_spike: 'ارتفاع مفاجئ في VIX: يعني أن الخوف/التذبذب ارتفع بسرعة، وغالباً تصبح عقود الخيارات أغلى وأخطر.',
+  vwap_break: 'كسر VWAP: السعر اخترق متوسط سعر اليوم المرجح بالحجم. فوقه يميل المشترون للسيطرة، وتحته يميل البائعون للسيطرة.',
+  volume_surge: 'اندفاع حجم التداول: حجم الشمعة الحالية أعلى بكثير من المتوسط، وهذا يدل على دخول أو خروج قوي من السوق.',
+  wide_candle: 'شمعة واسعة: مدى الشمعة أكبر من المعتاد، وهذا يعني حركة سريعة قد تسبب انزلاقاً أو انعكاساً حاداً.',
+}
+
+function avg(nums: number[]): number {
+  return nums.length ? nums.reduce((s, v) => s + v, 0) / nums.length : 0
+}
+
+export function evaluateMarketReaction(input: {
+  bars?: ReactionBar[]
+  spxChangePct?: number | null
+  vixPrice?: number | null
+  vixPrev?: number | null
+  vwap?: number | null
+}): MarketReactionDecision {
+  const signals: MarketReactionSignal[] = []
+  const bars = input.bars ?? []
+  const last = bars[bars.length - 1]
+  const prev = bars[bars.length - 2]
+
+  if (input.vixPrice && input.vixPrev && input.vixPrev > 0) {
+    const vixMovePct = ((input.vixPrice - input.vixPrev) / input.vixPrev) * 100
+    if (vixMovePct >= 8 || input.vixPrice >= 28) {
+      signals.push({
+        code: 'vix_spike',
+        label: 'ارتفاع مفاجئ في VIX',
+        description: `VIX تحرك ${vixMovePct.toFixed(1)}% — التذبذب يرتفع بسرعة`,
+        severity: vixMovePct >= 12 || input.vixPrice >= 30 ? 'high' : 'medium',
+      })
+    }
+  }
+
+  if (last && prev) {
+    const vwap = input.vwap ?? last.vwap ?? null
+    if (vwap) {
+      const crossedDown = prev.close >= vwap && last.close < vwap
+      const crossedUp = prev.close <= vwap && last.close > vwap
+      if (crossedDown || crossedUp) {
+        signals.push({
+          code: 'vwap_break',
+          label: crossedUp ? 'استعادة VWAP للأعلى' : 'كسر VWAP للأسفل',
+          description: crossedUp ? 'السعر عاد فوق VWAP — المشترون يحاولون السيطرة' : 'السعر كسر VWAP — البائعون يضغطون على السوق',
+          severity: 'medium',
+        })
+      }
+    }
+
+    const lookback = bars.slice(-21, -1)
+    const avgVolume = avg(lookback.map(b => b.volume).filter(v => v > 0))
+    if (avgVolume > 0 && last.volume >= avgVolume * 1.8) {
+      signals.push({
+        code: 'volume_surge',
+        label: 'اندفاع حجم التداول',
+        description: `حجم آخر شمعة أعلى من المتوسط بـ ${(last.volume / avgVolume).toFixed(1)}x`,
+        severity: last.volume >= avgVolume * 2.5 ? 'high' : 'medium',
+      })
+    }
+
+    const avgRange = avg(lookback.map(b => b.high - b.low).filter(v => v > 0))
+    const lastRange = last.high - last.low
+    if (avgRange > 0 && lastRange >= avgRange * 1.8) {
+      signals.push({
+        code: 'wide_candle',
+        label: 'شمعة واسعة',
+        description: `مدى آخر شمعة أكبر من المعتاد بـ ${(lastRange / avgRange).toFixed(1)}x`,
+        severity: lastRange >= avgRange * 2.5 ? 'high' : 'medium',
+      })
+    }
+  }
+
+  let score = 0
+  for (const s of signals) score += s.severity === 'high' ? 35 : s.severity === 'medium' ? 20 : 8
+  if (Math.abs(input.spxChangePct ?? 0) >= 1.5) score += 15
+  score = Math.min(100, score)
+
+  const highCount = signals.filter(s => s.severity === 'high').length
+  const action: MarketReactionAction = highCount >= 2 || score >= 70 ? 'block' : score >= 40 ? 'caution' : signals.length ? 'confirm' : 'normal'
+  const label = action === 'block'
+    ? 'رد فعل السوق حاد — تعليق الدخول'
+    : action === 'caution'
+      ? 'رد فعل السوق متوتر — دخول مشروط فقط'
+      : action === 'confirm'
+        ? 'السوق يتحرك بوضوح — انتظر اتجاه الإشارة'
+        : 'رد فعل السوق طبيعي'
+
+  const reason = signals[0]?.description ?? 'لا توجد حركة غير طبيعية في التذبذب أو الحجم أو VWAP.'
+
+  return { action, score, label, reason, signals, glossary: MARKET_REACTION_GLOSSARY }
+}

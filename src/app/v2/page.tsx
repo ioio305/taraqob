@@ -9,6 +9,7 @@ type Market = {
   spx: { price: number; prevClose?: number; changePct: number; high: number; low: number }
   vix: { price: number; estimated?: boolean }
   expectedMove: number | null
+  expectedMoveLive?: { points: number | null; source: string; label: string }
   emUpper: number | null
   emLower: number | null
 }
@@ -53,6 +54,14 @@ type Contract  = {
   status: 'execute' | 'watch' | 'no-trade'
   reason: string
   strategy: ContractStrategy
+  focus?: {
+    action: 'enter' | 'wait' | 'avoid'
+    label: string
+    confidence: number
+    primaryReason: string
+    nextStep: string
+    blockers: string[]
+  }
 }
 type ShortlistItem = {
   symbol: string; type: string; strike: number; expiration: string; dte: number
@@ -567,7 +576,28 @@ export default function V2Dashboard() {
                   </div>
                 </div>
 
-                <div className="p-4 space-y-3" style={{ background: 'rgba(0,0,0,0.2)' }}>
+                  <div className="p-4 space-y-3" style={{ background: 'rgba(0,0,0,0.2)' }}>
+
+                  {/* ── One clear decision ── */}
+                  {c.focus && (
+                    <div className="rounded-xl px-4 py-3"
+                         style={{
+                           background: c.focus.action === 'enter' ? 'rgba(16,185,129,0.10)' : c.focus.action === 'wait' ? 'rgba(245,158,11,0.10)' : 'rgba(239,68,68,0.10)',
+                           border: c.focus.action === 'enter' ? '1px solid rgba(16,185,129,0.35)' : c.focus.action === 'wait' ? '1px solid rgba(245,158,11,0.35)' : '1px solid rgba(239,68,68,0.35)',
+                         }}>
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="text-base font-bold"
+                             style={{ color: c.focus.action === 'enter' ? '#10B981' : c.focus.action === 'wait' ? '#F59E0B' : '#EF4444' }}>
+                          {c.focus.label}
+                        </div>
+                        <div className="text-xs font-mono" style={{ color: '#94A3B8' }}>
+                          ثقة {c.focus.confidence}/100
+                        </div>
+                      </div>
+                      <div className="text-xs mt-1 leading-relaxed" style={{ color: '#94A3B8' }}>{c.focus.primaryReason}</div>
+                      <div className="text-xs mt-1 leading-relaxed font-semibold" style={{ color: '#C9943A' }}>{c.focus.nextStep}</div>
+                    </div>
+                  )}
 
                   {/* ── Stale warning ── */}
                   {isStale && (
