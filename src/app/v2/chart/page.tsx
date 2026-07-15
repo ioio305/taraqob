@@ -49,6 +49,7 @@ interface ChartData {
   symbol:   string
   candles:  Candle[]
   analysis: AnalysisResult
+  gamma?:   GammaExposure | null
   error?:   string
 }
 
@@ -237,6 +238,7 @@ export default function ChartPage() {
       const d: ChartData = await res.json()
       if (d.error && !d.candles?.length) throw new Error(d.error)
       setData(d)
+      if (d.gamma) setGamma(d.gamma)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'فشل تحميل البيانات')
     } finally {
@@ -261,14 +263,6 @@ export default function ChartPage() {
         if (spx) items.push({ symbol: 'SPX', label: 'المرجعي', price: spx.last ?? null, change: spx.change_percentage ?? null })
         setSupport(items)
       })
-      .catch(() => {})
-  }, [])
-
-  // ── Fetch gamma exposure (CBOE, free) ───────────────────────────────────────
-  useEffect(() => {
-    fetch('/api/v2/gamma')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.success && d.gamma) setGamma(d.gamma) })
       .catch(() => {})
   }, [])
 

@@ -6,8 +6,9 @@ import { getIntradayBars, getHistoryBars } from '@/lib/v2/marketData'
 import {
   type RawBar,
   ema, rsi, macdFn, bollinger, atrFn, computeVwap, aggregateBars,
-  analyzeMarket, defaultAnalysis,
+  analyzeMarket, defaultAnalysis, applyGamma,
 } from '@/lib/v2/marketAnalysis'
+import { getGammaExposure } from '@/lib/v2/gammaExposure'
 
 export const dynamic = 'force-dynamic'
 
@@ -131,5 +132,11 @@ export async function GET(request: NextRequest) {
     analysis.summary.entryCondition = `${analysis.summary.entryCondition} + تأكيد شمعة إضافية بعد الحركة`
   }
 
-  return NextResponse.json({ tf, symbol: 'SPX', candles, analysis })
+  // ── انكشاف جاما: يغذّي القرار (جاما موجبة عند المقاومة → تخفيض) ──────────────
+  const gamma = await getGammaExposure().catch(() => null)
+  if (gamma && analysis.summary.decisionCode !== 'no_entry' && reaction.action !== 'block' && news?.decision?.action !== 'block') {
+    applyGamma(analysis, gamma)
+  }
+
+  return NextResponse.json({ tf, symbol: 'SPX', candles, analysis, gamma })
 }

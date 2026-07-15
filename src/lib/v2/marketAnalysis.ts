@@ -5,6 +5,7 @@
 // ============================================================
 import type { NewsRiskDecision } from '@/lib/v2/newsRisk'
 import type { MarketReactionDecision } from '@/lib/v2/marketReaction'
+import type { GammaExposure } from '@/lib/v2/gammaExposure'
 
 // ── جدول الأفضلية المُعاير على بيانات SPX تاريخية (scripts/backtest.ts) ──────
 // أرقام واقعية مقيسة على نافذة ~10 أيام تداول. تُعرض للمستخدم كتوقّع تاريخي.
@@ -718,3 +719,40 @@ export function defaultAnalysis(): AnalysisResult {
   }
 }
 
+
+// ── تطبيق انكشاف جاما على القرار — يحوّل جاما إلى قوة تحسّن الإشارة ──────────
+// جاما موجبة = سوق مكبوح (الارتدادات من الجدران مرجّحة، الصعود عند المقاومة محدود).
+// جاما سالبة = سوق مضخّم (اتجاهي، احذر التسارع). والجدران دعم/مقاومة مؤسسية حقيقية.
+export function applyGamma(a: AnalysisResult, gamma: GammaExposure | null): AnalysisResult {
+  if (!gamma || !gamma.spot) return a
+  const spot = gamma.spot
+  const tol = spot * 0.005
+  const nearCall = gamma.callWall != null && Math.abs(spot - gamma.callWall) <= tol
+  const nearPut  = gamma.putWall  != null && Math.abs(spot - gamma.putWall)  <= tol
+  const aboveCall = gamma.callWall != null && spot > gamma.callWall
+
+  // قراءة مستقلة
+  a.readings.push({
+    label: 'جاما',
+    verdict: gamma.regime === 'positive' ? 'مكبوحة' : 'مضخّمة',
+    tone: gamma.regime === 'positive' ? 'flat' : 'down',
+  })
+
+  // أدلة
+  if (gamma.regime === 'positive') a.bullCase.push('جاما موجبة — سوق مكبوح، الارتدادات من الجدران مرجّحة')
+  else a.bearCase.push('جاما سالبة — سوق عنيف، احذر الحركات المتسارعة')
+  if (nearPut)  a.bullCase.push('السعر عند جدار دعم جاما — نقطة ارتداد قوية')
+  if (nearCall) a.bearCase.push('السعر عند جدار مقاومة جاما — الصعود مكبوح فوق مباشرة')
+
+  // تعديل القرار: مطاردة الصعود عند/فوق مقاومة جاما في سوق مكبوح → تخفيض درجة
+  const order: DecisionCode[] = ['no_entry', 'watch', 'conditional', 'execute']
+  if (a.summary.bias !== 'هابط' && gamma.regime === 'positive' && (nearCall || aboveCall)) {
+    const i = order.indexOf(a.summary.decisionCode)
+    if (i > 0) {
+      a.summary.decisionCode = order[i - 1]
+      a.summary.expectancy = TIER_STATS[a.summary.decisionCode]
+      a.summary.decisionText = 'حذر (جاما) — السعر عند/فوق جدار مقاومة في سوق مكبوح، الصعود محدود'
+    }
+  }
+  return a
+}
