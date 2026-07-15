@@ -106,8 +106,8 @@ export async function GET(req: NextRequest) {
     const better = options
       .filter(o => o.option_type === type && (o.ask ?? 0) >= 0.5 && (o.ask ?? 0) <= 6)
       .map(o => ({ o, d: Math.abs(o.greeks?.delta ?? 0) }))
-      .filter(x => x.d >= 0.28 && x.d <= 0.45)
-      .sort((a, b) => Math.abs(a.d - 0.35) - Math.abs(b.d - 0.35))[0]
+      .filter(x => x.d >= 0.22 && x.d <= 0.48)
+      .sort((a, b) => Math.abs(a.d - 0.33) - Math.abs(b.d - 0.33))[0]
     if (better) roll = {
       strike: better.o.strike, ask: better.o.ask ?? 0, delta: Math.round(better.d * 100) / 100,
       reason: `ستريكك الحالي بطيء (دلتا ${delta.toFixed(2)}). ${better.o.strike} أسرع تفاعلاً (دلتا ${better.d.toFixed(2)}) — فكّر بالدحرجة إليه.`,
