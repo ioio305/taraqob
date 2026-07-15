@@ -431,11 +431,16 @@ export async function GET(request: NextRequest) {
     const emUpper = effectiveEM ? Math.round(spxPrice + effectiveEM) : Math.round(spxPrice + 50)
     const emLower = effectiveEM ? Math.round(spxPrice - effectiveEM) : Math.round(spxPrice - 50)
 
+    // السوق مغلق/قبل الافتتاح (وليس منعاً بسبب خبر أو رد فعل) → قائمة استعداد لا «لا تدخل»
+    const marketClosedPhase = sessionQuality.phase === 'closed' || sessionQuality.phase === 'pre_market'
+    const closedWatchlist = marketClosedPhase && !newsBlocked && !reactionBlocked
+
     const enrichedTop3 = top3.map(o => {
       const score = o._score ?? 0
 
       let status: 'execute' | 'watch' | 'no-trade'
-      if (newsBlocked || reactionBlocked || sessionBlocked) status = 'no-trade'
+      if (closedWatchlist)             status = 'watch'   // قائمة استعداد
+      else if (newsBlocked || reactionBlocked || sessionBlocked) status = 'no-trade'
       else if (watchMode || vixPrice >= 28) status = score >= 50 ? 'watch' : 'no-trade'
       else if (score >= 80)            status = 'execute'
       else if (score >= 74)            status = 'watch'
@@ -459,7 +464,9 @@ export async function GET(request: NextRequest) {
       })
 
       // One-line display reason for dashboard card
-      const reason = watchMode
+      const reason = closedWatchlist
+        ? 'قائمة استعداد — السوق مغلق، هذه المرشّحات ستُقيَّم عند الفتح'
+        : watchMode
         ? 'السوق عرضي — مراقبة فقط، لا تدخل دون اتجاه واضح'
         : newsBlocked
           ? newsDecision.reason
@@ -506,6 +513,7 @@ export async function GET(request: NextRequest) {
           emLower:      em && spxPrice ? Math.round(spxPrice - em) : null,
           dataSource,
           estimated:    dataSource !== 'tradier' || chainEstimated,
+          watchlist:    closedWatchlist,
         },
       sessions: {
         london: sessions.london,

@@ -518,20 +518,23 @@ function MobileTab({ href, icon, label, exact }: { href: string; icon: string; l
 }
 
 function MarketClock() {
-  const [info, setInfo] = useState({ time: '', status: '', color: '#2D3748' })
+  const [info, setInfo] = useState({ time: '', riyadh: '', status: '', color: '#2D3748' })
 
   useEffect(() => {
     function tick() {
       const ny  = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
       const h = ny.getHours(), m = ny.getMinutes(), day = ny.getDay()
       const t = h * 60 + m
-      const time = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')} ET`
+      const time = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')} نيويورك`
+      // توقيت الرياض
+      const ry = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Riyadh' }))
+      const riyadh = `${String(ry.getHours()).padStart(2,'0')}:${String(ry.getMinutes()).padStart(2,'0')} الرياض`
       let status = '', color = '#2D3748'
       if      (day === 0 || day === 6)  { status = 'مغلق';         color = '#2D3748' }
       else if (t >= 570 && t < 960)    { status = 'مفتوح';        color = '#10B981' }
       else if (t >= 540 && t < 570)    { status = 'قبل الافتتاح'; color = '#F59E0B' }
       else                              { status = 'بعد الإغلاق';  color = '#4A5568' }
-      setInfo({ time, status, color })
+      setInfo({ time, riyadh, status, color })
     }
     tick()
     const id = setInterval(tick, 30000)
@@ -539,12 +542,14 @@ function MarketClock() {
   }, [])
 
   return (
-    <div className="flex items-center gap-2 text-xs flex-1">
+    <div className="flex items-center gap-2 text-xs flex-1 flex-wrap">
       {info.status === 'مفتوح' && (
         <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: info.color }} />
       )}
-      <span style={{ fontFamily: '"IBM Plex Mono", monospace', color: '#3D5060' }}>{info.time}</span>
       <span style={{ color: info.color }}>{info.status}</span>
+      <span style={{ fontFamily: '"IBM Plex Mono", monospace', color: '#C9943A' }}>{info.riyadh}</span>
+      <span style={{ color: '#3D5060' }}>·</span>
+      <span style={{ fontFamily: '"IBM Plex Mono", monospace', color: '#6E7E8F' }}>{info.time}</span>
     </div>
   )
 }
