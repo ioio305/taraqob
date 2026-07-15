@@ -423,14 +423,18 @@ export async function GET(request: NextRequest) {
     const total = e1 + e2 + e3 + e4 + e5 + e6 + e7
     let decision: 'execute' | 'conditional' | 'watch' | 'reject' =
       total >= 80 ? 'execute' : total >= 65 ? 'conditional' : total >= 50 ? 'watch' : 'reject'
+    // السوق مغلق/قبل الافتتاح (وليس منعاً بسبب خبر أو رد فعل) → قائمة استعداد لا رفض
+    const closedOnly = (sessionQuality.phase === 'closed' || sessionQuality.phase === 'pre_market') && !newsBlocked && !reactionBlocked
     if (newsBlocked) decision = 'reject'
     if (reactionBlocked) decision = 'reject'
-    if (sessionBlocked) decision = 'reject'
+    if (sessionBlocked && !closedOnly) decision = 'reject'   // منع الجلسة الحقيقي فقط (أول 15 دقيقة)
+    else if (closedOnly && decision === 'execute') decision = 'watch'   // لا «نفّذ» والسوق مغلق
 
     const dirAr  = spxChgPct >= 0.3 ? 'صاعد' : spxChgPct <= -0.3 ? 'هابط' : 'محايد'
     const vwapAr = vwap ? (spxPrice > vwap ? '، فوق VWAP' : '، تحت VWAP') : ''
     const decisionReasonAr = isEstimated
       ? `تحليل بأسعار تقديرية (لا مصدر لحظي) — التحليل بناءً على SPX ${spxPrice.toFixed(0)} و VIX ${vixPrice.toFixed(1)}. خذ سعر العقد الفعلي من منصتك.`
+      : closedOnly ? `قائمة استعداد — السوق مغلق، الدرجة ${total}/100 ستُقيَّم عند الفتح`
       : newsBlocked && newsDecision ? `رُفض — ${newsDecision.reason}`
       : reactionBlocked ? `رُفض — ${marketReaction.reason}`
       : sessionBlocked ? `رُفض — ${sessionQuality.reason}`
