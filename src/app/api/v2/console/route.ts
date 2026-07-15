@@ -375,7 +375,7 @@ export async function GET(request: NextRequest) {
   const decisionReason =
     !marketOpen              ? 'السوق مغلق — لا يمكن تقييم التنفيذ' :
     isITM                    ? 'العقد ITM — خطر عالٍ، لا يُنصح بالدخول' :
-    !hasRealData             ? 'بيانات السعر غير متاحة من تريدر' :
+    !hasRealData             ? 'بيانات السعر غير متاحة حالياً' :
     !liquidityOk             ? 'سيولة ضعيفة — خطر تنفيذ' :
     !spreadOk                ? 'فرق سعر واسع — تكلفة تنفيذ مرتفعة' :
     decision === 'conditional' ? `دخول محتمل — السوق ${dirAr}${vwapAr}، شروط جيدة` :

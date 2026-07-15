@@ -440,7 +440,7 @@ function AnalyzeContent() {
               <div className="rounded-xl px-4 py-2.5 flex items-center gap-2 text-sm"
                 style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
                 <span style={{ color: '#F59E0B' }}>⚡</span>
-                <span style={{ color: '#F59E0B' }}>تحليل تقديري — السوق مغلق حالياً، أسعار Black-Scholes بناءً على SPX و VIX</span>
+                <span style={{ color: '#F59E0B' }}>تحليل تقديري — السوق مغلق حالياً، أسعار بتقدير حسابي بناءً على SPX و VIX</span>
               </div>
             )}
 
@@ -474,7 +474,7 @@ function AnalyzeContent() {
               )}
               {analysis.or_high && (
                 <div>
-                  <span className="text-xs font-mono" style={{ color: '#2D3748' }}>OR </span>
+                  <span className="text-xs font-mono" style={{ color: '#2D3748' }}>نطاق الافتتاح </span>
                   <span className="text-xs font-mono" style={{ color: '#F59E0B' }}>
                     {n(analysis.or_low, 0)} – {n(analysis.or_high, 0)}
                   </span>
@@ -486,7 +486,7 @@ function AnalyzeContent() {
                   {n(analysis.expected_move_live?.points ?? analysis.em_intraday, 1)}
                 </span>
                 {analysis.expected_move_live?.source === 'atm_straddle' && (
-                  <span className="text-[10px] font-mono mr-1" style={{ color: '#10B981' }}>Straddle</span>
+                  <span className="text-[10px] font-mono mr-1" style={{ color: '#10B981' }}>سترادل</span>
                 )}
               </div>
               <div className="mr-auto flex items-center gap-2">
@@ -500,7 +500,7 @@ function AnalyzeContent() {
                     style={{ background: refreshing ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.08)', color: '#10B981', border: '1px solid rgba(16,185,129,0.3)' }}>
                     <span className={`inline-block w-1.5 h-1.5 rounded-full ${refreshing ? 'animate-ping' : 'animate-pulse'}`}
                           style={{ background: '#10B981' }} />
-                    LIVE · 3s
+                    مباشر · 3ث
                   </span>
                 )}
               </div>
@@ -800,7 +800,7 @@ function AnalyzeContent() {
               <div className="rounded-xl px-4 py-3 flex items-center justify-between"
                 style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
                 <div className="text-center">
-                  <div className="text-xs font-mono mb-1" style={{ color: '#EF4444' }}>EM Lower</div>
+                  <div className="text-xs font-mono mb-1" style={{ color: '#EF4444' }}>حد الحركة السفلي</div>
                   <div className="font-bold font-mono" style={{ color: '#EF4444' }}>{analysis.em_lower}</div>
                 </div>
                 <div className="text-center flex-1 mx-4">
@@ -813,7 +813,7 @@ function AnalyzeContent() {
                   </div>
                 </div>
                 <div className="text-center">
-                  <div className="text-xs font-mono mb-1" style={{ color: '#10B981' }}>EM Upper</div>
+                  <div className="text-xs font-mono mb-1" style={{ color: '#10B981' }}>حد الحركة العلوي</div>
                   <div className="font-bold font-mono" style={{ color: '#10B981' }}>{analysis.em_upper}</div>
                 </div>
               </div>

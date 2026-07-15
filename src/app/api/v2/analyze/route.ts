@@ -420,7 +420,7 @@ export async function GET(request: NextRequest) {
     const dirAr  = spxChgPct >= 0.3 ? 'صاعد' : spxChgPct <= -0.3 ? 'هابط' : 'محايد'
     const vwapAr = vwap ? (spxPrice > vwap ? '، فوق VWAP' : '، تحت VWAP') : ''
     const decisionReasonAr = isEstimated
-      ? `تحليل تقديري — السوق مغلق حالياً، بيانات Black-Scholes بناءً على SPX ${spxPrice.toFixed(0)} و VIX ${vixPrice.toFixed(1)}`
+      ? `تحليل تقديري — السوق مغلق حالياً، بيانات بتقدير حسابي بناءً على SPX ${spxPrice.toFixed(0)} و VIX ${vixPrice.toFixed(1)}`
       : newsBlocked && newsDecision ? `رُفض — ${newsDecision.reason}`
       : reactionBlocked ? `رُفض — ${marketReaction.reason}`
       : sessionBlocked ? `رُفض — ${sessionQuality.reason}`

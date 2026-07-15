@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { getMarketSnapshot, getIntradayBars, getExpirations as mdExpirations, getOptionsChain } from '@/lib/v2/marketData'
 
 export const dynamic = 'force-dynamic'
 
@@ -80,15 +81,13 @@ interface StrategyResult {
 
 // ── Option chain fetch ─────────────────────────────────────────────────────────
 
-async function fetchChain(expiry: string, type: 'call' | 'put') {
-  const d   = await tGet(`/markets/options/chains?symbol=SPXW&expiration=${expiry}&greeks=true`)
-  const raw = d?.options?.option
-  const all: any[] = Array.isArray(raw) ? raw : (raw ? [raw] : [])
-  return all.filter(o => o.option_type === type).map(o => ({
-    symbol:        o.symbol as string,
-    strike:        o.strike as number,
-    bid:           o.bid   ?? null,
-    ask:           o.ask   ?? null,
+async function fetchChain(expiry: string, type: 'call' | 'put', spx: number, vix: number) {
+  const { options } = await getOptionsChain(expiry, spx, vix)
+  return options.filter(o => o.option_type === type).map(o => ({
+    symbol:        o.symbol,
+    strike:        o.strike,
+    bid:           o.bid ?? null,
+    ask:           o.ask ?? null,
     mid:           (o.bid != null && o.ask != null) ? (o.bid + o.ask) / 2 : (o.last ?? null),
     delta:         o.greeks?.delta  ?? null,
     iv:            o.greeks?.mid_iv ?? o.greeks?.smv_vol ?? null,
@@ -98,13 +97,9 @@ async function fetchChain(expiry: string, type: 'call' | 'put') {
 }
 
 async function getExpirations(): Promise<string[]> {
-  try {
-    const d   = await tGet('/markets/options/expirations?symbol=SPXW&includeAllRoots=true&strikes=false')
-    const raw = d?.expirations?.date
-    const arr = Array.isArray(raw) ? raw : (raw ? [raw] : [])
-    const today = todayET()
-    return (arr as string[]).filter(x => x >= today).slice(0, 6)
-  } catch { return [] }
+  const today = todayET()
+  const arr = await mdExpirations()
+  return arr.filter(x => x >= today).slice(0, 6)
 }
 
 // ── Strategy scoring ───────────────────────────────────────────────────────────
@@ -202,40 +197,21 @@ export async function GET(_req: NextRequest) {
   // ── Fetch market data ───────────────────────────────────────────────────────
   let spxPrice = 0, spxPrev = 0, vixPrice = 20, vwap: number | null = null
 
-  try {
-    const [mktD, tsD] = await Promise.allSettled([
-      tGet('/markets/quotes?symbols=$SPX.X,$VIX.X&greeks=false'),
-      marketOpen ? tGet('/markets/timesales?symbol=SPY&interval=1min&session_filter=open') : Promise.resolve(null),
-    ])
-
-    if (mktD.status === 'fulfilled') {
-      const qs  = Array.isArray(mktD.value?.quotes?.quote) ? mktD.value.quotes.quote : [mktD.value?.quotes?.quote].filter(Boolean)
-      const spxQ = qs.find((q: any) => q?.symbol === '$SPX.X') ?? null
-      const vixQ = qs.find((q: any) => q?.symbol === '$VIX.X') ?? null
-      if (spxQ?.last) { spxPrice = spxQ.last; spxPrev = spxQ.prevclose ?? spxQ.last }
-      if (vixQ?.last) vixPrice = vixQ.last
-    }
-
-    if (!spxPrice) {
-      const spyD = await tGet('/markets/quotes?symbols=SPY&greeks=false')
-      const spy  = Array.isArray(spyD?.quotes?.quote) ? spyD.quotes.quote[0] : spyD?.quotes?.quote
-      if (spy?.last) { spxPrice = +(spy.last * 10).toFixed(2); spxPrev = +((spy.prevclose ?? spy.last) * 10).toFixed(2) }
-    }
-
-    if (tsD.status === 'fulfilled' && tsD.value) {
-      const series: any[] = tsD.value?.series?.data ?? []
-      const arr = Array.isArray(series) ? series : [series]
-      if (arr.length > 0) {
+  const snapshot = await getMarketSnapshot()
+  spxPrice = snapshot.spxPrice
+  spxPrev  = snapshot.spxPrev ?? spxPrice
+  vixPrice = snapshot.vixPrice
+  if (marketOpen) {
+    try {
+      const bars = await getIntradayBars('1min', 2)
+      if (bars.length) {
+        const lastDay = bars[bars.length - 1].time.slice(0, 10)
+        const series = bars.filter(b => b.time.slice(0, 10) === lastDay)
         let sumPV = 0, sumV = 0
-        for (const c of arr) {
-          const p = ((c.high + c.low + c.close) / 3)
-          sumPV += p * (c.volume ?? 0); sumV += c.volume ?? 0
-        }
-        if (sumV > 0) vwap = +((sumPV / sumV) * 10).toFixed(2)
+        for (const c of series) { const p = (c.high + c.low + c.close) / 3; sumPV += p * (c.volume || 0); sumV += c.volume || 0 }
+        if (sumV > 0) vwap = Math.round(sumPV / sumV * 100) / 100
       }
-    }
-  } catch {
-    return NextResponse.json({ error: 'تعذر جلب بيانات السوق' }, { status: 502 })
+    } catch { /* تجاهل */ }
   }
 
   if (!spxPrice) return NextResponse.json({ error: 'تعذر جلب سعر SPX' }, { status: 502 })
@@ -335,14 +311,14 @@ export async function GET(_req: NextRequest) {
 
   try {
     if (strategyName === 'bull_put_spread' || strategyName === 'iron_condor') {
-      puts = await fetchChain(expiry, 'put')
+      puts = await fetchChain(expiry, 'put', spxPrice, vixPrice)
     }
     if (strategyName === 'bear_call_spread' || strategyName === 'iron_condor') {
-      calls = await fetchChain(expiry, 'call')
+      calls = await fetchChain(expiry, 'call', spxPrice, vixPrice)
     }
     // If IC and missing one leg set, try to fetch the other
-    if (strategyName === 'iron_condor' && puts.length === 0) puts = await fetchChain(expiry, 'put')
-    if (strategyName === 'iron_condor' && calls.length === 0) calls = await fetchChain(expiry, 'call')
+    if (strategyName === 'iron_condor' && puts.length === 0) puts = await fetchChain(expiry, 'put', spxPrice, vixPrice)
+    if (strategyName === 'iron_condor' && calls.length === 0) calls = await fetchChain(expiry, 'call', spxPrice, vixPrice)
   } catch {
     return NextResponse.json({ error: 'تعذر جلب سلسلة العقود' }, { status: 502 })
   }
