@@ -53,6 +53,8 @@ type Contract  = {
   score: number
   status: 'execute' | 'watch' | 'no-trade'
   reason: string
+  grade?: string
+  edgeCount?: number
   strategy: ContractStrategy
   focus?: {
     action: 'enter' | 'wait' | 'avoid'
@@ -555,14 +557,13 @@ export default function V2Dashboard() {
                     </span>
                     <span className="text-xl font-bold font-mono text-white">{c.strike.toLocaleString()}</span>
                     <span className="text-xs font-mono" style={{ color: '#4A5568' }}>DTE {c.dte}</span>
-                    {(c as { grade?: string }).grade && (() => {
-                      const gr = (c as { grade: string }).grade
-                      const col = gr === 'A+' ? '#C9943A' : gr === 'A' ? '#26D07C' : gr === 'B' ? '#60A5FA' : '#6E7E8F'
+                    {c.grade && (() => {
+                      const col = c.grade === 'A+' ? '#C9943A' : c.grade === 'A' ? '#26D07C' : c.grade === 'B' ? '#60A5FA' : '#6E7E8F'
                       return (
                         <span className="text-sm font-black px-2 py-0.5 rounded-lg"
-                          title={`اتفاق ${(c as { edgeCount?: number }).edgeCount ?? 0} من 7 أدلة`}
+                          title={`اتفاق ${c.edgeCount ?? 0} من 7 أدلة`}
                           style={{ background: `${col}1A`, color: col, border: `1px solid ${col}66` }}>
-                          {gr}
+                          {c.grade}
                         </span>
                       )
                     })()}
