@@ -29,6 +29,9 @@ export interface RawBar {
 }
 
 export interface AnalysisResult {
+  bullCase: string[]
+  bearCase: string[]
+  readings: { label: string; verdict: string; tone: 'up' | 'down' | 'flat' }[]
   trend: {
     direction: 'صاعد' | 'هابط' | 'محايد'
     score:     number
@@ -628,7 +631,48 @@ export function analyzeMarket(
     : `SPX يتقدم نحو ${t1!.toFixed(0)} ثم ${t2!.toFixed(0)}${srcNote}`
   const bearishScenario = `الخطة تُلغى عند ${stop!.toFixed(0)}${srcNote}`
 
+  // ── الحجة الصاعدة مقابل الهابطة (أدلة من المؤشرات) ───────────────────────────
+  const bullCase: string[] = []
+  const bearCase: string[] = []
+  if (trendDir === 'صاعد') bullCase.push('الاتجاه صاعد — المتوسطات مرتّبة للأعلى')
+  else if (trendDir === 'هابط') bearCase.push('الاتجاه هابط — المتوسطات مرتّبة للأسفل')
+  if (e200 !== null) {
+    if (close > e200) bullCase.push('السعر فوق المتوسط الطويل (اتجاه كبير صاعد)')
+    else bearCase.push('السعر تحت المتوسط الطويل (اتجاه كبير هابط)')
+  }
+  if (vwap !== null) {
+    if (close > vwap) bullCase.push('السعر فوق سعره العادل — المشترون مسيطرون')
+    else bearCase.push('السعر تحت سعره العادل — البائعون مسيطرون')
+  }
+  if (macdBullish === true) bullCase.push('الزخم إيجابي')
+  else if (macdBullish === false) bearCase.push('الزخم سلبي')
+  if (rsiV !== null) {
+    if (uptrend && rsiV >= 70 && rsiV < 88) bullCase.push('قوة مستمرة ضمن اتجاه صاعد ثابت')
+    else if (rsiV >= 88) bearCase.push('القوة متطرّفة — خطر تصحيح قصير')
+    else if (!uptrend && rsiV >= 75) bearCase.push('تشبع شراء في سوق عرضي — خطر انعكاس')
+    else if (rsiV <= 30 && !downtrend) bullCase.push('تشبع بيع — ارتداد محتمل')
+  }
+  if (volQuality === 'ممتاز') bullCase.push('التذبذب مناسب — الأهداف قابلة للتحقق')
+  else if (volQuality === 'سيء') bearCase.push('التذبذب ضعيف — السوق راكد')
+  // قرب المناطق
+  const nearSupply = sr.zones.filter(z => z.type === 'supply' && z.bottom > close).sort((a, b) => a.bottom - b.bottom)[0]
+  const nearDemand = sr.zones.filter(z => z.type === 'demand' && z.top < close).sort((a, b) => b.top - a.top)[0]
+  const atrRef = atrV ?? Math.max(4, close * 0.005)
+  if (nearDemand && (close - nearDemand.top) < atrRef * 1.5) bullCase.push('منطقة طلب (دعم) قريبة أسفل السعر')
+  if (nearSupply && (nearSupply.bottom - close) < atrRef * 1.5) bearCase.push('منطقة عرض (مقاومة) قريبة فوق السعر')
+
+  // ── القراءات المستقلة (كل مؤشر برأي) ────────────────────────────────────────
+  type Tone = 'up' | 'down' | 'flat'
+  const readings: { label: string; verdict: string; tone: Tone }[] = [
+    { label: 'الاتجاه', verdict: trendDir, tone: trendDir === 'صاعد' ? 'up' : trendDir === 'هابط' ? 'down' : 'flat' },
+    { label: 'الزخم',   verdict: macdBullish === true ? 'إيجابي' : macdBullish === false ? 'سلبي' : 'محايد', tone: macdBullish === true ? 'up' : macdBullish === false ? 'down' : 'flat' },
+    { label: 'التذبذب', verdict: volQuality, tone: volQuality === 'ممتاز' ? 'up' : volQuality === 'سيء' ? 'down' : 'flat' },
+  ]
+
   return {
+    bullCase,
+    bearCase,
+    readings,
     trend: {
       direction: trendDir, score: Math.round(trendScore),
       reason: trendSignals.slice(0, 2).join(' | '),
@@ -654,6 +698,9 @@ export function analyzeMarket(
 
 export function defaultAnalysis(): AnalysisResult {
   return {
+    bullCase: [],
+    bearCase: [],
+    readings: [],
     trend:      { direction: 'محايد', score: 0, reason: 'بيانات غير كافية', signals: [], decision: 'انتظر' },
     momentum:   { strength: 'ضعيف', saturation: 'طبيعي', rsiValue: null, macdBullish: null, signals: [], decision: 'انتظر' },
     volatility: { quality: 'مقبول', expectedRange: '—', bbWidth: null, atrValue: null, signals: [], decision: 'انتظر', regime: 'range' },

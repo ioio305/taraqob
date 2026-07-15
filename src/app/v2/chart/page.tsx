@@ -123,6 +123,23 @@ function qualityBadge(q: string) {
   return 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/50'
 }
 
+// ── لوحة قراءة السوق: نبرة القراءات + لجنة المخاطر ──────────────────────────
+function toneStyle(tone: 'up' | 'down' | 'flat') {
+  if (tone === 'up')   return { background: 'rgba(38,208,124,0.15)',  color: '#26D07C' }
+  if (tone === 'down') return { background: 'rgba(240,67,90,0.15)',   color: '#F0435A' }
+  return { background: 'rgba(148,163,184,0.12)', color: '#94a3b8' }
+}
+function riskItems(a: AnalysisResult): { label: string; ok: 'ok' | 'warn' | 'bad' }[] {
+  const news = a.newsRisk?.action
+  const re   = a.marketReaction?.action
+  return [
+    { label: 'الأخبار',        ok: news === 'block' ? 'bad' : news === 'caution' ? 'warn' : 'ok' },
+    { label: 'رد فعل السوق',   ok: re   === 'block' ? 'bad' : re   === 'caution' ? 'warn' : 'ok' },
+    { label: 'التذبذب',        ok: a.volatility.quality === 'سيء' ? 'bad' : a.volatility.quality === 'مقبول' ? 'warn' : 'ok' },
+    { label: 'وضوح الاتجاه',   ok: a.trend.direction === 'محايد' ? 'warn' : 'ok' },
+  ]
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ChartPage() {
@@ -260,14 +277,16 @@ export default function ChartPage() {
           box.style.borderRadius = '2px'
           overlay.appendChild(box)
 
-          if (x2 - x1 > 72) {
+          // عنوان مختصر فقط للمناطق القوية والعريضة (بلا أرقام أحجام تزحم الشارت)
+          if (x2 - x1 > 90 && zone.strength >= 0.5) {
             const label = document.createElement('div')
-            label.textContent = `${zone.type === 'demand' ? 'طلب/CALL' : 'عرض/PUT'} · Vol ${zone.volume}`
+            label.textContent = zone.type === 'demand' ? 'طلب' : 'عرض'
             label.style.position = 'absolute'
             label.style.left = `${x1 + 6}px`
-            label.style.top = `${Math.max(0, y1 + 4)}px`
+            label.style.top = `${Math.max(0, y1 + 3)}px`
             label.style.color = zone.type === 'demand' ? '#bbf7d0' : '#fecaca'
-            label.style.font = '10px IBM Plex Mono, monospace'
+            label.style.font = '10px "IBM Plex Sans Arabic", sans-serif'
+            label.style.opacity = '0.75'
             label.style.textShadow = '0 1px 3px #000'
             overlay.appendChild(label)
           }
@@ -302,9 +321,8 @@ export default function ChartPage() {
         createSeriesMarkers(cSeries, sr.signals.map(s => ({
           time: toTime(s.time, intraday),
           position: s.type === 'call' ? 'belowBar' : 'aboveBar',
-          color: s.type === 'call' ? '#22c55e' : '#ef4444',
-          shape: 'square',
-          text: s.type === 'call' ? '◆ CALL SR' : '◆ PUT SR',
+          color: s.type === 'call' ? '#26D07C' : '#F0435A',
+          shape: s.type === 'call' ? 'arrowUp' : 'arrowDown',
         })))
       }
 
@@ -707,6 +725,72 @@ export default function ChartPage() {
 
       {!loading && data && (
         <div className="space-y-6">
+
+          {/* ── قراءة السوق: القراءات + لماذا تدخل/لا + لجنة المخاطر ── */}
+          {analysis && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* القراءات المستقلة */}
+              <div className="bg-[#0a1929] border border-[#1e3a50] rounded-2xl p-4">
+                <h3 className="font-bold text-[#E8D5A3] text-sm mb-3">قراءات السوق</h3>
+                <div className="space-y-2">
+                  {analysis.readings.map(r => (
+                    <div key={r.label} className="flex items-center justify-between">
+                      <span className="text-sm text-gray-300">{r.label}</span>
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-lg" style={toneStyle(r.tone)}>{r.verdict}</span>
+                    </div>
+                  ))}
+                  {analysis.newsRisk && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-300">الأخبار</span>
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-lg"
+                        style={toneStyle(analysis.newsRisk.action === 'block' ? 'down' : analysis.newsRisk.action === 'caution' ? 'flat' : 'up')}>
+                        {analysis.newsRisk.action === 'block' ? 'خطر' : analysis.newsRisk.action === 'caution' ? 'حذر' : 'آمن'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* لماذا تدخل ولماذا لا */}
+              <div className="bg-[#0a1929] border border-[#1e3a50] rounded-2xl p-4">
+                <h3 className="font-bold text-[#E8D5A3] text-sm mb-3">لماذا تدخل ولماذا لا</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs font-bold text-emerald-400 mb-1.5">✓ للدخول</div>
+                    <ul className="space-y-1">
+                      {analysis.bullCase.length
+                        ? analysis.bullCase.map((c, i) => <li key={i} className="text-xs text-gray-300 leading-snug">• {c}</li>)
+                        : <li className="text-xs text-gray-600">—</li>}
+                    </ul>
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-red-400 mb-1.5">✕ ضد الدخول</div>
+                    <ul className="space-y-1">
+                      {analysis.bearCase.length
+                        ? analysis.bearCase.map((c, i) => <li key={i} className="text-xs text-gray-300 leading-snug">• {c}</li>)
+                        : <li className="text-xs text-gray-600">—</li>}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* لجنة المخاطر */}
+              <div className="bg-[#0a1929] border border-[#1e3a50] rounded-2xl p-4">
+                <h3 className="font-bold text-[#E8D5A3] text-sm mb-3">لجنة المخاطر</h3>
+                <div className="space-y-2">
+                  {riskItems(analysis).map(it => (
+                    <div key={it.label} className="flex items-center justify-between">
+                      <span className="text-sm text-gray-300">{it.label}</span>
+                      <span className="text-xs font-bold"
+                        style={{ color: it.ok === 'ok' ? '#26D07C' : it.ok === 'warn' ? '#F59E0B' : '#F0435A' }}>
+                        {it.ok === 'ok' ? '✓ سليم' : it.ok === 'warn' ? '⚠ حذر' : '✕ خطر'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ── Chart 1: الاتجاه والبنية السعرية ───────────────────────────── */}
           <div className="bg-[#0a1929] rounded-2xl overflow-hidden border border-[#1e3a50]">
