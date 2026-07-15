@@ -228,7 +228,7 @@ export async function GET(request: NextRequest) {
 
     // ── بيانات العقد: من السلسلة، ثم تقدير Black-Scholes ────────────────
     let cq: any = null
-    let isEstimated = chainEstimated || snap.source !== 'tradier'
+    let isEstimated = chainEstimated   // أسعار العقود تقديرية فقط إذا كانت السلسلة محسوبة (لا CBOE ولا Tradier)
 
     // من السلسلة
     const inChain = chainOpts.find(o => o.option_type === type && Math.round(o.strike) === Math.round(strike))

@@ -512,7 +512,7 @@ export async function GET(request: NextRequest) {
           emUpper:      em && spxPrice ? Math.round(spxPrice + em) : null,
           emLower:      em && spxPrice ? Math.round(spxPrice - em) : null,
           dataSource,
-          estimated:    dataSource !== 'tradier' || chainEstimated,
+          estimated:    chainEstimated,
           watchlist:    closedWatchlist,
         },
       sessions: {

@@ -6,6 +6,8 @@
 // Black-Scholes تركيبية عند غياب Tradier.
 // ============================================================
 
+import { getCboeData, cboeChain, cboeExpirations } from '@/lib/v2/cboe'
+
 const TRADIER_BASE = 'https://api.tradier.com/v1'
 const YF = 'https://query2.finance.yahoo.com/v8/finance/chart'
 const UA = { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' }
@@ -266,6 +268,12 @@ export async function getExpirations(): Promise<string[]> {
       } catch { continue }
     }
   }
+  // CBOE: تواريخ الانتهاء الحقيقية (مجاناً)
+  const cboe = await getCboeData()
+  if (cboe) {
+    const exps = cboeExpirations(cboe)
+    if (exps.length > 0) return exps
+  }
   return syntheticExpirations()
 }
 
@@ -372,5 +380,12 @@ export async function getOptionsChain(
       } catch { continue }
     }
   }
+  // CBOE: أسعار حقيقية مجاناً (متأخرة ~15 دقيقة)
+  const cboe = await getCboeData()
+  if (cboe) {
+    const chain = cboeChain(cboe, expiration)
+    if (chain.length > 0) return { options: chain, estimated: false }
+  }
+  // آخر حل: سلسلة محسوبة (Black-Scholes)
   return { options: buildSyntheticChain(spxPrice, vixPrice, expiration), estimated: true }
 }
