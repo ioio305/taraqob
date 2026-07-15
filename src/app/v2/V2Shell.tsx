@@ -47,11 +47,11 @@ function NavLink({ href, label, icon, exact, accent = '#C9943A' }: {
     <Link href={href}
       className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
       style={{
-        color:       active ? '#E8D5A3' : '#4A5568',
+        color:       active ? '#E8D5A3' : '#8A97A6',
         background:  active ? `${accent}12` : 'transparent',
         borderRight: active ? `2px solid ${accent}` : '2px solid transparent',
       }}>
-      <span className="w-4 text-center text-sm shrink-0" style={{ color: active ? accent : '#1A2A3A' }}>{icon}</span>
+      <span className="w-4 text-center text-sm shrink-0" style={{ color: active ? accent : '#6E7E8F' }}>{icon}</span>
       <span className="font-medium">{label}</span>
       {active && <span className="mr-auto w-1.5 h-1.5 rounded-full shrink-0" style={{ background: accent }} />}
     </Link>
@@ -65,8 +65,8 @@ function LockedNavLink({ label, icon, requiredTier }: { label: string; icon: str
     <Link href="/v2/upgrade"
       className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
       style={{ borderRight: '2px solid transparent' }}>
-      <span className="w-4 text-center text-sm shrink-0" style={{ color: '#1A2A3A' }}>{icon}</span>
-      <span className="font-medium" style={{ color: '#1A2A3A' }}>{label}</span>
+      <span className="w-4 text-center text-sm shrink-0" style={{ color: '#5E6E7F' }}>{icon}</span>
+      <span className="font-medium" style={{ color: '#6E7E8F' }}>{label}</span>
       <span className="mr-auto text-[10px] font-mono px-1.5 py-0.5 rounded"
         style={{ background: `${tc}15`, color: tc, border: `1px solid ${tc}25` }}>
         {TIER_LABEL[requiredTier]}
@@ -75,7 +75,7 @@ function LockedNavLink({ label, icon, requiredTier }: { label: string; icon: str
   )
 }
 
-function SectionTitle({ children, color = '#1A2A3A' }: { children: string; color?: string }) {
+function SectionTitle({ children, color = '#7C8A99' }: { children: string; color?: string }) {
   return (
     <div className="px-3 pb-1 pt-1 text-xs font-mono font-semibold tracking-widest uppercase"
       style={{ color, letterSpacing: '0.18em' }}>
@@ -247,7 +247,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
       {/* ── Admin nav ── */}
       {showAdminNav && (
         <div className="px-3 pt-4 pb-2 shrink-0">
-          <SectionTitle color="#C9943A40">الإدارة</SectionTitle>
+          <SectionTitle color="#C9943A">الإدارة</SectionTitle>
           <div className="space-y-0.5 mt-1">
             {NAV_ADMIN.map(item => <NavLink key={item.href} {...item} accent="#C9943A" />)}
           </div>
@@ -284,7 +284,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold text-white truncate leading-tight">{userName}</div>
-            <div className="text-xs font-mono mt-0.5" style={{ color: '#2D3748' }}>
+            <div className="text-xs font-mono mt-0.5" style={{ color: '#6E7E8F' }}>
               {ROLE_LABEL_MAP[userRole] ?? userRole}
             </div>
           </div>
