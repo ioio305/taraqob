@@ -288,34 +288,8 @@ export async function GET(request: NextRequest) {
     const contractType = (forceType ?? dir.type) as 'call' | 'put' | null
     const mktStatus    = isMarketOpen()
 
-    // ── Market closed → return quotes without attempting options chains ──
-    if (!mktStatus.open && !forceType) {
-      return NextResponse.json({
-        success:     true,
-        marketClosed: true,
-        marketStatus: mktStatus.label,
-        market: {
-          spx:          { price: spxPrice, prevClose: spxPrev, changePct: spxChgPct, high: spxHigh, low: spxLow },
-          vix:          { price: vixPrice, estimated: vixEstimated },
-          expectedMove: em,
-          emUpper:      em && spxPrice ? Math.round(spxPrice + em) : null,
-          emLower:      em && spxPrice ? Math.round(spxPrice - em) : null,
-          dataSource,
-        },
-        sessions: {
-          london: sessions.london,
-          tokyo:  sessions.tokyo,
-        },
-        direction:   { type: null, label: mktStatus.label, color: '#4A5568', reason: 'لا تداول خارج أوقات السوق' },
-        newsRisk:    newsDecision,
-        marketReaction,
-        sessionQuality,
-        contracts:   [],
-        expiration:  '',
-        expirations: [],
-        otmRange:    null,
-      })
-    }
+    // ملاحظة: حتى عند إغلاق السوق نحسب أفضل المرشّحات كـ«قائمة استعداد»
+    // (بأسعار CBOE الحقيقية) بدل إرجاع قائمة فارغة.
 
     // ── 2. Fetch expirations ─────────────────────────────────────
     const expirations = await getExpirations()
