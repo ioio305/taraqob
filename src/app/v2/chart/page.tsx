@@ -169,6 +169,44 @@ function computeVwapBands(candles: Candle[]): { u1: (number | null)[]; l1: (numb
   return { u1, l1, u2, l2 }
 }
 
+// ── ويدجت TradingView (عرض احترافي اختياري) ─────────────────────────────────
+function tfToTV(tf: string): string {
+  const map: Record<string, string> = { '1m':'1','3m':'3','5m':'5','15m':'15','30m':'30','1h':'60','1d':'D','1w':'W','1M':'M' }
+  return map[tf] ?? '5'
+}
+function TradingViewWidget({ tf }: { tf: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.innerHTML = ''
+    const script = document.createElement('script')
+    script.src = 'https://s3.tradingview.com/tv.js'
+    script.async = true
+    script.onload = () => {
+      const TV = (window as unknown as { TradingView?: { widget: new (o: unknown) => void } }).TradingView
+      if (TV && ref.current) {
+        new TV.widget({
+          container_id: 'tv_chart_container',
+          symbol: 'SP:SPX',
+          interval: tfToTV(tf),
+          theme: 'dark',
+          style: '1',
+          locale: 'ar',
+          timezone: 'Asia/Riyadh',
+          autosize: true,
+          hide_side_toolbar: false,
+          allow_symbol_change: true,
+          studies: ['STD;EMA'],
+        })
+      }
+    }
+    document.body.appendChild(script)
+    return () => { try { script.remove() } catch {} }
+  }, [tf])
+  return <div ref={ref} id="tv_chart_container" style={{ height: 560, width: '100%' }} />
+}
+
 // ── بنية السوق: القمم/القيعان (Swings) + كسر البنية (BoS) ────────────────────
 function computeStructure(candles: Candle[]): {
   swings: { time: string; price: number; kind: 'H' | 'L' }[]
@@ -248,6 +286,7 @@ export default function ChartPage() {
   const [showPanels, setShowPanels] = useState(false)   // لوحات المؤشرات التفصيلية — مخفية افتراضياً ليبقى شارت السعر البطل
   // طبقات الشارت — المحلل يختار ما يظهر (إعداد افتراضي نظيف)
   const [layers, setLayers] = useState({ emas: true, vwap: true, gamma: true, zones: true, structure: true, em: true, priorDay: false, rounds: false })
+  const [chartView, setChartView] = useState<'taraqob' | 'tradingview'>('taraqob')
   const [support, setSupport]     = useState<SupportQuote[]>([])
   const [gamma, setGamma]         = useState<GammaExposure | null>(null)
 
@@ -1050,6 +1089,28 @@ export default function ChartPage() {
               )}
             </div>
 
+            {/* تبديل العرض: شارت ترقّب (بالطبقات) / TradingView */}
+            <div className="px-4 pt-3 flex items-center gap-2 border-t border-[#1e3a50]">
+              <span className="text-xs text-gray-500 ml-1">العرض:</span>
+              {(['taraqob', 'tradingview'] as const).map(v => (
+                <button key={v} onClick={() => setChartView(v)}
+                  className="text-xs px-3 py-1 rounded-lg transition-colors font-bold"
+                  style={{
+                    background: chartView === v ? 'rgba(201,148,58,0.18)' : 'rgba(255,255,255,0.03)',
+                    border: chartView === v ? '1px solid rgba(201,148,58,0.5)' : '1px solid rgba(255,255,255,0.06)',
+                    color: chartView === v ? '#E8D5A3' : '#6E7E8F',
+                  }}>
+                  {v === 'taraqob' ? 'شارت ترقّب (بالطبقات)' : 'TradingView'}
+                </button>
+              ))}
+            </div>
+
+            {chartView === 'tradingview' ? (
+              <div className="px-4 pt-2 pb-3">
+                <TradingViewWidget tf={tf} />
+                <p className="text-xs text-gray-600 mt-2">عرض TradingView للسعر فقط — تحليل ترقّب (جاما، الطبقات، التوصيات) في «شارت ترقّب».</p>
+              </div>
+            ) : (<>
             {/* طبقات الشارت — المحلل يختار ما يظهر (لتفادي الازدحام) */}
             <div className="px-4 pt-2 pb-2 flex items-center gap-2 flex-wrap border-t border-[#1e3a50]">
               <span className="text-xs text-gray-500 ml-1">الطبقات:</span>
@@ -1082,6 +1143,7 @@ export default function ChartPage() {
               <div ref={trendRef} className="w-full" />
               <div ref={trendSrRef} className="absolute inset-0 pointer-events-none z-10" />
             </div>
+            </>)}
 
             {/* Interpretation */}
             {analysis && (
