@@ -16,18 +16,18 @@ function isMarketOpen(): { open: boolean; label: string } {
   const day = ny.getDay()          // 0=Sun, 6=Sat
   const t   = ny.getHours() * 60 + ny.getMinutes()
   if (day === 0 || day === 6)           return { open: false, label: 'السوق مغلق — عطلة نهاية الأسبوع' }
-  if (t < 570)                          return { open: false, label: 'السوق لم يفتح بعد — Pre-Market' }
-  if (t >= 960)                         return { open: false, label: 'السوق أُغلق — After Hours' }
+  if (t < 570)                          return { open: false, label: 'السوق لم يفتح بعد — ما قبل الافتتاح' }
+  if (t >= 960)                         return { open: false, label: 'السوق أُغلق — ما بعد الإغلاق' }
   return { open: true, label: 'مفتوح' }
 }
 
 // ── Market direction from SPX change + VIX ──────────────────────────────
 function getDirection(changePct: number, vix: number) {
   if (vix > 28)           return { type: null,   label: 'لا تداول — VIX مرتفع',  color: '#EF4444', reason: `VIX ${vix.toFixed(1)} — خطر عالٍ` }
-  if (changePct >= 0.5)   return { type: 'call', label: '▲ صاعد — Call فقط',    color: '#10B981', reason: `SPX +${changePct.toFixed(2)}% — بيئة صاعدة` }
-  if (changePct <= -0.5)  return { type: 'put',  label: '▼ هابط — Put فقط',     color: '#EF4444', reason: `SPX ${changePct.toFixed(2)}% — بيئة هابطة` }
-  if (changePct >= 0.15)  return { type: 'call', label: '▲ صاعد معتدل — Call',  color: '#34D399', reason: `SPX +${changePct.toFixed(2)}%` }
-  if (changePct <= -0.15) return { type: 'put',  label: '▼ هابط معتدل — Put',   color: '#F87171', reason: `SPX ${changePct.toFixed(2)}%` }
+  if (changePct >= 0.5)   return { type: 'call', label: '▲ صاعد — شراء فقط',    color: '#10B981', reason: `SPX +${changePct.toFixed(2)}% — بيئة صاعدة` }
+  if (changePct <= -0.5)  return { type: 'put',  label: '▼ هابط — بيع فقط',     color: '#EF4444', reason: `SPX ${changePct.toFixed(2)}% — بيئة هابطة` }
+  if (changePct >= 0.15)  return { type: 'call', label: '▲ صاعد معتدل — شراء',  color: '#34D399', reason: `SPX +${changePct.toFixed(2)}%` }
+  if (changePct <= -0.15) return { type: 'put',  label: '▼ هابط معتدل — بيع',   color: '#F87171', reason: `SPX ${changePct.toFixed(2)}%` }
   return { type: null, label: '↔ محايد — انتظر', color: '#F59E0B', reason: 'SPX يتداول عرضياً — لا اتجاه' }
 }
 

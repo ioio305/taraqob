@@ -312,7 +312,7 @@ export default function V2Dashboard() {
         {/* VIX */}
         <div className="rounded-2xl p-4 space-y-2"
              style={{ background: 'rgba(13,27,42,0.88)', border: '1px solid rgba(255,255,255,0.06)' }}>
-          <div className="text-xs font-mono tracking-widest" style={{ color: '#2D3748' }}>VIX</div>
+          <div className="text-xs font-mono tracking-widest" style={{ color: '#2D3748' }}>مؤشر الخوف</div>
           {loading ? (
             <><Sk w="w-full" h="h-8" /><Sk w="w-full" h="h-2" rounded="rounded-full" /></>
           ) : (
@@ -343,7 +343,7 @@ export default function V2Dashboard() {
         {/* Expected Move */}
         <div className="rounded-2xl p-4 space-y-2"
              style={{ background: 'rgba(13,27,42,0.88)', border: '1px solid rgba(255,255,255,0.06)' }}>
-          <div className="text-xs font-mono tracking-widest" style={{ color: '#2D3748' }}>EXPECTED MOVE</div>
+          <div className="text-xs font-mono tracking-widest" style={{ color: '#2D3748' }}>الحركة المتوقعة</div>
           {loading ? (
             <><Sk w="w-full" h="h-8" /><Sk w="w-full" h="h-4" /></>
           ) : (
@@ -365,7 +365,7 @@ export default function V2Dashboard() {
       {!loading && data?.otmRange && (
         <div className="rounded-xl px-4 py-2.5 text-xs font-mono"
              style={{ background: `${dirColor}08`, border: `1px solid ${dirColor}20`, color: dirColor }}>
-          نطاق OTM: {data.otmRange.note}
+          نطاق العقود خارج المال: {data.otmRange.note}
         </div>
       )}
 
@@ -373,7 +373,7 @@ export default function V2Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {([
           { name: 'لندن / قبل الافتتاح', flag: '🇬🇧', sess: data?.sessions?.london },
-          { name: 'أمس — US Session',    flag: '🇺🇸', sess: data?.sessions?.tokyo  },
+          { name: 'جلسة أمس',    flag: '🇺🇸', sess: data?.sessions?.tokyo  },
         ] as const).map(m => (
           <div key={m.name} className="rounded-2xl p-4"
                style={{ background: 'rgba(13,27,42,0.6)', border: '1px solid rgba(255,255,255,0.04)' }}>
@@ -402,17 +402,17 @@ export default function V2Dashboard() {
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between rounded-lg px-3 py-2.5"
                      style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.15)' }}>
-                  <span className="text-xs font-mono font-semibold" style={{ color: '#10B981' }}>HIGH — مقاومة</span>
+                  <span className="text-xs font-mono font-semibold" style={{ color: '#10B981' }}>الأعلى — مقاومة</span>
                   <span className="font-bold font-mono" style={{ color: '#10B981' }}>{n(m.sess?.high)}</span>
                 </div>
                 <div className="flex items-center justify-between rounded-lg px-3 py-2.5"
                      style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)' }}>
-                  <span className="text-xs font-mono font-semibold" style={{ color: '#EF4444' }}>LOW — دعم</span>
+                  <span className="text-xs font-mono font-semibold" style={{ color: '#EF4444' }}>الأدنى — دعم</span>
                   <span className="font-bold font-mono" style={{ color: '#EF4444' }}>{n(m.sess?.low)}</span>
                 </div>
                 <div className="flex items-center justify-between rounded-lg px-3 py-2"
                      style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
-                  <span className="text-xs font-mono" style={{ color: '#4A5568' }}>CLOSE</span>
+                  <span className="text-xs font-mono" style={{ color: '#4A5568' }}>الإغلاق</span>
                   <span className="text-sm font-bold font-mono text-white">{n(m.sess?.close)}</span>
                 </div>
               </div>
@@ -437,7 +437,7 @@ export default function V2Dashboard() {
             ) : (
               <span className="text-xs px-2 py-0.5 rounded-full font-mono"
                     style={{ background: 'rgba(201,148,58,0.08)', color: '#C9943A', border: '1px solid rgba(201,148,58,0.2)' }}>
-                أفضل 3 فرص OTM · Ask $0.50–$5.00
+                أفضل ٣ فرص خارج المال · سعر الطلب $0.50–$5.00
               </span>
             )}
           </div>
@@ -493,7 +493,7 @@ export default function V2Dashboard() {
             <div className="py-12 text-center">
               <div className="text-3xl mb-3 opacity-20">◌</div>
               <div className="text-sm" style={{ color: '#4A5568' }}>
-                {data?.error ?? 'لا يوجد عقد OTM مؤهل حالياً — جرب لاحقاً'}
+                {data?.error ?? 'لا يوجد عقد مؤهل (خارج المال) حالياً — جرب لاحقاً'}
               </div>
             </div>
           )}
@@ -794,11 +794,11 @@ export default function V2Dashboard() {
                 {data?.direction?.type === 'call' ? '▲' : '▼'}
               </span>
               <span className="text-sm font-medium text-white">
-                قائمة العقود OTM المؤهلة
+                قائمة العقود المؤهلة (خارج المال)
               </span>
               <span className="text-xs font-mono px-2 py-0.5 rounded"
                     style={{ background: 'rgba(201,148,58,0.1)', color: '#C9943A', border: '1px solid rgba(201,148,58,0.2)' }}>
-                Ask $0.50–$5.00 · OTM فقط
+                سعر الطلب $0.50–$5.00 · خارج المال فقط
               </span>
             </div>
             <span className="text-xs font-mono" style={{ color: '#2D3748' }}>
@@ -871,7 +871,7 @@ export default function V2Dashboard() {
             </table>
           </div>
           <div className="px-5 py-2 text-xs font-mono" style={{ color: '#1A2A3A', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-            ★ أفضل 3 · Delta 0.05–0.20 مُميَّز بالأخضر · وقف SPX = SPX الحالي ∓ 35% من EM · OTM صارم
+            ★ أفضل 3 · دلتا 0.05–0.20 مُميَّز بالأخضر · وقف SPX = SPX الحالي ∓ 35% من EM · OTM صارم
           </div>
         </div>
       )}
