@@ -7,6 +7,7 @@ import { computeStraddleMove } from '@/lib/v2/optionsExpectedMove'
 import { evaluateSessionQuality } from '@/lib/v2/sessionQuality'
 import { buildTradeFocus } from '@/lib/v2/tradeFocus'
 import { getMarketSnapshot, getExpirations, getOptionsChain } from '@/lib/v2/marketData'
+import { getGammaExposure } from '@/lib/v2/gammaExposure'
 
 export const dynamic = 'force-dynamic'
 
@@ -416,6 +417,9 @@ export async function GET(request: NextRequest) {
     const marketClosedPhase = sessionQuality.phase === 'closed' || sessionQuality.phase === 'pre_market'
     const closedWatchlist = marketClosedPhase && !newsBlocked && !reactionBlocked
 
+    // جاما لتصنيف الفرص (اتفاق الأدلة)
+    const gammaEx = await getGammaExposure().catch(() => null)
+
     const enrichedTop3 = top3.map(o => {
       const score = o._score ?? 0
 
@@ -444,6 +448,26 @@ export async function GET(request: NextRequest) {
         vixPrice,
       })
 
+      // ── تصنيف الفرصة A+/A/B/C — اتفاق الأدلة المستقلة ──────────────────────
+      const absDelta = Math.abs(o.delta ?? 0)
+      const rr = strat.stopLoss !== 0 ? Math.abs(strat.t1Profit / strat.stopLoss) : 0
+      const nearWall = gammaEx ? (
+        (gammaEx.callWall != null && Math.abs(spxPrice - gammaEx.callWall) < spxPrice * 0.006) ||
+        (gammaEx.putWall  != null && Math.abs(spxPrice - gammaEx.putWall)  < spxPrice * 0.006)
+      ) : false
+      const gammaAlign = gammaEx ? (gammaEx.regime === 'negative' || nearWall) : false
+      const edges = [
+        { ok: !!contractType,                                        label: 'اتجاه واضح' },
+        { ok: absDelta >= 0.22 && absDelta <= 0.48,                  label: 'دلتا سريعة' },
+        { ok: score >= 80,                                           label: 'درجة عالية' },
+        { ok: !newsBlocked && !reactionBlocked && !sessionBlocked,   label: 'بيئة نظيفة' },
+        { ok: rr >= 1.5,                                             label: 'مخاطرة/عائد ≥ 1.5' },
+        { ok: vixPrice < 24,                                         label: 'تذبذب معقول' },
+        { ok: gammaAlign,                                            label: 'جاما تدعم' },
+      ]
+      const edgeCount = edges.filter(e => e.ok).length
+      const grade = edgeCount >= 6 ? 'A+' : edgeCount >= 4 ? 'A' : edgeCount >= 2 ? 'B' : 'C'
+
       // One-line display reason for dashboard card
       const reason = closedWatchlist
         ? 'قائمة استعداد — السوق مغلق، هذه المرشّحات ستُقيَّم عند الفتح'
@@ -469,7 +493,7 @@ export async function GET(request: NextRequest) {
         session: sessionQuality,
         liquidityOk: (o.mid ?? 0) > 0 && ((o.ask ?? 0) - (o.bid ?? 0)) / (o.mid ?? 1) < 0.30,
       })
-      return { ...rest, score, status, reason, strategy: strat, focus }
+      return { ...rest, score, status, reason, strategy: strat, focus, grade, edgeCount, edges }
     })
 
     // OTM range description
