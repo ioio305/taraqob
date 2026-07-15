@@ -183,6 +183,26 @@ export default function V2Dashboard() {
     return () => clearInterval(t)
   }, [load])
 
+  // ── السجل الحي: تسجيل فرص A+/A التنفيذية (بلا تكرار، السيرفر يزيل المكرر) ──
+  useEffect(() => {
+    const cs = (data?.contracts ?? []).filter(c => (c.grade === 'A+' || c.grade === 'A') && c.status === 'execute')
+    for (const c of cs) {
+      fetch('/api/v2/signals/log', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contract_symbol: c.symbol, contract_type: c.type, strike: c.strike, expiry: c.expiration,
+          total_score: c.score, grade: c.grade,
+          entry_price: c.strategy?.entryBalanced ?? null,
+          stop_loss_level: c.strategy?.stopSpxLevel ?? null,
+          target_level: c.strategy?.t1SpxLevel ?? null,
+          risk_reward_ratio: c.strategy?.stopLoss ? Math.abs((c.strategy.t1Profit ?? 0) / c.strategy.stopLoss) : null,
+          spx_at_signal: data?.market?.spx?.price ?? null,
+          reason: c.reason,
+        }),
+      }).catch(() => {})
+    }
+  }, [data])
+
   // 1-second countdown between refreshes
   useEffect(() => {
     if (cdRef.current) clearInterval(cdRef.current)
