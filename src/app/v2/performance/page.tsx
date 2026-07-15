@@ -35,7 +35,7 @@ export default function PerformancePage() {
           .select('*')
           .order('created_at', { ascending: false })
           .limit(100)
-          .then(({ data }) => { setSignals(data ?? []); setLoading(false) })
+          .then(({ data }) => { setSignals((data ?? []).filter((s: Signal) => !s.contract_symbol?.startsWith('TEST_'))); setLoading(false) })
           .catch(() => setLoading(false))
       })
     })
