@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { computeStrategy } from '@/lib/v2/strategyEngine'
+import { getMarketSnapshot, getIntradayBars, getExpirations as mdExpirations, getOptionsChain } from '@/lib/v2/marketData'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,13 +50,9 @@ function parseOCC(symbol: string) {
 }
 
 async function getExpirations(): Promise<string[]> {
-  try {
-    const d = await tGet('/markets/options/expirations?symbol=SPXW&includeAllRoots=true&strikes=false')
-    const dates = d?.expirations?.date
-    const arr = Array.isArray(dates) ? dates : (dates ? [dates] : [])
-    const today = todayET()
-    return (arr as string[]).filter(x => typeof x === 'string' && x >= today).slice(0, 20)
-  } catch { return [] }
+  const today = todayET()
+  const arr = await mdExpirations()
+  return arr.filter(x => typeof x === 'string' && x >= today).slice(0, 20)
 }
 
 // Fetch option chain for an expiry and return options of given type
@@ -111,46 +108,27 @@ export async function GET(request: NextRequest) {
   let spxPrice = 0, spxPrev = 0, vixPrice = 20, vwap: number | null = null,
       orHigh: number | null = null, orLow: number | null = null
 
-  try {
-    const [mktD, tsD] = await Promise.allSettled([
-      tGet('/markets/quotes?symbols=$SPX.X,$VIX.X&greeks=false'),
-      marketOpen ? tGet('/markets/timesales?symbol=SPY&interval=1min&session_filter=open') : Promise.resolve(null),
-    ])
-
-    if (mktD.status === 'fulfilled') {
-      const qs: any[] = Array.isArray(mktD.value?.quotes?.quote) ? mktD.value.quotes.quote : [mktD.value?.quotes?.quote].filter(Boolean)
-      const spxQ = qs.find((q: any) => q?.symbol === '$SPX.X') ?? null
-      const vixQ = qs.find((q: any) => q?.symbol === '$VIX.X') ?? null
-      if (spxQ?.last) { spxPrice = spxQ.last; spxPrev = spxQ.prevclose ?? spxQ.last }
-      if (vixQ?.last) vixPrice = vixQ.last
-    }
-    if (!spxPrice) {
-      // SPY fallback
-      const spyD = await tGet('/markets/quotes?symbols=SPY&greeks=false')
-      const spy = Array.isArray(spyD?.quotes?.quote) ? spyD.quotes.quote[0] : spyD?.quotes?.quote
-      if (spy?.last) { spxPrice = +(spy.last * 10).toFixed(2); spxPrev = +(spy.prevclose ?? spy.last) * 10 }
-    }
-
-    if (tsD.status === 'fulfilled' && tsD.value) {
-      const series: any[] = tsD.value?.series?.data ?? []
-      const arr = Array.isArray(series) ? series : [series]
-      if (arr.length > 0) {
+  const snapshot = await getMarketSnapshot()
+  spxPrice = snapshot.spxPrice
+  spxPrev  = snapshot.spxPrev ?? spxPrice
+  vixPrice = snapshot.vixPrice
+  if (marketOpen) {
+    try {
+      const bars = await getIntradayBars('1min', 2)
+      if (bars.length) {
+        const lastDay = bars[bars.length - 1].time.slice(0, 10)
+        const series = bars.filter(b => b.time.slice(0, 10) === lastDay)
         let sumPV = 0, sumV = 0
-        for (const c of arr) {
-          const p = ((c.high ?? c.close) + (c.low ?? c.close) + c.close) / 3
-          sumPV += p * (c.volume ?? 0); sumV += c.volume ?? 0
-        }
-        vwap = sumV > 0 ? +((sumPV / sumV) * 10).toFixed(2) : null
-        const or = arr.slice(0, 30)
-        orHigh = or.length ? +(Math.max(...or.map((c: any) => c.high)) * 10).toFixed(2) : null
-        orLow  = or.length ? +(Math.min(...or.map((c: any) => c.low))  * 10).toFixed(2) : null
+        for (const c of series) { const p = (c.high + c.low + c.close) / 3; sumPV += p * (c.volume || 0); sumV += c.volume || 0 }
+        vwap = sumV > 0 ? Math.round(sumPV / sumV * 100) / 100 : null
+        const or = series.slice(0, 30)
+        orHigh = or.length ? Math.round(Math.max(...or.map(c => c.high)) * 100) / 100 : null
+        orLow  = or.length ? Math.round(Math.min(...or.map(c => c.low))  * 100) / 100 : null
       }
-    }
-  } catch {
-    return err('تعذر جلب بيانات السوق من تريدر', 502)
+    } catch { /* تجاهل */ }
   }
 
-  if (!spxPrice) return err('تعذر جلب سعر SPX من تريدر', 502)
+  if (!spxPrice) return err('تعذر جلب سعر SPX', 502)
 
   // ── Resolve option contract ────────────────────────────────────────────────
   let symbolRaw: string, expDate: string, strikeNum: number, type: 'call' | 'put'
@@ -169,14 +147,19 @@ export async function GET(request: NextRequest) {
     symbolRaw = occInput; expDate = parsed.expStr; strikeNum = parsed.strike
     type = parsed.type; dte = parsed.dte
 
-    // Fetch quote for this specific option
+    // Fetch quote — Tradier أولاً، ثم بديل تركيبي من السلسلة
     let cq: any = null
     try {
       const d = await tGet(`/markets/quotes?symbols=${encodeURIComponent(symbolRaw)}&greeks=true`)
       cq = Array.isArray(d?.quotes?.quote) ? d.quotes.quote[0] : d?.quotes?.quote
-    } catch { return err('تعذر جلب بيانات العقد من تريدر', 502) }
+    } catch { /* بديل أدناه */ }
+    if (!cq || (cq.bid == null && cq.ask == null && cq.last == null)) {
+      const { options } = await getOptionsChain(expDate, spxPrice, vixPrice)
+      const found = options.find(o => o.option_type === type && Math.round(o.strike) === Math.round(strikeNum))
+      if (found) cq = found
+    }
 
-    if (!cq) return err('لم يتم العثور على بيانات العقد في تريدر')
+    if (!cq) return err('لم يتم العثور على بيانات العقد')
 
     bid = cq.bid ?? null; ask = cq.ask ?? null; last = cq.last ?? null
     volume = cq.volume ?? 0; openInterest = cq.open_interest ?? 0
@@ -202,7 +185,7 @@ export async function GET(request: NextRequest) {
     } else {
       const exps = await getExpirations()
       expDate = exps[0] ?? ''
-      if (!expDate) return err('تعذر إيجاد تاريخ انتهاء متاح من تريدر')
+      if (!expDate) return err('تعذر إيجاد تاريخ انتهاء متاح')
     }
 
     // Compute DTE
@@ -210,11 +193,13 @@ export async function GET(request: NextRequest) {
     const expDateObj = new Date(expDate + 'T00:00:00')
     dte = Math.max(0, Math.round((expDateObj.getTime() - today.getTime()) / 86400000))
 
-    // Fetch chain
-    let chain: Awaited<ReturnType<typeof getChainOptions>>
-    try {
-      chain = await getChainOptions(expDate, type)
-    } catch { return err('تعذر جلب سلسلة العقود من تريدر', 502) }
+    // Fetch chain (المزوّد: Tradier أو تركيبي)
+    const { options } = await getOptionsChain(expDate, spxPrice, vixPrice)
+    const chain = options.filter(o => o.option_type === type).map(o => ({
+      symbol: o.symbol, strike: o.strike, bid: o.bid ?? null, ask: o.ask ?? null,
+      last: o.last ?? null, volume: o.volume ?? 0, open_interest: o.open_interest ?? 0,
+      greeks: o.greeks ? { delta: o.greeks.delta, gamma: o.greeks.gamma, theta: o.greeks.theta, vega: o.greeks.vega, mid_iv: o.greeks.mid_iv } : null,
+    }))
 
     if (chain.length === 0) return err(`لا توجد عقود ${type === 'call' ? 'CALL' : 'PUT'} متاحة لهذا التاريخ`)
 
@@ -237,7 +222,7 @@ export async function GET(request: NextRequest) {
   // ── Validate data quality — NO fake fallbacks ─────────────────────────────
   if (bid === null && ask === null && last === null)
     return NextResponse.json({
-      error: 'البيانات غير متاحة من تريدر',
+      error: 'البيانات غير متاحة حالياً',
       no_data: true, market_open: marketOpen,
     }, { status: 422 })
 
@@ -246,7 +231,7 @@ export async function GET(request: NextRequest) {
     ? +((bid + ask) / 2).toFixed(2)
     : (last ?? null)
 
-  if (mid === null) return NextResponse.json({ error: 'البيانات غير متاحة من تريدر', no_data: true, market_open: marketOpen }, { status: 422 })
+  if (mid === null) return NextResponse.json({ error: 'البيانات غير متاحة حالياً', no_data: true, market_open: marketOpen }, { status: 422 })
 
   const spreadAbs = (bid !== null && ask !== null) ? +(ask - bid).toFixed(2) : null
   const spreadPct  = (bid !== null && ask !== null && mid > 0) ? (ask - bid) / mid : null

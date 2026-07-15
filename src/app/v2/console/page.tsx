@@ -65,6 +65,13 @@ interface MidPoint { ts: number; mid: number }
 const TF_OPTIONS = [1, 3, 5, 15, 30] as const
 type TF = typeof TF_OPTIONS[number]
 
+// تسمية واضحة لفريم الشمعة (بدل «م» الغامضة)
+function tfLabel(t: number): string {
+  if (t === 1) return 'دقيقة'
+  if (t <= 10) return `${t} دقائق`
+  return `${t} دقيقة`
+}
+
 function buildCandles(history: MidPoint[], tfMinutes: number) {
   const bucketMs = tfMinutes * 60 * 1000
   const map = new Map<number, { time: number; open: number; high: number; low: number; close: number }>()
@@ -336,7 +343,7 @@ export default function ConsolePage() {
         <div className="flex items-center gap-3">
           <Link href="/v2" className="text-[#C9943A] hover:text-[#E8D5A3] text-sm">← لوحة التحكم</Link>
           <div>
-            <h1 className="text-xl font-bold text-[#E8D5A3]">كونسول عقود SPX</h1>
+            <h1 className="text-xl font-bold text-[#E8D5A3]">مرصد عقود SPX</h1>
             <p className="text-xs text-gray-500">تحليل لحظي — تحديث كل 2 ثانية</p>
           </div>
         </div>
@@ -410,8 +417,8 @@ export default function ConsolePage() {
             <div className="flex gap-1">
               {TF_OPTIONS.map(t => (
                 <button key={t} onClick={() => setTf(t)}
-                  className={`px-2 py-1 rounded-lg text-xs font-bold transition-colors ${tf === t ? 'bg-[#C9943A] text-[#060D14]' : 'bg-[#1a3a54] text-gray-300'}`}>
-                  {t}م
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${tf === t ? 'bg-[#C9943A] text-[#060D14]' : 'bg-[#1a3a54] text-gray-300'}`}>
+                  {tfLabel(t)}
                 </button>
               ))}
             </div>
@@ -508,7 +515,7 @@ export default function ConsolePage() {
             <div className="rounded-2xl overflow-hidden border border-[#1e3a50]">
               <div className="px-3 py-2 border-b border-[#1e3a50] flex items-center gap-3 text-xs text-gray-400">
                 <span className="text-[#E8D5A3] font-bold text-sm">شموع العقد</span>
-                <span className="bg-[#1a3a54] px-2 py-0.5 rounded text-gray-300 font-bold">{tf}م</span>
+                <span className="bg-[#1a3a54] px-2 py-0.5 rounded text-gray-300 font-bold">{tfLabel(tf)}</span>
                 <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#f59e0b] inline-block" />EMA9</span>
                 <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#06b6d4] inline-block" />EMA21</span>
                 <span className="mr-auto text-gray-700 text-[11px]">مبنية من تغير السعر الأوسط</span>

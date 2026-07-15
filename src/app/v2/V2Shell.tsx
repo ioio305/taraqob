@@ -27,7 +27,7 @@ const NAV_TRADING = [
 ]
 
 const NAV_TOOLS = [
-  { href: '/v2/console', label: 'كونسول العقود', icon: '🖥', exact: false, requiredTier: 'signal' },
+  { href: '/v2/console', label: 'مرصد العقود', icon: '🖥', exact: false, requiredTier: 'signal' },
   { href: '/v2/chart',   label: 'الشارت',         icon: '📈', exact: false, requiredTier: 'edge'   },
 ]
 
