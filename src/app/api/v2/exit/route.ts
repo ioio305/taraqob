@@ -92,8 +92,12 @@ export async function GET(req: NextRequest) {
       : `السعر عند جدار جاما المعاكس — الحركة مكبوحة ضدّك. اخرج.`
   } else if (pnlPerShare > 0) {
     verdict = 'manage_profit'
-    verdictText = 'أدِر الربح — انقل الوقف للتعادل'
-    actionText = `أنت رابح ${pnlTotal}$. ارفع الوقف إلى سعر دخولك ($${entry}) لتأمين الصفقة، ودع الربح يجري.`
+    const bigWin = pnlPct >= 60
+    const nextWall = type === 'call' ? (gamma?.callWall ?? null) : (gamma?.putWall ?? null)
+    verdictText = bigWin ? 'اربح الآن — لا تطمع' : 'أدِر الربح بذكاء'
+    actionText = bigWin
+      ? `رابح ${pnlTotal}$ (${pnlPct.toFixed(0)}%). الطمع يذهب ما جمع — بِع نصف مركزك الآن (تؤمّن ~$${Math.round(pnlTotal / 2)})، وارفع الوقف للتعادل، ودع الباقي يجري${nextWall ? ` نحو ${nextWall}` : ''}.`
+      : `رابح ${pnlTotal}$ (${pnlPct.toFixed(0)}%). ${pnlPct >= 30 ? `ارفع الوقف إلى التعادل ($${entry})` : `راقب الوقف عند $${stopPrice}`}، ودع الربح يجري${nextWall ? ` نحو جدار جاما ${nextWall}` : ''}.`
   } else {
     verdict = 'hold_cautious'
     verdictText = 'احتفظ بحذر — السبب سليم'
@@ -114,6 +118,18 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // ── خطة إدارة الربح (إن كان رابحاً) — ضد الطمع ──────────────────────────────
+  const nextWallForTarget = type === 'call' ? (gamma?.callWall ?? null) : (gamma?.putWall ?? null)
+  const profitPlan = pnlPerShare > 0 ? {
+    scaleOut: pnlPct >= 60 ? `بِع نصف المركز الآن — تؤمّن ~$${Math.round(pnlTotal / 2)} مؤكداً`
+      : pnlPct >= 30 ? 'بِع ثلث المركز — أمّن جزءاً من الربح'
+      : 'انتظر +30% قبل التدريج',
+    trailStop: pnlPct >= 30 ? entry : stopPrice,
+    trailStopLabel: pnlPct >= 30 ? 'التعادل (لا خسارة بعد الآن)' : 'الوقف الأصلي',
+    nextTarget: nextWallForTarget,
+    greedWarning: pnlPct >= 60 ? 'الطمع يذهب ما جمع — أمّن ربحك ولا ترفع الهدف' : null,
+  } : null
+
   return NextResponse.json({
     contract: { strike, type, expiration: exp, dte, bid, ask, mid, delta: Math.round(delta * 100) / 100 },
     estimated,
@@ -125,5 +141,6 @@ export async function GET(req: NextRequest) {
     timeWarn,
     verdict, verdictText, actionText,
     roll,
+    profitPlan,
   })
 }

@@ -15,6 +15,7 @@ interface ExitPlan {
   verdictText: string
   actionText: string
   roll: { strike: number; ask: number; delta: number; reason: string } | null
+  profitPlan: { scaleOut: string; trailStop: number; trailStopLabel: string; nextTarget: number | null; greedWarning: string | null } | null
   error?: string
 }
 
@@ -120,6 +121,34 @@ export default function ExitPage() {
               </div>
             ))}
           </div>
+
+          {/* Profit management (ضد الطمع) */}
+          {plan.profitPlan && (
+            <div className="bg-[#0a1929] border rounded-2xl p-4 space-y-2" style={{ borderColor: 'rgba(38,208,124,0.35)' }}>
+              <div className="text-sm font-bold" style={{ color: '#26D07C' }}>💰 إدارة الربح (ضد الطمع)</div>
+              {plan.profitPlan.greedWarning && (
+                <div className="text-xs px-3 py-2 rounded-lg font-bold" style={{ background: 'rgba(245,158,11,0.12)', color: '#F59E0B' }}>
+                  ⚠ {plan.profitPlan.greedWarning}
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+                <div className="bg-[#0d1f2e] rounded-lg p-2.5">
+                  <div className="text-xs text-gray-500">الخروج التدريجي</div>
+                  <div className="text-gray-200 mt-0.5">{plan.profitPlan.scaleOut}</div>
+                </div>
+                <div className="bg-[#0d1f2e] rounded-lg p-2.5">
+                  <div className="text-xs text-gray-500">الوقف المتحرك</div>
+                  <div className="font-mono font-bold text-emerald-400 mt-0.5">${plan.profitPlan.trailStop}</div>
+                  <div className="text-xs text-gray-600">{plan.profitPlan.trailStopLabel}</div>
+                </div>
+                <div className="bg-[#0d1f2e] rounded-lg p-2.5">
+                  <div className="text-xs text-gray-500">هدف الربح التالي</div>
+                  <div className="font-mono font-bold text-[#E8D5A3] mt-0.5">{plan.profitPlan.nextTarget ? `SPX ${plan.profitPlan.nextTarget}` : '—'}</div>
+                  <div className="text-xs text-gray-600">جدار جاما</div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Roll suggestion */}
           {plan.roll && (
