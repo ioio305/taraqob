@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useRiskSettings, RiskBar, SizeCard } from '@/components/v2/PositionSizing'
+import { PerformanceView } from '@/components/v2/PerformanceView'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type ScoreEntry = { score: number; max: number; label: string }
@@ -219,6 +220,7 @@ const SCORE_COLORS: Record<string, string> = {
 function AnalyzeContent() {
   const params = useSearchParams()
   const { settings: riskSettings, update: updateRisk } = useRiskSettings()
+  const [tab, setTab]           = useState<'analyze' | 'performance'>('analyze')
   const [input, setInput]       = useState(params.get('symbol') ?? '')
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [loading, setLoading]   = useState(false)
@@ -318,6 +320,23 @@ function AnalyzeContent() {
   return (
     <main className="max-w-5xl mx-auto px-4 py-6 space-y-4" dir="rtl"
       style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
+
+      {/* ── Tabs: تحليل العقد / الأداء ── */}
+      <div className="flex gap-2">
+        {(['analyze', 'performance'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)}
+            className="px-4 py-2 rounded-xl text-sm font-bold transition-colors"
+            style={{
+              background: tab === t ? 'rgba(201,148,58,0.18)' : 'rgba(255,255,255,0.03)',
+              border: tab === t ? '1px solid rgba(201,148,58,0.5)' : '1px solid rgba(255,255,255,0.06)',
+              color: tab === t ? '#E8D5A3' : '#6E7E8F',
+            }}>
+            {t === 'analyze' ? 'تحليل العقد' : '📊 الأداء والسجل'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'performance' ? <PerformanceView /> : (<>
 
       {/* ── Input ── */}
       <Card>
@@ -1010,6 +1029,7 @@ function AnalyzeContent() {
           </div>
         )
       })()}
+      </>)}
     </main>
   )
 }
