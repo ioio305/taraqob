@@ -330,7 +330,7 @@ export default async function RootPage() {
               {
                 step: '01',
                 title: 'جلب البيانات الحية',
-                desc: 'SPX · VIX · VWAP · Opening Range · سلسلة العقود · Greeks — كل شيء من Tradier مباشرةً',
+                desc: 'SPX · VIX · VWAP · Opening Range · سلسلة العقود · Greeks — مصادر بيانات متعددة مع بديل تلقائي',
                 color: '#C9943A',
               },
               {
@@ -468,7 +468,7 @@ export default async function RootPage() {
             <Link href="/login"        className="text-xs" style={{ color: '#2D3748' }}>تسجيل الدخول</Link>
           </div>
           <div className="text-xs font-mono" style={{ color: '#1A2A3A' }}>
-            البيانات من Tradier API · ليست توصيات استثمارية
+            بيانات السوق قد تكون مؤخرة أو تقديرية · ليست توصيات استثمارية
           </div>
         </div>
       </footer>

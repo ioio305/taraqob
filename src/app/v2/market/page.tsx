@@ -122,7 +122,7 @@ export default function MarketRegimePage() {
 
       {/* ملاحظة */}
       <div className="text-xs px-4 py-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.02)', color: '#2D3748', border: '1px solid rgba(255,255,255,0.04)' }}>
-        ⚠ هذا التحليل للمعلومات فقط وليس توصية استثمارية. البيانات من Tradier API.
+        ⚠ هذا التحليل للمعلومات فقط وليس توصية استثمارية. بيانات السوق قد تكون مؤخرة أو تقديرية.
       </div>
     </div>
   )
