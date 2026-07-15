@@ -140,6 +140,24 @@ function riskItems(a: AnalysisResult): { label: string; ok: 'ok' | 'warn' | 'bad
   ]
 }
 
+// ── نطاقات السعر العادل (انحراف معياري حول VWAP، يُعاد كل جلسة) ──────────────
+function computeVwapBands(candles: Candle[]): { u1: (number | null)[]; l1: (number | null)[]; u2: (number | null)[]; l2: (number | null)[] } {
+  const u1: (number | null)[] = [], l1: (number | null)[] = [], u2: (number | null)[] = [], l2: (number | null)[] = []
+  let sumV = 0, sumPV = 0, sumPV2 = 0, lastDay = ''
+  for (const c of candles) {
+    const day = c.time.slice(0, 10)
+    if (day !== lastDay) { sumV = 0; sumPV = 0; sumPV2 = 0; lastDay = day }
+    const tp = (c.high + c.low + c.close) / 3, v = c.volume || 0
+    sumV += v; sumPV += tp * v; sumPV2 += tp * tp * v
+    if (sumV > 0) {
+      const vwap = sumPV / sumV
+      const sd = Math.sqrt(Math.max(0, sumPV2 / sumV - vwap * vwap))
+      u1.push(vwap + sd); l1.push(vwap - sd); u2.push(vwap + 2 * sd); l2.push(vwap - 2 * sd)
+    } else { u1.push(null); l1.push(null); u2.push(null); l2.push(null) }
+  }
+  return { u1, l1, u2, l2 }
+}
+
 // ── المستويات القوية: قمة/قاع/إغلاق الأمس + الأرقام المستديرة ────────────────
 function computeKeyLevels(candles: Candle[], tf: string): { price: number; title: string; color: string; style: LineStyle }[] {
   if (candles.length < 2) return []
@@ -388,11 +406,22 @@ export default function ChartPage() {
         const e200 = chart.addSeries(LineSeries, { color: '#f43f5e', lineWidth: 2, lineStyle: LineStyle.Dashed, title: 'EMA200' })
         e200.setData(e200valid.map(c => ({ time: toTime(c.time, intraday), value: c.ema200! })))
       }
-      // VWAP (intraday only)
+      // VWAP + نطاقاته (intraday only) — السعر العادل ومتى يبتعد عنه
       if (intraday) {
         const vwapValid = candles.filter(c => c.vwap !== null)
         if (vwapValid.length > 0) {
-          const vwapS = chart.addSeries(LineSeries, { color: '#fbbf24', lineWidth: 1, lineStyle: LineStyle.Dotted, title: 'VWAP' })
+          // النطاقات أولاً (خلف الخط)
+          const bands = computeVwapBands(candles)
+          const addBand = (arr: (number | null)[], color: string, style: LineStyle) => {
+            const s = chart.addSeries(LineSeries, { color, lineWidth: 1, lineStyle: style, priceLineVisible: false, lastValueVisible: false })
+            s.setData(candles.map((c, i) => ({ time: toTime(c.time, intraday), value: arr[i] })).filter(p => p.value != null) as { time: Time; value: number }[])
+          }
+          addBand(bands.u2, 'rgba(251,191,36,0.25)', LineStyle.Dashed)
+          addBand(bands.l2, 'rgba(251,191,36,0.25)', LineStyle.Dashed)
+          addBand(bands.u1, 'rgba(251,191,36,0.45)', LineStyle.Dotted)
+          addBand(bands.l1, 'rgba(251,191,36,0.45)', LineStyle.Dotted)
+          // خط السعر العادل (VWAP) فوق النطاقات
+          const vwapS = chart.addSeries(LineSeries, { color: '#fbbf24', lineWidth: 2, title: 'السعر العادل' })
           vwapS.setData(vwapValid.map(c => ({ time: toTime(c.time, intraday), value: c.vwap! })))
         }
       }
@@ -864,8 +893,11 @@ export default function ChartPage() {
                 <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#06b6d4] inline-block" />EMA21</span>
                 <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#a855f7] inline-block" />EMA50</span>
                 <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#f43f5e] inline-block" />EMA200</span>
-                {intraday && <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#fbbf24] inline-block" />VWAP</span>}
+                {intraday && <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#fbbf24] inline-block" />السعر العادل + نطاقاته</span>}
               </div>
+              {intraday && (
+                <p className="text-xs text-gray-600">السعر العادل (الخط الذهبي) = القيمة العادلة للجلسة. اقتراب السعر من النطاق الخارجي = ابتعاد مبالغ فيه واحتمال ارتداد نحو الوسط.</p>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-0.5 text-xs border-t border-[#1e3a50] pt-1.5">
                 <span><span className="text-[#f59e0b] font-bold">EMA9</span><span className="text-gray-600"> — الاتجاه الأقصر أمداً، أول مؤشر يتفاعل مع الحركة</span></span>
                 <span><span className="text-[#06b6d4] font-bold">EMA21</span><span className="text-gray-600"> — اتجاه أسبوعي، خط دعم/مقاومة ديناميكي مهم</span></span>
