@@ -139,10 +139,11 @@ export async function GET(request: NextRequest) {
   }
 
   // ── نطاق الحركة المتوقعة لليوم (من VIX) ──────────────────────────────────────
+  // نستخدم آخر سعر في الشموع نفسها كمرجع (لا سعر منفصل) — ليتطابق النطاق مع الشارت
   let em: { upper: number; lower: number; points: number } | null = null
   try {
     const snap = await getMarketSnapshot()
-    const spot = snap.spxPrice || bars[bars.length - 1].close
+    const spot = bars[bars.length - 1].close || snap.spxPrice
     if (spot > 0) {
       const points = Math.round(spot * (snap.vixPrice / 100) * Math.sqrt(1 / 252))
       em = { upper: Math.round(spot + points), lower: Math.round(spot - points), points }
