@@ -101,15 +101,19 @@ function optionPriceToSPX(
   if (disc < 0) return null
 
   const sq = Math.sqrt(disc)
-  const x1 = (-b + sq) / (2 * a)  // larger root (g > 0 → up-move for calls)
-  const x2 = (-b - sq) / (2 * a)  // smaller root
+  const x1 = (-b + sq) / (2 * a)
+  const x2 = (-b - sq) / (2 * a)
 
-  // Select root matching the direction of movement:
-  // call profit → x1 (positive dS), call stop → x2 (negative dS)
-  // put profit  → x2 (negative dS), put stop  → x1 (positive dS)
-  const useX1 = (type === 'call') === isProfit
-  const dS = useX1 ? x1 : x2
-
+  // اتجاه الحركة الصحيح: call ربح=صعود، call وقف=هبوط، put ربح=هبوط، put وقف=صعود
+  const wantPositive = (type === 'call') === isProfit
+  const valid = [x1, x2].filter(dS => wantPositive ? dS > 0 : dS < 0)
+  if (valid.length === 0) {
+    // لا جذر في الاتجاه الصحيح → تقريب خطّي بالدلتا
+    if (Math.abs(d) < 1e-6) return null
+    return Math.round(currentSpx + (targetOptPrice - mid) / d)
+  }
+  // الجذر الأقرب للسعر الحالي هو الواقعي (الأبعد وهمي من تقريب دلتا-جاما)
+  const dS = valid.reduce((best, cur) => Math.abs(cur) < Math.abs(best) ? cur : best)
   return Math.round(currentSpx + dS)
 }
 

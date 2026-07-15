@@ -69,6 +69,13 @@ function todayET(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
 }
 
+// هل السوق مغلق الآن؟ (عطلة أو خارج 9:30–16:00 نيويورك)
+function marketClosedNow(): boolean {
+  const ny = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
+  const day = ny.getDay(); const t = ny.getHours() * 60 + ny.getMinutes()
+  return day === 0 || day === 6 || t >= 16 * 60 || t < 9 * 60 + 30
+}
+
 // Build OCC symbol from strike + type using nearest SPXW/SPX expiration
 async function strikeToOCC(strikeRaw: number, type: 'call' | 'put'): Promise<{ symbol: string; root: string; expiration: string }> {
   const strike = roundStrike(strikeRaw)
@@ -78,7 +85,10 @@ async function strikeToOCC(strikeRaw: number, type: 'call' | 'put'): Promise<{ s
 
   try {
     const list = await getExpirations()
-    const nearest = list.find(e => e >= todayStr) ?? list[0]
+    // عند إغلاق السوق نتخطّى عقد اليوم (منتهٍ/ميت) ونأخذ الأقرب بعده
+    const closed = marketClosedNow()
+    const nearest = list.find(e => closed ? e > todayStr : e >= todayStr)
+      ?? list.find(e => e >= todayStr) ?? list[0]
     if (nearest) {
       const [y, mo, da] = nearest.split('-')
       return { symbol: `SPXW${y.slice(2)}${mo}${da}${cp}${pad}`, root: 'SPXW', expiration: nearest }

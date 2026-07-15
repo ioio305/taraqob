@@ -91,34 +91,41 @@ function liveScore(
   else if (ask >= 0.50 && ask <  1.00) score += 22
   else if (ask >  3.00 && ask <= 5.00) score += 16
 
-  // ── 2. EM Fit (30 pts) — cheap OTM sits 0.8x–2.5x EM from ATM ─
+  // ── 2. EM Fit (20 pts) — cheap OTM sits 0.8x–2.5x EM from ATM ─
   if (em && em > 0) {
     const dist = Math.abs(o.strike - spxPrice)
     const pct  = dist / em
-    if      (pct >= 0.80 && pct <= 1.60) score += 30   // sweet spot: 1–2× EM
-    else if (pct >= 0.50 && pct <  0.80) score += 20
-    else if (pct >  1.60 && pct <= 2.50) score += 14
-    else if (pct >= 0.30 && pct <  0.50) score += 8
+    if      (pct >= 0.80 && pct <= 1.60) score += 20   // sweet spot
+    else if (pct >= 0.50 && pct <  0.80) score += 14
+    else if (pct >  1.60 && pct <= 2.50) score += 9
+    else if (pct >= 0.30 && pct <  0.50) score += 5
     else                                 score += 0    // >2.5× EM = lottery
   } else {
-    if      (ask >= 0.75 && ask <= 2.50) score += 20
-    else if (ask < 0.75)                 score += 12
-    else                                 score += 8
+    if      (ask >= 0.75 && ask <= 2.50) score += 14
+    else if (ask < 0.75)                 score += 8
+    else                                 score += 5
   }
 
-  // ── 3. Spread Tightness (20 pts) ───────────────────────────────
+  // ── 3. Delta Quality (15 pts) — 0.25–0.45 = عقد سريع التفاعل ──
+  const absDelta = Math.abs(o.greeks?.delta ?? o.delta ?? 0)
+  if      (absDelta >= 0.25 && absDelta <= 0.45) score += 15   // مثالي
+  else if (absDelta >= 0.18 && absDelta <  0.25) score += 10
+  else if (absDelta >  0.45 && absDelta <= 0.60) score += 8
+  else if (absDelta >= 0.12 && absDelta <  0.18) score += 4
+  else                                            score += 0   // <0.12 بطيء جداً
+
+  // ── 4. Spread Tightness (20 pts) ───────────────────────────────
   if      (spread < 0.05) score += 20
   else if (spread < 0.10) score += 15
   else if (spread < 0.20) score += 8
   else if (spread < 0.35) score += 3
 
-  // ── 4. Volume / Liquidity (15 pts) ─────────────────────────────
-  if      (volume >= 1000) score += 15
-  else if (volume >= 500)  score += 11
-  else if (volume >= 200)  score += 7
-  else if (volume >= 50)   score += 4
-  else if (volume >= 10)   score += 2
-  else if (volume >= 5)    score += 1
+  // ── 5. Volume / Liquidity (10 pts) ─────────────────────────────
+  if      (volume >= 1000) score += 10
+  else if (volume >= 500)  score += 7
+  else if (volume >= 200)  score += 5
+  else if (volume >= 50)   score += 3
+  else if (volume >= 10)   score += 1
 
   return score
 }
