@@ -140,6 +140,45 @@ function riskItems(a: AnalysisResult): { label: string; ok: 'ok' | 'warn' | 'bad
   ]
 }
 
+// ── المستويات القوية: قمة/قاع/إغلاق الأمس + الأرقام المستديرة ────────────────
+function computeKeyLevels(candles: Candle[], tf: string): { price: number; title: string; color: string; style: LineStyle }[] {
+  if (candles.length < 2) return []
+  const out: { price: number; title: string; color: string; style: LineStyle }[] = []
+  const last = candles[candles.length - 1].close
+  const intraday = !['1d', '1w', '1M'].includes(tf)
+
+  // قمة/قاع/إغلاق جلسة الأمس
+  let pdh: number | null = null, pdl: number | null = null, pdc: number | null = null
+  if (intraday) {
+    const byDay = new Map<string, Candle[]>()
+    for (const c of candles) {
+      const day = c.time.slice(0, 10)
+      if (!byDay.has(day)) byDay.set(day, [])
+      byDay.get(day)!.push(c)
+    }
+    const days = [...byDay.keys()]
+    if (days.length >= 2) {
+      const prev = byDay.get(days[days.length - 2])!
+      pdh = Math.max(...prev.map(c => c.high)); pdl = Math.min(...prev.map(c => c.low)); pdc = prev[prev.length - 1].close
+    }
+  } else {
+    const prev = candles[candles.length - 2]
+    pdh = prev.high; pdl = prev.low; pdc = prev.close
+  }
+  if (pdh !== null) out.push({ price: pdh, title: 'قمة الأمس', color: '#8595A5', style: LineStyle.Dashed })
+  if (pdl !== null) out.push({ price: pdl, title: 'قاع الأمس', color: '#8595A5', style: LineStyle.Dashed })
+  if (pdc !== null) out.push({ price: pdc, title: 'إغلاق الأمس', color: '#60A5FA', style: LineStyle.Dotted })
+
+  // الأرقام المستديرة القريبة (مضاعفات 50؛ المئات ذهبية بارزة)
+  const start = Math.ceil((last - 120) / 50) * 50
+  for (let lvl = start; lvl <= last + 120; lvl += 50) {
+    if (lvl <= 0) continue
+    const major = lvl % 100 === 0
+    out.push({ price: lvl, title: major ? `${lvl}` : '', color: major ? '#C9943A88' : '#3D5060', style: LineStyle.Dotted })
+  }
+  return out
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ChartPage() {
@@ -315,6 +354,14 @@ export default function ChartPage() {
       cSeries.setData(candles.map(c => ({
         time: toTime(c.time, intraday), open: c.open, high: c.high, low: c.low, close: c.close,
       })))
+
+      // المستويات القوية: قمة/قاع/إغلاق الأمس + الأرقام المستديرة
+      for (const lvl of computeKeyLevels(candles, tf)) {
+        cSeries.createPriceLine({
+          price: lvl.price, color: lvl.color, lineWidth: 1, lineStyle: lvl.style,
+          axisLabelVisible: !!lvl.title, title: lvl.title,
+        })
+      }
 
       const sr = data.analysis.sr
       if (sr.signals.length > 0) {
