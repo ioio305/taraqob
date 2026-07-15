@@ -50,6 +50,7 @@ interface ChartData {
   candles:  Candle[]
   analysis: AnalysisResult
   gamma?:   GammaExposure | null
+  em?:      { upper: number; lower: number; points: number } | null
   error?:   string
 }
 
@@ -168,6 +169,35 @@ function computeVwapBands(candles: Candle[]): { u1: (number | null)[]; l1: (numb
   return { u1, l1, u2, l2 }
 }
 
+// ── بنية السوق: القمم/القيعان (Swings) + كسر البنية (BoS) ────────────────────
+function computeStructure(candles: Candle[]): {
+  swings: { time: string; price: number; kind: 'H' | 'L' }[]
+  breaks: { time: string; price: number; dir: 'up' | 'down' }[]
+} {
+  const pivot = 3
+  const swings: { idx: number; time: string; price: number; kind: 'H' | 'L' }[] = []
+  for (let i = pivot; i < candles.length - pivot; i++) {
+    const c = candles[i]
+    const left = candles.slice(i - pivot, i), right = candles.slice(i + 1, i + pivot + 1)
+    if (left.every(x => c.high >= x.high) && right.every(x => c.high > x.high)) swings.push({ idx: i, time: c.time, price: c.high, kind: 'H' })
+    else if (left.every(x => c.low <= x.low) && right.every(x => c.low < x.low)) swings.push({ idx: i, time: c.time, price: c.low, kind: 'L' })
+  }
+  const breaks: { time: string; price: number; dir: 'up' | 'down' }[] = []
+  let lastH: number | null = null, lastL: number | null = null, brokeH = false, brokeL = false
+  for (let j = 0; j < candles.length; j++) {
+    for (const s of swings) {
+      if (s.idx + pivot === j) {
+        if (s.kind === 'H') { lastH = s.price; brokeH = false }
+        else { lastL = s.price; brokeL = false }
+      }
+    }
+    const c = candles[j]
+    if (lastH != null && !brokeH && c.close > lastH) { breaks.push({ time: c.time, price: lastH, dir: 'up' }); brokeH = true }
+    if (lastL != null && !brokeL && c.close < lastL) { breaks.push({ time: c.time, price: lastL, dir: 'down' }); brokeL = true }
+  }
+  return { swings: swings.slice(-14).map(({ time, price, kind }) => ({ time, price, kind })), breaks: breaks.slice(-6) }
+}
+
 // ── المستويات القوية: قمة/قاع/إغلاق الأمس + الأرقام المستديرة ────────────────
 function computeKeyLevels(candles: Candle[], tf: string): { price: number; title: string; color: string; style: LineStyle; kind: 'prior' | 'round' }[] {
   if (candles.length < 2) return []
@@ -217,7 +247,7 @@ export default function ChartPage() {
   const [showAdv, setShowAdv]     = useState(false)
   const [showPanels, setShowPanels] = useState(false)   // لوحات المؤشرات التفصيلية — مخفية افتراضياً ليبقى شارت السعر البطل
   // طبقات الشارت — المحلل يختار ما يظهر (إعداد افتراضي نظيف)
-  const [layers, setLayers] = useState({ emas: true, vwap: true, gamma: true, zones: true, priorDay: false, rounds: false })
+  const [layers, setLayers] = useState({ emas: true, vwap: true, gamma: true, zones: true, structure: true, em: true, priorDay: false, rounds: false })
   const [support, setSupport]     = useState<SupportQuote[]>([])
   const [gamma, setGamma]         = useState<GammaExposure | null>(null)
 
@@ -406,14 +436,40 @@ export default function ChartPage() {
         if (gamma.flipLevel) cSeries.createPriceLine({ price: gamma.flipLevel, color: '#A78BFA', lineWidth: 2, lineStyle: LineStyle.Solid,  axisLabelVisible: true, title: 'انقلاب جاما' })
       }
 
-      // ── طبقة: العرض/الطلب (إشارات + مناطق) ──
-      if (layers.zones && sr.signals.length > 0) {
-        createSeriesMarkers(cSeries, sr.signals.map(s => ({
+      // ── طبقة: نطاق الحركة المتوقعة لليوم (من VIX) ──
+      if (layers.em && data.em) {
+        cSeries.createPriceLine({ price: data.em.upper, color: 'rgba(96,165,250,0.55)', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'الحركة +' })
+        cSeries.createPriceLine({ price: data.em.lower, color: 'rgba(96,165,250,0.55)', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'الحركة −' })
+      }
+
+      // ── العلامات المدمجة: إشارات العرض/الطلب + بنية السوق ──
+      const markers: { time: Time; position: 'aboveBar' | 'belowBar'; color: string; shape: 'arrowUp' | 'arrowDown' | 'circle'; text?: string }[] = []
+      if (layers.zones) {
+        for (const s of sr.signals) markers.push({
           time: toTime(s.time, intraday),
           position: s.type === 'call' ? 'belowBar' : 'aboveBar',
           color: s.type === 'call' ? '#26D07C' : '#F0435A',
           shape: s.type === 'call' ? 'arrowUp' : 'arrowDown',
-        })))
+        })
+      }
+      if (layers.structure) {
+        const st = computeStructure(candles)
+        for (const sw of st.swings) markers.push({
+          time: toTime(sw.time, intraday),
+          position: sw.kind === 'H' ? 'aboveBar' : 'belowBar',
+          color: '#5E6E7F', shape: 'circle',
+        })
+        for (const b of st.breaks) markers.push({
+          time: toTime(b.time, intraday),
+          position: b.dir === 'up' ? 'belowBar' : 'aboveBar',
+          color: b.dir === 'up' ? '#26D07C' : '#F0435A',
+          shape: b.dir === 'up' ? 'arrowUp' : 'arrowDown',
+          text: b.dir === 'up' ? 'كسر ↑' : 'كسر ↓',
+        })
+      }
+      if (markers.length) {
+        markers.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0))
+        createSeriesMarkers(cSeries, markers)
       }
 
       // ── طبقة: المتوسطات ──
@@ -1002,6 +1058,8 @@ export default function ChartPage() {
                 ['vwap', 'السعر العادل'],
                 ['gamma', 'جاما'],
                 ['zones', 'عرض/طلب'],
+                ['structure', 'بنية السوق'],
+                ['em', 'الحركة المتوقعة'],
                 ['priorDay', 'مستويات الأمس'],
                 ['rounds', 'أرقام مستديرة'],
               ] as const).map(([key, label]) => {

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getNewsResult } from '@/app/api/v2/news/route'
 import { evaluateMarketReaction } from '@/lib/v2/marketReaction'
-import { getIntradayBars, getHistoryBars } from '@/lib/v2/marketData'
+import { getIntradayBars, getHistoryBars, getMarketSnapshot } from '@/lib/v2/marketData'
 import {
   type RawBar,
   ema, rsi, macdFn, bollinger, atrFn, computeVwap, aggregateBars,
@@ -138,5 +138,16 @@ export async function GET(request: NextRequest) {
     applyGamma(analysis, gamma)
   }
 
-  return NextResponse.json({ tf, symbol: 'SPX', candles, analysis, gamma })
+  // ── نطاق الحركة المتوقعة لليوم (من VIX) ──────────────────────────────────────
+  let em: { upper: number; lower: number; points: number } | null = null
+  try {
+    const snap = await getMarketSnapshot()
+    const spot = snap.spxPrice || bars[bars.length - 1].close
+    if (spot > 0) {
+      const points = Math.round(spot * (snap.vixPrice / 100) * Math.sqrt(1 / 252))
+      em = { upper: Math.round(spot + points), lower: Math.round(spot - points), points }
+    }
+  } catch { /* تجاهل */ }
+
+  return NextResponse.json({ tf, symbol: 'SPX', candles, analysis, gamma, em })
 }
