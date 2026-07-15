@@ -127,6 +127,12 @@ function qualityBadge(q: string) {
 }
 
 // ── لوحة قراءة السوق: نبرة القراءات + لجنة المخاطر ──────────────────────────
+function pcrMood(r: number): { word: string; color: string } {
+  if (!r) return { word: '—', color: '#94a3b8' }
+  if (r < 0.8) return { word: 'متفائل', color: '#26D07C' }
+  if (r > 1.2) return { word: 'متشائم', color: '#F0435A' }
+  return { word: 'متوازن', color: '#94a3b8' }
+}
 function toneStyle(tone: 'up' | 'down' | 'flat') {
   if (tone === 'up')   return { background: 'rgba(38,208,124,0.15)',  color: '#26D07C' }
   if (tone === 'down') return { background: 'rgba(240,67,90,0.15)',   color: '#F0435A' }
@@ -839,25 +845,27 @@ export default function ChartPage() {
                   </div>
                 </div>
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mt-3 pt-3 border-t border-white/10 text-center">
-                  <div>
-                    <div className="text-xs text-gray-500">جدار الدعم</div>
+                  <div title="مستوى تجذبه المؤسسات كدعم قوي — السعر يميل للارتداد منه صعوداً" className="cursor-help">
+                    <div className="text-xs text-gray-500 border-b border-dotted border-gray-600 inline-block">جدار الدعم</div>
                     <div className="font-mono font-bold text-emerald-400 mt-0.5">{gamma.putWall ?? '—'}</div>
                   </div>
-                  <div>
-                    <div className="text-xs text-gray-500">نقطة الانقلاب</div>
+                  <div title="الحد الفاصل: فوقه سوق هادئ مكبوح، وتحته سوق عنيف اتجاهي" className="cursor-help">
+                    <div className="text-xs text-gray-500 border-b border-dotted border-gray-600 inline-block">نقطة الانقلاب</div>
                     <div className="font-mono font-bold mt-0.5" style={{ color: '#A78BFA' }}>{gamma.flipLevel ?? '—'}</div>
                   </div>
-                  <div>
-                    <div className="text-xs text-gray-500">جدار المقاومة</div>
+                  <div title="مستوى تجذبه المؤسسات كمقاومة — الصعود فوقه صعب" className="cursor-help">
+                    <div className="text-xs text-gray-500 border-b border-dotted border-gray-600 inline-block">جدار المقاومة</div>
                     <div className="font-mono font-bold text-red-400 mt-0.5">{gamma.callWall ?? '—'}</div>
                   </div>
-                  <div>
-                    <div className="text-xs text-gray-500">أقصى ألم</div>
+                  <div title="السعر الذي يميل السوق للإغلاق قربه عند انتهاء العقود (مغناطيس)" className="cursor-help">
+                    <div className="text-xs text-gray-500 border-b border-dotted border-gray-600 inline-block">سعر الإغلاق المرجّح</div>
                     <div className="font-mono font-bold text-[#E8D5A3] mt-0.5">{gamma.maxPain ?? '—'}</div>
                   </div>
-                  <div>
-                    <div className="text-xs text-gray-500">شراء/بيع</div>
-                    <div className="font-mono font-bold mt-0.5" style={{ color: gamma.putCallRatio > 1.2 ? '#F0435A' : gamma.putCallRatio < 0.8 ? '#26D07C' : '#94a3b8' }}>{gamma.putCallRatio || '—'}</div>
+                  <div title="نسبة عقود الهبوط إلى الصعود — أقل من ١ ميل تفاؤل، أكبر من ١ ميل تشاؤم" className="cursor-help">
+                    <div className="text-xs text-gray-500 border-b border-dotted border-gray-600 inline-block">مزاج الخيارات</div>
+                    {(() => { const m = pcrMood(gamma.putCallRatio); return (
+                      <div className="font-mono font-bold mt-0.5" style={{ color: m.color }}>{gamma.putCallRatio || '—'} · {m.word}</div>
+                    ) })()}
                   </div>
                 </div>
               </div>
