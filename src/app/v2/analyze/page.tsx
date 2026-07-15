@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { useRiskSettings, RiskBar, SizeCard } from '@/components/v2/PositionSizing'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type ScoreEntry = { score: number; max: number; label: string }
@@ -217,6 +218,7 @@ const SCORE_COLORS: Record<string, string> = {
 // ── Main Component ─────────────────────────────────────────────────────────
 function AnalyzeContent() {
   const params = useSearchParams()
+  const { settings: riskSettings, update: updateRisk } = useRiskSettings()
   const [input, setInput]       = useState(params.get('symbol') ?? '')
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [loading, setLoading]   = useState(false)
@@ -687,6 +689,12 @@ function AnalyzeContent() {
                         <div className="text-xs font-mono mt-1" style={{ color: '#2D3748' }}>{e.sub}</div>
                       </div>
                     ))}
+                  </div>
+
+                  {/* حجم المركز وإدارة المخاطر */}
+                  <div className="space-y-2 mb-4">
+                    <RiskBar settings={riskSettings} update={updateRisk} />
+                    <SizeCard settings={riskSettings} entryPerShare={s.entryBalanced} stopPerShare={s.stopPrice} />
                   </div>
 
                   {/* Target table */}
