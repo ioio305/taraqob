@@ -61,9 +61,13 @@ const TF_LABEL: Record<string, string> = {
 }
 
 const BASE_CHART = {
-  layout:    { background: { type: ColorType.Solid, color: '#060D14' }, textColor: '#94a3b8' },
-  grid:      { vertLines: { color: '#0f1f2e' }, horzLines: { color: '#0f1f2e' } },
-  crosshair: { mode: CrosshairMode.Normal },
+  layout:    { background: { type: ColorType.Solid, color: '#0A1420' }, textColor: '#B8C4D4', fontFamily: '"IBM Plex Sans Arabic", sans-serif' },
+  grid:      { vertLines: { color: 'rgba(255,255,255,0.02)' }, horzLines: { color: 'rgba(255,255,255,0.05)' } },
+  crosshair: {
+    mode: CrosshairMode.Normal,
+    vertLine: { color: 'rgba(201,148,58,0.5)', width: 1 as const, labelBackgroundColor: '#C9943A' },
+    horzLine: { color: 'rgba(201,148,58,0.5)', width: 1 as const, labelBackgroundColor: '#C9943A' },
+  },
   timeScale: { borderColor: '#1e3a50', timeVisible: true },
   rightPriceScale: { borderColor: '#1e3a50' },
 }
@@ -127,6 +131,7 @@ export default function ChartPage() {
   const [loading, setLoading]     = useState(false)
   const [error, setError]         = useState('')
   const [showAdv, setShowAdv]     = useState(false)
+  const [showPanels, setShowPanels] = useState(false)   // لوحات المؤشرات التفصيلية — مخفية افتراضياً ليبقى شارت السعر البطل
   const [support, setSupport]     = useState<SupportQuote[]>([])
 
   // Strike input state
@@ -281,12 +286,12 @@ export default function ChartPage() {
 
     // ── Chart 1: Trend (candles + EMAs + VWAP) ─────────────────────────────
     if (trendRef.current) {
-      const chart = mkChart(trendRef.current, 340)
+      const chart = mkChart(trendRef.current, 560)
 
       const cSeries = chart.addSeries(CandlestickSeries, {
-        upColor: '#22c55e', downColor: '#ef4444',
-        borderUpColor: '#22c55e', borderDownColor: '#ef4444',
-        wickUpColor: '#22c55e', wickDownColor: '#ef4444',
+        upColor: '#26D07C', downColor: '#F0435A',
+        borderUpColor: '#26D07C', borderDownColor: '#F0435A',
+        wickUpColor: '#5FE3A5', wickDownColor: '#FF7385',
       })
       cSeries.setData(candles.map(c => ({
         time: toTime(c.time, intraday), open: c.open, high: c.high, low: c.low, close: c.close,
@@ -473,7 +478,7 @@ export default function ChartPage() {
       chartInstances.current.forEach(c => { try { c.remove() } catch {} })
       chartInstances.current = []
     }
-  }, [data, tf])
+  }, [data, tf, showPanels])
 
   const analysis = data?.analysis
   const last     = data?.candles[data.candles.length - 1]
@@ -771,6 +776,15 @@ export default function ChartPage() {
             )}
           </div>
 
+          {/* زر إظهار/إخفاء لوحات المؤشرات التفصيلية */}
+          <button onClick={() => setShowPanels(v => !v)}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-colors"
+            style={{ background: 'rgba(201,148,58,0.08)', border: '1px solid rgba(201,148,58,0.22)', color: '#C9943A' }}>
+            <span>{showPanels ? '▲' : '▼'}</span>
+            <span>{showPanels ? 'إخفاء لوحات المؤشرات' : 'عرض لوحات المؤشرات التفصيلية (الزخم والتذبذب)'}</span>
+          </button>
+
+          {showPanels && (<>
           {/* ── Chart 2: الزخم والتشبع ─────────────────────────────────────── */}
           <div className="bg-[#0a1929] rounded-2xl overflow-hidden border border-[#1e3a50]">
             <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-[#1e3a50]">
@@ -911,6 +925,8 @@ export default function ChartPage() {
               </div>
             )}
           </div>
+
+          </>)}
 
           {/* ── Chart 4: القرار والتنفيذ ────────────────────────────────────── */}
           <div className="bg-[#0a1929] rounded-2xl overflow-hidden border border-[#1e3a50]">
