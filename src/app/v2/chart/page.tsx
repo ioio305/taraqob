@@ -127,10 +127,11 @@ function qualityBadge(q: string) {
 }
 
 // ── لوحة قراءة السوق: نبرة القراءات + لجنة المخاطر ──────────────────────────
-function pcrMood(r: number): { word: string; color: string } {
-  if (!r) return { word: '—', color: '#94a3b8' }
-  if (r < 0.8) return { word: 'متفائل', color: '#26D07C' }
-  if (r > 1.2) return { word: 'متشائم', color: '#F0435A' }
+// callPut = نسبة الشراء/البيع (Call÷Put): أكبر من ١ = إقبال شراء (تفاؤل)
+function pcrMood(callPut: number): { word: string; color: string } {
+  if (!callPut) return { word: '—', color: '#94a3b8' }
+  if (callPut > 1.2) return { word: 'متفائل', color: '#26D07C' }
+  if (callPut < 0.8) return { word: 'متشائم', color: '#F0435A' }
   return { word: 'متوازن', color: '#94a3b8' }
 }
 function toneStyle(tone: 'up' | 'down' | 'flat') {
@@ -861,11 +862,13 @@ export default function ChartPage() {
                     <div className="text-xs text-gray-500 border-b border-dotted border-gray-600 inline-block">سعر الإغلاق المرجّح</div>
                     <div className="font-mono font-bold text-[#E8D5A3] mt-0.5">{gamma.maxPain ?? '—'}</div>
                   </div>
-                  <div title="نسبة عقود الهبوط إلى الصعود — أقل من ١ ميل تفاؤل، أكبر من ١ ميل تشاؤم" className="cursor-help">
-                    <div className="text-xs text-gray-500 border-b border-dotted border-gray-600 inline-block">مزاج الخيارات</div>
-                    {(() => { const m = pcrMood(gamma.putCallRatio); return (
-                      <div className="font-mono font-bold mt-0.5" style={{ color: m.color }}>{gamma.putCallRatio || '—'} · {m.word}</div>
-                    ) })()}
+                  <div title="نسبة عقود الشراء إلى البيع — أكبر من ١ إقبال شراء (تفاؤل)، أقل من ١ إقبال بيع (تشاؤم)" className="cursor-help">
+                    <div className="text-xs text-gray-500 border-b border-dotted border-gray-600 inline-block">شراء/بيع</div>
+                    {(() => {
+                      const cp = gamma.putCallRatio ? Math.round((1 / gamma.putCallRatio) * 100) / 100 : 0
+                      const m = pcrMood(cp)
+                      return <div className="font-mono font-bold mt-0.5" style={{ color: m.color }}>{cp || '—'} · {m.word}</div>
+                    })()}
                   </div>
                 </div>
               </div>
