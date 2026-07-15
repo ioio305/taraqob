@@ -16,6 +16,8 @@ import {
   Time,
 } from 'lightweight-charts'
 import type { AnalysisResult, SRZone } from '@/lib/v2/marketAnalysis'
+import type { GammaExposure } from '@/lib/v2/gammaExposure'
+import { gammaVerdict } from '@/lib/v2/gammaExposure'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -207,6 +209,7 @@ export default function ChartPage() {
   const [showAdv, setShowAdv]     = useState(false)
   const [showPanels, setShowPanels] = useState(false)   // لوحات المؤشرات التفصيلية — مخفية افتراضياً ليبقى شارت السعر البطل
   const [support, setSupport]     = useState<SupportQuote[]>([])
+  const [gamma, setGamma]         = useState<GammaExposure | null>(null)
 
   // Strike input state
   const [strike, setStrike]           = useState('')
@@ -258,6 +261,14 @@ export default function ChartPage() {
         if (spx) items.push({ symbol: 'SPX', label: 'المرجعي', price: spx.last ?? null, change: spx.change_percentage ?? null })
         setSupport(items)
       })
+      .catch(() => {})
+  }, [])
+
+  // ── Fetch gamma exposure (CBOE, free) ───────────────────────────────────────
+  useEffect(() => {
+    fetch('/api/v2/gamma')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.success && d.gamma) setGamma(d.gamma) })
       .catch(() => {})
   }, [])
 
@@ -379,6 +390,13 @@ export default function ChartPage() {
           price: lvl.price, color: lvl.color, lineWidth: 1, lineStyle: lvl.style,
           axisLabelVisible: !!lvl.title, title: lvl.title,
         })
+      }
+
+      // مستويات انكشاف جاما (تموضع المؤسسات) — دعم/مقاومة حقيقية + نقطة الانقلاب
+      if (gamma) {
+        if (gamma.putWall)   cSeries.createPriceLine({ price: gamma.putWall,   color: '#26D07C', lineWidth: 2, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'جدار دعم (جاما)' })
+        if (gamma.callWall)  cSeries.createPriceLine({ price: gamma.callWall,  color: '#F0435A', lineWidth: 2, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'جدار مقاومة (جاما)' })
+        if (gamma.flipLevel) cSeries.createPriceLine({ price: gamma.flipLevel, color: '#A78BFA', lineWidth: 2, lineStyle: LineStyle.Solid,  axisLabelVisible: true, title: 'انقلاب جاما' })
       }
 
       const sr = data.analysis.sr
@@ -572,7 +590,7 @@ export default function ChartPage() {
       chartInstances.current.forEach(c => { try { c.remove() } catch {} })
       chartInstances.current = []
     }
-  }, [data, tf, showPanels])
+  }, [data, tf, showPanels, gamma])
 
   const analysis = data?.analysis
   const last     = data?.candles[data.candles.length - 1]
@@ -801,6 +819,43 @@ export default function ChartPage() {
 
       {!loading && data && (
         <div className="space-y-6">
+
+          {/* ── انكشاف جاما (تموضع المؤسسات) — الميزة المميزة ── */}
+          {gamma && (() => {
+            const v = gammaVerdict(gamma)
+            const accent = v.tone === 'calm' ? '#26D07C' : '#F0435A'
+            return (
+              <div className="rounded-2xl p-4 border" style={{ background: `${accent}0F`, borderColor: `${accent}44` }}>
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-lg" style={{ background: 'rgba(167,139,250,0.15)', color: '#A78BFA' }}>انكشاف جاما · SPX</span>
+                      <h3 className="font-bold text-[#E8D5A3]">{v.title}</h3>
+                    </div>
+                    <p className="text-sm text-gray-300 mt-1.5 leading-relaxed">{v.advice}</p>
+                  </div>
+                  <div className="text-center shrink-0">
+                    <div className="text-2xl font-black" style={{ color: accent }}>{gamma.totalGex >= 0 ? '+' : ''}{gamma.totalGex}</div>
+                    <div className="text-xs text-gray-500">مليار $ / 1٪</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3 mt-3 pt-3 border-t border-white/10 text-center">
+                  <div>
+                    <div className="text-xs text-gray-500">جدار الدعم</div>
+                    <div className="font-mono font-bold text-emerald-400 mt-0.5">{gamma.putWall ?? '—'}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500">نقطة الانقلاب</div>
+                    <div className="font-mono font-bold mt-0.5" style={{ color: '#A78BFA' }}>{gamma.flipLevel ?? '—'}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500">جدار المقاومة</div>
+                    <div className="font-mono font-bold text-red-400 mt-0.5">{gamma.callWall ?? '—'}</div>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
 
           {/* ── قراءة السوق: القراءات + لماذا تدخل/لا + لجنة المخاطر ── */}
           {analysis && (
