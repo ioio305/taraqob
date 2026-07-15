@@ -150,7 +150,7 @@ export async function getIntradayBars(tradierInterval: string, days: number): Pr
 
   if (hasTradier()) {
     try {
-      const url = `/markets/timesales?symbol=SPY&interval=${tradierInterval}&start=${start}&end=${end}&session_filter=open`
+      const url = `/markets/timesales?symbol=SPY&interval=${tradierInterval}&start=${start}&end=${end}&session_filter=all`
       const json = await tradierGet(url)
       const raw = json?.series?.data ?? []
       const arr = Array.isArray(raw) ? raw : [raw]
@@ -169,7 +169,7 @@ export async function getIntradayBars(tradierInterval: string, days: number): Pr
   const yInt = TF_TO_YAHOO_INTRADAY[tradierInterval] ?? '5m'
   const range = yahooRangeForDays(days, true)
   try {
-    const res = await fetch(`${YF}/SPY?interval=${yInt}&range=${range}&includePrePost=false`, { headers: UA, cache: 'no-store' })
+    const res = await fetch(`${YF}/SPY?interval=${yInt}&range=${range}&includePrePost=true`, { headers: UA, cache: 'no-store' })
     if (!res.ok) return []
     return parseYahooBars(await res.json(), 10)
   } catch { return [] }
