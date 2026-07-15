@@ -24,6 +24,7 @@ const NAV_TRADING = [
   { href: '/v2/analyze',     label: 'تحليل العقد', icon: '⬡', exact: false, requiredTier: 'radar'  },
   { href: '/v2/signals',     label: 'الإشارات',    icon: '◉', exact: false, requiredTier: 'signal' },
   { href: '/v2/performance', label: 'الأداء',      icon: '◫', exact: false, requiredTier: 'signal' },
+  { href: '/v2/exit',        label: 'مساعد الخروج', icon: '🚪', exact: false, requiredTier: 'radar'  },
 ]
 
 const NAV_TOOLS = [
