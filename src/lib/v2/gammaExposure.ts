@@ -20,6 +20,8 @@ export interface GammaExposure {
   flipLevel: number | null    // نقطة الانقلاب (جاما صفرية)
   callWall: number | null     // أكبر جدار فوق السعر = مقاومة
   putWall: number | null      // أكبر جدار تحت السعر = دعم
+  maxPain: number | null      // سعر أقصى ألم للمشترين = مغناطيس عند الانتهاء
+  putCallRatio: number        // نسبة الشراء/البيع (الفائدة المفتوحة) — مزاج
   walls: GammaWall[]          // أقوى المستويات (مغناطيس)
   profile: { strike: number; gex: number }[]  // ملف كامل قرب السعر
   fetchedAt: string
@@ -100,6 +102,40 @@ export async function getGammaExposure(): Promise<GammaExposure | null> {
   const putWall = strikes.filter(s => s.strike < spot && s.gex < 0)
     .sort((a, b) => a.gex - b.gex)[0]?.strike ?? null
 
+  // نسبة الشراء/البيع + أقصى ألم (من نفس بيانات CBOE)
+  let sumCallOI = 0, sumPutOI = 0
+  const todayYY = new Date().toISOString().slice(2, 10).replace(/-/g, '')
+  const expMap = new Map<string, Map<number, { c: number; p: number }>>()
+  for (const o of options) {
+    const m = o.option?.match(OCC); if (!m) continue
+    const exp = m[2], type = m[3], strike = parseInt(m[4]) / 1000
+    const oi = o.open_interest ?? 0
+    if (!oi || Math.abs(strike - spot) > spot * 0.15) continue
+    if (type === 'C') sumCallOI += oi; else sumPutOI += oi
+    if (!expMap.has(exp)) expMap.set(exp, new Map())
+    const sm = expMap.get(exp)!
+    const cur = sm.get(strike) ?? { c: 0, p: 0 }
+    if (type === 'C') cur.c += oi; else cur.p += oi
+    sm.set(strike, cur)
+  }
+  const putCallRatio = sumCallOI > 0 ? Math.round((sumPutOI / sumCallOI) * 100) / 100 : 0
+
+  // Max Pain من أقرب انتهاء (0DTE يهيمن على التثبيت)
+  let maxPain: number | null = null
+  const nearExp = [...expMap.keys()].filter(e => e >= todayYY).sort()[0] ?? [...expMap.keys()].sort()[0]
+  if (nearExp) {
+    const sm = expMap.get(nearExp)!
+    let best = Infinity
+    for (const P of [...sm.keys()].sort((a, b) => a - b)) {
+      let pain = 0
+      for (const [K, oi] of sm) {
+        if (K < P) pain += oi.c * (P - K)
+        else if (K > P) pain += oi.p * (K - P)
+      }
+      if (pain < best) { best = pain; maxPain = P }
+    }
+  }
+
   return {
     spot,
     totalGex: Math.round(totalGex * 100) / 100,
@@ -107,6 +143,8 @@ export async function getGammaExposure(): Promise<GammaExposure | null> {
     flipLevel,
     callWall,
     putWall,
+    maxPain,
+    putCallRatio,
     walls,
     profile: strikes.map(s => ({ strike: s.strike, gex: Math.round(s.gex * 100) / 100 })),
     fetchedAt: new Date().toISOString(),

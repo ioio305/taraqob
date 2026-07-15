@@ -162,9 +162,9 @@ function computeVwapBands(candles: Candle[]): { u1: (number | null)[]; l1: (numb
 }
 
 // ── المستويات القوية: قمة/قاع/إغلاق الأمس + الأرقام المستديرة ────────────────
-function computeKeyLevels(candles: Candle[], tf: string): { price: number; title: string; color: string; style: LineStyle }[] {
+function computeKeyLevels(candles: Candle[], tf: string): { price: number; title: string; color: string; style: LineStyle; kind: 'prior' | 'round' }[] {
   if (candles.length < 2) return []
-  const out: { price: number; title: string; color: string; style: LineStyle }[] = []
+  const out: { price: number; title: string; color: string; style: LineStyle; kind: 'prior' | 'round' }[] = []
   const last = candles[candles.length - 1].close
   const intraday = !['1d', '1w', '1M'].includes(tf)
 
@@ -186,16 +186,16 @@ function computeKeyLevels(candles: Candle[], tf: string): { price: number; title
     const prev = candles[candles.length - 2]
     pdh = prev.high; pdl = prev.low; pdc = prev.close
   }
-  if (pdh !== null) out.push({ price: pdh, title: 'قمة الأمس', color: '#8595A5', style: LineStyle.Dashed })
-  if (pdl !== null) out.push({ price: pdl, title: 'قاع الأمس', color: '#8595A5', style: LineStyle.Dashed })
-  if (pdc !== null) out.push({ price: pdc, title: 'إغلاق الأمس', color: '#60A5FA', style: LineStyle.Dotted })
+  if (pdh !== null) out.push({ price: pdh, title: 'قمة الأمس', color: '#8595A5', style: LineStyle.Dashed, kind: 'prior' })
+  if (pdl !== null) out.push({ price: pdl, title: 'قاع الأمس', color: '#8595A5', style: LineStyle.Dashed, kind: 'prior' })
+  if (pdc !== null) out.push({ price: pdc, title: 'إغلاق الأمس', color: '#60A5FA', style: LineStyle.Dotted, kind: 'prior' })
 
   // الأرقام المستديرة القريبة (مضاعفات 50؛ المئات ذهبية بارزة)
   const start = Math.ceil((last - 120) / 50) * 50
   for (let lvl = start; lvl <= last + 120; lvl += 50) {
     if (lvl <= 0) continue
     const major = lvl % 100 === 0
-    out.push({ price: lvl, title: major ? `${lvl}` : '', color: major ? '#C9943A88' : '#3D5060', style: LineStyle.Dotted })
+    out.push({ price: lvl, title: major ? `${lvl}` : '', color: major ? '#C9943A88' : '#3D5060', style: LineStyle.Dotted, kind: 'round' })
   }
   return out
 }
@@ -209,6 +209,8 @@ export default function ChartPage() {
   const [error, setError]         = useState('')
   const [showAdv, setShowAdv]     = useState(false)
   const [showPanels, setShowPanels] = useState(false)   // لوحات المؤشرات التفصيلية — مخفية افتراضياً ليبقى شارت السعر البطل
+  // طبقات الشارت — المحلل يختار ما يظهر (إعداد افتراضي نظيف)
+  const [layers, setLayers] = useState({ emas: true, vwap: true, gamma: true, zones: true, priorDay: false, rounds: false })
   const [support, setSupport]     = useState<SupportQuote[]>([])
   const [gamma, setGamma]         = useState<GammaExposure | null>(null)
 
@@ -378,23 +380,27 @@ export default function ChartPage() {
         time: toTime(c.time, intraday), open: c.open, high: c.high, low: c.low, close: c.close,
       })))
 
-      // المستويات القوية: قمة/قاع/إغلاق الأمس + الأرقام المستديرة
+      const sr = data.analysis.sr
+
+      // ── طبقة: مستويات الأمس + الأرقام المستديرة (حسب اختيار المحلل) ──
       for (const lvl of computeKeyLevels(candles, tf)) {
+        if (lvl.kind === 'prior' && !layers.priorDay) continue
+        if (lvl.kind === 'round' && !layers.rounds) continue
         cSeries.createPriceLine({
           price: lvl.price, color: lvl.color, lineWidth: 1, lineStyle: lvl.style,
           axisLabelVisible: !!lvl.title, title: lvl.title,
         })
       }
 
-      // مستويات انكشاف جاما (تموضع المؤسسات) — دعم/مقاومة حقيقية + نقطة الانقلاب
-      if (gamma) {
-        if (gamma.putWall)   cSeries.createPriceLine({ price: gamma.putWall,   color: '#26D07C', lineWidth: 2, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'جدار دعم (جاما)' })
-        if (gamma.callWall)  cSeries.createPriceLine({ price: gamma.callWall,  color: '#F0435A', lineWidth: 2, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'جدار مقاومة (جاما)' })
+      // ── طبقة: انكشاف جاما (دعم/مقاومة مؤسسية + الانقلاب) ──
+      if (layers.gamma && gamma) {
+        if (gamma.putWall)   cSeries.createPriceLine({ price: gamma.putWall,   color: '#26D07C', lineWidth: 2, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'دعم جاما' })
+        if (gamma.callWall)  cSeries.createPriceLine({ price: gamma.callWall,  color: '#F0435A', lineWidth: 2, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'مقاومة جاما' })
         if (gamma.flipLevel) cSeries.createPriceLine({ price: gamma.flipLevel, color: '#A78BFA', lineWidth: 2, lineStyle: LineStyle.Solid,  axisLabelVisible: true, title: 'انقلاب جاما' })
       }
 
-      const sr = data.analysis.sr
-      if (sr.signals.length > 0) {
+      // ── طبقة: العرض/الطلب (إشارات + مناطق) ──
+      if (layers.zones && sr.signals.length > 0) {
         createSeriesMarkers(cSeries, sr.signals.map(s => ({
           time: toTime(s.time, intraday),
           position: s.type === 'call' ? 'belowBar' : 'aboveBar',
@@ -403,26 +409,25 @@ export default function ChartPage() {
         })))
       }
 
-      // EMA 9
-      const e9 = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 1, title: 'EMA9' })
-      e9.setData(candles.filter(c => c.ema9 !== null).map(c => ({ time: toTime(c.time, intraday), value: c.ema9! })))
-      // EMA 21
-      const e21 = chart.addSeries(LineSeries, { color: '#06b6d4', lineWidth: 1, title: 'EMA21' })
-      e21.setData(candles.filter(c => c.ema21 !== null).map(c => ({ time: toTime(c.time, intraday), value: c.ema21! })))
-      // EMA 50
-      const e50 = chart.addSeries(LineSeries, { color: '#a855f7', lineWidth: 1, title: 'EMA50' })
-      e50.setData(candles.filter(c => c.ema50 !== null).map(c => ({ time: toTime(c.time, intraday), value: c.ema50! })))
-      // EMA 200
-      const e200valid = candles.filter(c => c.ema200 !== null)
-      if (e200valid.length > 0) {
-        const e200 = chart.addSeries(LineSeries, { color: '#f43f5e', lineWidth: 2, lineStyle: LineStyle.Dashed, title: 'EMA200' })
-        e200.setData(e200valid.map(c => ({ time: toTime(c.time, intraday), value: c.ema200! })))
+      // ── طبقة: المتوسطات ──
+      if (layers.emas) {
+        const e9 = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 1, title: 'EMA9' })
+        e9.setData(candles.filter(c => c.ema9 !== null).map(c => ({ time: toTime(c.time, intraday), value: c.ema9! })))
+        const e21 = chart.addSeries(LineSeries, { color: '#06b6d4', lineWidth: 1, title: 'EMA21' })
+        e21.setData(candles.filter(c => c.ema21 !== null).map(c => ({ time: toTime(c.time, intraday), value: c.ema21! })))
+        const e50 = chart.addSeries(LineSeries, { color: '#a855f7', lineWidth: 1, title: 'EMA50' })
+        e50.setData(candles.filter(c => c.ema50 !== null).map(c => ({ time: toTime(c.time, intraday), value: c.ema50! })))
+        const e200valid = candles.filter(c => c.ema200 !== null)
+        if (e200valid.length > 0) {
+          const e200 = chart.addSeries(LineSeries, { color: '#f43f5e', lineWidth: 2, lineStyle: LineStyle.Dashed, title: 'EMA200' })
+          e200.setData(e200valid.map(c => ({ time: toTime(c.time, intraday), value: c.ema200! })))
+        }
       }
-      // VWAP + نطاقاته (intraday only) — السعر العادل ومتى يبتعد عنه
-      if (intraday) {
+
+      // ── طبقة: السعر العادل + نطاقاته (داخل اليوم فقط) ──
+      if (intraday && layers.vwap) {
         const vwapValid = candles.filter(c => c.vwap !== null)
         if (vwapValid.length > 0) {
-          // النطاقات أولاً (خلف الخط)
           const bands = computeVwapBands(candles)
           const addBand = (arr: (number | null)[], color: string, style: LineStyle) => {
             const s = chart.addSeries(LineSeries, { color, lineWidth: 1, lineStyle: style, priceLineVisible: false, lastValueVisible: false })
@@ -432,13 +437,13 @@ export default function ChartPage() {
           addBand(bands.l2, 'rgba(251,191,36,0.25)', LineStyle.Dashed)
           addBand(bands.u1, 'rgba(251,191,36,0.45)', LineStyle.Dotted)
           addBand(bands.l1, 'rgba(251,191,36,0.45)', LineStyle.Dotted)
-          // خط السعر العادل (VWAP) فوق النطاقات
           const vwapS = chart.addSeries(LineSeries, { color: '#fbbf24', lineWidth: 2, title: 'السعر العادل' })
           vwapS.setData(vwapValid.map(c => ({ time: toTime(c.time, intraday), value: c.vwap! })))
         }
       }
 
-      drawSRZones(chart, cSeries, trendSrRef.current, sr.zones, candles)
+      if (layers.zones) drawSRZones(chart, cSeries, trendSrRef.current, sr.zones, candles)
+      else if (trendSrRef.current) trendSrRef.current.innerHTML = ''
 
       chart.timeScale().fitContent()
     }
@@ -584,7 +589,7 @@ export default function ChartPage() {
       chartInstances.current.forEach(c => { try { c.remove() } catch {} })
       chartInstances.current = []
     }
-  }, [data, tf, showPanels, gamma])
+  }, [data, tf, showPanels, gamma, layers])
 
   const analysis = data?.analysis
   const last     = data?.candles[data.candles.length - 1]
@@ -833,7 +838,7 @@ export default function ChartPage() {
                     <div className="text-xs text-gray-500">مليار $ / 1٪</div>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-3 mt-3 pt-3 border-t border-white/10 text-center">
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mt-3 pt-3 border-t border-white/10 text-center">
                   <div>
                     <div className="text-xs text-gray-500">جدار الدعم</div>
                     <div className="font-mono font-bold text-emerald-400 mt-0.5">{gamma.putWall ?? '—'}</div>
@@ -845,6 +850,14 @@ export default function ChartPage() {
                   <div>
                     <div className="text-xs text-gray-500">جدار المقاومة</div>
                     <div className="font-mono font-bold text-red-400 mt-0.5">{gamma.callWall ?? '—'}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500">أقصى ألم</div>
+                    <div className="font-mono font-bold text-[#E8D5A3] mt-0.5">{gamma.maxPain ?? '—'}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500">شراء/بيع</div>
+                    <div className="font-mono font-bold mt-0.5" style={{ color: gamma.putCallRatio > 1.2 ? '#F0435A' : gamma.putCallRatio < 0.8 ? '#26D07C' : '#94a3b8' }}>{gamma.putCallRatio || '—'}</div>
                   </div>
                 </div>
               </div>
@@ -968,6 +981,32 @@ export default function ChartPage() {
               {analysis?.sr && (
                 <p className="text-xs text-gray-600">{analysis.sr.summary}</p>
               )}
+            </div>
+
+            {/* طبقات الشارت — المحلل يختار ما يظهر (لتفادي الازدحام) */}
+            <div className="px-4 pt-2 pb-2 flex items-center gap-2 flex-wrap border-t border-[#1e3a50]">
+              <span className="text-xs text-gray-500 ml-1">الطبقات:</span>
+              {([
+                ['emas', 'المتوسطات'],
+                ['vwap', 'السعر العادل'],
+                ['gamma', 'جاما'],
+                ['zones', 'عرض/طلب'],
+                ['priorDay', 'مستويات الأمس'],
+                ['rounds', 'أرقام مستديرة'],
+              ] as const).map(([key, label]) => {
+                const on = layers[key]
+                return (
+                  <button key={key} onClick={() => setLayers(l => ({ ...l, [key]: !l[key] }))}
+                    className="text-xs px-2.5 py-1 rounded-lg transition-colors font-medium"
+                    style={{
+                      background: on ? 'rgba(201,148,58,0.14)' : 'rgba(255,255,255,0.03)',
+                      border: on ? '1px solid rgba(201,148,58,0.4)' : '1px solid rgba(255,255,255,0.06)',
+                      color: on ? '#E8D5A3' : '#6E7E8F',
+                    }}>
+                    {label}
+                  </button>
+                )
+              })}
             </div>
 
             <div className="relative">
