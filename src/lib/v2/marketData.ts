@@ -291,6 +291,17 @@ function occSymbol(root: string, expiration: string, type: 'call' | 'put', strik
   return `${root}${y.slice(2)}${mo}${da}${cp}${pad}`
 }
 
+// ميل التذبذب لمؤشر الأسهم (Volatility Smirk):
+// العقود تحت السعر (puts) تذبذبها أعلى، وفوقه (calls) أقل — والميل أحدّ للعقود قصيرة الأجل.
+function skewedIV(atmIV: number, S: number, K: number, T: number): number {
+  const m = (S - K) / S                                   // + للهبوطي (تحت السعر)، - للصاعد
+  const termFactor = Math.min(1.6, Math.max(0.9, Math.sqrt(0.08 / Math.max(T, 0.003))))
+  const slope = (m >= 0 ? 4.0 : 1.6) * termFactor         // هبوط أحدّ من صعود
+  const conv  = 1.5 * termFactor                          // تحدّب على الأطراف
+  const iv = atmIV * (1 + slope * m + conv * m * Math.abs(m))
+  return Math.min(atmIV * 3, Math.max(atmIV * 0.45, iv))  // حدود آمنة
+}
+
 export function buildSyntheticChain(
   spxPrice: number,
   vixPrice: number,
@@ -301,7 +312,7 @@ export function buildSyntheticChain(
   const exp = new Date(expiration + 'T00:00:00'); exp.setHours(0, 0, 0, 0)
   const dte = Math.max(0, Math.round((exp.getTime() - today.getTime()) / 86400000))
   const T = Math.max(dte, 0.25) / 365           // 0DTE ≈ ربع يوم متبقٍ
-  const sigma = Math.max(vixPrice, 8) / 100
+  const atmIV = Math.max(vixPrice, 8) / 100     // تذبذب عند السعر (VIX)
   const r = 0.05
   const STEP = 5
   const base = Math.round(spxPrice / STEP) * STEP
@@ -309,6 +320,7 @@ export function buildSyntheticChain(
 
   for (let k = base - rangePts; k <= base + rangePts; k += STEP) {
     if (k <= 0) continue
+    const sigma = skewedIV(atmIV, spxPrice, k, T)   // تذبذب خاص بهذا الستريك (نفسه للـ call والـ put)
     for (const type of ['call', 'put'] as const) {
       const bs = blackScholes(spxPrice, k, T, r, sigma, type)
       const mid = Math.max(bs.price, 0.05)

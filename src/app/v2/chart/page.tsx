@@ -15,7 +15,7 @@ import {
   LineStyle,
   Time,
 } from 'lightweight-charts'
-import type { AnalysisResult, SRZone } from '@/app/api/v2/chart/route'
+import type { AnalysisResult, SRZone } from '@/lib/v2/marketAnalysis'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
