@@ -93,7 +93,7 @@ export default function LoginForm() {
                  style={{ filter: 'drop-shadow(0 0 20px rgba(201,148,58,0.3))' }} />
           </div>
           <h1 className="text-2xl font-bold text-white tracking-wider">ترقّب</h1>
-          <p className="text-sm mt-1 font-mono" style={{ color: '#4A5568' }}>
+          <p className="text-sm mt-1 font-mono" style={{ color: '#8A97A6' }}>
             البيتا المغلق — الدخول بالدعوة فقط
           </p>
         </div>
@@ -120,26 +120,26 @@ export default function LoginForm() {
 
           {/* Email */}
           <div>
-            <label className="block text-xs font-mono mb-2" style={{ color: '#4A5568' }}>
+            <label className="block text-xs font-mono mb-2" style={{ color: '#8A97A6' }}>
               البريد الإلكتروني
             </label>
             <input
               type="email" value={email} onChange={e => setEmail(e.target.value)}
               required dir="ltr" placeholder="example@email.com"
-              className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none font-mono"
+              className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none font-mono transition-all focus:ring-2 focus:ring-[#C9943A]/40 focus:border-[#C9943A]/50"
               style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
             />
           </div>
 
           {/* Password */}
           <div>
-            <label className="block text-xs font-mono mb-2" style={{ color: '#4A5568' }}>
+            <label className="block text-xs font-mono mb-2" style={{ color: '#8A97A6' }}>
               كلمة المرور
             </label>
             <input
               type="password" value={password} onChange={e => setPassword(e.target.value)}
               required dir="ltr"
-              className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none"
+              className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none transition-all focus:ring-2 focus:ring-[#C9943A]/40 focus:border-[#C9943A]/50"
               style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
             />
           </div>
@@ -156,12 +156,12 @@ export default function LoginForm() {
 
           <Link href="/auth/forgot-password"
                 className="block text-center text-xs font-mono transition-colors"
-                style={{ color: '#2D3748' }}>
+                style={{ color: '#8595A5' }}>
             نسيت كلمة المرور؟
           </Link>
         </div>
 
-        <div className="mt-5 text-center text-xs font-mono" style={{ color: '#1A2A3A' }}>
+        <div className="mt-5 text-center text-xs font-mono" style={{ color: '#5E6E7F' }}>
           للتحليل العام فقط — لا ضمان ربح
         </div>
       </div>
