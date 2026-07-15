@@ -182,7 +182,7 @@ export default function StrategyPage() {
               </div>
               {lastFetch && (
                 <span className="text-xs text-gray-700 font-mono">
-                  {lastFetch.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  {lastFetch.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Riyadh' })}
                 </span>
               )}
             </div>

@@ -435,12 +435,16 @@ function AnalyzeContent() {
         return (
           <div className="space-y-4">
 
-            {/* ── Estimated badge ── */}
+            {/* ── Estimated warning (قوي) ── */}
             {analysis.is_estimated && (
-              <div className="rounded-xl px-4 py-2.5 flex items-center gap-2 text-sm"
-                style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
-                <span style={{ color: '#F59E0B' }}>⚡</span>
-                <span style={{ color: '#F59E0B' }}>تحليل تقديري — السوق مغلق حالياً، أسعار بتقدير حسابي بناءً على SPX و VIX</span>
+              <div className="rounded-xl px-4 py-3 space-y-1"
+                style={{ background: 'rgba(240,67,90,0.10)', border: '1px solid rgba(240,67,90,0.38)' }}>
+                <div className="flex items-center gap-2 text-sm font-bold" style={{ color: '#F0435A' }}>
+                  <span>⚠</span><span>أسعار تقديرية — لا تعتمد الأرقام الدولارية</span>
+                </div>
+                <div className="text-xs leading-relaxed" style={{ color: '#F0435A', opacity: 0.9 }}>
+                  لا يوجد مصدر أسعار لحظي (بلا مفتاح بيانات). سعر العقد الدولاري محسوب رياضياً وقد <b>يختلف عن السوق بأضعاف</b> — خذ السعر الفعلي من منصة وسيطك (دراية). أما <b>التحليل</b> (الاتجاه، المستويات، الدرجة، الأهداف بنقاط SPX) فدقيق ويمكن الاعتماد عليه.
+                </div>
               </div>
             )}
 

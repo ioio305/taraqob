@@ -443,7 +443,7 @@ export default function V2Dashboard() {
           </div>
           {!loading && ts && (
             <span className="text-xs font-mono" style={{ color: '#2D3748' }}>
-              {ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              {ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Riyadh' })}
             </span>
           )}
         </div>
@@ -529,7 +529,7 @@ export default function V2Dashboard() {
             // ── Locked time ───────────────────────────────────────────────
             const lockedTimeStr = plan
               ? new Date(plan.lockedAt).toLocaleTimeString('en-US',
-                  { hour: '2-digit', minute: '2-digit', hour12: false })
+                  { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Riyadh' })
               : null
 
             const stratColor = strat?.strategy === 'strong' ? '#10B981'

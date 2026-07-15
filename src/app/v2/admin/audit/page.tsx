@@ -71,7 +71,7 @@ export default function AuditPage() {
                     {new Date(log.created_at).toLocaleDateString('ar-SA')}
                   </div>
                   <div className="text-xs font-mono" style={{ color: '#2D3748' }}>
-                    {new Date(log.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(log.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Riyadh' })}
                   </div>
                 </div>
 

@@ -506,7 +506,7 @@ export default function ConsolePage() {
                   )}
                 </div>
                 <div className="mt-2 text-[10px] text-gray-700 font-mono text-left">
-                  {new Date(snap.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  {new Date(snap.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Riyadh' })}
                 </div>
               </div>
             )}
