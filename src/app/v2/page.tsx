@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { NewsBar, NewsImpactBadge, useNews } from '@/components/v2/NewsBar'
+import { DisciplineBar } from '@/components/v2/PositionSizing'
 
 type Market = {
   spx: { price: number; prevClose?: number; changePct: number; high: number; low: number }
@@ -246,6 +247,9 @@ export default function V2Dashboard() {
 
       {/* ── News bar ── */}
       <NewsBar news={news} loading={newsLoading} failed={newsFailed} />
+
+      {/* ── الانضباط: حد الخسارة اليومي/الأسبوعي ── */}
+      <DisciplineBar />
 
       {/* ── Upgrade success banner ── */}
       <Suspense fallback={null}>

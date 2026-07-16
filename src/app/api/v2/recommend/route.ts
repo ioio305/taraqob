@@ -6,8 +6,9 @@ import { evaluateMarketReaction } from '@/lib/v2/marketReaction'
 import { computeStraddleMove } from '@/lib/v2/optionsExpectedMove'
 import { evaluateSessionQuality } from '@/lib/v2/sessionQuality'
 import { buildTradeFocus } from '@/lib/v2/tradeFocus'
-import { getMarketSnapshot, getExpirations, getOptionsChain } from '@/lib/v2/marketData'
+import { getMarketSnapshot, getExpirations, getOptionsChain, getHistoryBars } from '@/lib/v2/marketData'
 import { getGammaExposure } from '@/lib/v2/gammaExposure'
+import { crashGuard } from '@/lib/v2/marketAnalysis'
 
 export const dynamic = 'force-dynamic'
 
@@ -420,16 +421,41 @@ export async function GET(request: NextRequest) {
     // جاما لتصنيف الفرص (اتفاق الأدلة)
     const gammaEx = await getGammaExposure().catch(() => null)
 
+    // ── حارس الانهيارات: شموع يومية + مؤشر الخوف — مثبت خارج العينة أن أيام
+    // العنف الشديد تخسر حتى مع أفضل الإشارات، فلا إشارة تنفيذ فيها ─────────────
+    const dailyForGuard = await getHistoryBars('daily', 60).catch(() => [])
+    const guard = crashGuard(dailyForGuard, vixPrice)
+
     const enrichedTop3 = top3.map(o => {
       const score = o._score ?? 0
+      const absDeltaEarly = Math.abs(o.delta ?? 0)
+      const midEarly = o.mid ?? 0
+      const spreadFrac = midEarly > 0 ? ((o.ask ?? 0) - (o.bid ?? 0)) / midEarly : 1
 
       let status: 'execute' | 'watch' | 'no-trade'
+      let capReason: string | null = null
       if (closedWatchlist)             status = 'watch'   // قائمة استعداد
       else if (newsBlocked || reactionBlocked || sessionBlocked) status = 'no-trade'
       else if (watchMode || vixPrice >= 28) status = score >= 50 ? 'watch' : 'no-trade'
       else if (score >= 80)            status = 'execute'
       else if (score >= 74)            status = 'watch'
       else                             status = 'no-trade'
+
+      // حارس الانهيارات: يمنع أي تنفيذ في يوم عنيف
+      if (guard.active && status === 'execute') {
+        status = 'watch'
+        capReason = `حارس الانهيارات: ${guard.reasons[0]} — لا دخول اليوم`
+      }
+      // تشديد السرعة: عقد بطيء (دلتا أقل من 0.20) لا يرتفع فوق «راقب» مهما كانت درجته
+      if (absDeltaEarly < 0.20 && status === 'execute') {
+        status = 'watch'
+        capReason = `العقد بطيء الحركة (دلتا ${absDeltaEarly.toFixed(2)}) — راقب ولا تنفذ`
+      }
+      // فرق شراء/بيع واسع (فوق 12%): تكلفة التنفيذ تأكل الأفضلية
+      if (spreadFrac > 0.12 && status === 'execute') {
+        status = 'watch'
+        capReason = `فرق الشراء/البيع واسع (${(spreadFrac * 100).toFixed(0)}%) — التكلفة تأكل الربح`
+      }
 
       const strat = computeStrategy({
         score,
@@ -469,7 +495,9 @@ export async function GET(request: NextRequest) {
       const grade = edgeCount >= 6 ? 'A+' : edgeCount >= 4 ? 'A' : edgeCount >= 2 ? 'B' : 'C'
 
       // One-line display reason for dashboard card
-      const reason = closedWatchlist
+      const reason = capReason
+        ? capReason
+        : closedWatchlist
         ? 'قائمة استعداد — السوق مغلق، هذه المرشّحات ستُقيَّم عند الفتح'
         : watchMode
         ? 'السوق عرضي — مراقبة فقط، لا تدخل دون اتجاه واضح'
@@ -520,6 +548,7 @@ export async function GET(request: NextRequest) {
           estimated:    chainEstimated,
           watchlist:    closedWatchlist,
         },
+      crashGuard: guard,
       sessions: {
         london: sessions.london,
         tokyo:  sessions.tokyo,

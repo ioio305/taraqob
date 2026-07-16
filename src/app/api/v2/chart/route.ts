@@ -6,7 +6,7 @@ import { getIntradayBars, getHistoryBars, getMarketSnapshot } from '@/lib/v2/mar
 import {
   type RawBar,
   ema, rsi, macdFn, bollinger, atrFn, computeVwap, aggregateBars,
-  analyzeMarket, defaultAnalysis, applyGamma,
+  analyzeMarket, defaultAnalysis, applyGamma, crashGuard, applyCrashGuard,
 } from '@/lib/v2/marketAnalysis'
 import { getGammaExposure } from '@/lib/v2/gammaExposure'
 
@@ -138,17 +138,26 @@ export async function GET(request: NextRequest) {
     applyGamma(analysis, gamma)
   }
 
+  let snap: Awaited<ReturnType<typeof getMarketSnapshot>> | null = null
+  try { snap = await getMarketSnapshot() } catch { /* تجاهل */ }
+
+  // ── حارس الانهيارات: يفحص الشموع اليومية + مؤشر الخوف ويمنع الدخول في أيام
+  // العنف الشديد (مثبت خارج العينة: هذه الأيام تخسر حتى مع أفضل الإشارات) ──────
+  try {
+    const dailyBars = cfg.intraday ? await getHistoryBars('daily', 60) : bars
+    applyCrashGuard(analysis, crashGuard(dailyBars, snap?.vixPrice ?? null))
+  } catch { /* تجاهل */ }
+
   // ── نطاق الحركة المتوقعة لليوم (من VIX) ──────────────────────────────────────
   // نستخدم آخر سعر في الشموع نفسها كمرجع (لا سعر منفصل) — ليتطابق النطاق مع الشارت
   let em: { upper: number; lower: number; points: number } | null = null
-  try {
-    const snap = await getMarketSnapshot()
+  if (snap) {
     const spot = bars[bars.length - 1].close || snap.spxPrice
     if (spot > 0) {
       const points = Math.round(spot * (snap.vixPrice / 100) * Math.sqrt(1 / 252))
       em = { upper: Math.round(spot + points), lower: Math.round(spot - points), points }
     }
-  } catch { /* تجاهل */ }
+  }
 
   return NextResponse.json({ tf, symbol: 'SPX', candles, analysis, gamma, em })
 }

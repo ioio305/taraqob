@@ -9,14 +9,14 @@
 // التشغيل:  npx tsx scripts/finalExam.ts
 // ============================================================
 import {
-  ema, rsi, macdFn, bollinger, atrFn, analyzeMarket,
+  ema, rsi, macdFn, bollinger, atrFn, analyzeMarket, crashGuard, applyCrashGuard,
 } from '../src/lib/v2/marketAnalysis.ts'
 
-// جلب شموع SPX اليومية مباشرة من ياهو بتواريخ محددة (يتفادى خلل نطاق max)
-async function fetchDaily(fromISO: string, toISO: string) {
+// جلب شموع يومية مباشرة من ياهو بتواريخ محددة (يتفادى خلل نطاق max)
+async function fetchDaily(fromISO: string, toISO: string, ticker = '%5EGSPC') {
   const p1 = Math.floor(new Date(fromISO).getTime() / 1000)
   const p2 = Math.floor(new Date(toISO).getTime() / 1000)
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?interval=1d&period1=${p1}&period2=${p2}`
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&period1=${p1}&period2=${p2}`
   const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } })
   const json: any = await res.json()
   const r = json?.chart?.result?.[0]
@@ -102,9 +102,11 @@ async function main() {
   console.log('═'.repeat(80))
   console.log('الامتحان النهائي لترقب — بيانات لم يرها النظام من قبل (2016–2023)')
   console.log('═'.repeat(80))
-  console.log('جلب تاريخ SPX اليومي (2015–2023)…')
+  console.log('جلب تاريخ SPX اليومي (2015–2023) + مؤشر الخوف VIX…')
   // إحماء سنة قبل بداية الاختبار
   const bars = await fetchDaily('2015-01-01', OOS_END + 'T23:59:59Z')
+  const vixBars = await fetchDaily('2015-01-01', OOS_END + 'T23:59:59Z', '%5EVIX')
+  const vixByDay = new Map(vixBars.map(b => [b.time.slice(0, 10), b.close]))
   console.log(`إجمالي الأيام المجلوبة: ${bars.length} (${bars[0]?.time.slice(0, 10)} → ${bars[bars.length - 1]?.time.slice(0, 10)})`)
   const firstTest = Math.max(WARMUP, bars.findIndex(b => b.time >= OOS_START))
   console.log(`فترة الاختبار: ${bars[firstTest]?.time.slice(0, 10)} → ${bars[bars.length - 1]?.time.slice(0, 10)} (${bars.length - firstTest} يوم تداول)\n`)
@@ -114,6 +116,8 @@ async function main() {
     const slice = bars.slice(0, i + 1)
     const inds = buildInds(slice)
     const a = analyzeMarket(slice as any, inds as any)
+    // حارس الانهيارات — كما يعمل في الإنتاج تماماً (شموع يومية + مؤشر الخوف الحقيقي)
+    applyCrashGuard(a, crashGuard(slice as any, vixByDay.get(bars[i].time.slice(0, 10)) ?? null))
     const s = a.summary
     if (s.entryLevel == null || s.t1Level == null || s.stopLevel == null) continue
 

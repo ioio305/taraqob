@@ -22,6 +22,106 @@ export function useRiskSettings() {
   return { settings, update }
 }
 
+// ── الانضباط: حد الخسارة اليومي والأسبوعي ────────────────────────────────────
+// خسارتان في اليوم = انتهى يومك. خمس خسائر في الأسبوع = انتهى أسبوعك.
+// أقوى حماية من «التداول الانتقامي» — أكبر مدمّر لحسابات المتداولين.
+interface DisciplineState { day: string; dayWins: number; dayLosses: number; week: string; weekLosses: number }
+
+function tradingDayNY(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+}
+function weekKeyNY(): string {
+  // مفتاح الأسبوع = تاريخ يوم الاثنين (بتوقيت نيويورك)
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
+  const day = (now.getDay() + 6) % 7   // الاثنين = 0
+  now.setDate(now.getDate() - day)
+  return now.toISOString().slice(0, 10)
+}
+const FRESH_DISCIPLINE = (): DisciplineState => ({
+  day: tradingDayNY(), dayWins: 0, dayLosses: 0, week: weekKeyNY(), weekLosses: 0,
+})
+
+export const DAY_LOSS_LIMIT = 2
+export const WEEK_LOSS_LIMIT = 5
+
+export function useDiscipline() {
+  const [state, setState] = useState<DisciplineState>(FRESH_DISCIPLINE())
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('taraqob_discipline')
+      if (raw) {
+        const saved: DisciplineState = JSON.parse(raw)
+        // يوم جديد يصفّر عدّاد اليوم؛ أسبوع جديد يصفّر عدّاد الأسبوع
+        const next = { ...saved }
+        if (saved.day !== tradingDayNY()) { next.day = tradingDayNY(); next.dayWins = 0; next.dayLosses = 0 }
+        if (saved.week !== weekKeyNY())   { next.week = weekKeyNY(); next.weekLosses = 0 }
+        setState(next)
+      }
+    } catch { /* تجاهل */ }
+  }, [])
+  function record(result: 'win' | 'loss') {
+    setState(prev => {
+      const next = { ...prev }
+      if (result === 'win') next.dayWins++
+      else { next.dayLosses++; next.weekLosses++ }
+      try { localStorage.setItem('taraqob_discipline', JSON.stringify(next)) } catch { /* تجاهل */ }
+      return next
+    })
+  }
+  function undo() {
+    setState(() => {
+      const next = FRESH_DISCIPLINE()
+      try { localStorage.setItem('taraqob_discipline', JSON.stringify(next)) } catch { /* تجاهل */ }
+      return next
+    })
+  }
+  const dayBlocked  = state.dayLosses  >= DAY_LOSS_LIMIT
+  const weekBlocked = state.weekLosses >= WEEK_LOSS_LIMIT
+  const blockNote = weekBlocked
+    ? `خسرت ${state.weekLosses} صفقات هذا الأسبوع — انتهى أسبوعك. ارتح وعُد الاثنين، الحساب المحمي يتعافى`
+    : dayBlocked
+    ? `خسرت صفقتين اليوم — انتهى يومك. أفضل صفقة الآن هي عدم الدخول: التداول الانتقامي يدمّر الحسابات`
+    : null
+  return { state, record, undo, dayBlocked, weekBlocked, blocked: dayBlocked || weekBlocked, blockNote }
+}
+
+// ── شريط الانضباط: عدّاد اليوم + تسجيل النتيجة ──────────────────────────────
+export function DisciplineBar() {
+  const d = useDiscipline()
+  return (
+    <div className="rounded-xl px-4 py-2.5 flex items-center gap-3 flex-wrap"
+      style={{
+        background: d.blocked ? 'rgba(240,67,90,0.08)' : '#0a1929',
+        border: d.blocked ? '1px solid rgba(240,67,90,0.5)' : '1px solid #1e3a50',
+      }}>
+      <span className="text-xs text-gray-500">انضباط اليوم:</span>
+      <span className="text-xs font-mono">
+        <span className="text-emerald-400">{d.state.dayWins} ربح</span>
+        <span className="text-gray-600"> / </span>
+        <span className="text-red-400">{d.state.dayLosses} خسارة</span>
+        <span className="text-gray-600"> (الحد {DAY_LOSS_LIMIT})</span>
+      </span>
+      <div className="flex gap-1.5">
+        <button onClick={() => d.record('win')}
+          className="text-xs px-2.5 py-1 rounded-lg font-bold"
+          style={{ background: 'rgba(38,208,124,0.12)', border: '1px solid rgba(38,208,124,0.35)', color: '#26D07C' }}>
+          + ربحت صفقة
+        </button>
+        <button onClick={() => d.record('loss')}
+          className="text-xs px-2.5 py-1 rounded-lg font-bold"
+          style={{ background: 'rgba(240,67,90,0.12)', border: '1px solid rgba(240,67,90,0.35)', color: '#F0435A' }}>
+          − خسرت صفقة
+        </button>
+      </div>
+      {d.blockNote && (
+        <div className="w-full text-sm font-bold mt-1" style={{ color: '#F0435A' }}>
+          🛑 {d.blockNote}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── شريط إعداد المخاطرة ──────────────────────────────────────────────────────
 export function RiskBar({ settings, update }: { settings: RiskSettings; update: (p: Partial<RiskSettings>) => void }) {
   return (
@@ -49,8 +149,21 @@ export function RiskBar({ settings, update }: { settings: RiskSettings; update: 
 export function SizeCard({ settings, entryPerShare, stopPerShare }: {
   settings: RiskSettings; entryPerShare: number; stopPerShare: number
 }) {
+  const discipline = useDiscipline()
   const ps = computePositionSize(settings, entryPerShare, stopPerShare)
   if (!ps) return null
+  // حد الخسارة: حين يُقفل اليوم/الأسبوع لا نعرض حجم صفقة إطلاقاً
+  if (discipline.blocked) {
+    return (
+      <div className="rounded-2xl p-4" style={{ background: 'rgba(240,67,90,0.06)', border: '1px solid rgba(240,67,90,0.45)' }}>
+        <div className="flex items-center gap-2 mb-1">
+          <span>🛑</span>
+          <span className="text-sm font-bold" style={{ color: '#F0435A' }}>حجم المركز: صفر عقود</span>
+        </div>
+        <p className="text-sm text-gray-400">{discipline.blockNote}</p>
+      </div>
+    )
+  }
   const ok = ps.affordable && ps.cost <= settings.balance
   const accent = ok ? '#26D07C' : '#F0435A'
   return (

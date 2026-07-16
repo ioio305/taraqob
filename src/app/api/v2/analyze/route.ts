@@ -6,7 +6,8 @@ import { evaluateMarketReaction } from '@/lib/v2/marketReaction'
 import { computeStraddleMove } from '@/lib/v2/optionsExpectedMove'
 import { evaluateSessionQuality } from '@/lib/v2/sessionQuality'
 import { buildTradeFocus } from '@/lib/v2/tradeFocus'
-import { getMarketSnapshot, getIntradayBars, getExpirations, getOptionsChain, type MdBar } from '@/lib/v2/marketData'
+import { getMarketSnapshot, getIntradayBars, getHistoryBars, getExpirations, getOptionsChain, type MdBar } from '@/lib/v2/marketData'
+import { crashGuard } from '@/lib/v2/marketAnalysis'
 
 export const dynamic = 'force-dynamic'
 
@@ -430,10 +431,29 @@ export async function GET(request: NextRequest) {
     if (sessionBlocked && !closedOnly) decision = 'reject'   // منع الجلسة الحقيقي فقط (أول 15 دقيقة)
     else if (closedOnly && decision === 'execute') decision = 'watch'   // لا «نفّذ» والسوق مغلق
 
+    // ── تشديد الانضباط (المرحلة 1): حارس الانهيارات + سرعة العقد + تكلفة الفرق ──
+    let capReasonAr: string | null = null
+    const guardDaily = await getHistoryBars('daily', 60).catch(() => [])
+    const guard = crashGuard(guardDaily, vixPrice)
+    if (guard.active && (decision === 'execute' || decision === 'conditional')) {
+      decision = 'watch'
+      capReasonAr = `حارس الانهيارات: ${guard.reasons[0]} — سوق عنيف اليوم، لا دخول (تاريخياً هذه الأيام تخسر حتى مع أفضل الإشارات)`
+    }
+    const absDeltaCap = Math.abs(delta ?? 0)
+    if (absDeltaCap > 0 && absDeltaCap < 0.20 && (decision === 'execute' || decision === 'conditional')) {
+      decision = 'watch'
+      capReasonAr = `العقد بطيء الحركة (دلتا ${absDeltaCap.toFixed(2)} — الأفضل 0.25 إلى 0.45)، راقب ولا تنفذ`
+    }
+    if (spreadPct > 0.12 && decision === 'execute') {
+      decision = 'watch'
+      capReasonAr = `فرق الشراء/البيع واسع (${(spreadPct * 100).toFixed(0)}%) — تكلفة التنفيذ تأكل الأفضلية`
+    }
+
     const dirAr  = spxChgPct >= 0.3 ? 'صاعد' : spxChgPct <= -0.3 ? 'هابط' : 'محايد'
     const vwapAr = vwap ? (spxPrice > vwap ? '، فوق VWAP' : '، تحت VWAP') : ''
     const decisionReasonAr = isEstimated
       ? `تحليل بأسعار تقديرية (لا مصدر لحظي) — التحليل بناءً على SPX ${spxPrice.toFixed(0)} و VIX ${vixPrice.toFixed(1)}. خذ سعر العقد الفعلي من منصتك.`
+      : capReasonAr ? capReasonAr
       : closedOnly ? `قائمة استعداد — السوق مغلق، الدرجة ${total}/100 ستُقيَّم عند الفتح`
       : newsBlocked && newsDecision ? `رُفض — ${newsDecision.reason}`
       : reactionBlocked ? `رُفض — ${marketReaction.reason}`

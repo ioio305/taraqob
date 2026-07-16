@@ -7,15 +7,17 @@ import type { NewsRiskDecision } from '@/lib/v2/newsRisk'
 import type { MarketReactionDecision } from '@/lib/v2/marketReaction'
 import type { GammaExposure } from '@/lib/v2/gammaExposure'
 
-// ── جدول الأفضلية المُعاير على بيانات SPX تاريخية (scripts/backtest.ts) ──────
-// أرقام واقعية مقيسة على نافذة ~10 أيام تداول. تُعرض للمستخدم كتوقّع تاريخي.
+// ── جدول الأفضلية — الأرقام المتحفظة المثبتة خارج فترة المعايرة ──────────────
+// المصدر: scripts/finalExam.ts على 2016–2023 (2012 يوم تداول لم يرها النظام
+// عند ضبط عتباته). نعرض هذه الأرقام عمداً بدل أرقام المعايرة الأعلى (56%)
+// لأن الصدق مع المستخدم أهم من الرقم الأجمل.
 export type DecisionCode = 'execute' | 'conditional' | 'watch' | 'no_entry'
 export interface TierStat { winRate: number; avgReturn: number; expR: number; verdict: string }
 export const TIER_STATS: Record<DecisionCode, TierStat> = {
-  execute:     { winRate: 56, avgReturn: 1.0,  expR: 0.37,  verdict: 'ادخل — أعلى احتمال ربح تاريخياً' },
-  conditional: { winRate: 46, avgReturn: 0.5,  expR: 0.12,  verdict: 'دخول مشروط — أفضلية معتدلة' },
-  watch:       { winRate: 52, avgReturn: 0.3,  expR: 0.05,  verdict: 'راقب — أفضلية ضعيفة، انتظر تأكيداً' },
-  no_entry:    { winRate: 43, avgReturn: -0.6, expR: -0.15, verdict: 'لا تدخل / اخرج — النتيجة سالبة تاريخياً' },
+  execute:     { winRate: 51, avgReturn: 0.8,  expR: 0.25,  verdict: 'ادخل — أعلى أفضلية مثبتة على 8 سنوات' },
+  conditional: { winRate: 49, avgReturn: 0.3,  expR: 0.18,  verdict: 'دخول مشروط — أفضلية معتدلة' },
+  watch:       { winRate: 53, avgReturn: 0.4,  expR: 0.05,  verdict: 'راقب — أفضلية ضعيفة، انتظر تأكيداً' },
+  no_entry:    { winRate: 46, avgReturn: -0.1, expR: -0.08, verdict: 'لا تدخل / اخرج — النتيجة سالبة تاريخياً' },
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -73,6 +75,7 @@ export interface AnalysisResult {
     stopLevel:       number | null
     levelSource:     'structure' | 'atr'
     expectancy:      TierStat
+    crashGuard?:     boolean
   }
   sr: {
     zones: SRZone[]
@@ -544,7 +547,7 @@ export function analyzeMarket(
   // ولذلك "execute" لم تعد مجرد "أعلى درجة" بل هذا النمط تحديداً.
   // لا يُصدر "execute" في اتجاه هابط لأنه لم يُتحقق منه في بيانات المعايرة.
   // النخبة (أعلى أفضلية مثبتة): تجمّع محايد داخل سوق عرضي — قبل الاختراق.
-  // فوز ~56% وعائد ~+1% تاريخياً (scripts/calibrate_rules.ts القاعدة J).
+  // فوز 51% وتوقع +0.25R خارج العينة 2016-2023 (scripts/finalExam.ts).
   const eliteEntry =
     bias === 'محايد' && decScore >= 60 && regime === 'range' && volQuality !== 'سيء'
 
@@ -719,6 +722,54 @@ export function defaultAnalysis(): AnalysisResult {
   }
 }
 
+
+// ── حارس الانهيارات ──────────────────────────────────────────────────────────
+// الاختبار خارج العينة (scripts/finalExam.ts) أثبت أن النظام يخسر في الانهيارات
+// العنيفة (كورونا 2020: كل الإشارات خسرت). الحارس يكتشف أيام العنف الشديد
+// من الشموع اليومية ومؤشر الخوف، ويمنع أي إشارة دخول فيها.
+export interface CrashGuardResult { active: boolean; reasons: string[] }
+
+export function crashGuard(daily: RawBar[], vix?: number | null): CrashGuardResult {
+  const reasons: string[] = []
+  const n = daily.length - 1
+  if (n < 20) return { active: false, reasons }
+
+  const c = daily[n].close
+  const ret1 = (c / daily[n - 1].close - 1) * 100
+  const ret5 = (c / daily[n - 5].close - 1) * 100
+  // ATR-14 نسبةً للسعر — يرتفع فوق 2.6% فقط في الانهيارات الحقيقية
+  let atrSum = 0
+  for (let i = n - 13; i <= n; i++) {
+    atrSum += Math.max(
+      daily[i].high - daily[i].low,
+      Math.abs(daily[i].high - daily[i - 1].close),
+      Math.abs(daily[i].low - daily[i - 1].close),
+    )
+  }
+  const atrPct = (atrSum / 14 / c) * 100
+
+  if (ret1 <= -2.5)          reasons.push(`هبوط يومي عنيف (${ret1.toFixed(1)}%)`)
+  else if (Math.abs(ret1) >= 3.5) reasons.push(`حركة يومية متطرفة (${ret1.toFixed(1)}%)`)
+  if (ret5 <= -6)            reasons.push(`انهيار أسبوعي (${ret5.toFixed(1)}% في 5 أيام)`)
+  if (atrPct >= 2.6)         reasons.push(`تذبذب انهياري (متوسط الحركة ${atrPct.toFixed(1)}% يومياً)`)
+  if (vix != null && vix >= 30) reasons.push(`مؤشر الخوف ${vix.toFixed(0)} — فوق منطقة الأمان`)
+
+  return { active: reasons.length > 0, reasons }
+}
+
+// تطبيق الحارس على نتيجة التحليل: أي إشارة دخول تُخفَّض إلى "راقب" مع سبب واضح
+export function applyCrashGuard(a: AnalysisResult, guard: CrashGuardResult): AnalysisResult {
+  if (!guard.active) return a
+  a.readings.push({ label: 'حارس الانهيارات', verdict: 'نشط — لا دخول', tone: 'down' })
+  a.bearCase.push(`حارس الانهيارات نشط: ${guard.reasons.join('، ')}`)
+  if (a.summary.decisionCode === 'execute' || a.summary.decisionCode === 'conditional') {
+    a.summary.decisionCode = 'watch'
+    a.summary.expectancy = TIER_STATS.watch
+    a.summary.decisionText = `حارس الانهيارات: سوق عنيف اليوم — لا دخول (${guard.reasons[0]}). تاريخياً هذه الأيام تخسر حتى مع أفضل الإشارات`
+  }
+  a.summary.crashGuard = true
+  return a
+}
 
 // ── تطبيق انكشاف جاما على القرار — يحوّل جاما إلى قوة تحسّن الإشارة ──────────
 // جاما موجبة = سوق مكبوح (الارتدادات من الجدران مرجّحة، الصعود عند المقاومة محدود).

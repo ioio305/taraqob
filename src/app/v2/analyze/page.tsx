@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { useRiskSettings, RiskBar, SizeCard } from '@/components/v2/PositionSizing'
+import { useRiskSettings, RiskBar, SizeCard, DisciplineBar } from '@/components/v2/PositionSizing'
 import { PerformanceView } from '@/components/v2/PerformanceView'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -713,6 +713,7 @@ function AnalyzeContent() {
                   {/* حجم المركز وإدارة المخاطر */}
                   <div className="space-y-2 mb-4">
                     <RiskBar settings={riskSettings} update={updateRisk} />
+                    <DisciplineBar />
                     <SizeCard settings={riskSettings} entryPerShare={s.entryBalanced} stopPerShare={s.stopPrice} />
                   </div>
 
