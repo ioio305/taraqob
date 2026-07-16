@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { AlertsWatcher } from '@/components/v2/AlertsWatcher'
+import { BeginnerHelpers } from '@/components/v2/BeginnerGuide'
 
 const ROLE_LABEL_MAP: Record<string, string>  = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
 const ROLE_COLOR_MAP: Record<string, string>  = { admin: '#C9943A', moderator: '#60A5FA', user: '#4A5568' }
@@ -25,11 +26,13 @@ const NAV_TRADING = [
   { href: '/v2/analyze',     label: 'تحليل العقد', icon: '⬡', exact: false, requiredTier: 'radar'  },
   { href: '/v2/signals',     label: 'الإشارات',    icon: '◉', exact: false, requiredTier: 'signal' },
   { href: '/v2/exit',        label: 'مساعد الخروج', icon: '🚪', exact: false, requiredTier: 'radar'  },
+  { href: '/v2/paper',       label: 'محفظة تجريبية', icon: '🎮', exact: false, requiredTier: 'radar'  },
 ]
 
 const NAV_TOOLS = [
   { href: '/v2/console', label: 'مرصد العقود', icon: '🖥', exact: false, requiredTier: 'signal' },
   { href: '/v2/chart',   label: 'الشارت',         icon: '📈', exact: false, requiredTier: 'edge'   },
+  { href: '/track',      label: 'السجل العام',    icon: '📜', exact: false, requiredTier: 'radar'  },
 ]
 
 const NAV_ADMIN = [
@@ -491,6 +494,9 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
 
         {/* مراقب التنبيهات: فرص قوية + انقلاب جاما + قرارات خروج الصفقات المحفوظة */}
         <AlertsWatcher />
+
+        {/* دليل المبتدئ: قاموس المصطلحات + الجولة التعريفية */}
+        <BeginnerHelpers />
 
         {/* Mobile bottom nav */}
         <nav className="lg:hidden shrink-0 flex items-center justify-around px-1 py-2"

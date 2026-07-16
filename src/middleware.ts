@@ -18,7 +18,8 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── مسارات عامة — لا تحتاج تسجيل دخول ──────────────────────
-  const publicRoutes = ['/', '/login', '/compliance', '/how-it-works']
+  // /track: السجل الحي العام — شفافية كاملة أمام الجميع
+  const publicRoutes = ['/', '/login', '/compliance', '/how-it-works', '/track']
   if (publicRoutes.includes(pathname) || pathname.startsWith('/auth/')) {
     return NextResponse.next()
   }

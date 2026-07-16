@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useRiskSettings, RiskBar, SizeCard, DisciplineBar } from '@/components/v2/PositionSizing'
+import { computePositionSize } from '@/lib/v2/positionSizing'
 import { PerformanceView } from '@/components/v2/PerformanceView'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -468,6 +469,48 @@ function AnalyzeContent() {
                 </div>
               </div>
             )}
+
+            {/* ── الخلاصة ببساطة — للمبتدئ: 3 إجابات فقط ── */}
+            {(() => {
+              const entryPx = analysis.entry_balanced
+              const stopPx  = analysis.targets?.stop?.exit_price ?? null
+              const t1Px    = analysis.targets?.t1?.exit_price ?? null
+              const ps = entryPx && stopPx ? computePositionSize(riskSettings, entryPx, stopPx) : null
+              const canEnter = analysis.decision === 'execute' || analysis.decision === 'conditional'
+              const decAr = analysis.decision === 'execute' ? 'نعم — الظروف مناسبة'
+                : analysis.decision === 'conditional' ? 'نعم بشرط — اقرأ السبب'
+                : analysis.decision === 'watch' ? 'ليس الآن — راقب فقط' : 'لا — ابتعد عن هذا العقد'
+              const decClr = analysis.decision === 'execute' ? '#26D07C'
+                : analysis.decision === 'conditional' ? '#C9943A'
+                : analysis.decision === 'watch' ? '#60A5FA' : '#F0435A'
+              return (
+                <div className="rounded-2xl p-4"
+                  style={{ background: `${decClr}08`, border: `1px solid ${decClr}35` }}>
+                  <div className="text-xs font-bold mb-3" style={{ color: decClr }}>💡 الخلاصة ببساطة</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">هل أدخل؟</div>
+                      <div className="text-base font-black" style={{ color: decClr }}>{decAr}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">كم أشتري؟</div>
+                      <div className="text-base font-black text-white">
+                        {canEnter && ps && ps.affordable
+                          ? `${ps.contracts} عقد (أقصى خسارة $${ps.maxLoss})`
+                          : canEnter ? 'اضبط رصيدك بالأسفل' : 'صفر — لا دخول'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">متى أخرج؟</div>
+                      <div className="text-base font-black font-mono text-white" dir="ltr">
+                        {t1Px && stopPx ? `🎯 $${t1Px} · 🛑 $${stopPx}` : '—'}
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-3 text-center">{analysis.decision_reason_ar}</p>
+                </div>
+              )
+            })()}
 
             {/* ── Market Status Bar ── */}
             <div className="rounded-2xl px-5 py-3 flex flex-wrap items-center gap-x-5 gap-y-2"
