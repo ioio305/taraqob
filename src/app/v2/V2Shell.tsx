@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { AlertsWatcher } from '@/components/v2/AlertsWatcher'
 
 const ROLE_LABEL_MAP: Record<string, string>  = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
 const ROLE_COLOR_MAP: Record<string, string>  = { admin: '#C9943A', moderator: '#60A5FA', user: '#4A5568' }
@@ -487,6 +488,9 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
         <main className="flex-1 overflow-y-auto">
           {children}
         </main>
+
+        {/* مراقب التنبيهات: فرص قوية + انقلاب جاما + قرارات خروج الصفقات المحفوظة */}
+        <AlertsWatcher />
 
         {/* Mobile bottom nav */}
         <nav className="lg:hidden shrink-0 flex items-center justify-around px-1 py-2"

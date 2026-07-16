@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { loadPositions, savePositions, type WatchedPosition } from '@/components/v2/AlertsWatcher'
 
 interface ExitPlan {
   contract: { strike: number; type: string; expiration: string; dte: number; bid: number; ask: number; mid: number; delta: number }
@@ -34,6 +35,38 @@ export default function ExitPage() {
   const [plan, setPlan]       = useState<ExitPlan | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
+  const [watched, setWatched] = useState<WatchedPosition[]>([])
+  useEffect(() => { setWatched(loadPositions()) }, [])
+
+  const isWatched = plan
+    ? watched.some(w => w.strike === plan.contract.strike && w.type === plan.contract.type)
+    : false
+
+  function toggleWatch() {
+    if (!plan) return
+    let next: WatchedPosition[]
+    if (isWatched) {
+      next = watched.filter(w => !(w.strike === plan.contract.strike && w.type === plan.contract.type))
+    } else {
+      next = [...watched, {
+        strike: plan.contract.strike,
+        type: plan.contract.type as 'call' | 'put',
+        entry: plan.entry,
+        expiry: plan.contract.expiration,
+        addedAt: new Date().toISOString(),
+      }].slice(-5)   // خمس صفقات كحد أقصى
+    }
+    setWatched(next); savePositions(next)
+  }
+
+  function removeWatch(w: WatchedPosition) {
+    const next = watched.filter(x => !(x.strike === w.strike && x.type === w.type))
+    setWatched(next); savePositions(next)
+  }
+
+  function loadWatch(w: WatchedPosition) {
+    setType(w.type); setStrike(String(w.strike)); setEntry(String(w.entry))
+  }
 
   async function evaluate() {
     if (!strike || !entry) { setError('أدخل رقم السترايك وسعر دخولك'); return }
@@ -93,16 +126,46 @@ export default function ExitPage() {
 
       {error && <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-xl p-4 text-sm">{error}</div>}
 
+      {/* الصفقات المحفوظة للمتابعة التلقائية */}
+      {watched.length > 0 && (
+        <div className="bg-[#0a1929] border border-[#1e3a50] rounded-2xl p-4">
+          <div className="text-sm font-bold text-[#E8D5A3] mb-2">👁 صفقات تحت المتابعة التلقائية</div>
+          <p className="text-xs text-gray-500 mb-3">ترقب يراقبها كل دقيقة ونصف أثناء السوق ويناديك بإشعار حين تحتاج قراراً</p>
+          <div className="flex flex-wrap gap-2">
+            {watched.map(w => (
+              <div key={`${w.type}${w.strike}`} className="flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-mono"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <button onClick={() => loadWatch(w)} className="font-bold" style={{ color: w.type === 'call' ? '#26D07C' : '#F0435A' }}>
+                  {w.type === 'call' ? '▲' : '▼'} {w.strike} @ ${w.entry}
+                </button>
+                <button onClick={() => removeWatch(w)} className="text-gray-500 hover:text-red-400">✕</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {plan && vs && (
         <div className="space-y-4">
           {/* Verdict */}
           <div className="rounded-2xl p-5" style={{ background: vs.bg, border: `1px solid ${vs.border}` }}>
-            <div className="flex items-center gap-3">
-              <span className="text-3xl">{vs.icon}</span>
-              <div>
-                <div className="text-xl font-bold" style={{ color: vs.color }}>{plan.verdictText}</div>
-                <div className="text-sm text-gray-300 mt-1">{plan.actionText}</div>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">{vs.icon}</span>
+                <div>
+                  <div className="text-xl font-bold" style={{ color: vs.color }}>{plan.verdictText}</div>
+                  <div className="text-sm text-gray-300 mt-1">{plan.actionText}</div>
+                </div>
               </div>
+              <button onClick={toggleWatch}
+                className="text-xs font-bold px-3 py-2 rounded-xl"
+                style={{
+                  background: isWatched ? 'rgba(38,208,124,0.12)' : 'rgba(201,148,58,0.12)',
+                  border: `1px solid ${isWatched ? 'rgba(38,208,124,0.4)' : 'rgba(201,148,58,0.4)'}`,
+                  color: isWatched ? '#26D07C' : '#E8D5A3',
+                }}>
+                {isWatched ? '✓ تحت المتابعة — اضغط للإيقاف' : '👁 احفظ للمتابعة التلقائية'}
+              </button>
             </div>
           </div>
 

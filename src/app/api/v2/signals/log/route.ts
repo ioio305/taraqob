@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { sendTelegram, formatSignalMessage } from '@/lib/v2/telegram'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,5 +49,12 @@ export async function POST(req: NextRequest) {
     spx_at_signal:     spx_at_signal ?? null,
   })
   if (error) return NextResponse.json({ ok: false, error: error.message })
-  return NextResponse.json({ ok: true, logged: true })
+
+  // إشعار تليجرام فوري (يعمل فقط عند ضبط TELEGRAM_BOT_TOKEN/CHAT_ID في Vercel)
+  const telegramSent = await sendTelegram(formatSignalMessage({
+    grade, contract_symbol, contract_type, strike,
+    entry_price, stop_loss_level, target_level, spx_at_signal, reason,
+  }))
+
+  return NextResponse.json({ ok: true, logged: true, telegramSent })
 }
