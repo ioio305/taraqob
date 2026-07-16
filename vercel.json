@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/v2/signals/evaluate",
+      "schedule": "30 21 * * 1-5"
+    }
+  ]
+}

@@ -19,7 +19,11 @@ export async function middleware(request: NextRequest) {
 
   // ── مسارات عامة — لا تحتاج تسجيل دخول ──────────────────────
   // /track: السجل الحي العام — شفافية كاملة أمام الجميع
-  const publicRoutes = ['/', '/login', '/compliance', '/how-it-works', '/track']
+  // /api/v2/signals/evaluate: يستدعيه مجدول Vercel يومياً بعد الإغلاق (بلا جلسة)
+  const publicRoutes = [
+    '/', '/login', '/compliance', '/how-it-works', '/track',
+    '/manifest.webmanifest', '/api/v2/signals/evaluate',
+  ]
   if (publicRoutes.includes(pathname) || pathname.startsWith('/auth/')) {
     return NextResponse.next()
   }
