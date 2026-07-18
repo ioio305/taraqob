@@ -144,7 +144,8 @@ export default function V2Dashboard() {
   const liveSnaps    = useRef<Map<string, LiveSnap>>(new Map())
 
   const load = useCallback(async () => {
-    setLoad(true)
+    // لا نعيد الهياكل العظمية في التحديث الدوري — أول تحميل فقط.
+    // البيانات القديمة تبقى ظاهرة حتى تصل الجديدة، فيصير التحديث صامتاً بلا وميض.
     setCd(REFRESH_SEC)
     try {
       const res  = await fetch('/api/v2/recommend')

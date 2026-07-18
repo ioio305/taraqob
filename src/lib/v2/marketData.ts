@@ -56,19 +56,57 @@ async function yahooQuote(symbol: string): Promise<any | null> {
   } catch { return null }
 }
 
+// ── نسبة التحويل SPY → SPX ──────────────────────────────────
+// النسبة الحقيقية ليست 10 بالضبط (تنحرف ~1% بفعل توزيعات الأرباح).
+// نعايرها من إغلاق الأمس الفعلي للاثنين (SPX من ياهو ÷ SPY من ياهو)
+// ونخزّنها 10 دقائق — الانحراف يتغير ببطء (أيام) فالمعايرة تبقى دقيقة.
+let _ratioCache: { ratio: number; at: number } | null = null
+export async function spyToSpxRatio(): Promise<number> {
+  if (_ratioCache && Date.now() - _ratioCache.at < 10 * 60_000) return _ratioCache.ratio
+  try {
+    const [gspc, spy] = await Promise.all([yahooQuote('^GSPC'), yahooQuote('SPY')])
+    const gPrev = gspc?.chartPreviousClose ?? gspc?.previousClose ?? 0
+    const sPrev = spy?.chartPreviousClose ?? spy?.previousClose ?? 0
+    if (gPrev > 1000 && sPrev > 100) {
+      const ratio = gPrev / sPrev
+      if (ratio > 9 && ratio < 11) {
+        _ratioCache = { ratio, at: Date.now() }
+        return ratio
+      }
+    }
+  } catch { /* استخدم 10 */ }
+  return _ratioCache?.ratio ?? 10
+}
+
 export async function getMarketSnapshot(): Promise<MarketSnapshot> {
-  // Tradier أولاً
+  // Tradier أولاً — أسعار فورية. مفاتيح البيانات لا تشمل رموز المؤشرات عادةً،
+  // فنعتمد SPY × 10 (فوري ودقيق) ونعزّز مؤشر الخوف من Yahoo (قيمة حية + إغلاق أمس صحيح)
   if (hasTradier()) {
     try {
-      const mkt = await tradierGet('/markets/quotes?symbols=$SPX.X,$VIX.X,VIX,SPY,VIXY&greeks=false')
+      const [mkt, vixMetaY, ratio] = await Promise.all([
+        tradierGet('/markets/quotes?symbols=$SPX.X,$VIX.X,VIX,SPY,VIXY&greeks=false'),
+        yahooQuote('^VIX').catch(() => null),
+        spyToSpxRatio(),
+      ])
       const qs: any[] = Array.isArray(mkt?.quotes?.quote) ? mkt.quotes.quote : [mkt?.quotes?.quote].filter(Boolean)
-      let spxQ = qs.find(q => q.symbol === '$SPX.X' || q.symbol === 'SPX') ?? null
+      let spxQ = qs.find(q => q.symbol === '$SPX.X') ?? null
       let vixQ = qs.find(q => q.symbol === '$VIX.X' || q.symbol === 'VIX') ?? null
       if (!spxQ?.last) {
         const spy = qs.find(q => q.symbol === 'SPY')
-        if (spy?.last) spxQ = { ...spy, last: spy.last * 10, prevclose: (spy.prevclose ?? spy.last) * 10, high: (spy.high ?? 0) * 10, low: (spy.low ?? 0) * 10 }
+        if (spy?.last) spxQ = {
+          ...spy,
+          last:      +(spy.last * ratio).toFixed(2),
+          prevclose: +((spy.prevclose ?? spy.last) * ratio).toFixed(2),
+          high:      +((spy.high ?? 0) * ratio).toFixed(2),
+          low:       +((spy.low ?? 0) * ratio).toFixed(2),
+        }
       }
-      if (!vixQ?.last && !vixQ?.prevclose) {
+      // مؤشر الخوف: Yahoo أولاً (حي + إغلاق أمس فعلي)، ثم قيمة تريدر، ثم تقدير VIXY
+      const vixYLive = vixMetaY?.regularMarketPrice ?? 0
+      const vixYPrev = vixMetaY?.chartPreviousClose ?? vixMetaY?.previousClose ?? null
+      if (vixYLive > 0) {
+        vixQ = { last: vixYLive, prevclose: vixYPrev }
+      } else if (!vixQ?.last && !vixQ?.prevclose) {
         const vixy = qs.find(q => q.symbol === 'VIXY')
         if (vixy?.last) vixQ = { last: Math.round(vixy.last * 3.5 * 10) / 10, prevclose: null }
       }
@@ -153,15 +191,15 @@ export async function getIntradayBars(tradierInterval: string, days: number): Pr
   if (hasTradier()) {
     try {
       const url = `/markets/timesales?symbol=SPY&interval=${tradierInterval}&start=${start}&end=${end}&session_filter=all`
-      const json = await tradierGet(url)
+      const [json, ratio] = await Promise.all([tradierGet(url), spyToSpxRatio()])
       const raw = json?.series?.data ?? []
       const arr = Array.isArray(raw) ? raw : [raw]
       const bars = arr.filter((d: any) => !!d?.time).map((d: any) => ({
         time: d.time,
-        open: +(d.open * 10).toFixed(2),
-        high: +(d.high * 10).toFixed(2),
-        low: +(d.low * 10).toFixed(2),
-        close: +(d.close * 10).toFixed(2),
+        open: +(d.open * ratio).toFixed(2),
+        high: +(d.high * ratio).toFixed(2),
+        low: +(d.low * ratio).toFixed(2),
+        close: +(d.close * ratio).toFixed(2),
         volume: d.volume ?? 0,
       }))
       if (bars.length >= 10) return bars
@@ -184,25 +222,33 @@ export async function getHistoryBars(tradierInterval: string, days: number): Pro
   const start = new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10)
   const end = new Date().toISOString().slice(0, 10)
 
+  // الشموع اليومية: Yahoo أولاً — ^GSPC هو SPX الأصلي الدقيق (لا تحويل ولا انحراف)،
+  // والشموع اليومية لا تحتاج سرعة لحظية. Tradier (SPY × نسبة معايرة) احتياط فقط.
+  const yahooFirst = await getHistoryBarsYahoo(tradierInterval, days)
+  if (yahooFirst.length >= 10) return yahooFirst
+
   if (hasTradier()) {
     try {
       const url = `/markets/history?symbol=SPY&interval=${tradierInterval}&start=${start}&end=${end}`
-      const json = await tradierGet(url)
+      const [json, ratio] = await Promise.all([tradierGet(url), spyToSpxRatio()])
       const hist = json?.history ?? {}
       const raw = hist.day ?? hist.week ?? hist.month ?? []
       const bars = (Array.isArray(raw) ? raw : [raw]).filter((d: any) => !!d?.date).map((d: any) => ({
         time: d.date,
-        open: +(d.open * 10).toFixed(2),
-        high: +(d.high * 10).toFixed(2),
-        low: +(d.low * 10).toFixed(2),
-        close: +(d.close * 10).toFixed(2),
+        open: +(d.open * ratio).toFixed(2),
+        high: +(d.high * ratio).toFixed(2),
+        low: +(d.low * ratio).toFixed(2),
+        close: +(d.close * ratio).toFixed(2),
         volume: d.volume ?? 0,
       }))
       if (bars.length >= 10) return bars
-    } catch { /* اسقط إلى Yahoo */ }
+    } catch { /* لا مصدر آخر */ }
   }
+  return []
+}
 
-  // Yahoo: ^GSPC مباشرة (دقيق، بلا × 10)
+// Yahoo: ^GSPC مباشرة (SPX الأصلي — دقيق بلا تحويل)
+async function getHistoryBarsYahoo(tradierInterval: string, days: number): Promise<MdBar[]> {
   const yInt = TF_TO_YAHOO_HISTORY[tradierInterval] ?? '1d'
   const range = yahooRangeForDays(days, false)
   try {
