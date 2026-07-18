@@ -492,7 +492,12 @@ export async function GET(request: NextRequest) {
         { ok: gammaAlign,                                            label: 'جاما تدعم' },
       ]
       const edgeCount = edges.filter(e => e.ok).length
-      const grade = edgeCount >= 6 ? 'A+' : edgeCount >= 4 ? 'A' : edgeCount >= 2 ? 'B' : 'C'
+      // دليل السرعة (دلتا 0.22-0.48) شرط إلزامي للتصنيفات العليا:
+      // عقد بطيء = يانصيب مهما اجتمعت الأدلة الأخرى — لا يستحق A أبداً
+      const deltaEdgeOk = absDelta >= 0.22 && absDelta <= 0.48
+      const grade = (edgeCount >= 6 && deltaEdgeOk) ? 'A+'
+        : (edgeCount >= 4 && deltaEdgeOk) ? 'A'
+        : edgeCount >= 2 ? 'B' : 'C'
 
       // One-line display reason for dashboard card
       const reason = capReason
