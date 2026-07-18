@@ -90,7 +90,9 @@ export function AlertsWatcher() {
 
       // ── 3. الصفقات المحفوظة: هل تحتاج قراراً؟ ──
       const positions = loadPositions()
+      const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
       for (const pos of positions.slice(0, 5)) {
+        if (pos.expiry && pos.expiry < todayStr) continue   // عقد منتهٍ — لا داعي للاستعلام
         try {
           const q = `strike=${pos.strike}&type=${pos.type}&entry=${pos.entry}${pos.expiry ? `&expiry=${pos.expiry}` : ''}`
           const ex = await fetch(`/api/v2/exit?${q}`).then(r => r.json())

@@ -1082,7 +1082,7 @@ export default function ChartPage() {
                 <span className="flex items-center gap-1"><span className="w-5 h-3 rounded-sm bg-emerald-500/35 border border-emerald-500 inline-block" />صندوق طلب — CALL</span>
                 <span className="flex items-center gap-1"><span className="w-5 h-3 rounded-sm bg-red-500/35 border border-red-500 inline-block" />صندوق عرض — PUT</span>
                 <span className="flex items-center gap-1"><span className="w-5 h-3 rounded-sm bg-emerald-500/60 border border-emerald-300 inline-block" />لون أغمق = سيولة أعلى</span>
-                <span className="flex items-center gap-1"><span className="w-5 h-3 rounded-sm border border-dashed border-[#C9943A] inline-block" />حد متقطع = Retest مؤكد</span>
+                <span className="flex items-center gap-1"><span className="w-5 h-3 rounded-sm border border-dashed border-[#C9943A] inline-block" />حد متقطع = السعر عاد واختبر المنطقة فعلاً</span>
               </div>
               {analysis?.sr && (
                 <p className="text-xs text-gray-600">{analysis.sr.summary}</p>

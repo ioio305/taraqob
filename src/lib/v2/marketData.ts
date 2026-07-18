@@ -304,8 +304,15 @@ export function syntheticExpirations(count = 8): string[] {
   return out
 }
 
+// ذاكرة قدرة: بعض مفاتيح تريدر لا تشمل بيانات عقود المؤشرات (SPX/SPXW).
+// عند أول فشل نتوقف عن المحاولة 6 ساعات — نوفّر رحلتين فاشلتين في كل طلب.
+let _tradierIndexOptionsFailedAt = 0
+function tradierIndexOptionsUsable(): boolean {
+  return hasTradier() && Date.now() - _tradierIndexOptionsFailedAt > 6 * 3600_000
+}
+
 export async function getExpirations(): Promise<string[]> {
-  if (hasTradier()) {
+  if (tradierIndexOptionsUsable()) {
     for (const sym of ['SPXW', 'SPX']) {
       try {
         const d = await tradierGet(`/markets/options/expirations?symbol=${sym}&includeAllRoots=true&strikes=false`)
@@ -313,6 +320,7 @@ export async function getExpirations(): Promise<string[]> {
         if (dates) return Array.isArray(dates) ? dates : [dates]
       } catch { continue }
     }
+    _tradierIndexOptionsFailedAt = Date.now()
   }
   // CBOE: تواريخ الانتهاء الحقيقية (مجاناً)
   const cboe = await getCboeData()
@@ -415,7 +423,7 @@ export async function getOptionsChain(
   spxPrice: number,
   vixPrice: number,
 ): Promise<{ options: MdOption[]; estimated: boolean }> {
-  if (hasTradier()) {
+  if (tradierIndexOptionsUsable()) {
     for (const sym of ['SPXW', 'SPX']) {
       try {
         const chain = await tradierGet(`/markets/options/chains?symbol=${sym}&expiration=${expiration}&greeks=true`)
@@ -425,6 +433,7 @@ export async function getOptionsChain(
         if (opts.length > 0) return { options: opts as MdOption[], estimated: false }
       } catch { continue }
     }
+    _tradierIndexOptionsFailedAt = Date.now()
   }
   // CBOE: أسعار حقيقية مجاناً (متأخرة ~15 دقيقة)
   const cboe = await getCboeData()

@@ -86,8 +86,11 @@ export default function PaperPage() {
   }
 
   function closePosition(p: PaperPosition) {
-    const exitPrice = prices[p.id]
-    if (!exitPrice) { setMsg('لم يصل سعر حي بعد لهذا العقد — انتظر لحظات'); return }
+    // عقد انتهى تاريخه: يُغلق بسعره الحي إن وُجد، وإلا بقيمة صفر (انتهى بلا قيمة)
+    const todayStr = new Date().toISOString().slice(0, 10)
+    const isExpired = !!p.expiry && p.expiry < todayStr
+    const exitPrice = prices[p.id] ?? (isExpired ? 0 : undefined)
+    if (exitPrice == null) { setMsg('لم يصل سعر حي بعد لهذا العقد — انتظر لحظات'); return }
     const proceeds = Math.round(exitPrice * 100 * p.contracts * 100) / 100
     const pnl = Math.round((proceeds - p.cost) * 100) / 100
     const next: PaperState = {
@@ -217,6 +220,8 @@ export default function PaperPage() {
                       ? <span style={{ color: (pnl ?? 0) >= 0 ? '#26D07C' : '#F0435A' }}>
                           الآن ${now} ({(pnl ?? 0) >= 0 ? '+' : ''}${(pnl ?? 0).toFixed(0)})
                         </span>
+                      : (p.expiry && p.expiry < new Date().toISOString().slice(0, 10))
+                      ? <span style={{ color: '#F0435A' }}>انتهى العقد — أغلقه لتسجيل النتيجة</span>
                       : <span className="text-gray-600">جارٍ جلب السعر…</span>}
                   </div>
                   <button onClick={() => closePosition(p)}

@@ -198,7 +198,7 @@ export function computeSRZones(bars: RawBar[], atrArr: (number | null)[]): { zon
 
   const strongest = filtered[0]
   const summary = strongest
-    ? `أقوى منطقة حالياً: ${strongest.label} — قتامة اللون تعكس سيولة أعلى، والحد المتقطع يعني Retest مؤكد.`
+    ? `أقوى منطقة حالياً: ${strongest.label} — قتامة اللون تعكس سيولة أعلى، والحد المتقطع يعني أن السعر عاد واختبرها فعلاً.`
     : 'لا توجد مناطق عرض/طلب كافية حالياً.'
 
   return { zones: filtered, signals: signals.slice(-12), summary }
