@@ -37,31 +37,30 @@ function ReferralCard() {
   )
 }
 
+// الأسعار الشهرية الأساسية — السنوي يُحسب منها بخصم 30%
 const TIERS = [
   {
     key:   'signal',
     label: 'سيجنال',
     color: '#60A5FA',
-    price: '$29',
-    period: '/شهر',
-    desc:  'للمتداولين الجادين الذين يريدون إشارات موثّقة وأدوات تحليل متقدمة',
+    monthly: 29,
+    desc:  'للمتداولين الجادين — الإشارات الموثّقة ورادار الأموال',
     features: [
       'الإشارات الموثّقة مع دخول وخروج حقيقي',
-      'صفحة الأداء التاريخي',
-      'كونسول العقود المتقدم',
-      'جميع ميزات رادار',
+      'رادار الأموال الذكية',
+      'مرصد العقود المتقدم',
+      'جميع ميزات رادار المجانية',
     ],
   },
   {
     key:   'edge',
     label: 'إيدج',
     color: '#C9943A',
-    price: '$79',
-    period: '/شهر',
-    desc:  'للمحترفين الذين يحتاجون إلى تحليل معمّق وأدوات الشارت الكاملة',
+    monthly: 79,
+    desc:  'للمحترفين — العدة الكاملة بلا استثناء',
     features: [
-      'الشارت المتقدم مع جميع المؤشرات',
-      'تحليل معمّق للعقود والاستراتيجيات',
+      'الشارت المتقدم مع جميع الطبقات',
+      'نسخ السبريدات محددة المخاطرة',
       'وصول مبكر للميزات الجديدة',
       'جميع ميزات سيجنال',
     ],
@@ -69,30 +68,33 @@ const TIERS = [
   },
   {
     key:   'alpha',
-    label: 'ألفا',
+    label: 'VIP',
     color: '#A78BFA',
-    price: '$199',
-    period: '/شهر',
-    desc:  'للمؤسسات وكبار المتداولين — وصول كامل وغير محدود',
+    monthly: 199,
+    desc:  'المنصة تعمل لأجلك — أسبقية وخصوصية ومقاعد محدودة',
     features: [
-      'وصول كامل لجميع الميزات',
-      'أولوية في الدعم الفني',
-      'تقارير مخصصة',
-      'جميع ميزات إيدج',
+      'الفرص القوية تصلك أولاً فور ولادتها',
+      'تقرير المدرب الشخصي أسبوعياً',
+      'خطة اليوم تصلك صباحاً على جوالك',
+      'صوتك مسموع في الميزات القادمة + جميع ميزات إيدج',
     ],
+    badge: 'مقاعد محدودة',
   },
 ]
+
+const YEARLY_DISCOUNT = 0.30   // خصم الاشتراك السنوي
 
 export default function UpgradePage() {
   const [loading, setLoading] = useState<string | null>(null)
   const [error,   setError]   = useState<string | null>(null)
+  const [billing, setBilling] = useState<'monthly' | 'yearly'>('monthly')
 
   async function checkout(tier: string) {
     setLoading(tier); setError(null)
     try {
       const res  = await fetch('/api/v2/stripe/checkout', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier }),
+        body: JSON.stringify({ tier, billing }),
       })
       const data = await res.json()
       if (data.url) {
@@ -132,6 +134,27 @@ export default function UpgradePage() {
         </div>
       )}
 
+      {/* مبدّل الفوترة: شهري / سنوي بخصم 30% */}
+      <div className="flex justify-center mb-8">
+        <div className="flex items-center rounded-full p-0.5 gap-0.5"
+          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          {([
+            { b: 'monthly' as const, label: 'شهري' },
+            { b: 'yearly' as const,  label: 'سنوي — وفّر 30%' },
+          ]).map(x => (
+            <button key={x.b} onClick={() => setBilling(x.b)}
+              className="text-xs font-bold px-4 py-2 rounded-full transition-all"
+              style={{
+                background: billing === x.b ? 'rgba(38,208,124,0.15)' : 'transparent',
+                border: billing === x.b ? '1px solid rgba(38,208,124,0.4)' : '1px solid transparent',
+                color: billing === x.b ? '#26D07C' : '#4A5568',
+              }}>
+              {x.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Tier cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         {TIERS.map(tier => (
@@ -149,10 +172,20 @@ export default function UpgradePage() {
 
             <div className="mb-4">
               <div className="text-xs font-mono mb-1" style={{ color: tier.color }}>{tier.label}</div>
-              <div className="flex items-baseline gap-1">
-                <span className="text-2xl font-bold font-mono" style={{ color: 'white' }}>{tier.price}</span>
-                <span className="text-xs" style={{ color: '#4A5568' }}>{tier.period}</span>
-              </div>
+              {billing === 'monthly' ? (
+                <div className="flex items-baseline gap-1">
+                  <span className="text-2xl font-bold font-mono" style={{ color: 'white' }}>${tier.monthly}</span>
+                  <span className="text-xs" style={{ color: '#4A5568' }}>/شهر</span>
+                </div>
+              ) : (
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-2xl font-bold font-mono" style={{ color: 'white' }}>
+                    ${Math.round(tier.monthly * (1 - YEARLY_DISCOUNT))}
+                  </span>
+                  <span className="text-xs" style={{ color: '#4A5568' }}>/شهر · يُدفع سنوياً</span>
+                  <span className="text-xs font-mono line-through" style={{ color: '#3A4A5C' }}>${tier.monthly}</span>
+                </div>
+              )}
               <p className="text-xs mt-2 leading-relaxed" style={{ color: '#4A5568' }}>{tier.desc}</p>
             </div>
 

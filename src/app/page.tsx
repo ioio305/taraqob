@@ -83,7 +83,7 @@ export default async function RootPage({ searchParams }: { searchParams?: { prev
             color: '#C9943A',
           }}>
           <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#C9943A' }} />
-          نظام تحليل عقود SPX المطوّر · بيانات Tradier الحية
+          أسعار فورية · مُختبَر على 8 سنوات · سجل عام مفتوح للجميع
         </div>
 
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
@@ -101,26 +101,30 @@ export default async function RootPage({ searchParams }: { searchParams?: { prev
           كالمحترفين
         </h1>
 
-        <p className="text-lg sm:text-xl mb-10 max-w-2xl mx-auto leading-relaxed"
+        <p className="text-lg sm:text-xl mb-4 max-w-2xl mx-auto leading-relaxed"
           style={{ color: '#64748B' }}>
-          منصة تحليلية متكاملة تجلب بيانات Tradier الحية وتحللها بـ 7 محركات ذكية
-          لتقديم قرار واضح بدرجة من 100 — مصممة خصيصاً للمحترفين في 0DTE و 1DTE
+          المنصة الوحيدة التي تتخذ موقفاً وتتحمّله: خطة مكتوبة كل صباح، توصيات بثلاث فئات
+          لكل مستوى، حماية آلية من أيام الانهيارات — وكل إشارة قوية تُسجَّل في سجل عام لا يُمكن تجميله
+        </p>
+        <p className="text-sm mb-10 max-w-xl mx-auto" style={{ color: '#3A4A5C' }}>
+          بصدق كامل: نسبة الربح المثبتة على 8 سنوات لم يرها النظام هي 51% بأفضلية +0.25 —
+          أفضلية حقيقية إحصائياً، وليست وعداً بالثراء. من يعدك بأكثر فاسأله عن سجله العام.
         </p>
 
         <div className="flex flex-wrap items-center justify-center gap-4 mb-20">
           <Link href="/login"
             className="flex items-center gap-2 px-8 py-4 rounded-xl text-base font-bold transition-all"
             style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
-            ابدأ التداول ←
+            🎁 جرّب 7 أيام مجاناً — كل الميزات
           </Link>
-          <Link href="/how-it-works"
+          <Link href="/track"
             className="flex items-center gap-2 px-8 py-4 rounded-xl text-base font-medium transition-all"
             style={{
-              background: 'rgba(255,255,255,0.04)',
-              border: '1px solid rgba(255,255,255,0.08)',
-              color: '#94A3B8',
+              background: 'rgba(38,208,124,0.06)',
+              border: '1px solid rgba(38,208,124,0.25)',
+              color: '#26D07C',
             }}>
-            كيف يعمل النظام
+            📜 شاهد السجل العام — بلا تسجيل
           </Link>
         </div>
 
@@ -248,10 +252,10 @@ export default async function RootPage({ searchParams }: { searchParams?: { prev
       <section style={{ borderTop: '1px solid rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(13,27,42,0.5)' }}>
         <div className="max-w-4xl mx-auto px-6 py-10 grid grid-cols-2 sm:grid-cols-4 gap-8 text-center">
           {[
-            { v: '7',       l: 'محركات تحليلية' },
-            { v: '100',     l: 'نقطة قرار'       },
-            { v: 'Tradier', l: 'مصدر البيانات'   },
-            { v: '0DTE',    l: 'تركيز التداول'   },
+            { v: '51%',  l: 'نسبة ربح مثبتة خارج العينة' },
+            { v: '8',    l: 'سنوات اختبار لم يرها النظام' },
+            { v: '100%', l: 'من التوصيات لها وقف وهدف' },
+            { v: '7',    l: 'أيام تجربة كاملة مجاناً' },
           ].map(s => (
             <div key={s.l}>
               <div className="text-3xl font-bold font-mono mb-1" style={{ color: '#C9943A' }}>{s.v}</div>
@@ -275,34 +279,49 @@ export default async function RootPage({ searchParams }: { searchParams?: { prev
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[
             {
-              icon: '⬡', color: '#C9943A',
-              title: '7 محركات تحليلية',
-              desc: 'اتجاه السوق · الزخم وVWAP · Expected Move · جودة العقد · السيولة · Theta/Gamma · وضوح التنفيذ — كل محرك بدرجته الخاصة من 100',
+              icon: '📋', color: '#C9943A',
+              title: 'خطة اليوم — موقف واحد واضح',
+              desc: 'كل صباح قبل الجرس: الانحياز، منطقة الدخول، الأهداف والوقف، وما يلغي الخطة — مكتوبة بالعربي، لا لوحة أرقام تُفسّرها بنفسك',
             },
             {
-              icon: '◈', color: '#10B981',
-              title: 'بيانات Tradier الحية',
-              desc: 'أسعار SPX وVIX لحظياً · Greeks دقيقة · VWAP من timesales · Opening Range · سلسلة كاملة OTM',
+              icon: '🛡️', color: '#10B981',
+              title: 'حارس الانهيارات — حماية مثبتة',
+              desc: 'في الأيام العنيفة (مثل انهيار كورونا) يمنع النظام أي توصية دخول تلقائياً — لأن الاختبار أثبت أنها أيام تخسر حتى مع أفضل الإشارات',
             },
             {
-              icon: '◐', color: '#60A5FA',
-              title: 'أهداف ووقف ذكي',
-              desc: 'أهداف ثلاثة مبنية على Expected Move بمستويات SPX واضحة · وقف خسارة بنقاط محددة · لا تخمين',
+              icon: '🟢', color: '#60A5FA',
+              title: 'ثلاث فئات لكل مستوى',
+              desc: 'المحافظ (احتمال أعلى وهدوء) · المتوسط (التوازن المثبت) · المغامر (عقود رخيصة) — مع احتمال رياضي حقيقي لا تسويقي على كل عقد',
             },
             {
-              icon: '◉', color: '#A78BFA',
-              title: '0DTE و 1DTE',
-              desc: 'مصمم خصيصاً للتداول اليومي · delta مثالي 0.22–0.32 · premium $5–$500 · OTM صارم بالكامل',
+              icon: '📜', color: '#26D07C',
+              title: 'سجل عام لا يمكن تجميله',
+              desc: 'كل إشارة قوية تُسجَّل آلياً وتُقيَّم آلياً على أسعار السوق — وتُعرض للعالم بلا تسجيل دخول. نربح ونخسر أمامك',
             },
             {
-              icon: '◫', color: '#F59E0B',
-              title: 'قائمة مختصرة ذكية',
-              desc: 'أفضل 8 عقود من نفس الانتهاء · مرتبة بالجودة · تحليل كامل بنقرة واحدة · العقد المحدد مُميَّز',
+              icon: '📡', color: '#A78BFA',
+              title: 'رادار الأموال الذكية',
+              desc: 'يكشف الستريكات التي تتدفق عليها ملايين المؤسسات اليوم (حجم يفوق المراكز القائمة أضعافاً) — ميزة كانت حكراً على منصات المئات شهرياً',
             },
             {
-              icon: '◇', color: '#EF4444',
-              title: 'إدارة مخاطر كاملة',
-              desc: 'تحذيرات Gamma حاد · Theta مرتفع · Spread واسع · ITM فوري · VIX خطر — كل التحذيرات قبل التنفيذ',
+              icon: '🧲', color: '#F59E0B',
+              title: 'خريطة أموال صنّاع السوق',
+              desc: 'جدران الجاما ونقطة الانقلاب: أين يرتد السعر وأين يتسارع — مدمجة في القرار والخطة والشارت، وتحذّرك إن كان هدفك خلف جدار',
+            },
+            {
+              icon: '🚪', color: '#EF4444',
+              title: 'مساعد الخروج — ضد الطمع',
+              desc: 'سجّل صفقتك ويراقبها كل دقيقة ونصف: «اخرج الآن» أو «بِع النصف وأمّن ربحك» — ويناديك بإشعار دون أن تفتح المنصة',
+            },
+            {
+              icon: '📔', color: '#60A5FA',
+              title: 'مدرب شخصي يقرأ صفقاتك',
+              desc: 'دفتر سحابي يتبعك على أجهزتك + مدرب يصارحك: أسوأ ساعاتك، تداولك الانتقامي، وأين تنزف — بأرقامك أنت لا بالعموميات',
+            },
+            {
+              icon: '🎮', color: '#C9943A',
+              title: 'محفظة تجريبية بأسعار حقيقية',
+              desc: '10,000$ وهمية تتداول بها بأسعار السوق الفعلية — اقتنع بالنتائج بنفسك قبل أن تخاطر بريال واحد',
             },
           ].map(f => (
             <div key={f.title} className="rounded-2xl p-6 transition-all group"
@@ -366,6 +385,9 @@ export default async function RootPage({ searchParams }: { searchParams?: { prev
           <div className="text-xs font-mono tracking-widest mb-3" style={{ color: '#C9943A' }}>الباقات</div>
           <h2 className="text-3xl font-bold text-white mb-3">اختر ما يناسبك</h2>
           <p className="text-sm" style={{ color: '#4A5568' }}>كل الأرقام حقيقية · كل الإشارات موثّقة · لا وعود فارغة</p>
+          <p className="text-sm mt-2 font-bold" style={{ color: '#26D07C' }}>
+            🎁 كل حساب جديد يبدأ بتجربة 7 أيام كاملة الميزات — وكل صديق تدعوه يهديك أسبوعاً إضافياً
+          </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -373,26 +395,26 @@ export default async function RootPage({ searchParams }: { searchParams?: { prev
             {
               key: 'radar', label: 'رادار', price: 'مجاني', period: '',
               color: '#4A5568',
-              desc: 'للمبتدئين — الداشبورد وتحليل العقود',
-              features: ['داشبورد SPX الحي', 'تحليل العقد الفوري', 'قائمة مختصرة', 'درجة القرار'],
+              desc: 'ابدأ رحلتك — الأساسيات كاملة',
+              features: ['خطة اليوم الصباحية', 'الداشبورد وتحليل العقد', 'المحفظة التجريبية 10,000$', 'مساعد الخروج ودفتر الصفقات'],
             },
             {
               key: 'signal', label: 'سيجنال', price: '$29', period: '/شهر',
               color: '#60A5FA',
-              desc: 'إشارات موثّقة وأدوات تحليل متقدمة',
-              features: ['إشارات موثّقة بدخول وخروج', 'صفحة الأداء التاريخي', 'كونسول العقود', 'كل ميزات رادار'],
+              desc: 'للجاد — الإشارات والرادار',
+              features: ['الإشارات الموثّقة بدخول وخروج', 'رادار الأموال الذكية', 'مرصد العقود المتقدم', 'كل ميزات رادار'],
             },
             {
               key: 'edge', label: 'إيدج', price: '$79', period: '/شهر',
               color: '#C9943A', badge: 'الأكثر شعبية',
-              desc: 'تحليل معمّق وأدوات الشارت الكاملة',
-              features: ['الشارت المتقدم', 'تحليل معمّق للاستراتيجيات', 'وصول مبكر للميزات', 'كل ميزات سيجنال'],
+              desc: 'للمحترف — العدة الكاملة',
+              features: ['الشارت المتقدم بكل الطبقات', 'نسخ السبريدات محددة المخاطرة', 'وصول مبكر للميزات الجديدة', 'كل ميزات سيجنال'],
             },
             {
-              key: 'alpha', label: 'ألفا', price: '$199', period: '/شهر',
-              color: '#A78BFA',
-              desc: 'وصول كامل غير محدود + أولوية الدعم',
-              features: ['وصول كامل لكل الميزات', 'أولوية في الدعم', 'تقارير مخصصة', 'كل ميزات إيدج'],
+              key: 'alpha', label: 'VIP', price: '$199', period: '/شهر',
+              color: '#A78BFA', badge: 'مقاعد محدودة',
+              desc: 'المنصة تعمل لأجلك — لا العكس',
+              features: ['الفرص القوية تصلك أولاً فور ولادتها', 'تقرير المدرب الشخصي أسبوعياً', 'خطة اليوم تصلك صباحاً', 'صوتك مسموع في الميزات القادمة'],
             },
           ].map(tier => (
             <div key={tier.key} className="rounded-2xl p-5 flex flex-col relative"
@@ -439,19 +461,20 @@ export default async function RootPage({ searchParams }: { searchParams?: { prev
       {/* ── CTA ── */}
       <section className="max-w-3xl mx-auto px-6 py-24 text-center">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono mb-6"
-          style={{ background: 'rgba(201,148,58,0.08)', border: '1px solid rgba(201,148,58,0.2)', color: '#C9943A' }}>
-          بالدعوة فقط
+          style={{ background: 'rgba(38,208,124,0.08)', border: '1px solid rgba(38,208,124,0.25)', color: '#26D07C' }}>
+          🎁 7 أيام كاملة الميزات — مجاناً
         </div>
         <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4 leading-tight">
-          جاهز لتداول أكثر احترافية؟
+          جرّبها بنفسك — والسجل العام حَكَمنا
         </h2>
-        <p className="text-base mb-10 max-w-sm mx-auto" style={{ color: '#4A5568' }}>
-          المنصة تعمل بالدعوة فقط — تواصل مع المدير للحصول على وصول
+        <p className="text-base mb-10 max-w-md mx-auto" style={{ color: '#4A5568' }}>
+          لا نطلب ثقتك، نطلب أسبوعاً واحداً: افتح خطة اليوم كل صباح، تابع التوصيات
+          بالمحفظة التجريبية، وقارن بنفسك مع السجل العام المفتوح
         </p>
         <Link href="/login"
           className="inline-flex items-center gap-2 px-10 py-4 rounded-xl text-base font-bold transition-all"
           style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
-          تسجيل الدخول ←
+          ابدأ تجربتك المجانية ←
         </Link>
       </section>
 
@@ -464,6 +487,7 @@ export default async function RootPage({ searchParams }: { searchParams?: { prev
             <span className="text-xs font-mono" style={{ color: '#1A2A3A' }}>TARAQOB PRO</span>
           </div>
           <div className="flex items-center gap-6">
+            <Link href="/track"        className="text-xs" style={{ color: '#2D3748' }}>السجل العام</Link>
             <Link href="/how-it-works" className="text-xs" style={{ color: '#2D3748' }}>كيف يعمل</Link>
             <Link href="/compliance"   className="text-xs" style={{ color: '#2D3748' }}>الإفصاح والمخاطر</Link>
             <Link href="/login"        className="text-xs" style={{ color: '#2D3748' }}>تسجيل الدخول</Link>
