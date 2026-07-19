@@ -3,11 +3,12 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { HomepageNewsBar } from '@/components/HomepageNewsBar'
 
-export default async function RootPage() {
+export default async function RootPage({ searchParams }: { searchParams?: { preview?: string } }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (user) {
+  // ?preview=1 يسمح للمسجّلين برؤية الصفحة التعريفية دون إعادة توجيه
+  if (user && searchParams?.preview !== '1') {
     const { data: profile } = await supabase
       .from('user_profiles')
       .select('role, is_active')

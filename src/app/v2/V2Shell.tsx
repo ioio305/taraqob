@@ -36,6 +36,7 @@ const NAV_TOOLS = [
   { href: '/v2/console', label: 'مرصد العقود', icon: '🖥', exact: false, requiredTier: 'signal' },
   { href: '/v2/chart',   label: 'الشارت',         icon: '📈', exact: false, requiredTier: 'edge'   },
   { href: '/track',      label: 'السجل العام',    icon: '📜', exact: false, requiredTier: 'radar'  },
+  { href: '/?preview=1', label: 'الصفحة التعريفية', icon: '🌐', exact: false, requiredTier: 'radar' },
 ]
 
 const NAV_ADMIN = [
@@ -265,36 +266,36 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
         </div>
       )}
 
-      {/* ── Admin nav ── */}
-      {showAdminNav && (
-        <div className="px-3 pt-4 pb-2 shrink-0">
-          <SectionTitle color="#C9943A">الإدارة</SectionTitle>
+      {/* ── منطقة الأقسام: قابلة للتمرير — ذيل السايدبار (الخروج) مثبت دائماً ── */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {showAdminNav && (
+          <div className="px-3 pt-3 pb-1">
+            <SectionTitle color="#C9943A">الإدارة</SectionTitle>
+            <div className="space-y-0.5 mt-1">
+              {NAV_ADMIN.map(item => <NavLink key={item.href} {...item} accent="#C9943A" />)}
+            </div>
+          </div>
+        )}
+
+        {showAdminNav && (
+          <div className="mx-4 my-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }} />
+        )}
+
+        {/* ── Trading nav ── */}
+        <div className="px-3 pt-1 pb-1">
+          <SectionTitle>التداول</SectionTitle>
           <div className="space-y-0.5 mt-1">
-            {NAV_ADMIN.map(item => <NavLink key={item.href} {...item} accent="#C9943A" />)}
+            {NAV_TRADING.map(item => renderNavItem(item, showAdminNav ? '#60A5FA' : '#C9943A'))}
           </div>
         </div>
-      )}
 
-      {showAdminNav && (
-        <div className="mx-4 my-2 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }} />
-      )}
-
-      {/* ── Trading nav ── */}
-      <div className="px-3 pt-2 pb-2 shrink-0">
-        <SectionTitle>{showAdminNav ? 'التداول' : 'التداول'}</SectionTitle>
-        <div className="space-y-0.5 mt-1">
-          {NAV_TRADING.map(item => renderNavItem(item, showAdminNav ? '#60A5FA' : '#C9943A'))}
+        <div className="px-3 pt-1 pb-2">
+          <SectionTitle>الأدوات</SectionTitle>
+          <div className="space-y-0.5 mt-1">
+            {NAV_TOOLS.map(item => renderNavItem(item, showAdminNav ? '#60A5FA' : '#C9943A'))}
+          </div>
         </div>
       </div>
-
-      <div className="px-3 pt-1 pb-2 shrink-0">
-        <SectionTitle>الأدوات</SectionTitle>
-        <div className="space-y-0.5 mt-1">
-          {NAV_TOOLS.map(item => renderNavItem(item, showAdminNav ? '#60A5FA' : '#C9943A'))}
-        </div>
-      </div>
-
-      <div className="flex-1" />
 
       {/* ── User footer ── */}
       <div className="px-4 py-4 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>

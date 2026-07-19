@@ -129,13 +129,20 @@ export default function SignalsPage() {
                 <div key={s.id} className="bg-navy-900 border border-navy-700 rounded-xl p-4">
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-white">{s.contract_symbol}</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* اسم مفهوم بدل رمز العقد التقني */}
+                        <span className="font-bold text-base"
+                          style={{ color: s.contract_type === 'put' ? '#F0435A' : '#26D07C' }}>
+                          {s.contract_type === 'put' ? '▼ بوت' : '▲ كول'} {fmt(s.strike, 0)}
+                        </span>
+                        <span className="text-xs text-surface-500">
+                          انتهاء {new Date(s.expiry + 'T12:00:00Z').toLocaleDateString('ar-SA', { day: 'numeric', month: 'long' })}
+                        </span>
                         <span className={`text-xs px-2 py-0.5 rounded-full border ${st.cls}`}>{st.ar}</span>
                       </div>
-                      <div className="text-xs text-surface-500 mt-1">
-                        {s.signal_ref} &bull; {s.expiry} &bull; Strike {fmt(s.strike, 0)} &bull;{' '}
-                        <span className="uppercase">{s.contract_type}</span>
+                      <div className="text-xs mt-1 font-mono cursor-help" style={{ color: '#2D3748' }}
+                        title="رمز العقد الرسمي في البورصة — تحتاجه فقط عند البحث عن العقد في منصة وسيطك">
+                        {s.contract_symbol}
                       </div>
                     </div>
                     <div className="text-center">
