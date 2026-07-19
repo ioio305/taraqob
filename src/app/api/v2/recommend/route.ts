@@ -9,6 +9,7 @@ import { buildTradeFocus } from '@/lib/v2/tradeFocus'
 import { getMarketSnapshot, getExpirations, getOptionsChain, getHistoryBars } from '@/lib/v2/marketData'
 import { getGammaExposure } from '@/lib/v2/gammaExposure'
 import { crashGuard } from '@/lib/v2/marketAnalysis'
+import { econWarning, upcomingEvents } from '@/lib/v2/econCalendar'
 
 export const dynamic = 'force-dynamic'
 
@@ -622,6 +623,8 @@ export async function GET(request: NextRequest) {
         },
       crashGuard: guard,
       mode: recMode,
+      // التقويم الاقتصادي — معلومة توجيهية، لا تمنع أي دخول
+      econ: { warning: econWarning(), upcoming: upcomingEvents(14).slice(0, 4) },
       // وعي تسعير الخوف — معلومة توجيهية فقط، لا تمنع أي دخول
       pricing:
         vixPrice < 14

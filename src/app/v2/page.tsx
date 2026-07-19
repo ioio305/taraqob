@@ -81,8 +81,12 @@ type Data = {
   contracts: Contract[]; shortlist: ShortlistItem[]
   expiration: string; expirations: string[]
   otmRange: { low: number; high: number; note: string } | null
-  mode?: 'quality' | 'cheap'
+  mode?: 'safe' | 'balanced' | 'bold'
   pricing?: { level: string; color: string; advice: string }
+  econ?: {
+    warning: { nameAr: string; when: string; advice: string; impact: string } | null
+    upcoming: { date: string; time: string; nameAr: string; impact: string; advice: string; inDays: number }[]
+  }
 }
 
 function n(v: number | null | undefined, d = 2) {
@@ -269,6 +273,44 @@ export default function V2Dashboard() {
 
       {/* ── الانضباط: حد الخسارة اليومي/الأسبوعي ── */}
       <DisciplineBar />
+
+      {/* ── تحذير حدث اقتصادي كبير اليوم/غداً (معلومة لا منع) ── */}
+      {data?.econ?.warning && (
+        <div className="rounded-xl px-4 py-3 flex items-start gap-3"
+          style={{
+            background: data.econ.warning.impact === 'high' ? 'rgba(240,67,90,0.08)' : 'rgba(245,158,11,0.08)',
+            border: `1px solid ${data.econ.warning.impact === 'high' ? 'rgba(240,67,90,0.4)' : 'rgba(245,158,11,0.4)'}`,
+          }}>
+          <span className="text-xl">📅</span>
+          <div>
+            <div className="text-sm font-bold" style={{ color: data.econ.warning.impact === 'high' ? '#F0435A' : '#F59E0B' }}>
+              {data.econ.warning.when}: {data.econ.warning.nameAr}
+            </div>
+            <div className="text-xs text-gray-400 mt-0.5">{data.econ.warning.advice}</div>
+          </div>
+        </div>
+      )}
+
+      {/* ── أهم الأحداث القادمة ── */}
+      {(data?.econ?.upcoming?.length ?? 0) > 0 && (
+        <div className="rounded-2xl px-4 py-3"
+          style={{ background: 'rgba(13,27,42,0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <div className="text-xs font-bold mb-2" style={{ color: '#C9943A' }}>⚠️ أهم الأحداث القادمة</div>
+          <div className="flex flex-wrap gap-2">
+            {data!.econ!.upcoming.map(e => (
+              <span key={e.date + e.nameAr} className="text-xs px-2.5 py-1 rounded-lg font-mono cursor-help"
+                title={e.advice}
+                style={{
+                  background: e.impact === 'high' ? 'rgba(240,67,90,0.08)' : 'rgba(96,165,250,0.08)',
+                  border: `1px solid ${e.impact === 'high' ? 'rgba(240,67,90,0.3)' : 'rgba(96,165,250,0.25)'}`,
+                  color: e.impact === 'high' ? '#F0888A' : '#93B8E8',
+                }}>
+                {e.nameAr} · {e.inDays === 0 ? 'اليوم' : e.inDays === 1 ? 'غداً' : `بعد ${e.inDays} أيام`}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Upgrade success banner ── */}
       <Suspense fallback={null}>
