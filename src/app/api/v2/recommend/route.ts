@@ -10,6 +10,8 @@ import { getMarketSnapshot, getExpirations, getOptionsChain, getHistoryBars } fr
 import { getGammaExposure } from '@/lib/v2/gammaExposure'
 import { crashGuard } from '@/lib/v2/marketAnalysis'
 import { econWarning, upcomingEvents } from '@/lib/v2/econCalendar'
+import { findDebitSpread } from '@/lib/v2/spreads'
+import { timingZone } from '@/lib/v2/timingZones'
 
 export const dynamic = 'force-dynamic'
 
@@ -374,6 +376,7 @@ export async function GET(request: NextRequest) {
     let top3: any[]      = []
     let shortlist: any[] = []   // all qualifying OTM contracts from best expiration
     let usedExp          = ''
+    let usedChain: any[] = []   // السلسلة الكاملة للانتهاء المختار — لاقتراح السبريدات
     let watchMode        = false
     let straddleMove     = computeStraddleMove([], spxPrice, em)
 
@@ -469,6 +472,7 @@ export async function GET(request: NextRequest) {
                 }))
               : []
             usedExp = exp
+            usedChain = opts
           }
         } catch { /* جرّب النطاق التالي */ }
         if (top3.length > 0) break
@@ -594,7 +598,22 @@ export async function GET(request: NextRequest) {
       })
       // احتمال صادق وحيد: الاحتمال الرياضي من الدلتا (تقريب معروف لاحتمال الانتهاء داخل المال)
       const probItmPct = Math.round(Math.abs(o.delta ?? 0) * 100)
-      return { ...rest, score, status, reason, strategy: strat, focus, grade, edgeCount, edges, probItmPct }
+
+      // نسخة السبريد (مخاطرة محددة) — للفئتين المحافظ والمتوسط حيث العقود مؤهلة
+      const spread = (recMode !== 'bold')
+        ? findDebitSpread(usedChain as any, { strike: o.strike, type: o.type, ask: o.ask ?? 0, delta: o.delta ?? null })
+        : null
+
+      // تحذير الجدار المؤسسي: الستريك أو الهدف خلف جدار جاما = طريق عسير (معلومة لا منع)
+      let wallNote: string | null = null
+      if (gammaEx) {
+        if (o.type === 'call' && gammaEx.callWall != null && o.strike >= gammaEx.callWall)
+          wallNote = `الستريك خلف جدار مقاومة الجاما (${Math.round(gammaEx.callWall)}) — الوصول إليه عسير`
+        else if (o.type === 'put' && gammaEx.putWall != null && o.strike <= gammaEx.putWall)
+          wallNote = `الستريك خلف جدار دعم الجاما (${Math.round(gammaEx.putWall)}) — الوصول إليه عسير`
+      }
+
+      return { ...rest, score, status, reason, strategy: strat, focus, grade, edgeCount, edges, probItmPct, spread, wallNote }
     })
 
     // OTM range description
@@ -625,6 +644,8 @@ export async function GET(request: NextRequest) {
       mode: recMode,
       // التقويم الاقتصادي — معلومة توجيهية، لا تمنع أي دخول
       econ: { warning: econWarning(), upcoming: upcomingEvents(14).slice(0, 4) },
+      // نافذة التوقيت الحالية — معلومة توجيهية، لا تمنع أي دخول
+      timing: timingZone(),
       // وعي تسعير الخوف — معلومة توجيهية فقط، لا تمنع أي دخول
       pricing:
         vixPrice < 14

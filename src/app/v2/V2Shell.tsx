@@ -32,6 +32,7 @@ const NAV_TRADING = [
 ]
 
 const NAV_TOOLS = [
+  { href: '/v2/radar',   label: 'رادار الأموال', icon: '📡', exact: false, requiredTier: 'signal' },
   { href: '/v2/console', label: 'مرصد العقود', icon: '🖥', exact: false, requiredTier: 'signal' },
   { href: '/v2/chart',   label: 'الشارت',         icon: '📈', exact: false, requiredTier: 'edge'   },
   { href: '/track',      label: 'السجل العام',    icon: '📜', exact: false, requiredTier: 'radar'  },

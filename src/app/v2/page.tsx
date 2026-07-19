@@ -57,6 +57,12 @@ type Contract  = {
   grade?: string
   edgeCount?: number
   probItmPct?: number
+  spread?: {
+    sellStrike: number; sellBid: number; width: number; debit: number
+    maxProfit: number; maxLoss: number; breakeven: number; rr: number
+    costCutPct: number; noteAr: string
+  } | null
+  wallNote?: string | null
   strategy: ContractStrategy
   focus?: {
     action: 'enter' | 'wait' | 'avoid'
@@ -83,6 +89,7 @@ type Data = {
   otmRange: { low: number; high: number; note: string } | null
   mode?: 'safe' | 'balanced' | 'bold'
   pricing?: { level: string; color: string; advice: string }
+  timing?: { zone: string; label: string; advice: string; color: string; icon: string }
   econ?: {
     warning: { nameAr: string; when: string; advice: string; impact: string } | null
     upcoming: { date: string; time: string; nameAr: string; impact: string; advice: string; inDays: number }[]
@@ -545,6 +552,15 @@ export default function V2Dashboard() {
               </span>
             )}
 
+            {/* نافذة التوقيت — معلومة لا منع */}
+            {data?.timing && data.timing.zone !== 'closed' && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-mono cursor-help"
+                    title={data.timing.advice}
+                    style={{ background: `${data.timing.color}14`, color: data.timing.color, border: `1px solid ${data.timing.color}35` }}>
+                {data.timing.icon} {data.timing.label}
+              </span>
+            )}
+
             {data?.watchMode && (
               <span className="text-xs px-2 py-0.5 rounded-full font-mono"
                     style={{ background: 'rgba(96,165,250,0.1)', color: '#60A5FA', border: '1px solid rgba(96,165,250,0.2)' }}>
@@ -781,6 +797,44 @@ export default function V2Dashboard() {
                         استراتيجية {strat.strategyLabel}
                       </span>
                       <span className="text-xs leading-snug" style={{ color: '#64748B' }}>{c.reason}</span>
+                    </div>
+                  )}
+
+                  {/* تحذير الجدار المؤسسي — معلومة لا منع */}
+                  {c.wallNote && (
+                    <div className="text-xs rounded-lg px-3 py-2 flex items-center gap-2"
+                      style={{ background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.3)', color: '#FCD34D' }}>
+                      <span>🧲</span><span>{c.wallNote}</span>
+                    </div>
+                  )}
+
+                  {/* نسخة السبريد — مخاطرة محددة للمحترفين */}
+                  {c.spread && (
+                    <div className="rounded-lg p-3"
+                      style={{ background: 'rgba(167,139,250,0.05)', border: '1px solid rgba(167,139,250,0.25)' }}>
+                      <div className="flex items-center justify-between flex-wrap gap-2 mb-1.5">
+                        <span className="text-xs font-bold" style={{ color: '#A78BFA' }}>
+                          🛡 نسخة السبريد — مخاطرة محددة السقف
+                        </span>
+                        <span className="text-xs font-mono" style={{ color: '#A78BFA' }}>
+                          عائد/مخاطرة {c.spread.rr}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center mb-1.5">
+                        <div>
+                          <div className="text-xs" style={{ color: '#4A5568' }}>التكلفة (أقصى خسارة)</div>
+                          <div className="text-sm font-black font-mono" style={{ color: '#F0435A' }}>${c.spread.maxLoss}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs" style={{ color: '#4A5568' }}>أقصى ربح</div>
+                          <div className="text-sm font-black font-mono" style={{ color: '#26D07C' }}>${c.spread.maxProfit}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs" style={{ color: '#4A5568' }}>التعادل</div>
+                          <div className="text-sm font-black font-mono text-white">{c.spread.breakeven}</div>
+                        </div>
+                      </div>
+                      <p className="text-xs leading-relaxed" style={{ color: '#64748B' }}>{c.spread.noteAr}</p>
                     </div>
                   )}
 
