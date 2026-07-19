@@ -40,7 +40,13 @@ export default function LoginForm() {
     const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
 
     if (authError) {
-      setError('البريد أو كلمة المرور غير صحيحة')
+      // حساب لم يفعَّل بريده بعد؟ نعيد إرسال رابط التفعيل تلقائياً
+      if (authError.message.toLowerCase().includes('not confirmed')) {
+        await supabase.auth.resend({ type: 'signup', email }).catch(() => {})
+        setError('حسابك لم يُفعَّل بعد — أرسلنا لك رابط التفعيل من جديد، افحص بريدك (ومجلد غير الهام)')
+      } else {
+        setError('البريد أو كلمة المرور غير صحيحة')
+      }
       setLoading(false)
       return
     }

@@ -13,6 +13,9 @@ function RegisterContent() {
   const [password, setPassword] = useState('')
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState<string | null>(null)
+  // عند تفعيل «تأكيد البريد» في النظام: نعرض شاشة «تحقق من بريدك» بدل الدخول
+  const [verifyMode, setVerifyMode] = useState(false)
+  const [resent, setResent]     = useState(false)
 
   // جاء برابط دعوة صديق؟ نحفظ معرف الداعي ليُكافأ بعد أول دخول
   useEffect(() => {
@@ -41,15 +44,65 @@ function RegisterContent() {
       return
     }
 
-    // الملف الشخصي يُنشأ تلقائياً — نكمّل الاسم فقط
-    if (data.user) {
+    // الملف الشخصي يُنشأ تلقائياً — نكمّل الاسم فقط (يعمل فقط عند وجود جلسة)
+    if (data.user && data.session) {
       await supabase.from('user_profiles')
         .update({ full_name: name.trim() })
         .eq('id', data.user.id)
     }
 
+    // تأكيد البريد مفعّل؟ (لا جلسة حتى يضغط رابط بريده) → شاشة «تحقق من بريدك»
+    if (data.user && !data.session) {
+      setVerifyMode(true)
+      setLoading(false)
+      return
+    }
+
     const plan = searchParams.get('plan')
     window.location.href = `/login?registered=1${plan ? `&plan=${plan}` : ''}`
+  }
+
+  async function resendVerification() {
+    setResent(false)
+    const supabase = createClient()
+    await supabase.auth.resend({ type: 'signup', email: email.trim() })
+    setResent(true)
+  }
+
+  // ── شاشة «تحقق من بريدك» — تظهر بعد التسجيل حين يكون تأكيد البريد مفعلاً ──
+  if (verifyMode) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6" dir="rtl"
+        style={{ background: '#060D14', fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
+        <div className="w-full max-w-sm text-center">
+          <div className="text-5xl mb-5">📬</div>
+          <h1 className="text-2xl font-bold text-white mb-3">تحقق من بريدك</h1>
+          <p className="text-sm leading-relaxed mb-2" style={{ color: '#8A97A6' }}>
+            أرسلنا رابط تفعيل إلى<br /><b className="text-white" dir="ltr">{email}</b>
+          </p>
+          <p className="text-xs mb-6" style={{ color: '#5E6E7F' }}>
+            اضغط الرابط في الرسالة وسيفتح حسابك مباشرة مع بدء تجربتك المجانية.
+            لم تجدها؟ افحص مجلد «غير الهام».
+          </p>
+          {resent && (
+            <div className="rounded-xl p-3 text-xs mb-4"
+              style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', color: '#34D399' }}>
+              ✓ أعدنا الإرسال — افحص بريدك
+            </div>
+          )}
+          <button onClick={resendVerification}
+            className="text-sm font-bold px-6 py-3 rounded-xl"
+            style={{ background: 'rgba(201,148,58,0.12)', border: '1px solid rgba(201,148,58,0.4)', color: '#E8D5A3' }}>
+            ↻ أعد إرسال الرابط
+          </button>
+          <div className="mt-6">
+            <Link href="/login" className="text-xs" style={{ color: '#5E6E7F' }}>
+              فعّلت حسابك؟ سجّل دخولك ←
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
