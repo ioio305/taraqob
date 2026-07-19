@@ -80,6 +80,8 @@ type Data = {
   contracts: Contract[]; shortlist: ShortlistItem[]
   expiration: string; expirations: string[]
   otmRange: { low: number; high: number; note: string } | null
+  mode?: 'quality' | 'cheap'
+  pricing?: { level: string; color: string; advice: string }
 }
 
 function n(v: number | null | undefined, d = 2) {
@@ -136,6 +138,16 @@ export default function V2Dashboard() {
   const [countdown, setCd]  = useState(REFRESH_SEC)
   const [strike, setStrike] = useState('')
   const [ctype, setCtype]   = useState<'auto' | 'call' | 'put'>('auto')
+  // نمط الترشيح: الجودة أولاً (افتراضي) أو الاقتناص الرخيص — محفوظ محلياً
+  const [recMode, setRecMode] = useState<'quality' | 'cheap'>('quality')
+  useEffect(() => {
+    try { if (localStorage.getItem('taraqob_rec_mode') === 'cheap') setRecMode('cheap') } catch { /* تجاهل */ }
+  }, [])
+  function switchMode(m: 'quality' | 'cheap') {
+    setRecMode(m)
+    try { localStorage.setItem('taraqob_rec_mode', m) } catch { /* تجاهل */ }
+    lockedPlans.current.clear(); liveSnaps.current.clear()   // عقود النمط الآخر مختلفة
+  }
   const { news, loading: newsLoading, failed: newsFailed } = useNews()
   const cdRef        = useRef<ReturnType<typeof setInterval> | null>(null)
   // Frozen plans: locked when a contract is first seen — never auto-updated
@@ -148,7 +160,7 @@ export default function V2Dashboard() {
     // البيانات القديمة تبقى ظاهرة حتى تصل الجديدة، فيصير التحديث صامتاً بلا وميض.
     setCd(REFRESH_SEC)
     try {
-      const res  = await fetch('/api/v2/recommend')
+      const res  = await fetch(`/api/v2/recommend?mode=${recMode}`)
       const json = await res.json()
       // ── Freeze plan on first sight; update live snap every poll ──────────
       const contracts: Contract[] = json.contracts ?? []
@@ -170,7 +182,7 @@ export default function V2Dashboard() {
       setTs(new Date())
     } catch {}
     setLoad(false)
-  }, [])
+  }, [recMode])
 
   // Re-analyze: clears the frozen plan so next poll locks a fresh one
   function reanalyze(symbol: string) {
@@ -456,15 +468,40 @@ export default function V2Dashboard() {
              style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-bold" style={{ color: '#C9943A' }}>لوحة المستخدم</span>
-            {data?.watchMode ? (
+
+            {/* نمط الترشيح — يغيّر الترتيب فقط، لا يمنع شيئاً */}
+            <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
+              {([
+                { m: 'quality' as const, label: '⭐ الجودة أولاً' },
+                { m: 'cheap' as const,   label: '💰 الاقتناص الرخيص' },
+              ]).map(x => (
+                <button key={x.m} onClick={() => switchMode(x.m)}
+                  className="text-xs px-2.5 py-1 font-bold"
+                  style={{
+                    background: recMode === x.m ? 'rgba(201,148,58,0.2)' : 'transparent',
+                    color: recMode === x.m ? '#E8D5A3' : '#4A5568',
+                  }}
+                  title={x.m === 'quality'
+                    ? 'عقود سريعة (دلتا 0.25-0.45) — المنطق الذي قيست عليه النسبة المثبتة 51%'
+                    : 'عقود $0.50-$5 للحساب الصغير — أرخص لكن أبطأ، سقف تصنيفها B'}>
+                  {x.label}
+                </button>
+              ))}
+            </div>
+
+            {/* وعي تسعير الخوف — معلومة لا منع */}
+            {data?.pricing && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-mono cursor-help"
+                    title={data.pricing.advice}
+                    style={{ background: `${data.pricing.color}14`, color: data.pricing.color, border: `1px solid ${data.pricing.color}35` }}>
+                التسعير: {data.pricing.level}
+              </span>
+            )}
+
+            {data?.watchMode && (
               <span className="text-xs px-2 py-0.5 rounded-full font-mono"
                     style={{ background: 'rgba(96,165,250,0.1)', color: '#60A5FA', border: '1px solid rgba(96,165,250,0.2)' }}>
                 وضع مراقبة · السوق عرضي
-              </span>
-            ) : (
-              <span className="text-xs px-2 py-0.5 rounded-full font-mono"
-                    style={{ background: 'rgba(201,148,58,0.08)', color: '#C9943A', border: '1px solid rgba(201,148,58,0.2)' }}>
-                أفضل ٣ فرص خارج المال · سعر الطلب $0.50–$5.00
               </span>
             )}
           </div>
@@ -908,7 +945,7 @@ export default function V2Dashboard() {
             </table>
           </div>
           <div className="px-5 py-2 text-xs font-mono" style={{ color: '#1A2A3A', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-            ★ أفضل 3 · دلتا 0.05–0.20 مُميَّز بالأخضر · وقف SPX = SPX الحالي ∓ 35% من EM · OTM صارم
+            ★ أفضل 3 · {recMode === 'quality' ? 'الجودة أولاً: دلتا 0.25–0.45 وفرق ضيق' : 'الاقتناص الرخيص: سعر $0.50–$5'} · وقف SPX = SPX الحالي ∓ 35% من EM · OTM صارم
           </div>
         </div>
       )}

@@ -35,11 +35,18 @@ function getDirection(changePct: number, vix: number) {
 
 // ── Mandatory Pre-Filter ─────────────────────────────────────────────────
 // Executed BEFORE any scoring. Order is fixed and cannot be bypassed.
+// نمطا الترشيح:
+//   quality (الافتراضي) — «الجودة أولاً»: الدلتا 0.25-0.45 هي الملك، السعر حتى $40
+//   cheap — «الاقتناص الرخيص»: عقود $0.50-$5 لصاحب الحساب الصغير (سقفها B)
+// ملاحظة مهمة: النمطان يغيّران الترتيب والاختيار فقط — لا يضيفان أي منع جديد.
+export type RecMode = 'quality' | 'cheap'
+
 // Returns rejection reason string, or null if contract passes all gates.
 function mandatoryFilter(
   o: any,
   spxPrice: number,
   type: 'call' | 'put',
+  mode: RecMode,
 ): string | null {
   const ask = o.ask ?? 0
   const bid = o.bid ?? 0
@@ -58,9 +65,15 @@ function mandatoryFilter(
   if (!bid || !ask || bid <= 0 || ask <= 0 || ask <= bid)
     return 'Invalid Quote'
 
-  // ── Gate 4: Ask price range $0.50–$5.00 (absolute — no exceptions) ──
-  if (ask < 0.50) return 'Ask Below $0.50'
-  if (ask > 5.00) return 'Ask Above $5.00'
+  // ── Gate 4: Ask price range (حسب النمط) ───────────────────────
+  if (mode === 'cheap') {
+    if (ask < 0.50) return 'Ask Below $0.50'
+    if (ask > 5.00) return 'Ask Above $5.00'
+  } else {
+    // الجودة: عقد الدلتا 0.25-0.45 على SPX يعيش بين $2 و $40
+    if (ask < 2.00)  return 'Ask Below $2.00'
+    if (ask > 40.00) return 'Ask Above $40.00'
+  }
 
   return null   // passed all gates → proceed to scoring
 }
@@ -73,21 +86,60 @@ function liveScore(
   spxPrice: number,
   type: 'call' | 'put',
   em: number | null,
+  mode: RecMode,
 ): number {
   // ── Run mandatory filter first — hard stop ────────────────────
-  if (mandatoryFilter(o, spxPrice, type) !== null) return -1
+  if (mandatoryFilter(o, spxPrice, type, mode) !== null) return -1
 
   const ask    = o.ask
   const bid    = o.bid
   const mid    = (bid + ask) / 2
   const volume = o.volume ?? 0
   const spread = (ask - bid) / mid
+  const absDelta = Math.abs(o.greeks?.delta ?? o.delta ?? 0)
+  const oi = o.open_interest ?? 0
 
-  // ── Quality filter: spread too wide for cheap contracts ───────
+  // ── Quality filter: spread too wide ───────────────────────────
   if (spread > 0.50) return -1
 
   let score = 0
 
+  if (mode === 'quality') {
+    // ═══ نمط «الجودة أولاً» — الدلتا هي الملك (النسبة المثبتة 51% قيست على هذا المنطق) ═══
+    // 1. الدلتا (35 نقطة)
+    if      (absDelta >= 0.25 && absDelta <= 0.45) score += 35
+    else if (absDelta >= 0.20 && absDelta <  0.25) score += 22
+    else if (absDelta >  0.45 && absDelta <= 0.55) score += 18
+    else if (absDelta >= 0.15 && absDelta <  0.20) score += 8
+    // 2. ضيق الفرق (20 نقطة)
+    if      (spread < 0.03) score += 20
+    else if (spread < 0.06) score += 15
+    else if (spread < 0.10) score += 9
+    else if (spread < 0.20) score += 3
+    // 3. الموقع ضمن الحركة المتوقعة (15) — الهدف داخل 1×EM قابل للتحقق
+    if (em && em > 0) {
+      const pct = Math.abs(o.strike - spxPrice) / em
+      if      (pct >= 0.30 && pct <= 1.00) score += 15
+      else if (pct >  1.00 && pct <= 1.50) score += 9
+      else if (pct <  0.30)                score += 6
+      else                                 score += 0
+    } else score += 8
+    // 4. السعر (15) — نطاق عملي واسع
+    if      (mid >= 4 && mid <= 25) score += 15
+    else if (mid >= 2 && mid <  4)  score += 10
+    else if (mid >  25 && mid <= 40) score += 8
+    // 5. السيولة: حجم اليوم (10) + عقود مفتوحة (5)
+    if      (volume >= 1000) score += 10
+    else if (volume >= 300)  score += 7
+    else if (volume >= 50)   score += 4
+    else if (volume >= 10)   score += 1
+    if      (oi >= 1000) score += 5
+    else if (oi >= 200)  score += 3
+    else if (oi >= 50)   score += 1
+    return score
+  }
+
+  // ═══ نمط «الاقتناص الرخيص» — المنطق الأصلي كما هو ═══
   // ── 1. Ask Price Quality (35 pts) — $1–$3 is the sweet spot ───
   if      (ask >= 1.00 && ask <= 3.00) score += 35
   else if (ask >= 0.50 && ask <  1.00) score += 22
@@ -109,7 +161,6 @@ function liveScore(
   }
 
   // ── 3. Delta Quality (15 pts) — 0.25–0.45 = عقد سريع التفاعل ──
-  const absDelta = Math.abs(o.greeks?.delta ?? o.delta ?? 0)
   if      (absDelta >= 0.25 && absDelta <= 0.45) score += 15   // مثالي
   else if (absDelta >= 0.18 && absDelta <  0.25) score += 10
   else if (absDelta >  0.45 && absDelta <= 0.60) score += 8
@@ -256,6 +307,8 @@ async function fetchSPXSessions() {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const forceType = searchParams.get('type') as 'call' | 'put' | null
+  // نمط الترشيح: quality (افتراضي) أو cheap — يغيّر الترتيب فقط، لا يمنع شيئاً
+  const recMode: RecMode = searchParams.get('mode') === 'cheap' ? 'cheap' : 'quality'
 
   try {
     // ── 1. Fetch SPX, VIX, sessions in parallel ──────────────────
@@ -327,7 +380,7 @@ export async function GET(request: NextRequest) {
           const eDate = new Date(o.expiration_date + 'T12:00:00Z')
           const tDate = new Date(todayStr + 'T12:00:00Z')
           const dte   = Math.max(0, Math.round((eDate.getTime() - tDate.getTime()) / 86400000))
-          const live  = liveScore(o, spxPrice, type, em)
+          const live  = liveScore(o, spxPrice, type, em, recMode)
           return {
             symbol:       o.symbol,
             type:         o.option_type,
@@ -554,6 +607,14 @@ export async function GET(request: NextRequest) {
           watchlist:    closedWatchlist,
         },
       crashGuard: guard,
+      mode: recMode,
+      // وعي تسعير الخوف — معلومة توجيهية فقط، لا تمنع أي دخول
+      pricing:
+        vixPrice < 14
+          ? { level: 'رخيص', color: '#26D07C', advice: 'العقود رخيصة التسعير — وقت ممتاز للشراء المفرد' }
+          : vixPrice <= 20
+          ? { level: 'عادل', color: '#60A5FA', advice: 'تسعير العقود طبيعي — ادخل بخطتك المعتادة' }
+          : { level: 'غالٍ', color: '#F59E0B', advice: `العقود منتفخة التسعير (خوف ${vixPrice.toFixed(0)}) — قلّل حجم الصفقة أو اختر انتهاءً أقرب` },
       sessions: {
         london: sessions.london,
         tokyo:  sessions.tokyo,
