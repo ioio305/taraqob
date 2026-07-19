@@ -112,7 +112,7 @@ export default async function RootPage({ searchParams }: { searchParams?: { prev
         </p>
 
         <div className="flex flex-wrap items-center justify-center gap-4 mb-20">
-          <Link href={user ? '/v2' : '/login'}
+          <Link href={user ? '/v2' : '/register'}
             className="flex items-center gap-2 px-8 py-4 rounded-xl text-base font-bold transition-all"
             style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
             {user ? '◈ ادخل منصتك ←' : '🎁 جرّب 7 أيام مجاناً — كل الميزات'}
@@ -447,7 +447,7 @@ export default async function RootPage({ searchParams }: { searchParams?: { prev
               <Link
                 href={user
                   ? (tier.key === 'radar' ? '/v2' : '/v2/upgrade')
-                  : (tier.key === 'radar' ? '/login' : `/login?plan=${tier.key}`)}
+                  : (tier.key === 'radar' ? '/register' : `/register?plan=${tier.key}`)}
                 className="block text-center py-2.5 rounded-xl text-sm font-bold transition-all"
                 style={{
                   background: tier.key === 'radar' ? 'rgba(255,255,255,0.04)' : `${tier.color}18`,
@@ -474,7 +474,7 @@ export default async function RootPage({ searchParams }: { searchParams?: { prev
           لا نطلب ثقتك، نطلب أسبوعاً واحداً: افتح خطة اليوم كل صباح، تابع التوصيات
           بالمحفظة التجريبية، وقارن بنفسك مع السجل العام المفتوح
         </p>
-        <Link href={user ? '/v2' : '/login'}
+        <Link href={user ? '/v2' : '/register'}
           className="inline-flex items-center gap-2 px-10 py-4 rounded-xl text-base font-bold transition-all"
           style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
           {user ? 'العودة إلى منصتك ←' : 'ابدأ تجربتك المجانية ←'}

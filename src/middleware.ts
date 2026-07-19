@@ -19,9 +19,10 @@ export async function middleware(request: NextRequest) {
 
   // ── مسارات عامة — لا تحتاج تسجيل دخول ──────────────────────
   // /track: السجل الحي العام — شفافية كاملة أمام الجميع
+  // /register: إنشاء حساب التجربة المجانية
   // /api/v2/signals/evaluate: يستدعيه مجدول Vercel يومياً بعد الإغلاق (بلا جلسة)
   const publicRoutes = [
-    '/', '/login', '/compliance', '/how-it-works', '/track',
+    '/', '/login', '/register', '/compliance', '/how-it-works', '/track',
     '/manifest.webmanifest', '/api/v2/signals/evaluate',
   ]
   if (publicRoutes.includes(pathname) || pathname.startsWith('/auth/')) {
@@ -49,10 +50,17 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // ── غير مسجّل → login ────────────────────────────────────────
+  // ── غير مسجّل ────────────────────────────────────────────────
   if (!user) {
+    // واجهات برمجية: رد برمجي سليم بدل صفحة ويب
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    }
+    // صفحات: نحفظ الوجهة ليعود إليها بعد الدخول
     const url = request.nextUrl.clone()
     url.pathname = '/login'
+    url.search = ''
+    if (pathname !== '/v2') url.searchParams.set('next', pathname)
     return NextResponse.redirect(url)
   }
 

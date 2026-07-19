@@ -1,7 +1,7 @@
 // ── السجل العام — كل إشارات ترقب القوية ونتائجها، أمام الجميع بلا تسجيل دخول ──
 // لا حذف، لا تجميل، لا انتقاء: الإشارة تُسجَّل آلياً لحظة ظهورها وتُقيَّم آلياً
 // على أسعار السوق الفعلية. هذه صفحة لا يجرؤ عليها من يبيع الوهم.
-import { createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,6 +30,13 @@ function gradeOf(summary: string | null): string {
 }
 
 export default async function PublicTrackPage() {
+  // زائر أم مسجّل؟ — الزر الختامي يتصرف بذكاء
+  let loggedIn = false
+  try {
+    const { data: { user } } = await createClient().auth.getUser()
+    loggedIn = !!user
+  } catch { /* زائر */ }
+
   let rows: Row[] = []
   try {
     const sb = createServiceClient()
@@ -135,9 +142,9 @@ export default async function PublicTrackPage() {
         </div>
 
         <div className="text-center">
-          <a href="/login" className="inline-block px-6 py-3 rounded-xl text-sm font-bold"
+          <a href={loggedIn ? '/v2' : '/register'} className="inline-block px-6 py-3 rounded-xl text-sm font-bold"
             style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
-            جرّب ترقب بنفسك ←
+            {loggedIn ? '◈ العودة إلى منصتك ←' : '🎁 جرّب ترقب مجاناً 7 أيام ←'}
           </a>
         </div>
       </div>

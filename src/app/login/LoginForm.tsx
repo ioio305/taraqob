@@ -70,6 +70,12 @@ export default function LoginForm() {
       window.location.href = '/v2/upgrade'
       return
     }
+    // كان قاصداً صفحة محددة قبل أن يوقفه تسجيل الدخول؟ → نعيده إليها
+    const next = searchParams.get('next')
+    if (next && next.startsWith('/') && !next.startsWith('//')) {
+      window.location.href = next
+      return
+    }
     // توجيه حسب الدور — نظام V2 فقط
     if (['admin', 'moderator'].includes(profile.role)) {
       window.location.href = '/v2/admin'
@@ -102,7 +108,7 @@ export default function LoginForm() {
           </div>
           <h1 className="text-2xl font-bold text-white tracking-wider">ترقّب</h1>
           <p className="text-sm mt-1 font-mono" style={{ color: '#8A97A6' }}>
-            البيتا المغلق — الدخول بالدعوة فقط
+            منصة قرار عقود SPX — بصدق مثبت
           </p>
         </div>
 
@@ -167,6 +173,14 @@ export default function LoginForm() {
                 style={{ color: '#8595A5' }}>
             نسيت كلمة المرور؟
           </Link>
+
+          <div className="pt-3 text-center" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+            <span className="text-xs" style={{ color: '#5E6E7F' }}>ليس لديك حساب؟ </span>
+            <Link href={`/register${searchParams.get('plan') ? `?plan=${searchParams.get('plan')}` : ''}${searchParams.get('ref') ? `${searchParams.get('plan') ? '&' : '?'}ref=${searchParams.get('ref')}` : ''}`}
+                  className="text-xs font-bold" style={{ color: '#C9943A' }}>
+              أنشئه مجاناً — تجربة 7 أيام كاملة
+            </Link>
+          </div>
         </div>
 
         <div className="mt-5 text-center text-xs font-mono" style={{ color: '#5E6E7F' }}>
