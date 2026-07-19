@@ -157,15 +157,22 @@ export default function ExitPage() {
                   <div className="text-sm text-gray-300 mt-1">{plan.actionText}</div>
                 </div>
               </div>
-              <button onClick={toggleWatch}
-                className="text-xs font-bold px-3 py-2 rounded-xl"
-                style={{
-                  background: isWatched ? 'rgba(38,208,124,0.12)' : 'rgba(201,148,58,0.12)',
-                  border: `1px solid ${isWatched ? 'rgba(38,208,124,0.4)' : 'rgba(201,148,58,0.4)'}`,
-                  color: isWatched ? '#26D07C' : '#E8D5A3',
-                }}>
-                {isWatched ? '✓ تحت المتابعة — اضغط للإيقاف' : '👁 احفظ للمتابعة التلقائية'}
-              </button>
+              <span className="flex gap-2 flex-wrap">
+                <button onClick={toggleWatch}
+                  className="text-xs font-bold px-3 py-2 rounded-xl"
+                  style={{
+                    background: isWatched ? 'rgba(38,208,124,0.12)' : 'rgba(201,148,58,0.12)',
+                    border: `1px solid ${isWatched ? 'rgba(38,208,124,0.4)' : 'rgba(201,148,58,0.4)'}`,
+                    color: isWatched ? '#26D07C' : '#E8D5A3',
+                  }}>
+                  {isWatched ? '✓ تحت المتابعة — اضغط للإيقاف' : '👁 احفظ للمتابعة التلقائية'}
+                </button>
+                <a href={`/v2/journal?type=${plan.contract.type}&strike=${plan.contract.strike}&entry=${plan.entry}`}
+                  className="text-xs font-bold px-3 py-2 rounded-xl"
+                  style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.35)', color: '#93B8E8' }}>
+                  📔 سجّل في الدفتر
+                </a>
+              </span>
             </div>
           </div>
 
