@@ -67,14 +67,18 @@ export async function GET() {
     // (1.5 × مدى الحركة) — جدران بعيدة كجدران الانتهاءات الشهرية تُستبدل
     // بمستويات الأمس، وإلا فمسافة نصف مدى يومي
     const maxDist = atrV * 1.5
-    const nearSupport = (putWall != null && spot - putWall <= maxDist && putWall < spot)
-      ? putWall
-      : (spot - prior.low <= maxDist && prior.low < spot) ? prior.low
-      : Math.round(spot - atrV * 0.5)
-    const nearResist = (callWall != null && callWall - spot <= maxDist && callWall > spot)
-      ? callWall
-      : (prior.high - spot <= maxDist && prior.high > spot) ? prior.high
-      : Math.round(spot + atrV * 0.5)
+    const nearSupport = Math.round(
+      (putWall != null && spot - putWall <= maxDist && putWall < spot)
+        ? putWall
+        : (spot - prior.low <= maxDist && prior.low < spot) ? prior.low
+        : spot - atrV * 0.5
+    )
+    const nearResist = Math.round(
+      (callWall != null && callWall - spot <= maxDist && callWall > spot)
+        ? callWall
+        : (prior.high - spot <= maxDist && prior.high > spot) ? prior.high
+        : spot + atrV * 0.5
+    )
 
     if (guard.active) {
       stance = `اليوم للمشاهدة لا للتداول — حارس الانهيارات نشط (${guard.reasons[0]}). تاريخياً هذه الأيام تخسر حتى مع أفضل الإشارات. راقب واحفظ رأس مالك.`
