@@ -1,7 +1,41 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+
+// ── بطاقة الإحالة: كل صديق يشترك من رابطك = أسبوع مجاني لك ──────────────────
+function ReferralCard() {
+  const [data, setData] = useState<{ link: string; referredCount: number; earnedDays: number; nextMilestone: string } | null>(null)
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    fetch('/api/v2/referral').then(r => r.json()).then(d => { if (d.ok) setData(d) }).catch(() => {})
+  }, [])
+  if (!data) return null
+  return (
+    <div className="mb-8 rounded-2xl p-5"
+      style={{ background: 'linear-gradient(135deg, rgba(38,208,124,0.06), rgba(13,27,42,0.9))', border: '1px solid rgba(38,208,124,0.3)' }}>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <div className="text-base font-bold" style={{ color: '#26D07C' }}>🎁 ادعُ أصدقاءك — واكسب أسابيع مجانية</div>
+          <p className="text-xs text-gray-400 mt-1">
+            كل صديق يسجّل من رابطك = <b>أسبوع مجاني لك</b>. خمسة أصدقاء = أكثر من شهر كامل.
+          </p>
+          <p className="text-xs mt-1.5" style={{ color: '#8CE0B0' }}>
+            دعواتك: {data.referredCount} · أيامك المكتسبة: {data.earnedDays} · {data.nextMilestone}
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            try { navigator.clipboard.writeText(data.link); setCopied(true); setTimeout(() => setCopied(false), 2000) } catch { /* تجاهل */ }
+          }}
+          className="text-xs font-bold px-4 py-2.5 rounded-xl"
+          style={{ background: 'rgba(38,208,124,0.15)', border: '1px solid rgba(38,208,124,0.45)', color: '#26D07C' }}>
+          {copied ? '✓ نُسخ الرابط' : '📋 انسخ رابط دعوتك'}
+        </button>
+      </div>
+    </div>
+  )
+}
 
 const TIERS = [
   {
@@ -88,6 +122,8 @@ export default function UpgradePage() {
           كل الأرقام حقيقية، كل الإشارات موثّقة. اختر الباقة التي تناسب مستوى تداولك.
         </p>
       </div>
+
+      <ReferralCard />
 
       {error && (
         <div className="mb-6 rounded-xl px-4 py-3 text-sm text-center font-mono"

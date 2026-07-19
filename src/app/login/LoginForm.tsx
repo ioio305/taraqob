@@ -26,6 +26,9 @@ export default function LoginForm() {
     const registered = searchParams.get('registered')
     if (urlError)   setError(URL_ERROR_MESSAGES[urlError] ?? 'حدث خطأ غير متوقع.')
     if (registered) setSuccess('تم إنشاء حسابك بنجاح! سجّل دخولك الآن.')
+    // رابط دعوة صديق؟ نحفظ معرف الداعي ليُكافأ بعد أول دخول
+    const ref = searchParams.get('ref')
+    if (ref) { try { localStorage.setItem('taraqob_ref', ref) } catch { /* تجاهل */ } }
   }, [searchParams])
 
   async function handleLogin(e: React.FormEvent) {

@@ -97,12 +97,26 @@ type Notification = {
 }
 
 // ── Main Shell ─────────────────────────────────────────────────
-export default function V2Shell({ children, userName, userRole, userSecondaryRoles = [], subscriptionTier = 'radar' }: {
+export default function V2Shell({ children, userName, userRole, userSecondaryRoles = [], subscriptionTier = 'radar', trialDaysLeft = null }: {
   children: ReactNode; userName: string; userRole: string
   userSecondaryRoles?: string[]; subscriptionTier?: string
+  trialDaysLeft?: number | null
 }) {
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  // ── الإحالة: عند أول دخول بعد التسجيل من رابط دعوة، نسجّل الداعي ونكافئه ──
+  useEffect(() => {
+    try {
+      const ref = localStorage.getItem('taraqob_ref')
+      if (ref) {
+        fetch('/api/v2/referral', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ref }),
+        }).then(() => localStorage.removeItem('taraqob_ref')).catch(() => {})
+      }
+    } catch { /* تجاهل */ }
+  }, [])
   const [loggingOut, setLoggingOut] = useState(false)
   const [previewRole, setPreviewRole] = useState<string | null>(null)
   const [switcherOpen, setSwitcherOpen] = useState(false)
@@ -488,6 +502,15 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
             </div>
           )}
         </header>
+
+        {/* شريط التجربة المجانية */}
+        {trialDaysLeft != null && (
+          <div className="shrink-0 px-4 py-1.5 text-center text-xs font-bold" dir="rtl"
+            style={{ background: 'linear-gradient(90deg, rgba(201,148,58,0.15), rgba(201,148,58,0.05))', borderBottom: '1px solid rgba(201,148,58,0.3)', color: '#E8D5A3' }}>
+            🎁 تجربتك الكاملة: باقي {trialDaysLeft} {trialDaysLeft === 1 ? 'يوم' : trialDaysLeft === 2 ? 'يومان' : 'أيام'} — كل الميزات مفتوحة ·
+            <a href="/v2/upgrade" className="underline mr-1">ادعُ صديقاً واكسب أسبوعاً إضافياً</a>
+          </div>
+        )}
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto">
