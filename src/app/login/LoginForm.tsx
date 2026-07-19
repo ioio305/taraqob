@@ -65,6 +65,11 @@ export default function LoginForm() {
       return
     }
 
+    // جاء من زر «اشترك الآن» بباقة محددة؟ → مباشرة لصفحة الاشتراكات بعد الدخول
+    if (searchParams.get('plan')) {
+      window.location.href = '/v2/upgrade'
+      return
+    }
     // توجيه حسب الدور — نظام V2 فقط
     if (['admin', 'moderator'].includes(profile.role)) {
       window.location.href = '/v2/admin'

@@ -64,10 +64,10 @@ export default async function RootPage({ searchParams }: { searchParams?: { prev
             style={{ color: '#4A5568' }}>
             الإفصاح
           </Link>
-          <Link href="/login"
+          <Link href={user ? '/v2' : '/login'}
             className="px-5 py-2 rounded-lg text-sm font-bold transition-all"
             style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
-            تسجيل الدخول
+            {user ? '◈ منصتي' : 'تسجيل الدخول'}
           </Link>
         </nav>
       </header>
@@ -112,10 +112,10 @@ export default async function RootPage({ searchParams }: { searchParams?: { prev
         </p>
 
         <div className="flex flex-wrap items-center justify-center gap-4 mb-20">
-          <Link href="/login"
+          <Link href={user ? '/v2' : '/login'}
             className="flex items-center gap-2 px-8 py-4 rounded-xl text-base font-bold transition-all"
             style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
-            🎁 جرّب 7 أيام مجاناً — كل الميزات
+            {user ? '◈ ادخل منصتك ←' : '🎁 جرّب 7 أيام مجاناً — كل الميزات'}
           </Link>
           <Link href="/track"
             className="flex items-center gap-2 px-8 py-4 rounded-xl text-base font-medium transition-all"
@@ -444,7 +444,10 @@ export default async function RootPage({ searchParams }: { searchParams?: { prev
                   </li>
                 ))}
               </ul>
-              <Link href={tier.key === 'radar' ? '/login' : `/login?plan=${tier.key}`}
+              <Link
+                href={user
+                  ? (tier.key === 'radar' ? '/v2' : '/v2/upgrade')
+                  : (tier.key === 'radar' ? '/login' : `/login?plan=${tier.key}`)}
                 className="block text-center py-2.5 rounded-xl text-sm font-bold transition-all"
                 style={{
                   background: tier.key === 'radar' ? 'rgba(255,255,255,0.04)' : `${tier.color}18`,
@@ -471,10 +474,10 @@ export default async function RootPage({ searchParams }: { searchParams?: { prev
           لا نطلب ثقتك، نطلب أسبوعاً واحداً: افتح خطة اليوم كل صباح، تابع التوصيات
           بالمحفظة التجريبية، وقارن بنفسك مع السجل العام المفتوح
         </p>
-        <Link href="/login"
+        <Link href={user ? '/v2' : '/login'}
           className="inline-flex items-center gap-2 px-10 py-4 rounded-xl text-base font-bold transition-all"
           style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
-          ابدأ تجربتك المجانية ←
+          {user ? 'العودة إلى منصتك ←' : 'ابدأ تجربتك المجانية ←'}
         </Link>
       </section>
 
