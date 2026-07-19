@@ -21,22 +21,27 @@ function tierAllows(userTier: string, required: string): boolean {
 }
 
 // ── Nav definitions ────────────────────────────────────────────
+// ── التقسيم الهادئ: رحلة التداول اليومية أولاً، ثم أدوات التعمق ──
 const NAV_TRADING = [
   { href: '/v2/plan',        label: 'خطة اليوم',   icon: '📋', exact: false, requiredTier: 'radar'  },
   { href: '/v2',             label: 'الداشبورد',   icon: '◈', exact: true,  requiredTier: 'radar'  },
   { href: '/v2/analyze',     label: 'تحليل العقد', icon: '⬡', exact: false, requiredTier: 'radar'  },
   { href: '/v2/signals',     label: 'الإشارات',    icon: '◉', exact: false, requiredTier: 'signal' },
   { href: '/v2/exit',        label: 'مساعد الخروج', icon: '🚪', exact: false, requiredTier: 'radar'  },
-  { href: '/v2/journal',     label: 'دفتر الصفقات', icon: '📔', exact: false, requiredTier: 'radar'  },
-  { href: '/v2/paper',       label: 'محفظة تجريبية', icon: '🎮', exact: false, requiredTier: 'radar'  },
 ]
 
 const NAV_TOOLS = [
+  { href: '/v2/chart',   label: 'الشارت',         icon: '📈', exact: false, requiredTier: 'edge'   },
   { href: '/v2/radar',   label: 'رادار الأموال', icon: '📡', exact: false, requiredTier: 'signal' },
   { href: '/v2/console', label: 'مرصد العقود', icon: '🖥', exact: false, requiredTier: 'signal' },
-  { href: '/v2/chart',   label: 'الشارت',         icon: '📈', exact: false, requiredTier: 'edge'   },
-  { href: '/track',      label: 'السجل العام',    icon: '📜', exact: false, requiredTier: 'radar'  },
-  { href: '/?preview=1', label: 'الصفحة التعريفية', icon: '🌐', exact: false, requiredTier: 'radar' },
+  { href: '/v2/journal', label: 'دفتر الصفقات', icon: '📔', exact: false, requiredTier: 'radar'  },
+  { href: '/v2/paper',   label: 'محفظة تجريبية', icon: '🎮', exact: false, requiredTier: 'radar'  },
+]
+
+// روابط خفيفة أسفل القائمة — بلا أيقونات صاخبة
+const NAV_QUIET = [
+  { href: '/track',      label: 'السجل العام' },
+  { href: '/?preview=1', label: 'الصفحة التعريفية' },
 ]
 
 const NAV_ADMIN = [
@@ -121,7 +126,6 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
   }, [])
   const [loggingOut, setLoggingOut] = useState(false)
   const [previewRole, setPreviewRole] = useState<string | null>(null)
-  const [switcherOpen, setSwitcherOpen] = useState(false)
 
   // ── Notifications state ────────────────────────────────────
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -227,25 +231,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
         </Link>
       </div>
 
-      {/* Role badge */}
-      <div className="px-4 pt-3 pb-2 shrink-0">
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
-             style={{ background: `${roleColor}0A`, border: `1px solid ${roleColor}20` }}>
-          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: roleColor }} />
-          <span className="text-xs font-mono" style={{ color: roleColor }}>
-            {ROLE_LABEL_MAP[effectiveRole] ?? effectiveRole}
-          </span>
-          {isPreviewing && (
-            <span className="text-xs font-mono px-1.5 py-0.5 rounded mr-auto"
-                  style={{ background: 'rgba(96,165,250,0.15)', color: '#60A5FA' }}>معاينة</span>
-          )}
-          {!isPreviewing && isStaff && (
-            <span className="mr-auto text-xs font-mono" style={{ color: '#1A2A3A' }}>
-              {isAdmin ? 'وصول كامل' : 'وصول محدود'}
-            </span>
-          )}
-        </div>
-      </div>
+      {/* شارة الدور انتقلت إلى مبدّل الهيدر — سايدبار أهدأ */}
 
       {/* Tier badge (non-staff only) */}
       {!isStaff && (
@@ -295,12 +281,24 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
             {NAV_TOOLS.map(item => renderNavItem(item, showAdminNav ? '#60A5FA' : '#C9943A'))}
           </div>
         </div>
+
+        {/* روابط هادئة */}
+        <div className="px-5 pt-1 pb-3 flex items-center gap-3">
+          {NAV_QUIET.map((q, i) => (
+            <span key={q.href} className="flex items-center gap-3">
+              {i > 0 && <span style={{ color: '#1A2A3A' }}>·</span>}
+              <Link href={q.href} className="text-xs transition-colors hover:text-white" style={{ color: '#4A5568' }}>
+                {q.label}
+              </Link>
+            </span>
+          ))}
+        </div>
       </div>
 
-      {/* ── User footer ── */}
-      <div className="px-4 py-4 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+      {/* ── ذيل هادئ: الهوية فقط — الخروج انتقل إلى الهيدر ── */}
+      <div className="px-4 py-3 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
             style={{ background: `${ROLE_COLOR_MAP[userRole] ?? '#4A5568'}15`, color: ROLE_COLOR_MAP[userRole] ?? '#4A5568', border: `1px solid ${ROLE_COLOR_MAP[userRole] ?? '#4A5568'}30` }}>
             {userName.charAt(0).toUpperCase()}
           </div>
@@ -310,32 +308,6 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
               {ROLE_LABEL_MAP[userRole] ?? userRole}
             </div>
           </div>
-          <button
-            onClick={logout}
-            disabled={loggingOut}
-            title="تسجيل الخروج"
-            className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all disabled:opacity-40"
-            style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.12)', color: '#4A5568' }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = 'rgba(239,68,68,0.15)'
-              e.currentTarget.style.color = '#EF4444'
-              e.currentTarget.style.borderColor = 'rgba(239,68,68,0.3)'
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = 'rgba(239,68,68,0.06)'
-              e.currentTarget.style.color = '#4A5568'
-              e.currentTarget.style.borderColor = 'rgba(239,68,68,0.12)'
-            }}>
-            {loggingOut ? (
-              <span className="text-xs font-mono" style={{ color: '#EF4444' }}>...</span>
-            ) : (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                <polyline points="16,17 21,12 16,7"/>
-                <line x1="21" y1="12" x2="9" y2="12"/>
-              </svg>
-            )}
-          </button>
         </div>
       </div>
     </div>
@@ -439,53 +411,29 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
             )}
           </div>
 
-          {/* ── Admin role preview switcher ── */}
+          {/* ── مبدّل الدور: مفتاح تحويل أنيق — ضغطة واحدة تنقلك بين الأدوار ── */}
           {canPreview && (
-            <div className="relative flex items-center gap-2">
-              {isPreviewing && (
-                <button onClick={() => switchPreview(userRole)}
-                        className="text-xs px-2.5 py-1 rounded-lg font-mono transition-all"
-                        style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.25)', color: '#60A5FA' }}>
-                  ← مدير
-                </button>
-              )}
-              <button onClick={() => setSwitcherOpen(v => !v)}
-                      className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg font-mono transition-all"
-                      style={{
-                        background: isPreviewing ? 'rgba(96,165,250,0.08)' : 'rgba(201,148,58,0.08)',
-                        border:     isPreviewing ? '1px solid rgba(96,165,250,0.2)' : '1px solid rgba(201,148,58,0.2)',
-                        color:      isPreviewing ? '#60A5FA' : '#C9943A',
-                      }}>
-                <span>{ROLE_ICON_MAP[effectiveRole] ?? '◎'}</span>
-                <span>{ROLE_LABEL_MAP[effectiveRole] ?? effectiveRole}</span>
-                <span style={{ color: '#2D3748' }}>⇅</span>
-              </button>
-
-              {switcherOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setSwitcherOpen(false)} />
-                  <div className="absolute top-full left-0 mt-2 w-44 rounded-xl overflow-hidden z-50"
-                       style={{ background: '#0D1B2A', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
-                    <div className="px-3 py-2 text-xs font-mono" style={{ color: '#2D3748', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                      معاينة كـ…
-                    </div>
-                    {(['admin', 'moderator', 'user'] as const).map(r => (
-                      <button key={r} onClick={() => switchPreview(r)}
-                              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-mono transition-all"
-                              style={{
-                                background: r === effectiveRole ? `${ROLE_COLOR_MAP[r] ?? '#4A5568'}12` : 'transparent',
-                                color:      r === effectiveRole ? ROLE_COLOR_MAP[r] ?? '#4A5568' : '#4A5568',
-                                borderBottom: '1px solid rgba(255,255,255,0.04)',
-                              }}>
-                        <span>{ROLE_ICON_MAP[r] ?? '◎'}</span>
-                        <span>{ROLE_LABEL_MAP[r] ?? r}</span>
-                        {r === userRole && <span className="mr-auto text-xs" style={{ color: '#1A2A3A' }}>أساسي</span>}
-                        {r === effectiveRole && r !== userRole && <span className="mr-auto text-xs" style={{ color: ROLE_COLOR_MAP[r] }}>●</span>}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
+            <div className="flex items-center rounded-full p-0.5 gap-0.5"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              {(['admin', 'moderator', 'user'] as const).map(r => {
+                const active = r === effectiveRole
+                const rc = ROLE_COLOR_MAP[r] ?? '#4A5568'
+                return (
+                  <button key={r} onClick={() => switchPreview(r)}
+                    title={`التحويل إلى عرض ${ROLE_LABEL_MAP[r] ?? r}${r === userRole ? ' (دورك الأساسي)' : ''}`}
+                    className="flex items-center gap-1.5 rounded-full transition-all duration-200"
+                    style={{
+                      padding: active ? '4px 12px' : '4px 8px',
+                      background: active ? `${rc}1F` : 'transparent',
+                      border: active ? `1px solid ${rc}55` : '1px solid transparent',
+                      color: active ? rc : '#3A4A5C',
+                      boxShadow: active ? `0 0 12px ${rc}22` : 'none',
+                    }}>
+                    <span className="text-xs">{ROLE_ICON_MAP[r] ?? '◎'}</span>
+                    {active && <span className="text-xs font-bold whitespace-nowrap">{ROLE_LABEL_MAP[r] ?? r}</span>}
+                  </button>
+                )
+              })}
             </div>
           )}
 
@@ -503,6 +451,32 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
               </Link>
             </div>
           )}
+
+          {/* ── تسجيل الخروج — دائماً هنا، دائماً مرئي ── */}
+          <button
+            onClick={logout}
+            disabled={loggingOut}
+            title="تسجيل الخروج"
+            className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all disabled:opacity-40"
+            style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)', color: '#8B9BAD' }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(239,68,68,0.15)'
+              e.currentTarget.style.color = '#EF4444'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(239,68,68,0.06)'
+              e.currentTarget.style.color = '#8B9BAD'
+            }}>
+            {loggingOut ? (
+              <span className="text-xs font-mono" style={{ color: '#EF4444' }}>...</span>
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16,17 21,12 16,7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+            )}
+          </button>
         </header>
 
         {/* شريط التجربة المجانية */}
