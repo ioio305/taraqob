@@ -56,6 +56,7 @@ type Contract  = {
   reason: string
   grade?: string
   edgeCount?: number
+  probItmPct?: number
   strategy: ContractStrategy
   focus?: {
     action: 'enter' | 'wait' | 'avoid'
@@ -138,15 +139,20 @@ export default function V2Dashboard() {
   const [countdown, setCd]  = useState(REFRESH_SEC)
   const [strike, setStrike] = useState('')
   const [ctype, setCtype]   = useState<'auto' | 'call' | 'put'>('auto')
-  // نمط الترشيح: الجودة أولاً (افتراضي) أو الاقتناص الرخيص — محفوظ محلياً
-  const [recMode, setRecMode] = useState<'quality' | 'cheap'>('quality')
+  // فئة الترشيح: محافظ / متوسط (افتراضي) / مغامر — محفوظة محلياً
+  type RecMode = 'safe' | 'balanced' | 'bold'
+  const [recMode, setRecMode] = useState<RecMode>('balanced')
   useEffect(() => {
-    try { if (localStorage.getItem('taraqob_rec_mode') === 'cheap') setRecMode('cheap') } catch { /* تجاهل */ }
+    try {
+      const saved = localStorage.getItem('taraqob_rec_mode')
+      if (saved === 'safe') setRecMode('safe')
+      else if (saved === 'bold' || saved === 'cheap') setRecMode('bold')   // ترحيل القيمة القديمة
+    } catch { /* تجاهل */ }
   }, [])
-  function switchMode(m: 'quality' | 'cheap') {
+  function switchMode(m: RecMode) {
     setRecMode(m)
     try { localStorage.setItem('taraqob_rec_mode', m) } catch { /* تجاهل */ }
-    lockedPlans.current.clear(); liveSnaps.current.clear()   // عقود النمط الآخر مختلفة
+    lockedPlans.current.clear(); liveSnaps.current.clear()   // عقود الفئة الأخرى مختلفة
   }
   const { news, loading: newsLoading, failed: newsFailed } = useNews()
   const cdRef        = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -469,11 +475,12 @@ export default function V2Dashboard() {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-bold" style={{ color: '#C9943A' }}>لوحة المستخدم</span>
 
-            {/* نمط الترشيح — يغيّر الترتيب فقط، لا يمنع شيئاً */}
+            {/* فئة الترشيح — تغيّر الترتيب فقط، لا تمنع شيئاً */}
             <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
               {([
-                { m: 'quality' as const, label: '⭐ الجودة أولاً' },
-                { m: 'cheap' as const,   label: '💰 الاقتناص الرخيص' },
+                { m: 'safe' as const,     label: '🟢 المحافظ',  tip: 'عقود أسرع (دلتا 0.30-0.45) بأهداف أقرب وفرق أضيق — أعلى احتمال، ربح أهدأ' },
+                { m: 'balanced' as const, label: '🟡 المتوسط',  tip: 'التوازن المثبت (دلتا 0.25-0.45) — المنطق الذي قيست عليه نسبة 51%' },
+                { m: 'bold' as const,     label: '🔴 المغامر',   tip: 'عقود $0.50-$5 رخيصة — خسائر متكررة صغيرة وربحة نادرة كبيرة، سقفها B' },
               ]).map(x => (
                 <button key={x.m} onClick={() => switchMode(x.m)}
                   className="text-xs px-2.5 py-1 font-bold"
@@ -481,9 +488,7 @@ export default function V2Dashboard() {
                     background: recMode === x.m ? 'rgba(201,148,58,0.2)' : 'transparent',
                     color: recMode === x.m ? '#E8D5A3' : '#4A5568',
                   }}
-                  title={x.m === 'quality'
-                    ? 'عقود سريعة (دلتا 0.25-0.45) — المنطق الذي قيست عليه النسبة المثبتة 51%'
-                    : 'عقود $0.50-$5 للحساب الصغير — أرخص لكن أبطأ، سقف تصنيفها B'}>
+                  title={x.tip}>
                   {x.label}
                 </button>
               ))}
@@ -629,6 +634,13 @@ export default function V2Dashboard() {
                         </span>
                       )
                     })()}
+                    {(c.probItmPct ?? 0) > 0 && (
+                      <span className="text-xs font-mono px-2 py-0.5 rounded-lg cursor-help"
+                        title="الاحتمال الرياضي (من الدلتا) لانتهاء العقد داخل المال — رقم حقيقي لا تسويقي"
+                        style={{ background: 'rgba(255,255,255,0.04)', color: '#94A3B8', border: '1px solid rgba(255,255,255,0.1)' }}>
+                        احتمال ~{c.probItmPct}%
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     {/* Locked badge */}
@@ -945,7 +957,7 @@ export default function V2Dashboard() {
             </table>
           </div>
           <div className="px-5 py-2 text-xs font-mono" style={{ color: '#1A2A3A', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-            ★ أفضل 3 · {recMode === 'quality' ? 'الجودة أولاً: دلتا 0.25–0.45 وفرق ضيق' : 'الاقتناص الرخيص: سعر $0.50–$5'} · وقف SPX = SPX الحالي ∓ 35% من EM · OTM صارم
+            ★ أفضل 3 · {recMode === 'safe' ? 'المحافظ: دلتا 0.30–0.45، أهداف قريبة، فرق ضيق جداً' : recMode === 'balanced' ? 'المتوسط: دلتا 0.25–0.45 وفرق ضيق' : 'المغامر: سعر $0.50–$5'} · وقف SPX = SPX الحالي ∓ 35% من EM · OTM صارم
           </div>
         </div>
       )}

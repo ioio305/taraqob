@@ -35,11 +35,11 @@ function getDirection(changePct: number, vix: number) {
 
 // ── Mandatory Pre-Filter ─────────────────────────────────────────────────
 // Executed BEFORE any scoring. Order is fixed and cannot be bypassed.
-// نمطا الترشيح:
-//   quality (الافتراضي) — «الجودة أولاً»: الدلتا 0.25-0.45 هي الملك، السعر حتى $40
-//   cheap — «الاقتناص الرخيص»: عقود $0.50-$5 لصاحب الحساب الصغير (سقفها B)
-// ملاحظة مهمة: النمطان يغيّران الترتيب والاختيار فقط — لا يضيفان أي منع جديد.
-export type RecMode = 'quality' | 'cheap'
+// فئات الترشيح الثلاث — تغيّر الترتيب والاختيار فقط، لا تضيف أي منع جديد:
+//   safe     🟢 المحافظ: دلتا 0.30-0.45، فرق ضيق جداً، هدف قريب — أعلى احتمال
+//   balanced 🟡 المتوسط (الافتراضي): دلتا 0.25-0.45 — منطق «الجودة أولاً» المثبت
+//   bold     🔴 المغامر: عقود $0.50-$5 — رخيصة سريعة الحركة، سقف تصنيفها B
+export type RecMode = 'safe' | 'balanced' | 'bold'
 
 // Returns rejection reason string, or null if contract passes all gates.
 function mandatoryFilter(
@@ -65,12 +65,16 @@ function mandatoryFilter(
   if (!bid || !ask || bid <= 0 || ask <= 0 || ask <= bid)
     return 'Invalid Quote'
 
-  // ── Gate 4: Ask price range (حسب النمط) ───────────────────────
-  if (mode === 'cheap') {
+  // ── Gate 4: Ask price range (حسب الفئة) ───────────────────────
+  if (mode === 'bold') {
     if (ask < 0.50) return 'Ask Below $0.50'
     if (ask > 5.00) return 'Ask Above $5.00'
+  } else if (mode === 'safe') {
+    // المحافظ: عقد الدلتا 0.30-0.45 القريب يعيش بين $4 و $40
+    if (ask < 4.00)  return 'Ask Below $4.00'
+    if (ask > 40.00) return 'Ask Above $40.00'
   } else {
-    // الجودة: عقد الدلتا 0.25-0.45 على SPX يعيش بين $2 و $40
+    // المتوسط: عقد الدلتا 0.25-0.45 يعيش بين $2 و $40
     if (ask < 2.00)  return 'Ask Below $2.00'
     if (ask > 40.00) return 'Ask Above $40.00'
   }
@@ -104,25 +108,28 @@ function liveScore(
 
   let score = 0
 
-  if (mode === 'quality') {
-    // ═══ نمط «الجودة أولاً» — الدلتا هي الملك (النسبة المثبتة 51% قيست على هذا المنطق) ═══
+  if (mode === 'safe' || mode === 'balanced') {
+    // ═══ المحافظ والمتوسط — الدلتا هي الملك (النسبة المثبتة 51% قيست على هذا المنطق) ═══
+    const dSweet = mode === 'safe' ? [0.30, 0.45] : [0.25, 0.45]   // المحافظ يطلب دلتا أسرع
     // 1. الدلتا (35 نقطة)
-    if      (absDelta >= 0.25 && absDelta <= 0.45) score += 35
-    else if (absDelta >= 0.20 && absDelta <  0.25) score += 22
+    if      (absDelta >= dSweet[0] && absDelta <= dSweet[1]) score += 35
+    else if (absDelta >= dSweet[0] - 0.05 && absDelta < dSweet[0]) score += 22
     else if (absDelta >  0.45 && absDelta <= 0.55) score += 18
-    else if (absDelta >= 0.15 && absDelta <  0.20) score += 8
-    // 2. ضيق الفرق (20 نقطة)
-    if      (spread < 0.03) score += 20
-    else if (spread < 0.06) score += 15
-    else if (spread < 0.10) score += 9
-    else if (spread < 0.20) score += 3
-    // 3. الموقع ضمن الحركة المتوقعة (15) — الهدف داخل 1×EM قابل للتحقق
+    else if (absDelta >= 0.15 && absDelta <  dSweet[0] - 0.05) score += 8
+    // 2. ضيق الفرق (20 نقطة) — المحافظ أشد صرامة
+    const sBands = mode === 'safe' ? [0.02, 0.04, 0.07, 0.12] : [0.03, 0.06, 0.10, 0.20]
+    if      (spread < sBands[0]) score += 20
+    else if (spread < sBands[1]) score += 15
+    else if (spread < sBands[2]) score += 9
+    else if (spread < sBands[3]) score += 3
+    // 3. الموقع ضمن الحركة المتوقعة (15) — المحافظ يريد ستريكاً أقرب (هدفاً أسهل)
     if (em && em > 0) {
       const pct = Math.abs(o.strike - spxPrice) / em
-      if      (pct >= 0.30 && pct <= 1.00) score += 15
-      else if (pct >  1.00 && pct <= 1.50) score += 9
-      else if (pct <  0.30)                score += 6
-      else                                 score += 0
+      const sweet: [number, number] = mode === 'safe' ? [0.15, 0.70] : [0.30, 1.00]
+      if      (pct >= sweet[0] && pct <= sweet[1]) score += 15
+      else if (pct >  sweet[1] && pct <= sweet[1] + 0.5) score += 9
+      else if (pct <  sweet[0])                    score += 6
+      else                                         score += 0
     } else score += 8
     // 4. السعر (15) — نطاق عملي واسع
     if      (mid >= 4 && mid <= 25) score += 15
@@ -139,7 +146,7 @@ function liveScore(
     return score
   }
 
-  // ═══ نمط «الاقتناص الرخيص» — المنطق الأصلي كما هو ═══
+  // ═══ 🔴 المغامر «الاقتناص الرخيص» — المنطق الأصلي كما هو ═══
   // ── 1. Ask Price Quality (35 pts) — $1–$3 is the sweet spot ───
   if      (ask >= 1.00 && ask <= 3.00) score += 35
   else if (ask >= 0.50 && ask <  1.00) score += 22
@@ -307,8 +314,13 @@ async function fetchSPXSessions() {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const forceType = searchParams.get('type') as 'call' | 'put' | null
-  // نمط الترشيح: quality (افتراضي) أو cheap — يغيّر الترتيب فقط، لا يمنع شيئاً
-  const recMode: RecMode = searchParams.get('mode') === 'cheap' ? 'cheap' : 'quality'
+  // فئة الترشيح: safe / balanced (افتراضي) / bold — تغيّر الترتيب فقط، لا تمنع شيئاً
+  // توافق خلفي: quality → balanced، cheap → bold
+  const rawMode = searchParams.get('mode')
+  const recMode: RecMode =
+    rawMode === 'safe' ? 'safe'
+    : (rawMode === 'bold' || rawMode === 'cheap') ? 'bold'
+    : 'balanced'
 
   try {
     // ── 1. Fetch SPX, VIX, sessions in parallel ──────────────────
@@ -579,7 +591,9 @@ export async function GET(request: NextRequest) {
         session: sessionQuality,
         liquidityOk: (o.mid ?? 0) > 0 && ((o.ask ?? 0) - (o.bid ?? 0)) / (o.mid ?? 1) < 0.30,
       })
-      return { ...rest, score, status, reason, strategy: strat, focus, grade, edgeCount, edges }
+      // احتمال صادق وحيد: الاحتمال الرياضي من الدلتا (تقريب معروف لاحتمال الانتهاء داخل المال)
+      const probItmPct = Math.round(Math.abs(o.delta ?? 0) * 100)
+      return { ...rest, score, status, reason, strategy: strat, focus, grade, edgeCount, edges, probItmPct }
     })
 
     // OTM range description
