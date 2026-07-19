@@ -1,6 +1,9 @@
 // ── دفتر الصفقات + عقل المدرب الشخصي ────────────────────────────────────────
-// التخزين: محلي (فوري بلا إعداد). للمزامنة السحابية لاحقاً شغّل
-// scripts/sql/v2_trades.sql في Supabase وبدّل طبقة التخزين هنا فقط.
+// التخزين: سحابي (Supabase جدول v2_trades بعزل كامل لكل مستخدم عبر RLS) —
+// دفترك يتبعك على كل أجهزتك. الصفقات المسجلة محلياً قبل الترقية تُرحَّل
+// تلقائياً مرة واحدة عند أول فتح.
+
+import { createClient } from '@/lib/supabase/client'
 
 export interface Trade {
   id: string
@@ -16,13 +19,79 @@ export interface Trade {
   note?: string
 }
 
-const KEY = 'taraqob_journal'
-
-export function loadTrades(): Trade[] {
-  try { return JSON.parse(localStorage.getItem(KEY) ?? '[]') } catch { return [] }
+function rowToTrade(r: any): Trade {
+  return {
+    id: r.id,
+    type: r.contract_type,
+    strike: Number(r.strike),
+    expiry: r.expiry ?? undefined,
+    qty: r.qty,
+    entry: Number(r.entry_price),
+    exit: r.exit_price != null ? Number(r.exit_price) : undefined,
+    pnlTotal: r.pnl_total != null ? Number(r.pnl_total) : undefined,
+    openedAt: r.opened_at,
+    closedAt: r.closed_at ?? undefined,
+    note: r.note ?? undefined,
+  }
 }
-export function saveTrades(list: Trade[]) {
-  try { localStorage.setItem(KEY, JSON.stringify(list)) } catch { /* تجاهل */ }
+
+// ترحيل الدفتر المحلي القديم إلى السحابة — مرة واحدة فقط
+async function migrateLocalOnce(sb: ReturnType<typeof createClient>, userId: string) {
+  try {
+    if (localStorage.getItem('taraqob_journal_migrated')) return
+    const local: Trade[] = JSON.parse(localStorage.getItem('taraqob_journal') ?? '[]')
+    if (local.length > 0) {
+      const { error } = await sb.from('v2_trades').insert(local.map(t => ({
+        user_id: userId,
+        contract_type: t.type, strike: t.strike, expiry: t.expiry ?? null,
+        qty: t.qty, entry_price: t.entry,
+        exit_price: t.exit ?? null, pnl_total: t.pnlTotal ?? null,
+        opened_at: t.openedAt, closed_at: t.closedAt ?? null, note: t.note ?? null,
+      })))
+      if (error) return   // نحاول في الفتح القادم
+    }
+    localStorage.setItem('taraqob_journal_migrated', '1')
+  } catch { /* نحاول لاحقاً */ }
+}
+
+export async function fetchTrades(): Promise<Trade[]> {
+  const sb = createClient()
+  const { data: { user } } = await sb.auth.getUser()
+  if (!user) throw new Error('سجّل دخولك أولاً')
+  await migrateLocalOnce(sb, user.id)
+  const { data, error } = await sb
+    .from('v2_trades').select('*')
+    .order('opened_at', { ascending: true })
+  if (error) throw new Error('تعذر جلب الدفتر: ' + error.message)
+  return (data ?? []).map(rowToTrade)
+}
+
+export async function addTradeDb(t: Omit<Trade, 'id'>): Promise<Trade> {
+  const sb = createClient()
+  const { data: { user } } = await sb.auth.getUser()
+  if (!user) throw new Error('سجّل دخولك أولاً')
+  const { data, error } = await sb.from('v2_trades').insert({
+    user_id: user.id,
+    contract_type: t.type, strike: t.strike, expiry: t.expiry ?? null,
+    qty: t.qty, entry_price: t.entry,
+    opened_at: t.openedAt,
+  }).select('*').single()
+  if (error) throw new Error('تعذر التسجيل: ' + error.message)
+  return rowToTrade(data)
+}
+
+export async function closeTradeDb(id: string, exit: number, pnlTotal: number): Promise<void> {
+  const sb = createClient()
+  const { error } = await sb.from('v2_trades')
+    .update({ exit_price: exit, pnl_total: pnlTotal, closed_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw new Error('تعذر الإغلاق: ' + error.message)
+}
+
+export async function deleteTradeDb(id: string): Promise<void> {
+  const sb = createClient()
+  const { error } = await sb.from('v2_trades').delete().eq('id', id)
+  if (error) throw new Error('تعذر الحذف: ' + error.message)
 }
 
 // ── إحصاءات المتداول ─────────────────────────────────────────────────────────

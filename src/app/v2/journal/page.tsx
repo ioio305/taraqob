@@ -4,7 +4,8 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
-  loadTrades, saveTrades, computeStats, coachInsights, weeklyReport, type Trade,
+  fetchTrades, addTradeDb, closeTradeDb, deleteTradeDb,
+  computeStats, coachInsights, weeklyReport, type Trade,
 } from '@/lib/v2/journal'
 
 function JournalContent() {
@@ -18,32 +19,40 @@ function JournalContent() {
   const [exitPx, setExitPx] = useState('')
   const [msg, setMsg] = useState('')
 
-  useEffect(() => { setTrades(loadTrades()) }, [])
+  useEffect(() => {
+    fetchTrades().then(setTrades).catch(e => setMsg('⚠ ' + (e?.message ?? 'تعذر جلب الدفتر')))
+  }, [])
 
-  function persist(next: Trade[]) { setTrades(next); saveTrades(next) }
-
-  function addTrade() {
+  async function addTrade() {
     const k = parseFloat(strike), e = parseFloat(entry), q = Math.max(1, parseInt(qty) || 1)
     if (!k || !e) { setMsg('أدخل الستريك وسعر الدخول'); return }
-    persist([...trades, {
-      id: Date.now().toString(36), type, strike: k, qty: q, entry: e,
-      openedAt: new Date().toISOString(),
-    }])
-    setStrike(''); setEntry(''); setMsg('✓ سُجّلت الصفقة — أغلقها هنا حين تخرج ليتعلم المدرب منها')
+    try {
+      const saved = await addTradeDb({ type, strike: k, qty: q, entry: e, openedAt: new Date().toISOString() })
+      setTrades(prev => [...prev, saved])
+      setStrike(''); setEntry(''); setMsg('✓ سُجّلت الصفقة (متزامنة سحابياً) — أغلقها هنا حين تخرج ليتعلم المدرب منها')
+    } catch (err: any) { setMsg('⚠ ' + err.message) }
   }
 
-  function closeTrade(t: Trade) {
+  async function closeTrade(t: Trade) {
     const x = parseFloat(exitPx)
     if (isNaN(x) || x < 0) { setMsg('أدخل سعر الخروج'); return }
     const pnl = Math.round((x - t.entry) * 100 * t.qty)
-    persist(trades.map(tr => tr.id === t.id
-      ? { ...tr, exit: x, pnlTotal: pnl, closedAt: new Date().toISOString() }
-      : tr))
-    setClosingId(null); setExitPx('')
-    setMsg(pnl >= 0 ? `✓ +$${pnl} — سجلت الربح` : `سجلت الخسارة -$${Math.abs(pnl)} — الخسارة المسجلة درس، المخفية كارثة`)
+    try {
+      await closeTradeDb(t.id, x, pnl)
+      setTrades(prev => prev.map(tr => tr.id === t.id
+        ? { ...tr, exit: x, pnlTotal: pnl, closedAt: new Date().toISOString() }
+        : tr))
+      setClosingId(null); setExitPx('')
+      setMsg(pnl >= 0 ? `✓ +$${pnl} — سجلت الربح` : `سجلت الخسارة -$${Math.abs(pnl)} — الخسارة المسجلة درس، المخفية كارثة`)
+    } catch (err: any) { setMsg('⚠ ' + err.message) }
   }
 
-  function removeTrade(id: string) { persist(trades.filter(t => t.id !== id)) }
+  async function removeTrade(id: string) {
+    try {
+      await deleteTradeDb(id)
+      setTrades(prev => prev.filter(t => t.id !== id))
+    } catch (err: any) { setMsg('⚠ ' + err.message) }
+  }
 
   const stats = computeStats(trades)
   const insights = coachInsights(trades, stats)
@@ -62,8 +71,13 @@ function JournalContent() {
       style={{ background: '#060D14', fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
 
       <div>
-        <h1 className="text-xl font-black text-[#E8D5A3]">📔 دفتر الصفقات والمدرب الشخصي</h1>
-        <p className="text-sm text-gray-500 mt-0.5">سجّل كل صفقة حقيقية — والمدرب يقرأ أنماطك ويصارحك بها. البيانات محفوظة على جهازك.</p>
+        <h1 className="text-xl font-black text-[#E8D5A3]">📔 دفتر الصفقات والمدرب الشخصي
+          <span className="text-xs font-bold mr-2 px-2 py-0.5 rounded-lg align-middle"
+            style={{ background: 'rgba(38,208,124,0.1)', border: '1px solid rgba(38,208,124,0.35)', color: '#26D07C' }}>
+            ☁ متزامن سحابياً
+          </span>
+        </h1>
+        <p className="text-sm text-gray-500 mt-0.5">سجّل كل صفقة حقيقية — والمدرب يقرأ أنماطك ويصارحك بها. دفترك يتبعك على كل أجهزتك.</p>
       </div>
 
       {/* إحصاءاتك الحقيقية */}
