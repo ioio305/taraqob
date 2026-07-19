@@ -22,6 +22,7 @@ function tierAllows(userTier: string, required: string): boolean {
 
 // ── Nav definitions ────────────────────────────────────────────
 const NAV_TRADING = [
+  { href: '/v2/plan',        label: 'خطة اليوم',   icon: '📋', exact: false, requiredTier: 'radar'  },
   { href: '/v2',             label: 'الداشبورد',   icon: '◈', exact: true,  requiredTier: 'radar'  },
   { href: '/v2/analyze',     label: 'تحليل العقد', icon: '⬡', exact: false, requiredTier: 'radar'  },
   { href: '/v2/signals',     label: 'الإشارات',    icon: '◉', exact: false, requiredTier: 'signal' },
