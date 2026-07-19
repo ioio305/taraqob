@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'حدث خطأ أثناء إنشاء الدعوة' }, { status: 500 })
   }
 
-  const appUrl     = process.env.NEXT_PUBLIC_APP_URL || 'https://taraqob.vercel.app'
+  const appUrl     = process.env.NEXT_PUBLIC_APP_URL || 'https://trqob.com'
   const inviteLink = `${appUrl}/auth/accept-invite?token=${token}`
 
   // إرسال البريد الإلكتروني عبر Resend إذا كان المفتاح موجوداً

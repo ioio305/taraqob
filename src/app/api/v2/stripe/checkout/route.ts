@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
   }
 
   const stripe = new Stripe(stripeKey, { apiVersion: '2025-04-30.basil' })
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://taraqob.vercel.app'
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://trqob.com'
 
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',

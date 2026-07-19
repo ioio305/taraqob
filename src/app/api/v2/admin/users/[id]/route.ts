@@ -26,7 +26,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     if (me.role !== 'admin') return NextResponse.json({ error: 'المدير فقط يمكنه إعادة تعيين كلمات المرور' }, { status: 403 })
     const { data: target } = await serviceClient.from('user_profiles').select('email').eq('id', params.id).single()
     if (!target?.email) return NextResponse.json({ error: 'لم يتم العثور على البريد الإلكتروني' }, { status: 404 })
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://taraqob.vercel.app'
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://trqob.com'
     const { data, error } = await serviceClient.auth.admin.generateLink({
       type:       'recovery',
       email:      target.email,

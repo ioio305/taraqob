@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
     new_values: { email, role },
   })
 
-  const appUrl     = process.env.NEXT_PUBLIC_APP_URL || 'https://taraqob.vercel.app'
+  const appUrl     = process.env.NEXT_PUBLIC_APP_URL || 'https://trqob.com'
   const inviteLink = `${appUrl}/auth/accept-invite?token=${token}`
 
   return NextResponse.json({ success: true, inviteLink })
