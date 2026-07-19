@@ -194,7 +194,6 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
   }, [userRole, isAdmin]) // eslint-disable-line
 
   function switchPreview(r: string) {
-    setSwitcherOpen(false)
     const next = r === userRole ? null : r
     setPreviewRole(next)
     if (next) { localStorage.setItem('taraqob_view_as', next); router.push('/v2') }
