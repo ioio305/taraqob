@@ -36,14 +36,15 @@ export function emailButton(text: string, href: string): string {
   </div>`
 }
 
-// إرسال دفعة عبر Resend (حتى 100 رسالة/طلب). يرجع عدد ما أُرسل فعلاً.
+// إرسال دفعة عبر Resend (حتى 100 رسالة/طلب). يرجع العدد المُرسَل + أخطاء فعلية.
 export async function sendResendBatch(
   emails: { to: string; subject: string; html: string }[],
-): Promise<{ sent: number; skipped: boolean }> {
+): Promise<{ sent: number; skipped: boolean; errors: string[] }> {
   const key = process.env.RESEND_API_KEY
-  if (!key) return { sent: 0, skipped: true }
+  if (!key) return { sent: 0, skipped: true, errors: ['RESEND_API_KEY غير مضبوط في البيئة'] }
 
   let sent = 0
+  const errors: string[] = []
   for (let i = 0; i < emails.length; i += 100) {
     const chunk = emails.slice(i, i + 100).map(e => ({
       from: FROM, to: [e.to], subject: e.subject, html: e.html,
@@ -54,10 +55,14 @@ export async function sendResendBatch(
         headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(chunk),
       })
+      const txt = await res.text()
       if (res.ok) sent += chunk.length
-    } catch { /* نتجاهل فشل دفعة ونكمل */ }
+      else errors.push(`HTTP ${res.status}: ${txt.slice(0, 400)}`)
+    } catch (e: any) {
+      errors.push(String(e?.message ?? e).slice(0, 200))
+    }
   }
-  return { sent, skipped: false }
+  return { sent, skipped: false, errors }
 }
 
 // ── النشرة الأسبوعية: تُبنى من أرقام حقيقية فقط ──────────────────────────────

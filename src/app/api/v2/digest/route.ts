@@ -24,15 +24,35 @@ export async function GET(req: NextRequest) {
 
   const sb = createServiceClient()
 
-  // المشتركون النشطون
-  const { data: leads } = await sb
-    .from('v2_leads')
-    .select('id, email')
-    .eq('unsubscribed', false)
-    .limit(5000)
+  // الجمهور: leads (النشرة العادية) أو users (اختبار على المستخدمين الحاليين)
+  const audience = new URL(req.url).searchParams.get('audience') === 'users' ? 'users' : 'leads'
 
-  if (!leads || leads.length === 0) {
-    return NextResponse.json({ ok: true, sent: 0, note: 'لا مشتركين' })
+  let recipients: { id: string; email: string }[] = []
+  if (audience === 'users') {
+    const { data } = await sb
+      .from('user_profiles')
+      .select('id, email')
+      .eq('is_active', true)
+      .not('email', 'is', null)
+      .limit(5000)
+    // بريد فريد فقط
+    const seen = new Set<string>()
+    recipients = (data ?? []).filter((u: any) => {
+      const e = String(u.email ?? '').trim().toLowerCase()
+      if (!e || seen.has(e)) return false
+      seen.add(e); return true
+    }).map((u: any) => ({ id: u.id, email: u.email }))
+  } else {
+    const { data: leads } = await sb
+      .from('v2_leads')
+      .select('id, email')
+      .eq('unsubscribed', false)
+      .limit(5000)
+    recipients = (leads ?? []).map((l: any) => ({ id: l.id, email: l.email }))
+  }
+
+  if (recipients.length === 0) {
+    return NextResponse.json({ ok: true, audience, sent: 0, note: 'لا مستلمين' })
   }
 
   // إحصاءات من السجل الحقيقي — نفس مصدر صفحة /track
@@ -56,16 +76,17 @@ export async function GET(req: NextRequest) {
 
   const body = digestBody({ weekCount, wins, losses, winRate, topLine })
 
-  const emails = leads.map((l: any) => ({
-    to: l.email as string,
+  const emails = recipients.map((r) => ({
+    to: r.email,
     subject: 'ملخّص ترقّب الأسبوعي 📊',
     html: emailShell({
       title: 'ملخّصك الأسبوعي',
       body,
-      unsubscribeUrl: `${APP_URL}/unsubscribe?id=${l.id}`,
+      // رابط الإلغاء للمشتركين فقط (المستخدمون يديرون تفضيلاتهم داخل المنصة)
+      unsubscribeUrl: audience === 'leads' ? `${APP_URL}/unsubscribe?id=${r.id}` : undefined,
     }),
   }))
 
-  const { sent, skipped } = await sendResendBatch(emails)
-  return NextResponse.json({ ok: true, recipients: leads.length, sent, skipped })
+  const { sent, skipped, errors } = await sendResendBatch(emails)
+  return NextResponse.json({ ok: true, audience, recipients: recipients.length, sent, skipped, errors })
 }
