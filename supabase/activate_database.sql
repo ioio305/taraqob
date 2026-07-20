@@ -178,14 +178,15 @@ ALTER TABLE invitations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE v2_signals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
-CREATE OR REPLACE FUNCTION get_my_role()
-RETURNS user_role AS $$
-  SELECT role FROM public.user_profiles WHERE id = auth.uid()
-$$ LANGUAGE SQL SECURITY DEFINER STABLE SET search_path = '';
+CREATE SCHEMA IF NOT EXISTS private;
+REVOKE ALL ON SCHEMA private FROM PUBLIC, anon, authenticated;
+GRANT USAGE ON SCHEMA private TO authenticated, service_role;
 
-CREATE OR REPLACE FUNCTION is_staff()
+CREATE OR REPLACE FUNCTION private.is_staff()
 RETURNS BOOLEAN AS $$
-  SELECT public.get_my_role() IN ('admin', 'moderator')
+  SELECT role IN ('admin', 'moderator')
+  FROM public.user_profiles
+  WHERE id = auth.uid()
 $$ LANGUAGE SQL SECURITY DEFINER STABLE SET search_path = '';
 
 DROP POLICY IF EXISTS "user_profiles_read_own" ON user_profiles;
@@ -196,28 +197,26 @@ DROP POLICY IF EXISTS "user_profiles_staff_update" ON user_profiles;
 CREATE POLICY "user_profiles_read_own" ON user_profiles
   FOR SELECT TO authenticated USING (auth.uid() = id);
 CREATE POLICY "user_profiles_staff_read_all" ON user_profiles
-  FOR SELECT TO authenticated USING (is_staff());
+  FOR SELECT TO authenticated USING (private.is_staff());
 CREATE POLICY "user_profiles_update_own" ON user_profiles
   FOR UPDATE TO authenticated USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 CREATE POLICY "user_profiles_staff_update" ON user_profiles
-  FOR UPDATE TO authenticated USING (is_staff());
+  FOR UPDATE TO authenticated USING (private.is_staff());
 
 REVOKE UPDATE ON TABLE public.user_profiles FROM authenticated;
 GRANT UPDATE (full_name, full_name_ar, avatar_url, last_seen_at)
   ON TABLE public.user_profiles TO authenticated;
 
 REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.get_my_role() FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.is_staff() FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.get_my_role() TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.is_staff() TO authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION private.is_staff() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION private.is_staff() TO authenticated, service_role;
 
 DROP POLICY IF EXISTS "users_own_signals" ON v2_signals;
 DROP POLICY IF EXISTS "staff_all_signals" ON v2_signals;
 CREATE POLICY "users_own_signals" ON v2_signals
   FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "staff_all_signals" ON v2_signals
-  FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+  FOR ALL TO authenticated USING (private.is_staff()) WITH CHECK (private.is_staff());
 
 DROP POLICY IF EXISTS "users read own notifications" ON notifications;
 DROP POLICY IF EXISTS "users mark own read" ON notifications;
@@ -227,10 +226,13 @@ CREATE POLICY "users read own notifications" ON notifications
 CREATE POLICY "users mark own read" ON notifications
   FOR UPDATE TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "staff insert notifications" ON notifications
-  FOR INSERT TO authenticated WITH CHECK (is_staff());
+  FOR INSERT TO authenticated WITH CHECK (private.is_staff());
 
 DROP POLICY IF EXISTS "invitations_staff_all" ON invitations;
 DROP POLICY IF EXISTS "invitations_read_by_token" ON invitations;
 CREATE POLICY "invitations_staff_all" ON invitations
-  FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+  FOR ALL TO authenticated USING (private.is_staff()) WITH CHECK (private.is_staff());
 REVOKE SELECT ON TABLE public.invitations FROM anon;
+
+DROP FUNCTION IF EXISTS public.is_staff();
+DROP FUNCTION IF EXISTS public.get_my_role();
