@@ -45,7 +45,8 @@ export async function POST(req: NextRequest) {
     .upsert({ email, name, source }, { onConflict: 'email', ignoreDuplicates: true })
 
   if (error) {
-    return NextResponse.json({ ok: false, error: 'تعذر الحفظ — جرب لاحقاً' }, { status: 500 })
+    // تشخيص مؤقت — يُزال بعد تحديد السبب
+    return NextResponse.json({ ok: false, error: 'تعذر الحفظ — جرب لاحقاً', _diag: { code: (error as any).code, msg: error.message, hint: (error as any).hint } }, { status: 500 })
   }
   return NextResponse.json({ ok: true })
 }
