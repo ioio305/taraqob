@@ -16,6 +16,17 @@ import {
   type MarketQuotes,
 } from '@/lib/v2/tradier'
 
+async function requireAuthenticatedUser() {
+  const supabase = createClient()
+  const { data: { user }, error } = await supabase.auth.getUser()
+
+  if (error || !user) {
+    throw new Error('Unauthorized')
+  }
+
+  return { supabase, user }
+}
+
 // ── Direction Engine ────────────────────────────────────────
 
 export type DirectionResult = {
@@ -54,6 +65,7 @@ function classifyEnvironment(changePct: number, vix: number, spxPrice: number): 
 // ── ACTION 1: Market Snapshot ──────────────────────────────
 
 export async function fetchMarketSnapshot() {
+  await requireAuthenticatedUser()
   const [market, sessions] = await Promise.all([getMarketQuotes(), getSessionLevels()])
 
   const spxPrice  = market.spx?.last ?? 0
@@ -117,6 +129,7 @@ export type MarketSnapshot = Awaited<ReturnType<typeof fetchMarketSnapshot>>
 // ── ACTION 2: أفضل 3 عقود ──────────────────────────────────
 
 export async function fetchTop3Contracts(direction?: 'call' | 'put') {
+  await requireAuthenticatedUser()
   const market = await getMarketQuotes()
   if (!market.success || !market.spx?.last) {
     return { success: false, error: 'تعذر جلب سعر SPX', contracts: [], expiration: '' }
@@ -153,6 +166,7 @@ export async function analyzeContract(input: {
   strike?: number
   contractType?: 'call' | 'put'
 }) {
+  const { supabase, user } = await requireAuthenticatedUser()
   const startTime = Date.now()
 
   const market = await getMarketQuotes()
@@ -260,9 +274,7 @@ export async function analyzeContract(input: {
   }
 
   try {
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) await supabase.from('v2_contract_analyses').insert({ ...analysis, created_by: user.id })
+    await supabase.from('v2_contract_analyses').insert({ ...analysis, created_by: user.id })
   } catch {}
 
   return { success: true, error: null, analysis }

@@ -34,7 +34,7 @@ function RegisterContent() {
       email: email.trim(),
       password,
       options: {
-        data: { full_name: name.trim(), role: 'user' },
+        data: { full_name: name.trim() },
         // رابط التفعيل في البريد يهبط على مسار الاستقبال الذي يسجّل الدخول تلقائياً
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },

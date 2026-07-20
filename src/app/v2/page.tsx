@@ -984,7 +984,7 @@ export default function V2Dashboard() {
               </span>
             </div>
             <span className="text-xs font-mono" style={{ color: '#2D3748' }}>
-              {data.expiration} · {(data.shortlist ?? []).length} عقد
+              {data?.expiration} · {(data?.shortlist ?? []).length} عقد
             </span>
           </div>
           <div className="overflow-x-auto">
@@ -1000,7 +1000,7 @@ export default function V2Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {(data.shortlist ?? []).map((row, idx) => {
+                {(data?.shortlist ?? []).map((row, idx) => {
                   const isTop = idx < 3
                   const rankColor = idx === 0 ? '#C9943A' : idx === 1 ? '#34D399' : idx === 2 ? '#60A5FA' : '#4A5568'
                   return (

@@ -4,6 +4,39 @@
 
 export type UserRole = 'admin' | 'moderator' | 'user'
 
+// Legacy UI types retained until the classic component library is removed.
+export type SignalStatus =
+  | 'draft' | 'pending_review' | 'published' | 'watch' | 'conditional'
+  | 'active' | 'exit' | 'invalidated' | 'closed' | 'archived'
+export type SignalStrategy =
+  | 'bull_call_debit_spread' | 'bear_put_debit_spread'
+  | 'bull_put_credit_spread' | 'bear_call_credit_spread'
+  | 'long_call' | 'long_put'
+export type RiskLevel = 'low' | 'medium' | 'high' | 'extreme'
+export type MarketBias = 'bullish' | 'bearish' | 'neutral' | 'mixed' | 'risk_off'
+export type DecisionState = 'no_trade' | 'watch' | 'conditional' | 'active' | 'exit' | 'invalidated'
+export type IndicatorCode =
+  | 'market_regime' | 'volatility_pressure' | 'expected_move'
+  | 'intraday_momentum' | 'options_liquidity' | 'theta_burn' | 'macro_event'
+export type SignalUpdateType =
+  | 'still_valid' | 'move_to_watch' | 'entry_triggered' | 'exit_triggered'
+  | 'invalidated' | 'closed' | 'reduce_risk' | 'take_partial_profit'
+  | 'cancel_setup' | 'note'
+export type SignalStatusConfig = {
+  label_ar: string
+  label_en: string
+  color: string
+  bgColor: string
+  borderColor: string
+  dotColor: string
+}
+export type RiskLevelConfig = {
+  label_ar: string
+  label_en: string
+  color: string
+  bgColor: string
+}
+
 export type UserProfile = {
   id:           string
   email:        string

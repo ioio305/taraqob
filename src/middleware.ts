@@ -1,6 +1,8 @@
-import { createServerClient } from '@supabase/ssr'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+
+type CookieToSet = { name: string; value: string; options: CookieOptions }
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -24,6 +26,7 @@ export async function middleware(request: NextRequest) {
   const publicRoutes = [
     '/', '/login', '/register', '/compliance', '/how-it-works', '/track',
     '/manifest.webmanifest', '/api/v2/signals/evaluate',
+    '/api/invite/validate',
     '/api/v2/chat', '/api/v2/leads', '/api/v2/unsubscribe',
     '/api/v2/digest', '/unsubscribe',
   ]
@@ -40,7 +43,7 @@ export async function middleware(request: NextRequest) {
     {
       cookies: {
         getAll: () => request.cookies.getAll(),
-        setAll: (cookiesToSet) => {
+        setAll: (cookiesToSet: CookieToSet[]) => {
           cookiesToSet.forEach(({ name, value, options }) => {
             request.cookies.set(name, value)
             response.cookies.set(name, value, options)

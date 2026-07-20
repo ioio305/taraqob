@@ -384,7 +384,7 @@ export async function GET(request: NextRequest) {
 
   // ── Strategy levels ───────────────────────────────────────────────────────
   const strategy = computeStrategy({
-    score: totalScore, dte, iv, bid, ask, mid, delta, gamma,
+    score: totalScore, dte, iv, bid: bid ?? 0, ask: ask ?? 0, mid, delta, gamma,
     spxPrice, emUpper, emLower, type, chgPct: spxChgPct, vixPrice,
   })
 

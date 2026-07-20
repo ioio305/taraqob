@@ -91,7 +91,8 @@ BEGIN
   NEW.updated_at = now();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = '';
 
 DROP TRIGGER IF EXISTS update_user_profiles_updated_at ON user_profiles;
 CREATE TRIGGER update_user_profiles_updated_at
@@ -106,30 +107,60 @@ CREATE TRIGGER update_v2_signals_updated_at
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 DECLARE
-  requested_role TEXT;
-  safe_role user_role;
+  requested_token TEXT;
+  matched_invitation_id UUID;
+  matched_role public.user_role;
+  safe_role public.user_role := 'user'::public.user_role;
 BEGIN
-  requested_role := NEW.raw_user_meta_data->>'role';
+  requested_token := NEW.raw_user_meta_data->>'invitation_token';
 
-  IF requested_role IS NOT NULL AND EXISTS (
-    SELECT 1 FROM pg_enum e
-    JOIN pg_type t ON t.oid = e.enumtypid
-    WHERE t.typname = 'user_role' AND e.enumlabel = requested_role
-  ) THEN
-    safe_role := requested_role::user_role;
+  IF requested_token IS NOT NULL THEN
+    SELECT i.id, i.role
+      INTO matched_invitation_id, matched_role
+      FROM public.invitations AS i
+     WHERE i.token = requested_token
+       AND lower(i.email) = lower(NEW.email)
+       AND i.used_at IS NULL
+       AND i.expires_at > now()
+     LIMIT 1;
+
+    IF matched_invitation_id IS NOT NULL THEN
+      safe_role := matched_role;
+    END IF;
   ELSE
-    safe_role := 'beta_user'::user_role;
+    SELECT i.id, i.role
+      INTO matched_invitation_id, matched_role
+      FROM public.invitations AS i
+     WHERE lower(i.email) = lower(NEW.email)
+       AND i.used_at IS NULL
+       AND i.expires_at > now()
+     ORDER BY i.created_at DESC
+     LIMIT 1;
+
+    IF matched_invitation_id IS NOT NULL THEN
+      safe_role := matched_role;
+    END IF;
   END IF;
 
-  INSERT INTO user_profiles (id, email, role, is_active)
-  VALUES (NEW.id, NEW.email, safe_role, true)
+  INSERT INTO public.user_profiles (id, email, full_name, role, is_active)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    coalesce(NEW.raw_user_meta_data->>'full_name', ''),
+    safe_role,
+    true
+  )
   ON CONFLICT (id) DO UPDATE
     SET email = EXCLUDED.email,
         updated_at = now();
 
+  IF matched_invitation_id IS NOT NULL THEN
+    UPDATE public.invitations SET used_at = now() WHERE id = matched_invitation_id;
+  END IF;
+
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
@@ -137,7 +168,7 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
 INSERT INTO user_profiles (id, email, role, is_active)
-SELECT u.id, u.email, 'beta_user'::user_role, true
+SELECT u.id, u.email, 'user'::user_role, true
 FROM auth.users u
 LEFT JOIN user_profiles p ON p.id = u.id
 WHERE p.id IS NULL;
@@ -149,13 +180,13 @@ ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
 CREATE OR REPLACE FUNCTION get_my_role()
 RETURNS user_role AS $$
-  SELECT role FROM user_profiles WHERE id = auth.uid()
-$$ LANGUAGE SQL SECURITY DEFINER STABLE;
+  SELECT role FROM public.user_profiles WHERE id = auth.uid()
+$$ LANGUAGE SQL SECURITY DEFINER STABLE SET search_path = '';
 
 CREATE OR REPLACE FUNCTION is_staff()
 RETURNS BOOLEAN AS $$
-  SELECT get_my_role() IN ('admin', 'moderator', 'analyst')
-$$ LANGUAGE SQL SECURITY DEFINER STABLE;
+  SELECT public.get_my_role() IN ('admin', 'moderator')
+$$ LANGUAGE SQL SECURITY DEFINER STABLE SET search_path = '';
 
 DROP POLICY IF EXISTS "user_profiles_read_own" ON user_profiles;
 DROP POLICY IF EXISTS "user_profiles_staff_read_all" ON user_profiles;
@@ -170,6 +201,16 @@ CREATE POLICY "user_profiles_update_own" ON user_profiles
   FOR UPDATE TO authenticated USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 CREATE POLICY "user_profiles_staff_update" ON user_profiles
   FOR UPDATE TO authenticated USING (is_staff());
+
+REVOKE UPDATE ON TABLE public.user_profiles FROM authenticated;
+GRANT UPDATE (full_name, full_name_ar, avatar_url, last_seen_at)
+  ON TABLE public.user_profiles TO authenticated;
+
+REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.get_my_role() FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.is_staff() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_my_role() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.is_staff() TO authenticated, service_role;
 
 DROP POLICY IF EXISTS "users_own_signals" ON v2_signals;
 DROP POLICY IF EXISTS "staff_all_signals" ON v2_signals;
@@ -192,5 +233,4 @@ DROP POLICY IF EXISTS "invitations_staff_all" ON invitations;
 DROP POLICY IF EXISTS "invitations_read_by_token" ON invitations;
 CREATE POLICY "invitations_staff_all" ON invitations
   FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
-CREATE POLICY "invitations_read_by_token" ON invitations
-  FOR SELECT USING (true);
+REVOKE SELECT ON TABLE public.invitations FROM anon;

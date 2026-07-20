@@ -1,14 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  poweredByHeader: false,
   experimental: {
     serverActions: {
-      allowedOrigins: ['localhost:3000', 'taraqob.vercel.app', 'taraqob.netlify.app'],
+      allowedOrigins: [
+        'localhost:3000',
+        'trqob.com',
+        'www.trqob.com',
+        'taraqob.vercel.app',
+        'taraqob.netlify.app',
+      ],
     },
   },
 }

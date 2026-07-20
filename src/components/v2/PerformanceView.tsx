@@ -27,18 +27,28 @@ export function PerformanceView() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // نقيّم الإشارات المفتوحة أولاً (يحدّث النتائج)، ثم نحمّل السجل
-    fetch('/api/v2/signals/evaluate').catch(() => {}).finally(() => {
-      import('@/lib/supabase/client').then(({ createClient }) => {
-        createClient()
+    // The scheduled, authenticated cron updates outcomes; this view only reads them.
+    let cancelled = false
+
+    async function loadSignals() {
+      try {
+        const { createClient } = await import('@/lib/supabase/client')
+        const { data } = await createClient()
           .from('v2_signals')
           .select('*')
           .order('created_at', { ascending: false })
           .limit(100)
-          .then(({ data }) => { setSignals((data ?? []).filter((s: Signal) => !s.contract_symbol?.startsWith('TEST_'))); setLoading(false) })
-          .catch(() => setLoading(false))
-      })
-    })
+
+        if (!cancelled) {
+          setSignals((data ?? []).filter((s: Signal) => !s.contract_symbol?.startsWith('TEST_')))
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    void loadSignals()
+    return () => { cancelled = true }
   }, [])
 
   // تفصيل حسب التصنيف (السجل الحي)

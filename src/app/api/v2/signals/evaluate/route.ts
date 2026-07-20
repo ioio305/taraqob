@@ -1,11 +1,26 @@
 import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getHistoryBars } from '@/lib/v2/marketData'
 
 export const dynamic = 'force-dynamic'
 
 // يقيّم الإشارات المفتوحة: هل لمس SPX الهدف (ربح) أو الوقف (خسارة) قبل الانتهاء؟
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const cronSecret = process.env.CRON_SECRET
+  const authorization = request.headers.get('authorization')
+
+  if (!cronSecret) {
+    return NextResponse.json(
+      { ok: false, error: 'CRON_SECRET is not configured' },
+      { status: 503 },
+    )
+  }
+
+  if (authorization !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+  }
+
   const sb = createServiceClient()
   const { data: signals } = await sb
     .from('v2_signals')

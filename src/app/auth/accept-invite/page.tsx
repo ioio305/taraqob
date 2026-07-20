@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -22,25 +22,24 @@ export default function AcceptInvitePage() {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
 
-  useEffect(() => {
-    if (!token) { setStep('error'); return }
-    checkToken()
+  const checkToken = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/invite/validate?token=${encodeURIComponent(token ?? '')}`, {
+        cache: 'no-store',
+      })
+      const payload = await response.json()
+      if (!response.ok || !payload.invitation) { setStep('error'); return }
+      setInv(payload.invitation)
+      setStep('form')
+    } catch {
+      setStep('error')
+    }
   }, [token])
 
-  async function checkToken() {
-    const supabase = createClient()
-    const { data, error } = await supabase
-      .from('invitations')
-      .select('*')
-      .eq('token', token)
-      .is('used_at', null)
-      .gt('expires_at', new Date().toISOString())
-      .single()
-
-    if (error || !data) { setStep('error'); return }
-    setInv(data)
-    setStep('form')
-  }
+  useEffect(() => {
+    if (!token) { setStep('error'); return }
+    void checkToken()
+  }, [token, checkToken])
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
@@ -51,28 +50,16 @@ export default function AcceptInvitePage() {
     const supabase = createClient()
     await supabase.auth.signOut()
 
-    const { data: authData, error: signupError } = await supabase.auth.signUp({
+    const { error: signupError } = await supabase.auth.signUp({
       email:    invitation.email,
       password,
-      options: { data: { full_name: name, role: invitation.role } }
+      options: { data: { full_name: name, invitation_token: token } }
     })
 
     if (signupError) {
       setError(signupError.message)
       setLoading(false)
       return
-    }
-
-    await supabase
-      .from('invitations')
-      .update({ used_at: new Date().toISOString() })
-      .eq('token', token)
-
-    if (authData.user) {
-      await supabase
-        .from('user_profiles')
-        .update({ full_name: name, role: invitation.role })
-        .eq('id', authData.user.id)
     }
 
     router.push('/login?registered=1')
