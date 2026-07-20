@@ -53,7 +53,10 @@ export default function AcceptInvitePage() {
     const { error: signupError } = await supabase.auth.signUp({
       email:    invitation.email,
       password,
-      options: { data: { full_name: name, invitation_token: token } }
+      options: {
+        data: { full_name: name, invitation_token: token },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
     })
 
     if (signupError) {

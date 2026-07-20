@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 const URL_ERROR_MESSAGES: Record<string, string> = {
   inactive:     'هذا الحساب معطّل. تواصل مع المسؤول.',
   auth_failed:  'فشل التحقق. حاول تسجيل الدخول من جديد.',
+  recovery_failed: 'رابط الاستعادة غير صالح أو انتهت صلاحيته. اطلب رابطاً جديداً.',
   unauthorized: 'غير مصرح لك بالوصول.',
 }
 
