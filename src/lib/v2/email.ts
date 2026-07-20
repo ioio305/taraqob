@@ -4,34 +4,51 @@
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://trqob.com'
 const FROM = process.env.EMAIL_FROM || 'ترقّب <news@trqob.com>'
 
-// القالب الذهبي: غلاف داكن أنيق بهوية ترقّب — يقبل جسماً داخلياً ورابط إلغاء
-export function emailShell(opts: { title: string; body: string; unsubscribeUrl?: string }): string {
-  const { title, body, unsubscribeUrl } = opts
-  return `
-<div dir="rtl" style="font-family: Arial, 'Segoe UI', sans-serif; background:#060D14; padding:24px 0;">
-  <div style="max-width:600px; margin:0 auto; background:#0A1420; border:1px solid rgba(201,148,58,0.25); border-radius:16px; overflow:hidden;">
-    <div style="text-align:center; padding:24px 24px 4px;">
-      <img src="${APP_URL}/logo.png" alt="ترقّب" width="62" height="62" style="width:62px; height:62px; object-fit:contain; display:inline-block;" />
-      <div style="color:#E8D5A3; font-size:17px; font-weight:bold; margin-top:6px; letter-spacing:1px;">ترقّب</div>
-    </div>
-    <div style="padding:8px 28px 26px;">
-      <h1 style="color:#E8D5A3; font-size:20px; margin:14px 0 16px; text-align:center;">${title}</h1>
-      <div style="color:#C6CFD8; font-size:15px; line-height:1.9;">${body}</div>
-    </div>
-    <div style="padding:16px 28px; border-top:1px solid rgba(255,255,255,0.05); text-align:center;">
-      <p style="color:#3A4756; font-size:11px; line-height:1.7; margin:0;">
-        ترقّب أداة دعم قرار تعليمية لعقود SPX — ليست توصية استثمارية ولا ضمان ربح.
-        ${unsubscribeUrl ? `<br/><a href="${unsubscribeUrl}" style="color:#5E6E7F; text-decoration:underline;">إلغاء الاشتراك من النشرة</a>` : ''}
-      </p>
-    </div>
-  </div>
-</div>`.trim()
+// غلاف موحّد متوافق مع أشهر تطبيقات البريد، ويثبت الشعار واسم «ترقّب» في كل رسالة.
+export function emailShell(opts: { title: string; body: string; unsubscribeUrl?: string; preheader?: string }): string {
+  const { title, body, unsubscribeUrl, preheader = title } = opts
+  return `<!doctype html>
+<html lang="ar" dir="rtl">
+  <body style="margin:0; padding:0; background:#050B12; font-family:Arial,'Segoe UI',Tahoma,sans-serif;">
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">${preheader}</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%; background:#050B12;">
+      <tr>
+        <td align="center" style="padding:28px 12px;">
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%; max-width:600px; background:#0A1420; border:1px solid #263748; border-radius:20px; overflow:hidden;">
+            <tr>
+              <td align="center" style="padding:28px 24px 22px; background:#0D1B2A; border-bottom:1px solid #263748;">
+                <img src="${APP_URL}/logo.png" alt="شعار ترقّب" width="88" style="display:block; width:88px; height:auto; margin:0 auto 10px; border:0;" />
+                <div style="font-size:27px; line-height:1.2; font-weight:800; color:#F1D58A; letter-spacing:1px;">ترقّب</div>
+                <div style="margin-top:6px; font-size:11px; color:#2ED39A; letter-spacing:2px;">منصة دعم القرار لعقود المؤشرات</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:30px 30px 26px;">
+                <h1 style="margin:0 0 18px; color:#FFFFFF; font-size:22px; line-height:1.5; text-align:center;">${title}</h1>
+                <div style="color:#C6D0DB; font-size:15px; line-height:1.9; text-align:right;">${body}</div>
+              </td>
+            </tr>
+            <tr>
+              <td align="center" style="padding:18px 26px 22px; background:#08111B; border-top:1px solid #1B2A39;">
+                <div style="width:52px; height:3px; margin:0 auto 14px; background:#C9943A; border-radius:99px;"></div>
+                <p style="margin:0; color:#718096; font-size:11px; line-height:1.8;">
+                  ترقّب أداة دعم قرار تعليمية — ليست توصية استثمارية ولا ضمان ربح.
+                  ${unsubscribeUrl ? `<br/><a href="${unsubscribeUrl}" style="color:#94A3B8; text-decoration:underline;">إلغاء الاشتراك من النشرة</a>` : ''}
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`.trim()
 }
 
 // زر أساسي ذهبي
 export function emailButton(text: string, href: string): string {
   return `<div style="text-align:center; margin:24px 0;">
-    <a href="${href}" style="background:linear-gradient(135deg,#C9943A,#8F6415); color:#060D14; padding:13px 30px; border-radius:12px; text-decoration:none; font-weight:bold; font-size:15px; display:inline-block;">${text}</a>
+    <a href="${href}" style="background:#D6AA4A; background-image:linear-gradient(135deg,#F1D58A,#C9943A); color:#07111A; padding:14px 32px; border:1px solid #F1D58A; border-radius:12px; text-decoration:none; font-weight:800; font-size:15px; display:inline-block;">${text}</a>
   </div>`
 }
 

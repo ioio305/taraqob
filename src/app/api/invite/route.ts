@@ -1,4 +1,5 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { emailButton, emailShell, sendResendBatch } from '@/lib/v2/email'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
@@ -60,43 +61,21 @@ export async function POST(request: NextRequest) {
   const appUrl     = process.env.NEXT_PUBLIC_APP_URL || 'https://trqob.com'
   const inviteLink = `${appUrl}/auth/accept-invite?token=${token}`
 
-  // إرسال البريد الإلكتروني عبر Resend إذا كان المفتاح موجوداً
-  if (process.env.RESEND_API_KEY) {
-    try {
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from:    'ترقّب <info@resend.dev>',
-          to:      [email],
-          subject: `دعوة للانضمام إلى منصة ترقّب`,
-          html: `
-            <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px; background: #060D14; color: white; border-radius: 16px;">
-              <div style="text-align: center; margin-bottom: 28px;">
-                <div style="display: inline-block; background: linear-gradient(135deg,#C9943A,#8F6415); border-radius: 12px; padding: 10px 18px;">
-                  <span style="font-size: 20px; font-weight: bold; color: #060D14;">ترقّب</span>
-                </div>
-              </div>
-              <h2 style="color: #E8D5A3; margin-bottom: 12px;">مرحباً بك في ترقّب</h2>
-              <p style="color: #64748B; line-height: 1.7;">تمت دعوتك للانضمام إلى منصة ترقّب — منصة تحليل عقود SPX Options المتقدمة.</p>
-              <p style="color: #64748B;">صلاحيتك: <strong style="color: #C9943A;">${ROLE_NAMES[role]}</strong></p>
-              <div style="margin: 32px 0; text-align: center;">
-                <a href="${inviteLink}" style="background: linear-gradient(135deg,#C9943A,#8F6415); color: #060D14; padding: 14px 32px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 15px;">
-                  قبول الدعوة والتسجيل ←
-                </a>
-              </div>
-              <p style="color: #374151; font-size: 12px; text-align: center;">الرابط صالح لمدة 7 أيام. إذا لم تطلب هذه الدعوة تجاهل هذا البريد.</p>
-            </div>
-          `,
-        }),
-      })
-    } catch {
-      // فشل إرسال البريد لا يوقف العملية
-    }
-  }
+  // كل رسائل التطبيق تستخدم الغلاف الموحّد لضمان ظهور شعار واسم «ترقّب».
+  await sendResendBatch([{
+    to: email,
+    subject: 'دعوتك للانضمام إلى ترقّب',
+    html: emailShell({
+      title: 'مرحباً بك في ترقّب',
+      preheader: 'تمت دعوتك للانضمام إلى منصة ترقّب',
+      body: `
+        <p style="margin:0 0 14px;">تمت دعوتك للانضمام إلى منصة <b style="color:#F1D58A;">ترقّب</b>.</p>
+        <p style="margin:0 0 14px;">صلاحيتك: <b style="color:#2ED39A;">${ROLE_NAMES[role]}</b></p>
+        ${emailButton('قبول الدعوة والتسجيل ←', inviteLink)}
+        <p style="margin:18px 0 0; color:#718096; font-size:12px; text-align:center;">الرابط صالح لمدة 7 أيام. إذا لم تطلب هذه الدعوة فتجاهل الرسالة بأمان.</p>
+      `.trim(),
+    }),
+  }]).catch(() => ({ sent: 0, skipped: false, errors: ['تعذّر الإرسال'] }))
 
   // سجل المراجعة
   await serviceClient.from('audit_logs').insert({

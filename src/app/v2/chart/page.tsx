@@ -51,6 +51,8 @@ interface ChartData {
   analysis: AnalysisResult
   gamma?:   GammaExposure | null
   em?:      { upper: number; lower: number; points: number } | null
+  updatedAt?: string
+  lastCandleAt?: string | null
   error?:   string
 }
 
@@ -278,7 +280,7 @@ function computeKeyLevels(candles: Candle[], tf: string): { price: number; title
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ChartPage() {
-  const [tf, setTf]               = useState('1d')
+  const [tf, setTf]               = useState('5m')
   const [data, setData]           = useState<ChartData | null>(null)
   const [loading, setLoading]     = useState(false)
   const [error, setError]         = useState('')
@@ -289,6 +291,7 @@ export default function ChartPage() {
   const [chartView, setChartView] = useState<'taraqob' | 'tradingview'>('taraqob')
   const [support, setSupport]     = useState<SupportQuote[]>([])
   const [gamma, setGamma]         = useState<GammaExposure | null>(null)
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
 
   // Strike input state
   const [strike, setStrike]           = useState('')
@@ -307,41 +310,55 @@ export default function ChartPage() {
   const chartInstances = useRef<IChartApi[]>([])
 
   // ── Fetch chart data ────────────────────────────────────────────────────────
-  const fetchData = useCallback(async (timeframe: string) => {
-    setLoading(true)
+  const fetchData = useCallback(async (timeframe: string, silent = false) => {
+    if (!silent) setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/api/v2/chart?tf=${timeframe}`)
+      const res = await fetch(`/api/v2/chart?tf=${timeframe}&_=${Date.now()}`, { cache: 'no-store' })
       if (!res.ok) throw new Error('فشل الاتصال')
       const d: ChartData = await res.json()
       if (d.error && !d.candles?.length) throw new Error(d.error)
       setData(d)
+      setLastRefresh(new Date())
       if (d.gamma) setGamma(d.gamma)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'فشل تحميل البيانات')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [])
 
-  useEffect(() => { fetchData(tf) }, [tf, fetchData])
+  useEffect(() => {
+    void fetchData(tf)
+    const refreshMs = ['1d', '1w', '1M'].includes(tf) ? 120_000 : 30_000
+    const timer = window.setInterval(() => { void fetchData(tf, true) }, refreshMs)
+    return () => window.clearInterval(timer)
+  }, [tf, fetchData])
 
   // ── Fetch supporting symbols ────────────────────────────────────────────────
   useEffect(() => {
-    fetch('/api/market/pulse')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (!d) return
+    let active = true
+    const loadSupport = async () => {
+      try {
+        const response = await fetch(`/api/market/pulse?_=${Date.now()}`, { cache: 'no-store' })
+        const d = response.ok ? await response.json() : null
+        if (!d || !active) return
         const qqq = d.qqq ?? d.spy ?? null
         const vix = d.vix ?? null
         const spx = d.spx ?? null
         const items: SupportQuote[] = []
         if (qqq) items.push({ symbol: 'QQQ', label: 'ناسداك', price: qqq.last ?? null, change: qqq.change_percentage ?? null })
-        if (vix) items.push({ symbol: 'VIX', label: 'مؤشر الخوف', price: vix.last ?? null, change: vix.change_percentage ?? null })
-        if (spx) items.push({ symbol: 'SPX', label: 'المرجعي', price: spx.last ?? null, change: spx.change_percentage ?? null })
+        if (vix) items.push({ symbol: 'VIX', label: 'مؤشر الخوف', price: vix.last ?? vix.price ?? null, change: vix.change_percentage ?? vix.change ?? null })
+        if (spx) items.push({ symbol: 'SPX', label: 'المرجعي', price: spx.last ?? spx.price ?? null, change: spx.change_percentage ?? spx.change ?? null })
         setSupport(items)
-      })
-      .catch(() => {})
+      } catch { /* يبقى آخر سعر ناجح ظاهراً */ }
+    }
+    void loadSupport()
+    const timer = window.setInterval(() => { void loadSupport() }, 30_000)
+    return () => {
+      active = false
+      window.clearInterval(timer)
+    }
   }, [])
 
   // ── Auto-set option type from market bias ──────────────────────────────────
@@ -696,6 +713,12 @@ export default function ChartPage() {
   const analysis = data?.analysis
   const last     = data?.candles[data.candles.length - 1]
   const intraday = !['1d','1w','1M'].includes(tf)
+  const lastCandleLabel = data?.lastCandleAt
+    ? new Intl.DateTimeFormat('ar-SA-u-ca-gregory', {
+        timeZone: intraday ? 'America/New_York' : 'UTC',
+        day: 'numeric', month: 'short', hour: intraday ? 'numeric' : undefined, minute: intraday ? '2-digit' : undefined,
+      }).format(new Date(intraday ? data.lastCandleAt : `${data.lastCandleAt.slice(0, 10)}T12:00:00Z`))
+    : null
 
   return (
     <div className="min-h-screen bg-[#060D14] text-white p-4 space-y-4" dir="rtl">
@@ -711,6 +734,20 @@ export default function ChartPage() {
             {last && (
               <span className="text-sm font-mono text-white">{last.close.toLocaleString()}</span>
             )}
+            {lastCandleLabel && (
+              <span className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 px-2 py-1 rounded-full">
+                آخر شمعة: {lastCandleLabel}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => { void fetchData(tf) }}
+              disabled={loading}
+              className="text-xs text-[#E8D5A3] bg-[#C9943A]/10 border border-[#C9943A]/30 px-2 py-1 rounded-full disabled:opacity-50"
+            >
+              {loading ? 'جارٍ التحديث…' : 'تحديث الآن'}
+            </button>
+            {lastRefresh && <span className="text-[10px] text-gray-600">تلقائي كل {intraday ? '30 ثانية' : 'دقيقتين'}</span>}
           </div>
 
           {/* Timeframe selector */}

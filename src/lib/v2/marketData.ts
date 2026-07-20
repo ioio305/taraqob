@@ -7,6 +7,7 @@
 // ============================================================
 
 import { getCboeData, cboeChain, cboeExpirations } from '@/lib/v2/cboe'
+import { fromZonedTime } from 'date-fns-tz'
 
 const TRADIER_BASE = 'https://api.tradier.com/v1'
 const YF = 'https://query2.finance.yahoo.com/v8/finance/chart'
@@ -184,6 +185,11 @@ function parseYahooBars(json: any, scale: number): MdBar[] {
   return out
 }
 
+function normalizeTradierTime(value: string): string {
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)) return new Date(value).toISOString()
+  return fromZonedTime(value.replace(' ', 'T'), 'America/New_York').toISOString()
+}
+
 export async function getIntradayBars(tradierInterval: string, days: number): Promise<MdBar[]> {
   const start = new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10)
   const end = new Date().toISOString().slice(0, 10)
@@ -195,7 +201,7 @@ export async function getIntradayBars(tradierInterval: string, days: number): Pr
       const raw = json?.series?.data ?? []
       const arr = Array.isArray(raw) ? raw : [raw]
       const bars = arr.filter((d: any) => !!d?.time).map((d: any) => ({
-        time: d.time,
+        time: normalizeTradierTime(d.time),
         open: +(d.open * ratio).toFixed(2),
         high: +(d.high * ratio).toFixed(2),
         low: +(d.low * ratio).toFixed(2),
@@ -209,9 +215,12 @@ export async function getIntradayBars(tradierInterval: string, days: number): Pr
   const yInt = TF_TO_YAHOO_INTRADAY[tradierInterval] ?? '5m'
   const range = yahooRangeForDays(days, true)
   try {
-    const res = await fetch(`${YF}/SPY?interval=${yInt}&range=${range}&includePrePost=true`, { headers: UA, cache: 'no-store' })
+    const [res, ratio] = await Promise.all([
+      fetch(`${YF}/SPY?interval=${yInt}&range=${range}&includePrePost=true`, { headers: UA, cache: 'no-store' }),
+      spyToSpxRatio(),
+    ])
     if (!res.ok) return []
-    return parseYahooBars(await res.json(), 10)
+    return parseYahooBars(await res.json(), ratio)
   } catch { return [] }
 }
 

@@ -11,6 +11,7 @@ import {
 import { getGammaExposure } from '@/lib/v2/gammaExposure'
 
 export const dynamic = 'force-dynamic'
+const NO_STORE = { 'Cache-Control': 'no-store, max-age=0, must-revalidate' }
 
 // ─── Timeframe config ─────────────────────────────────────────────────────────
 
@@ -52,11 +53,14 @@ export async function GET(request: NextRequest) {
       bars = await getHistoryBars(cfg.tradierInterval, cfg.days)
     }
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 502 })
+    return NextResponse.json({ error: String(err) }, { status: 502, headers: NO_STORE })
   }
 
   if (bars.length < 10) {
-    return NextResponse.json({ tf, symbol: 'SPX', candles: [], analysis: defaultAnalysis(), error: 'بيانات غير كافية — تعذّر جلب الشموع' })
+    return NextResponse.json(
+      { tf, symbol: 'SPX', candles: [], analysis: defaultAnalysis(), error: 'بيانات غير كافية — تعذّر جلب الشموع' },
+      { headers: NO_STORE },
+    )
   }
 
   const closes = bars.map(b => b.close)
@@ -159,5 +163,14 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ tf, symbol: 'SPX', candles, analysis, gamma, em })
+  return NextResponse.json({
+    tf,
+    symbol: 'SPX',
+    candles,
+    analysis,
+    gamma,
+    em,
+    updatedAt: new Date().toISOString(),
+    lastCandleAt: bars[bars.length - 1]?.time ?? null,
+  }, { headers: NO_STORE })
 }
