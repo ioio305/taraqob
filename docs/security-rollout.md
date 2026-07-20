@@ -17,7 +17,8 @@ These changes deliberately avoid the recommendation engines and market-data keys
 4. Deploy the application branch to a Vercel Preview and test signup, login, invitation, admin access, and cron authorization.
 5. Promote the tested deployment to Production.
 6. Run `008_lock_invitation_reads.sql` after `/api/invite/validate` is live.
-7. Rerun Supabase Security Advisor and verify the public `SECURITY DEFINER` warnings are gone.
+7. Run `009_private_staff_authorization.sql` and verify staff access still works.
+8. Rerun Supabase Security Advisor and verify the exposed `SECURITY DEFINER` warnings are gone.
 
 ## Expected security behavior
 
@@ -25,5 +26,8 @@ These changes deliberately avoid the recommendation engines and market-data keys
 - A browser user cannot update `role`, `subscription_tier`, `is_active`, or `preferences`.
 - Invitation roles come from a valid, unused, unexpired database invitation.
 - Anonymous clients cannot list the `invitations` table after migration 008.
+- Staff authorization helpers are kept outside the exposed API schema after migration 009.
+
+The remaining leaked-password warning requires a paid Supabase plan. Do not change the subscription without explicit approval.
 
 Both database migrations are transactional. If a statement fails, PostgreSQL rolls that migration back automatically.
