@@ -33,6 +33,9 @@ export async function POST(req: NextRequest) {
 
   const email = String(body?.email ?? '').trim().toLowerCase().slice(0, 254)
   const name = String(body?.name ?? '').trim().slice(0, 100) || null
+  // الجوال: نُبقي الأرقام و + فقط، ونتجاهله إن كان قصيراً جداً
+  const phoneRaw = String(body?.phone ?? '').replace(/[^\d+]/g, '').slice(0, 20)
+  const phone = phoneRaw.replace(/\D/g, '').length >= 7 ? phoneRaw : null
   const source = ['chat', 'newsletter', 'landing'].includes(body?.source) ? body.source : 'chat'
 
   if (!EMAIL_RE.test(email)) {
@@ -40,9 +43,10 @@ export async function POST(req: NextRequest) {
   }
 
   const admin = createServiceClient()
+  // أول تسجيل يفوز — لا نطمس اسماً/جوالاً سابقاً بإدخال أنقص لاحق
   const { error } = await admin
     .from('v2_leads')
-    .upsert({ email, name, source }, { onConflict: 'email', ignoreDuplicates: true })
+    .upsert({ email, name, phone, source }, { onConflict: 'email', ignoreDuplicates: true })
 
   if (error) {
     return NextResponse.json({ ok: false, error: 'تعذر الحفظ — جرب لاحقاً' }, { status: 500 })

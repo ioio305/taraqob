@@ -23,8 +23,8 @@ const QUICK_MEMBER = [
   'ما الفرق بين الباقات؟',
 ]
 
-const GREETING_VISITOR = 'أهلاً بك 👋 أنا مساعد ترقّب. اسألني أي شيء عن المنصة — كيف تعمل، الباقات، أو كيف تبدأ تجربتك المجانية.'
-const GREETING_MEMBER = 'أهلاً 👋 أنا مساعدك في ترقّب. اسألني عن أي مصطلح أو ميزة، أو تصفّح القاموس من الأعلى.'
+const GREETING_VISITOR = 'أهلاً 👋 أنا مساعد ترقّب. اسأل. أجاوب بصدق وباختصار.'
+const GREETING_MEMBER = 'أهلاً 👋 اسأل عن أي مصطلح أو ميزة. أو افتح القاموس فوق.'
 
 export function AssistantWidget({ context = 'visitor' }: { context?: 'visitor' | 'member' }) {
   const [open, setOpen] = useState(false)
@@ -37,8 +37,40 @@ export function AssistantWidget({ context = 'visitor' }: { context?: 'visitor' |
   const [emailDone, setEmailDone] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
+  // بطاقة التعريف الاختيارية (زائر فقط): اسم + بريد + جوال، تظهر أول المحادثة
+  const [cardDone, setCardDone] = useState(context === 'member')
+  const [cName, setCName] = useState('')
+  const [cEmail, setCEmail] = useState('')
+  const [cPhone, setCPhone] = useState('')
+  const [cErr, setCErr] = useState<string | null>(null)
+  const [cBusy, setCBusy] = useState(false)
+
   const greeting = context === 'member' ? GREETING_MEMBER : GREETING_VISITOR
   const quick = context === 'member' ? QUICK_MEMBER : QUICK_VISITOR
+
+  useEffect(() => {
+    if (context !== 'visitor') return
+    try { if (localStorage.getItem('taraqob_lead_card')) setCardDone(true) } catch { /* تجاهل */ }
+  }, [context])
+
+  function dismissCard() {
+    setCardDone(true)
+    try { localStorage.setItem('taraqob_lead_card', '1') } catch { /* تجاهل */ }
+  }
+
+  async function submitCard() {
+    if (!cEmail.trim()) { setCErr('البريد ناقص'); return }
+    setCBusy(true); setCErr(null)
+    try {
+      const res = await fetch('/api/v2/leads', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: cName.trim(), email: cEmail.trim(), phone: cPhone.trim(), source: 'chat' }),
+      })
+      const d = await res.json()
+      if (d.ok) dismissCard()
+      else { setCErr(d.error ?? 'تعذّر الحفظ'); setCBusy(false) }
+    } catch { setCErr('تعذّر الاتصال'); setCBusy(false) }
+  }
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -123,8 +155,44 @@ export function AssistantWidget({ context = 'visitor' }: { context?: 'visitor' |
             </div>
           </div>
 
+          {/* بطاقة التعريف الاختيارية — أول شيء يراه الزائر */}
+          {tab === 'chat' && !cardDone && (
+            <div className="flex-1 overflow-y-auto px-4 py-5">
+              <div className="text-center mb-4">
+                <div className="text-3xl mb-2">👋</div>
+                <h3 className="text-base font-bold text-white mb-1">عرّفنا بنفسك</h3>
+                <p className="text-xs leading-relaxed" style={{ color: '#8595A5' }}>
+                  نرسل لك الفرص القوية وملخّص السوق. اختياري — تقدر تتخطّى وتسأل مباشرة.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <input value={cName} onChange={e => setCName(e.target.value)} placeholder="اسمك"
+                  className="w-full rounded-xl px-3 py-2.5 text-sm text-white outline-none"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }} />
+                <input value={cEmail} onChange={e => setCEmail(e.target.value)} type="email" dir="ltr" placeholder="بريدك"
+                  onKeyDown={e => { if (e.key === 'Enter') submitCard() }}
+                  className="w-full rounded-xl px-3 py-2.5 text-sm text-white outline-none text-left"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }} />
+                <input value={cPhone} onChange={e => setCPhone(e.target.value)} type="tel" dir="ltr" placeholder="جوالك (واتساب)"
+                  onKeyDown={e => { if (e.key === 'Enter') submitCard() }}
+                  className="w-full rounded-xl px-3 py-2.5 text-sm text-white outline-none text-left"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }} />
+                {cErr && <p className="text-xs" style={{ color: '#F87171' }}>{cErr}</p>}
+                <button onClick={submitCard} disabled={cBusy}
+                  className="w-full py-2.5 rounded-xl text-sm font-bold disabled:opacity-50"
+                  style={{ background: 'linear-gradient(135deg,#26D07C,#159957)', color: '#060D14' }}>
+                  {cBusy ? '...' : 'سجّلني — وابدأ'}
+                </button>
+                <button onClick={dismissCard}
+                  className="w-full py-2 text-xs" style={{ color: '#5E6E7F' }}>
+                  تخطَّ وتحدّث مباشرة ←
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* تبويب المحادثة */}
-          {tab === 'chat' && (
+          {tab === 'chat' && cardDone && (
             <>
               <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
                 {/* ترحيب */}
