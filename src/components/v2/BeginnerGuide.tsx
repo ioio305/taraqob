@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react'
 
-const GLOSSARY: { term: string; icon: string; simple: string }[] = [
+export const GLOSSARY: { term: string; icon: string; simple: string }[] = [
   { term: 'العقد (كول / بوت)', icon: '📄', simple: 'كول = تربح إذا صعد السوق. بوت = تربح إذا نزل. تشتري العقد بسعر صغير وتبيعه أغلى (أو أرخص فتخسر).' },
   { term: 'الستريك', icon: '🎯', simple: 'الرقم الذي تراهن أن السوق سيصله. كلما كان أبعد عن السعر الحالي كان العقد أرخص — وأصعب ربحاً.' },
   { term: 'الدلتا (سرعة العقد)', icon: '⚡', simple: 'كم يتحرك سعر عقدك حين يتحرك السوق نقطة واحدة. دلتا 0.30 يعني عقدك يكسب 30 سنتاً لكل نقطة. الأفضل بين 0.25 و 0.45 — الأبطأ من ذلك يانصيب.' },
@@ -29,8 +29,9 @@ const TOUR_STEPS: { icon: string; title: string; body: string }[] = [
   { icon: '🎮', title: 'ابدأ بالمحفظة التجريبية', body: 'جرّب التوصيات بمال وهمي (10,000$ افتراضية) قبل أن تخاطر بريال واحد. حين تقتنع بالنتائج بنفسك — ابدأ بمبالغ صغيرة.' },
 ]
 
+// ملاحظة: القاموس والزر العائم انتقلا إلى «مساعد ترقّب» (AssistantWidget).
+// هنا نُبقي فقط الجولة التعريفية التي تظهر عند أول دخول.
 export function BeginnerHelpers() {
-  const [glossaryOpen, setGlossaryOpen] = useState(false)
   const [tourStep, setTourStep] = useState<number | null>(null)
 
   useEffect(() => {
@@ -46,39 +47,6 @@ export function BeginnerHelpers() {
 
   return (
     <>
-      {/* زر القاموس العائم */}
-      <button onClick={() => setGlossaryOpen(true)}
-        className="fixed bottom-4 right-4 z-40 w-10 h-10 rounded-full text-lg shadow-lg"
-        style={{ background: 'rgba(13,27,42,0.9)', border: '1px solid rgba(201,148,58,0.4)', backdropFilter: 'blur(8px)' }}
-        title="قاموس المصطلحات ببساطة">
-        ❓
-      </button>
-
-      {/* القاموس */}
-      {glossaryOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-          onClick={() => setGlossaryOpen(false)} dir="rtl">
-          <div className="w-full max-w-lg max-h-[80vh] overflow-y-auto rounded-2xl p-5"
-            style={{ background: '#0D1B2A', border: '1px solid rgba(201,148,58,0.3)' }}
-            onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-[#E8D5A3]">المصطلحات ببساطة — بلا تعقيد</h2>
-              <button onClick={() => setGlossaryOpen(false)} className="text-gray-500 hover:text-white text-xl">✕</button>
-            </div>
-            <div className="space-y-3">
-              {GLOSSARY.map(g => (
-                <div key={g.term} className="rounded-xl p-3"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div className="text-sm font-bold text-white mb-1">{g.icon} {g.term}</div>
-                  <p className="text-sm text-gray-400 leading-relaxed">{g.simple}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* الجولة التعريفية (أول دخول فقط) */}
       {tourStep !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"

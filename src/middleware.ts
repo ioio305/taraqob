@@ -24,6 +24,8 @@ export async function middleware(request: NextRequest) {
   const publicRoutes = [
     '/', '/login', '/register', '/compliance', '/how-it-works', '/track',
     '/manifest.webmanifest', '/api/v2/signals/evaluate',
+    '/api/v2/chat', '/api/v2/leads', '/api/v2/unsubscribe',
+    '/api/v2/digest', '/unsubscribe',
   ]
   if (publicRoutes.includes(pathname) || pathname.startsWith('/auth/')) {
     return NextResponse.next()

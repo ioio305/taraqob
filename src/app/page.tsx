@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { HomepageNewsBar } from '@/components/HomepageNewsBar'
+import { AssistantWidget } from '@/components/v2/AssistantWidget'
+import { NewsletterBox } from '@/components/NewsletterBox'
 
 export default async function RootPage({ searchParams }: { searchParams?: { preview?: string } }) {
   const supabase = createClient()
@@ -481,6 +483,9 @@ export default async function RootPage({ searchParams }: { searchParams?: { prev
         </Link>
       </section>
 
+      {/* ── النشرة الأسبوعية ── */}
+      {!user && <NewsletterBox />}
+
       {/* ── Footer ── */}
       <footer style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
         <div className="max-w-5xl mx-auto px-6 py-8 flex flex-wrap items-center justify-between gap-4">
@@ -500,6 +505,9 @@ export default async function RootPage({ searchParams }: { searchParams?: { prev
           </div>
         </div>
       </footer>
+
+      {/* مساعد ترقّب: محادثة ذكية تعرّف بالقيمة وتصطاد المهتمين بلطف */}
+      <AssistantWidget context="visitor" />
     </div>
   )
 }
