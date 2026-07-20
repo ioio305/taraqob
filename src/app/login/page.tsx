@@ -4,14 +4,25 @@ import { createClient } from '@/lib/supabase/server'
 import LoginForm from './LoginForm'
 
 export default async function LoginPage({ searchParams }: { searchParams?: { plan?: string; next?: string } }) {
-  // مسجّل دخول أصلاً؟ لا معنى لصفحة الدخول — نحوّله لوجهته مباشرة
+  // مسجّل دخول أصلاً؟ لا معنى لصفحة الدخول — نحوّله لوجهته مباشرة.
+  // شرط أساسي: ملفه الشخصي موجود ونشط — وإلا نعرض النموذج بدل الدوران
+  // في حلقة تحويل لا نهائية مع حماية الوسيط.
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (user) {
-    if (searchParams?.plan) redirect('/v2/upgrade')
-    const next = searchParams?.next
-    if (next && next.startsWith('/') && !next.startsWith('//')) redirect(next)
-    redirect('/v2')
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('is_active')
+      .eq('id', user.id)
+      .single()
+    if (profile && profile.is_active !== false) {
+      if (searchParams?.plan) redirect('/v2/upgrade')
+      const next = searchParams?.next
+      if (next && next.startsWith('/') && !next.startsWith('//')) redirect(next)
+      redirect('/v2')
+    }
+    // ملف مفقود/معطل: أنهِ الجلسة ليتمكن من الدخول بحساب سليم
+    await supabase.auth.signOut()
   }
 
   return (
