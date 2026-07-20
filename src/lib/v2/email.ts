@@ -10,10 +10,9 @@ export function emailShell(opts: { title: string; body: string; unsubscribeUrl?:
   return `
 <div dir="rtl" style="font-family: Arial, 'Segoe UI', sans-serif; background:#060D14; padding:24px 0;">
   <div style="max-width:600px; margin:0 auto; background:#0A1420; border:1px solid rgba(201,148,58,0.25); border-radius:16px; overflow:hidden;">
-    <div style="text-align:center; padding:26px 24px 6px;">
-      <div style="display:inline-block; background:linear-gradient(135deg,#C9943A,#8F6415); border-radius:12px; padding:9px 18px;">
-        <span style="font-size:19px; font-weight:bold; color:#060D14;">ترقّب</span>
-      </div>
+    <div style="text-align:center; padding:24px 24px 4px;">
+      <img src="${APP_URL}/logo.png" alt="ترقّب" width="62" height="62" style="width:62px; height:62px; object-fit:contain; display:inline-block;" />
+      <div style="color:#E8D5A3; font-size:17px; font-weight:bold; margin-top:6px; letter-spacing:1px;">ترقّب</div>
     </div>
     <div style="padding:8px 28px 26px;">
       <h1 style="color:#E8D5A3; font-size:20px; margin:14px 0 16px; text-align:center;">${title}</h1>

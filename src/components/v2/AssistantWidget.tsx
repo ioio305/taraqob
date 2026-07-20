@@ -196,7 +196,7 @@ export function AssistantWidget({ context = 'visitor' }: { context?: 'visitor' |
             <>
               <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
                 {/* ترحيب */}
-                <Bubble role="assistant">{greeting}</Bubble>
+                <Bubble role="assistant"><RichText text={greeting} /></Bubble>
 
                 {/* اقتراحات سريعة قبل أي رسالة */}
                 {messages.length === 0 && (
@@ -211,7 +211,7 @@ export function AssistantWidget({ context = 'visitor' }: { context?: 'visitor' |
                   </div>
                 )}
 
-                {messages.map((m, i) => <Bubble key={i} role={m.role}>{m.content}</Bubble>)}
+                {messages.map((m, i) => <Bubble key={i} role={m.role}><RichText text={m.content} /></Bubble>)}
                 {loading && <Bubble role="assistant"><span className="opacity-60">يكتب…</span></Bubble>}
 
                 {/* دعوة للتجربة (زائر فقط، بعد أول تبادل) */}
@@ -287,6 +287,24 @@ export function AssistantWidget({ context = 'visitor' }: { context?: 'visitor' |
       )}
     </>
   )
+}
+
+// عرض نصّي أنيق: يحوّل **عريض** لخط ثقيل، ويُنظّف أي جدول ماركداون متسرّب
+function RichText({ text }: { text: string }) {
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const html = esc(text)
+    .split('\n')
+    .filter(line => !/^\s*\|?[\s:|-]*\|[\s:|-]*$/.test(line)) // صف الفواصل ---|---
+    .map(line => {
+      const t = line.trim()
+      if (t.startsWith('|') && t.endsWith('|')) {          // صف جدول → نص نظيف
+        return t.slice(1, -1).split('|').map(c => c.trim()).filter(Boolean).join(' — ')
+      }
+      return line.replace(/^#{1,6}\s*/, '')                 // عناوين #
+    })
+    .join('\n')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')       // عريض
+  return <span dangerouslySetInnerHTML={{ __html: html }} />
 }
 
 function Bubble({ role, children }: { role: 'user' | 'assistant'; children: React.ReactNode }) {
