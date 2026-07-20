@@ -33,7 +33,11 @@ function RegisterContent() {
     const { data, error: signupError } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { full_name: name.trim(), role: 'user' } },
+      options: {
+        data: { full_name: name.trim(), role: 'user' },
+        // رابط التفعيل في البريد يهبط على مسار الاستقبال الذي يسجّل الدخول تلقائياً
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
     })
 
     if (signupError) {
@@ -65,7 +69,11 @@ function RegisterContent() {
   async function resendVerification() {
     setResent(false)
     const supabase = createClient()
-    await supabase.auth.resend({ type: 'signup', email: email.trim() })
+    await supabase.auth.resend({
+      type: 'signup',
+      email: email.trim(),
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+    })
     setResent(true)
   }
 

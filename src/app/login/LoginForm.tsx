@@ -42,7 +42,10 @@ export default function LoginForm() {
     if (authError) {
       // حساب لم يفعَّل بريده بعد؟ نعيد إرسال رابط التفعيل تلقائياً
       if (authError.message.toLowerCase().includes('not confirmed')) {
-        await supabase.auth.resend({ type: 'signup', email }).catch(() => {})
+        await supabase.auth.resend({
+          type: 'signup', email,
+          options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+        }).catch(() => {})
         setError('حسابك لم يُفعَّل بعد — أرسلنا لك رابط التفعيل من جديد، افحص بريدك (ومجلد غير الهام)')
       } else {
         setError('البريد أو كلمة المرور غير صحيحة')
