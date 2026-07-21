@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 // GET — list 30 most recent notifications for the authenticated user
 export async function GET() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -23,7 +23,7 @@ export async function GET() {
 
 // PATCH — mark all notifications as read
 export async function PATCH() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -34,7 +34,7 @@ export async function PATCH() {
 
 // POST — create a notification (admin/moderator only)
 export async function POST(request: NextRequest) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

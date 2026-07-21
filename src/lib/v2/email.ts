@@ -2,7 +2,8 @@
 // تُستخدم من: النشرة الأسبوعية (digest) والحملات الترويجية.
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://trqob.com'
-const FROM = process.env.EMAIL_FROM || 'ترقّب <news@trqob.com>'
+const configuredFrom = process.env.RESEND_FROM_EMAIL || process.env.EMAIL_FROM || 'news@trqob.com'
+const FROM = configuredFrom.includes('<') ? configuredFrom : `ترقّب <${configuredFrom}>`
 
 // غلاف موحّد متوافق مع أشهر تطبيقات البريد، ويثبت الشعار واسم «ترقّب» في كل رسالة.
 export function emailShell(opts: { title: string; body: string; unsubscribeUrl?: string; preheader?: string }): string {

@@ -1,21 +1,12 @@
-import { createClient } from '@/lib/supabase/server'
+import { getV2Viewer } from '@/lib/v2/access'
 import { redirect } from 'next/navigation'
 import type { ReactNode } from 'react'
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase
-    .from('user_profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile || !['admin', 'moderator'].includes(profile.role)) {
-    redirect('/v2')
-  }
+  const viewer = await getV2Viewer()
+  if (!viewer) redirect('/login')
+  if (!viewer.profile || viewer.profile.is_active === false) redirect('/login?error=inactive')
+  if (!viewer.isStaff) redirect('/v2')
 
   return <>{children}</>
 }

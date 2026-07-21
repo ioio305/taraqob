@@ -28,6 +28,14 @@ export async function POST(request: NextRequest) {
   }
 
   const serviceClient = createServiceClient()
+  const { data: previousEvent } = await serviceClient
+    .from('stripe_webhook_events')
+    .select('event_id')
+    .eq('event_id', event.id)
+    .maybeSingle()
+  if (previousEvent) {
+    return NextResponse.json({ received: true, duplicate: true })
+  }
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session
@@ -75,6 +83,14 @@ export async function POST(request: NextRequest) {
         url:     '/v2/upgrade',
       })
     }
+  }
+
+  const { error: eventLogError } = await serviceClient
+    .from('stripe_webhook_events')
+    .insert({ event_id: event.id, event_type: event.type })
+
+  if (eventLogError && eventLogError.code !== '23505') {
+    console.error('Failed to record Stripe event:', eventLogError.message)
   }
 
   return NextResponse.json({ received: true })

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 
 export default function ForgotPasswordPage() {
@@ -42,7 +43,7 @@ export default function ForgotPasswordPage() {
 
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <img src="/logo.png" alt="ترقّب"
+            <Image src="/logo.png" alt="ترقّب" width={80} height={80} priority
                  className="w-20 h-20 object-contain"
                  style={{ filter: 'drop-shadow(0 0 20px rgba(201,148,58,0.3))' }} />
           </div>

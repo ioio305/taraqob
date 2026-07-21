@@ -4,8 +4,9 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  const supabase      = createClient()
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const supabase      = await createClient()
   const serviceClient = createServiceClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -15,7 +16,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (!me || !['admin', 'moderator'].includes(me.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  if (params.id === user.id) {
+  if (id === user.id) {
     return NextResponse.json({ error: 'لا يمكنك تعديل حسابك الخاص' }, { status: 400 })
   }
 
@@ -24,7 +25,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   // ── Password reset / set ─────────────────────────────────────────────
   if (body.action === 'reset_password_link') {
     if (me.role !== 'admin') return NextResponse.json({ error: 'المدير فقط يمكنه إعادة تعيين كلمات المرور' }, { status: 403 })
-    const { data: target } = await serviceClient.from('user_profiles').select('email').eq('id', params.id).single()
+    const { data: target } = await serviceClient.from('user_profiles').select('email').eq('id', id).single()
     if (!target?.email) return NextResponse.json({ error: 'لم يتم العثور على البريد الإلكتروني' }, { status: 404 })
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://trqob.com'
     const { data, error } = await serviceClient.auth.admin.generateLink({
@@ -35,7 +36,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     await serviceClient.from('audit_logs').insert({
       actor_id: user.id, actor_email: me.email ?? '',
-      action: 'reset_password_link', entity_type: 'user_profile', entity_id: params.id,
+      action: 'reset_password_link', entity_type: 'user_profile', entity_id: id,
     })
     return NextResponse.json({ success: true, link: data?.properties?.action_link ?? null })
   }
@@ -43,11 +44,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (body.action === 'set_password') {
     if (me.role !== 'admin') return NextResponse.json({ error: 'المدير فقط يمكنه تعيين كلمات المرور' }, { status: 403 })
     if (!body.password || body.password.length < 6) return NextResponse.json({ error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' }, { status: 400 })
-    const { error } = await serviceClient.auth.admin.updateUserById(params.id, { password: body.password })
+    const { error } = await serviceClient.auth.admin.updateUserById(id, { password: body.password })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     await serviceClient.from('audit_logs').insert({
       actor_id: user.id, actor_email: me.email ?? '',
-      action: 'set_password', entity_type: 'user_profile', entity_id: params.id,
+      action: 'set_password', entity_type: 'user_profile', entity_id: id,
     })
     return NextResponse.json({ success: true })
   }
@@ -77,7 +78,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   // secondary_roles stored in preferences JSONB
   if (Array.isArray(body.secondary_roles)) {
     // Merge into existing preferences
-    const { data: existing } = await serviceClient.from('user_profiles').select('preferences').eq('id', params.id).single()
+    const { data: existing } = await serviceClient.from('user_profiles').select('preferences').eq('id', id).single()
     const prefs = (existing?.preferences ?? {}) as Record<string, unknown>
     profileUpdates.preferences = { ...prefs, secondary_roles: body.secondary_roles }
   }
@@ -94,13 +95,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
   // Update auth record if email changed
   if (Object.keys(authUpdates).length > 0) {
-    const { error } = await serviceClient.auth.admin.updateUserById(params.id, authUpdates)
+    const { error } = await serviceClient.auth.admin.updateUserById(id, authUpdates)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
   // Update profile record
   if (Object.keys(profileUpdates).length > 0) {
-    const { error } = await serviceClient.from('user_profiles').update(profileUpdates).eq('id', params.id)
+    const { error } = await serviceClient.from('user_profiles').update(profileUpdates).eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
@@ -109,7 +110,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     actor_email: me.email ?? '',
     action:      'update_user',
     entity_type: 'user_profile',
-    entity_id:   params.id,
+    entity_id:   id,
     new_values:  { ...profileUpdates, ...authUpdates },
   })
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { getClientIdentifier, rateLimit } from '@/lib/security/rateLimit'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -10,16 +11,6 @@ export const maxDuration = 30
 // Haiku 4.5 خيار متوازن (سريع ورخيص) لواجهة عامة قد يكثر استخدامها. لو أردت
 // جودة أعلى غيّر هذا السطر إلى 'claude-opus-4-8'.
 const CHAT_MODEL = 'claude-haiku-4-5'
-
-// حد بسيط لكل IP يمنع إغراق واجهة عامة
-const hits = new Map<string, { count: number; resetAt: number }>()
-function rateLimited(ip: string): boolean {
-  const now = Date.now()
-  const h = hits.get(ip)
-  if (!h || now > h.resetAt) { hits.set(ip, { count: 1, resetAt: now + 60 * 60 * 1000 }); return false }
-  h.count++
-  return h.count > 40
-}
 
 // قاعدة معرفة المنصة — أرقام دقيقة بنبرة قيمة لا تثبيط. لا يختلق ما ليس هنا.
 const FACTS = `
@@ -76,8 +67,9 @@ VIP — 199$ شهرياً: الفرص أولاً + مدرب أسبوعي + خط�
 }
 
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
-  if (rateLimited(ip)) {
+  const ip = getClientIdentifier(req.headers)
+  const allowed = await rateLimit({ namespace: 'chat', identifier: ip, max: 40, windowSeconds: 3600 })
+  if (!allowed) {
     return NextResponse.json({ ok: false, reply: 'وصلنا للحد المسموح من الأسئلة الآن — عد بعد قليل 🙏' }, { status: 429 })
   }
 

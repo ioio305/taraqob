@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { AlertsWatcher } from '@/components/v2/AlertsWatcher'
@@ -223,7 +224,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
       <div className="px-5 pt-5 pb-4 shrink-0"
         style={{ borderBottom: '1px solid rgba(201,148,58,0.1)' }}>
         <Link href={showAdminNav ? '/v2/admin' : '/v2'} className="flex items-center gap-3">
-          <img src="/logo.png" alt="ترقّب" className="w-9 h-9 object-contain shrink-0" />
+          <Image src="/logo.png" alt="ترقّب" width={36} height={36} priority className="w-9 h-9 object-contain shrink-0" />
           <div>
             <div className="font-bold text-white text-sm tracking-wider">ترقّب</div>
             <div className="text-xs font-mono" style={{ color: '#C9943A', letterSpacing: '0.12em' }}>TARAQOB PRO</div>

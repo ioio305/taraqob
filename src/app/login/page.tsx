@@ -3,11 +3,12 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import LoginForm from './LoginForm'
 
-export default async function LoginPage({ searchParams }: { searchParams?: { plan?: string; next?: string } }) {
+export default async function LoginPage({ searchParams }: { searchParams?: Promise<{ plan?: string; next?: string }> }) {
+  const query = await searchParams
   // مسجّل دخول أصلاً؟ لا معنى لصفحة الدخول — نحوّله لوجهته مباشرة.
   // شرط أساسي: ملفه الشخصي موجود ونشط — وإلا نعرض النموذج بدل الدوران
   // في حلقة تحويل لا نهائية مع حماية الوسيط.
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (user) {
     const { data: profile } = await supabase
@@ -16,8 +17,8 @@ export default async function LoginPage({ searchParams }: { searchParams?: { pla
       .eq('id', user.id)
       .single()
     if (profile && profile.is_active !== false) {
-      if (searchParams?.plan) redirect('/v2/upgrade')
-      const next = searchParams?.next
+      if (query?.plan) redirect('/v2/upgrade')
+      const next = query?.next
       if (next && next.startsWith('/') && !next.startsWith('//')) redirect(next)
       redirect('/v2')
     }

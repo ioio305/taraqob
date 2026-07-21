@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { getClientIdentifier, rateLimit } from '@/lib/security/rateLimit'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,21 +9,12 @@ export const dynamic = 'force-dynamic'
 // مسار عام (بلا جلسة) — يستقبل من: الشات بوت، صندوق النشرة في الصفحة التسويقية.
 // الجدول محمي بـ RLS بلا سياسات = لا يقرؤه إلا مفتاح الخدمة (هذا المسار فقط).
 
-// حد بسيط لكل IP: يمنع الإغراق دون أي بنية إضافية
-const hits = new Map<string, { count: number; resetAt: number }>()
-function rateLimited(ip: string): boolean {
-  const now = Date.now()
-  const h = hits.get(ip)
-  if (!h || now > h.resetAt) { hits.set(ip, { count: 1, resetAt: now + 60 * 60 * 1000 }); return false }
-  h.count++
-  return h.count > 10
-}
-
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
-  if (rateLimited(ip)) {
+  const ip = getClientIdentifier(req.headers)
+  const allowed = await rateLimit({ namespace: 'leads', identifier: ip, max: 10, windowSeconds: 3600 })
+  if (!allowed) {
     return NextResponse.json({ ok: false, error: 'كثير من المحاولات — جرب لاحقاً' }, { status: 429 })
   }
 

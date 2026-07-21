@@ -1,16 +1,18 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { HomepageNewsBar } from '@/components/HomepageNewsBar'
 import { AssistantWidget } from '@/components/v2/AssistantWidget'
 import { NewsletterBox } from '@/components/NewsletterBox'
 
-export default async function RootPage({ searchParams }: { searchParams?: { preview?: string } }) {
-  const supabase = createClient()
+export default async function RootPage({ searchParams }: { searchParams?: Promise<{ preview?: string }> }) {
+  const query = await searchParams
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   // ?preview=1 يسمح للمسجّلين برؤية الصفحة التعريفية دون إعادة توجيه
-  if (user && searchParams?.preview !== '1') {
+  if (user && query?.preview !== '1') {
     const { data: profile } = await supabase
       .from('user_profiles')
       .select('role, is_active')
@@ -48,7 +50,7 @@ export default async function RootPage({ searchParams }: { searchParams?: { prev
           position: 'sticky', top: 0,
         }}>
         <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="ترقّب" className="w-9 h-9 object-contain shrink-0" />
+          <Image src="/logo.png" alt="ترقّب" width={36} height={36} priority className="w-9 h-9 object-contain shrink-0" />
           <div>
             <div className="font-bold text-white text-sm tracking-widest">ترقّب</div>
             <div className="text-xs font-mono hidden sm:block"
@@ -490,7 +492,7 @@ export default async function RootPage({ searchParams }: { searchParams?: { prev
       <footer style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
         <div className="max-w-5xl mx-auto px-6 py-8 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="ترقّب" className="w-6 h-6 object-contain" />
+            <Image src="/logo.png" alt="ترقّب" width={24} height={24} className="w-6 h-6 object-contain" />
             <span className="text-sm font-bold text-white">ترقّب</span>
             <span className="text-xs font-mono" style={{ color: '#1A2A3A' }}>TARAQOB PRO</span>
           </div>

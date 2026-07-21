@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createInvitationToken } from '@/lib/security/tokens'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,15 +14,14 @@ function normalizeRole(role: string): string {
   return 'user'
 }
 
-// Normalize UI role → DB role ('user' → 'free' until migration runs)
+// Normalize UI role → DB role.
 function dbRole(role: string): string {
-  if (role === 'user') return 'free'
   return role
 }
 
 // GET — قائمة المستخدمين مع فلترة
 export async function GET(request: NextRequest) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
 
 // POST — دعوة مستخدم جديد
 export async function POST(request: NextRequest) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -74,8 +74,12 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { email, role: roleRaw = 'user' } = body
-  const role = dbRole(roleRaw) // map 'user' → 'free' for DB enum compatibility
+  const email = String(body?.email ?? '').trim().toLowerCase().slice(0, 254)
+  const roleRaw = String(body?.role ?? 'user')
+  if (!['user', 'moderator', 'admin'].includes(roleRaw)) {
+    return NextResponse.json({ error: 'الصلاحية غير صحيحة' }, { status: 400 })
+  }
+  const role = dbRole(roleRaw)
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ error: 'البريد الإلكتروني غير صحيح' }, { status: 400 })
@@ -87,7 +91,7 @@ export async function POST(request: NextRequest) {
   }
 
   const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString()
-  const token = crypto.randomUUID()
+  const token = createInvitationToken()
 
   const { error: invErr } = await supabase.from('invitations').insert({
     email, role, invited_by: user.id, token, expires_at: expiresAt,

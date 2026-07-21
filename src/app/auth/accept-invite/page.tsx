@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import Image from 'next/image'
 
 const ROLE_AR: Record<string, string> = {
   admin:     'مدير',
@@ -113,7 +114,7 @@ export default function AcceptInvitePage() {
     <>
       <div className="text-center mb-8">
         <div className="flex justify-center mb-4">
-          <img src="/logo.png" alt="ترقّب"
+          <Image src="/logo.png" alt="ترقّب" width={80} height={80} priority
                className="w-20 h-20 object-contain"
                style={{ filter: 'drop-shadow(0 0 20px rgba(201,148,58,0.3))' }} />
         </div>

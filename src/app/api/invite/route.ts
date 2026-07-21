@@ -1,5 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { emailButton, emailShell, sendResendBatch } from '@/lib/v2/email'
+import { createInvitationToken } from '@/lib/security/tokens'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
@@ -13,7 +14,7 @@ const ROLE_NAMES: Record<string, string> = {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase      = createClient()
+  const supabase      = await createClient()
   const serviceClient = createServiceClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -29,9 +30,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
   }
 
-  const { email, role } = await request.json()
+  const body = await request.json()
+  const email = String(body?.email ?? '').trim().toLowerCase().slice(0, 254)
+  const role = String(body?.role ?? '')
 
-  if (!email || !role || !VALID_ROLES.includes(role)) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || !VALID_ROLES.includes(role)) {
     return NextResponse.json({ error: 'البيانات غير صحيحة' }, { status: 400 })
   }
 
@@ -47,7 +50,7 @@ export async function POST(request: NextRequest) {
   }
 
   // إنشاء الدعوة
-  const token     = crypto.randomUUID()
+  const token     = createInvitationToken()
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
   const { error } = await serviceClient

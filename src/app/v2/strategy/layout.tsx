@@ -1,25 +1,14 @@
-import { createClient } from '@/lib/supabase/server'
+import { getV2Viewer } from '@/lib/v2/access'
 import { redirect } from 'next/navigation'
 import type { ReactNode } from 'react'
 
 export default async function StrategyLayout({ children }: { children: ReactNode }) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const viewer = await getV2Viewer()
+  if (!viewer) redirect('/login')
+  if (!viewer.profile || viewer.profile.is_active === false) redirect('/login?error=inactive')
+  const isPartner = viewer.secondaryRoles.includes('partner')
 
-  const { data: profile } = await supabase
-    .from('user_profiles')
-    .select('role, preferences')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile) redirect('/v2')
-
-  const isStaff    = profile.role === 'admin' || profile.role === 'moderator'
-  const secondary  = (profile.preferences as any)?.secondary_roles ?? []
-  const isPartner  = Array.isArray(secondary) && secondary.includes('partner')
-
-  if (!isStaff && !isPartner) redirect('/v2')
+  if (!viewer.isStaff && !isPartner) redirect('/v2')
 
   return <>{children}</>
 }

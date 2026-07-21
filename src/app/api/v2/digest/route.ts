@@ -17,8 +17,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'CRON_SECRET غير مضبوط — لم تُرسل النشرة' }, { status: 503 })
   }
   const auth = req.headers.get('authorization')
-  const key = new URL(req.url).searchParams.get('key')
-  if (auth !== `Bearer ${secret}` && key !== secret) {
+  if (auth !== `Bearer ${secret}`) {
     return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
   }
 

@@ -33,7 +33,7 @@ export default async function PublicTrackPage() {
   // زائر أم مسجّل؟ — الزر الختامي يتصرف بذكاء
   let loggedIn = false
   try {
-    const { data: { user } } = await createClient().auth.getUser()
+    const { data: { user } } = await (await createClient()).auth.getUser()
     loggedIn = !!user
   } catch { /* زائر */ }
 

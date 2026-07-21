@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { INVITATION_TOKEN_PATTERN } from '@/lib/security/tokens'
 
 export const dynamic = 'force-dynamic'
-
-const INVITATION_TOKEN = /^[a-f0-9]{64}$/i
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token')?.trim() ?? ''
 
-  if (!INVITATION_TOKEN.test(token)) {
+  if (!INVITATION_TOKEN_PATTERN.test(token)) {
     return NextResponse.json({ error: 'Invalid invitation' }, { status: 400 })
   }
 

@@ -7,6 +7,10 @@
     {
       "path": "/api/v2/digest",
       "schedule": "0 6 * * 5"
+    },
+    {
+      "path": "/api/v2/backup",
+      "schedule": "15 2 * * *"
     }
   ]
 }
