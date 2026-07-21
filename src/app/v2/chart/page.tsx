@@ -323,45 +323,50 @@ function computeKeyLevels(candles: Candle[], tf: string): { price: number; title
   return out
 }
 
-// ── نقاط القوة (التلاقي): شمعة ذهبية = تلاقي إشارات صاعدة قوية، بنفسجية = هابطة قوية ──
-// تفحص كل شمعة: كم مؤشراً مستقلاً يتّفق في نفس الاتجاه (السعر العادل، ترتيب المتوسطات،
-// الزخم، RSI، الموقع من مناطق العرض/الطلب). تُلوَّن فقط عند تلاقٍ نادر وقوي (٤ إشارات فأكثر).
+// ── نقاط القوة (التلاقي): تُعلّم «لحظة الدخول» لا كل شمعة في الاتجاه ──────────
+// الشمعة الذهبية/البنفسجية = محفّز طازج (استعادة VWAP، تقاطع زخم، ارتداد RSI،
+// ارتداد من منطقة) + سياق داعم (متوسطات/VWAP) + الشمعة نفسها في الاتجاه.
+// مع تهدئة (لا تكرار متلاصق) لتبقى نادرة ودالّة على لحظة قرار، لا حالة مستمرة.
 function computeConfluence(candles: Candle[], zones: SRZone[]): Map<string, { kind: 'gold' | 'purple'; strength: number }> {
   const out = new Map<string, { kind: 'gold' | 'purple'; strength: number }>()
   const demand = zones.filter(z => z.type === 'demand')
   const supply = zones.filter(z => z.type === 'supply')
-  const inZone = (c: Candle, zs: SRZone[]) => zs.some(z => c.low <= z.top && c.high >= z.bottom)
+  const touches = (c: Candle, zs: SRZone[]) => zs.some(z => c.low <= z.top && c.high >= z.bottom)
 
-  for (let i = 1; i < candles.length; i++) {
+  const COOLDOWN = 3          // لا تعليم جديد قبل مرور 3 شموع على السابق
+  let lastMark = -COOLDOWN - 1
+
+  for (let i = 2; i < candles.length; i++) {
+    if (i - lastMark < COOLDOWN) continue
     const c = candles[i], p = candles[i - 1]
-    let bull = 0, bear = 0
 
-    // 1. مقابل السعر العادل (VWAP)
-    if (c.vwap != null) { if (c.close > c.vwap) bull++; else if (c.close < c.vwap) bear++ }
-    // 2. ترتيب المتوسطات (اصطفاف صاعد/هابط)
+    // سياق (خلفية الاتجاه) — كم إشارة داعمة مستقرة
+    let ctxBull = 0, ctxBear = 0
+    if (c.vwap != null) { if (c.close > c.vwap) ctxBull++; else ctxBear++ }
     if (c.ema9 != null && c.ema21 != null && c.ema50 != null) {
-      if (c.ema9 > c.ema21 && c.ema21 > c.ema50) bull++
-      else if (c.ema9 < c.ema21 && c.ema21 < c.ema50) bear++
+      if (c.ema9 > c.ema21 && c.ema21 > c.ema50) ctxBull++
+      else if (c.ema9 < c.ema21 && c.ema21 < c.ema50) ctxBear++
     }
-    // 3. السعر مقابل المتوسط السريع
-    if (c.ema9 != null) { if (c.close > c.ema9) bull++; else if (c.close < c.ema9) bear++ }
-    // 4. زخم MACD: الاتجاه + التسارع
-    if (c.macdHist != null && p.macdHist != null) {
-      if (c.macdHist > 0 && c.macdHist >= p.macdHist) bull++
-      else if (c.macdHist < 0 && c.macdHist <= p.macdHist) bear++
-    }
-    // 5. RSI صاعد دون تشبع / هابط دون تشبع
-    if (c.rsi != null && p.rsi != null) {
-      if (c.rsi > p.rsi && c.rsi >= 50 && c.rsi < 70) bull++
-      else if (c.rsi < p.rsi && c.rsi <= 50 && c.rsi > 30) bear++
-    }
-    // 6. الموقع من مناطق الطلب/العرض
-    if (inZone(c, demand)) bull++
-    if (inZone(c, supply)) bear++
+    if (c.ema9 != null) { if (c.close > c.ema9) ctxBull++; else ctxBear++ }
 
-    // ذهبية/بنفسجية فقط عند تلاقٍ قوي ونادر: ٤ إشارات فأكثر بفارق واضح
-    if (bull >= 4 && bull - bear >= 3) out.set(c.time, { kind: 'gold', strength: bull })
-    else if (bear >= 4 && bear - bull >= 3) out.set(c.time, { kind: 'purple', strength: bear })
+    // محفّز طازج على هذه الشمعة تحديداً (حدث، لا حالة)
+    const bullTrigger =
+      (p.vwap != null && c.vwap != null && p.close < p.vwap && c.close > c.vwap) ||      // استعادة السعر العادل
+      (p.macdHist != null && c.macdHist != null && p.macdHist <= 0 && c.macdHist > 0) || // تقاطع MACD صاعد
+      (p.rsi != null && c.rsi != null && p.rsi < 45 && c.rsi > p.rsi) ||                  // ارتداد RSI من الضعف
+      (touches(c, demand) && c.close > c.open)                                            // ارتداد صاعد من منطقة طلب
+    const bearTrigger =
+      (p.vwap != null && c.vwap != null && p.close > p.vwap && c.close < c.vwap) ||
+      (p.macdHist != null && c.macdHist != null && p.macdHist >= 0 && c.macdHist < 0) ||
+      (p.rsi != null && c.rsi != null && p.rsi > 55 && c.rsi < p.rsi) ||
+      (touches(c, supply) && c.close < c.open)
+
+    // ذهبية = محفّز صاعد + سياق داعم (≥2) + شمعة صاعدة. والعكس للبنفسجية.
+    if (bullTrigger && ctxBull >= 2 && c.close >= c.open) {
+      out.set(c.time, { kind: 'gold', strength: ctxBull }); lastMark = i
+    } else if (bearTrigger && ctxBear >= 2 && c.close <= c.open) {
+      out.set(c.time, { kind: 'purple', strength: ctxBear }); lastMark = i
+    }
   }
   return out
 }
@@ -1412,18 +1417,22 @@ export default function ChartPage() {
               })}
             </div>
 
-            {/* شرح طبقة قوة القرار — حتى لا يستغرب المستخدم الشمعة الملوّنة */}
+            {/* شرح طبقة قوة القرار — يصحّح فهم المبتدئ: ترجيح لا ضمان */}
             {layers.confluence && (
-              <div className="px-4 pb-2 flex items-center gap-x-5 gap-y-1 flex-wrap text-xs" style={{ color: '#8A97A6' }}>
-                <span className="flex items-center gap-1.5">
-                  <span className="font-bold" style={{ color: '#C9943A' }}>✦ شمعة ذهبية</span>
-                  = تلاقي إشارات صاعدة قوية (لحظة كول)
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="font-bold" style={{ color: '#A78BFA' }}>✦ شمعة بنفسجية</span>
-                  = تلاقي إشارات هابطة قوية (لحظة بوت)
-                </span>
-                <span style={{ color: '#5E6E7F' }}>— نادرة عمداً: تظهر فقط حين تتّفق ٤ مؤشرات فأكثر.</span>
+              <div className="px-4 pb-2 space-y-1 text-xs" style={{ color: '#8A97A6' }}>
+                <div className="flex items-center gap-x-5 gap-y-1 flex-wrap">
+                  <span>
+                    <span className="font-bold" style={{ color: '#C9943A' }}>✦ ذهبية</span>
+                    {' '}= لحظة يترجّح فيها الصعود (فرصة كول محتملة)
+                  </span>
+                  <span>
+                    <span className="font-bold" style={{ color: '#A78BFA' }}>✦ بنفسجية</span>
+                    {' '}= لحظة يترجّح فيها الهبوط (فرصة بوت محتملة)
+                  </span>
+                </div>
+                <div style={{ color: '#C99' }}>
+                  ⚠ ترجيح لا ضمان — قد تفشل، لذلك ضع وقفاً دائماً. وليست «اشترِ فوراً»: حلّل العقد وتأكّد أن العائد يفوق الخسارة أولاً.
+                </div>
               </div>
             )}
 
