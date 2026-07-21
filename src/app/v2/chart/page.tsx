@@ -53,6 +53,11 @@ interface ChartData {
   em?:      { upper: number; lower: number; points: number } | null
   updatedAt?: string
   lastCandleAt?: string | null
+  freshness?: {
+    status: 'live' | 'delayed' | 'closed'
+    ageSeconds: number | null
+    maxAgeSeconds: number
+  } | null
   error?:   string
 }
 
@@ -78,11 +83,42 @@ const BASE_CHART = {
   rightPriceScale: { borderColor: '#1e3a50' },
 }
 
+const NEW_YORK_CLOCK = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'America/New_York',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+})
+
+const NEW_YORK_CROSSHAIR = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'America/New_York',
+  day: '2-digit',
+  month: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+})
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function toTime(t: string, intraday: boolean): Time {
   if (!intraday) return t as Time
   return Math.floor(new Date(t.replace(' ', 'T')).getTime() / 1000) as unknown as Time
+}
+
+function timeValueToDate(time: Time): Date | null {
+  if (typeof time === 'number') return new Date(time * 1000)
+  if (typeof time === 'string') return new Date(`${time}T12:00:00Z`)
+  if (time && typeof time === 'object' && 'year' in time) {
+    return new Date(Date.UTC(time.year, time.month - 1, time.day, 12))
+  }
+  return null
+}
+
+function formatNewYorkTime(time: Time, withDate = false): string | null {
+  const date = timeValueToDate(time)
+  if (!date || Number.isNaN(date.getTime())) return null
+  return (withDate ? NEW_YORK_CROSSHAIR : NEW_YORK_CLOCK).format(date)
 }
 
 function decisionStyle(code: string) {
@@ -308,9 +344,11 @@ export default function ChartPage() {
   const decSrRef   = useRef<HTMLDivElement>(null)
 
   const chartInstances = useRef<IChartApi[]>([])
+  const requestSequence = useRef(0)
 
   // ── Fetch chart data ────────────────────────────────────────────────────────
   const fetchData = useCallback(async (timeframe: string, silent = false) => {
+    const requestId = ++requestSequence.current
     if (!silent) setLoading(true)
     setError('')
     try {
@@ -318,21 +356,34 @@ export default function ChartPage() {
       if (!res.ok) throw new Error('فشل الاتصال')
       const d: ChartData = await res.json()
       if (d.error && !d.candles?.length) throw new Error(d.error)
+      if (requestId !== requestSequence.current) return
       setData(d)
       setLastRefresh(new Date())
       if (d.gamma) setGamma(d.gamma)
     } catch (e: unknown) {
+      if (requestId !== requestSequence.current) return
       setError(e instanceof Error ? e.message : 'فشل تحميل البيانات')
     } finally {
-      if (!silent) setLoading(false)
+      if (!silent && requestId === requestSequence.current) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
     void fetchData(tf)
-    const refreshMs = ['1d', '1w', '1M'].includes(tf) ? 120_000 : 30_000
-    const timer = window.setInterval(() => { void fetchData(tf, true) }, refreshMs)
-    return () => window.clearInterval(timer)
+    const refreshMs = ['1d', '1w', '1M'].includes(tf) ? 120_000 : 15_000
+    let stopped = false
+    let timer: number | undefined
+    const schedule = () => {
+      timer = window.setTimeout(async () => {
+        if (!stopped && document.visibilityState === 'visible') await fetchData(tf, true)
+        if (!stopped) schedule()
+      }, refreshMs)
+    }
+    schedule()
+    return () => {
+      stopped = true
+      if (timer !== undefined) window.clearTimeout(timer)
+    }
   }, [tf, fetchData])
 
   // ── Fetch supporting symbols ────────────────────────────────────────────────
@@ -354,7 +405,7 @@ export default function ChartPage() {
       } catch { /* يبقى آخر سعر ناجح ظاهراً */ }
     }
     void loadSupport()
-    const timer = window.setInterval(() => { void loadSupport() }, 30_000)
+    const timer = window.setInterval(() => { void loadSupport() }, 15_000)
     return () => {
       active = false
       window.clearInterval(timer)
@@ -382,7 +433,19 @@ export default function ChartPage() {
     const roCallbacks: (() => void)[] = []
 
     function mkChart(el: HTMLDivElement, height: number): IChartApi {
-      const chart = createChart(el, { ...BASE_CHART, width: el.clientWidth, height })
+      const chart = createChart(el, {
+        ...BASE_CHART,
+        width: el.clientWidth,
+        height,
+        localization: intraday ? {
+          locale: 'ar-SA',
+          timeFormatter: (time: Time) => formatNewYorkTime(time, true) ?? '',
+        } : { locale: 'ar-SA' },
+        timeScale: {
+          ...BASE_CHART.timeScale,
+          tickMarkFormatter: intraday ? (time: Time) => formatNewYorkTime(time) : undefined,
+        },
+      })
       chartInstances.current.push(chart)
       const ro = new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth }))
       ro.observe(el)
@@ -719,6 +782,19 @@ export default function ChartPage() {
         day: 'numeric', month: 'short', hour: intraday ? 'numeric' : undefined, minute: intraday ? '2-digit' : undefined,
       }).format(new Date(intraday ? data.lastCandleAt : `${data.lastCandleAt.slice(0, 10)}T12:00:00Z`))
     : null
+  const freshness = data?.freshness ?? null
+  const freshnessLabel = freshness?.status === 'live'
+    ? 'مباشر'
+    : freshness?.status === 'delayed'
+      ? 'متأخر'
+      : freshness?.status === 'closed'
+        ? 'السوق مغلق'
+        : null
+  const freshnessClass = freshness?.status === 'live'
+    ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30'
+    : freshness?.status === 'delayed'
+      ? 'text-red-300 bg-red-500/10 border-red-500/40'
+      : 'text-gray-300 bg-gray-500/10 border-gray-500/30'
 
   return (
     <div className="min-h-screen bg-[#060D14] text-white p-4 space-y-4" dir="rtl">
@@ -735,8 +811,8 @@ export default function ChartPage() {
               <span className="text-sm font-mono text-white">{last.close.toLocaleString()}</span>
             )}
             {lastCandleLabel && (
-              <span className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 px-2 py-1 rounded-full">
-                آخر شمعة: {lastCandleLabel}
+              <span className={`text-xs border px-2 py-1 rounded-full ${freshnessClass}`}>
+                {freshnessLabel ? `${freshnessLabel} · ` : ''}آخر شمعة: {lastCandleLabel}
               </span>
             )}
             <button
@@ -747,7 +823,7 @@ export default function ChartPage() {
             >
               {loading ? 'جارٍ التحديث…' : 'تحديث الآن'}
             </button>
-            {lastRefresh && <span className="text-[10px] text-gray-600">تلقائي كل {intraday ? '30 ثانية' : 'دقيقتين'}</span>}
+            {lastRefresh && <span className="text-[10px] text-gray-600">تلقائي كل {intraday ? '15 ثانية' : 'دقيقتين'}</span>}
           </div>
 
           {/* Timeframe selector */}
@@ -767,6 +843,12 @@ export default function ChartPage() {
             ))}
           </div>
         </div>
+
+        {freshness?.status === 'delayed' && (
+          <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+            بيانات الشارت متأخرة الآن — أوقفنا قرار الدخول تلقائياً حتى تعود البيانات الحديثة.
+          </div>
+        )}
 
         {/* Strike input row */}
         <div className="flex items-end gap-3 flex-wrap">

@@ -8,6 +8,12 @@
 
 import { getCboeData, cboeChain, cboeExpirations } from '@/lib/v2/cboe'
 import { fromZonedTime } from 'date-fns-tz'
+import {
+  buildTradierTimeSalesPath,
+  getIntradayFreshness,
+  INTRADAY_INTERVAL_MINUTES,
+  NEW_YORK_TZ,
+} from './marketFreshness'
 
 const TRADIER_BASE = 'https://api.tradier.com/v1'
 const YF = 'https://query2.finance.yahoo.com/v8/finance/chart'
@@ -85,12 +91,12 @@ export async function getMarketSnapshot(): Promise<MarketSnapshot> {
   if (hasTradier()) {
     try {
       const [mkt, vixMetaY, ratio] = await Promise.all([
-        tradierGet('/markets/quotes?symbols=$SPX.X,$VIX.X,VIX,SPY,VIXY&greeks=false'),
+        tradierGet('/markets/quotes?symbols=$SPX.X,SPX,$VIX.X,VIX,SPY,VIXY&greeks=false'),
         yahooQuote('^VIX').catch(() => null),
         spyToSpxRatio(),
       ])
       const qs: any[] = Array.isArray(mkt?.quotes?.quote) ? mkt.quotes.quote : [mkt?.quotes?.quote].filter(Boolean)
-      let spxQ = qs.find(q => q.symbol === '$SPX.X') ?? null
+      let spxQ = qs.find(q => q.symbol === '$SPX.X') ?? qs.find(q => q.symbol === 'SPX') ?? null
       let vixQ = qs.find(q => q.symbol === '$VIX.X' || q.symbol === 'VIX') ?? null
       if (!spxQ?.last) {
         const spy = qs.find(q => q.symbol === 'SPY')
@@ -187,41 +193,125 @@ function parseYahooBars(json: any, scale: number): MdBar[] {
 
 function normalizeTradierTime(value: string): string {
   if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)) return new Date(value).toISOString()
-  return fromZonedTime(value.replace(' ', 'T'), 'America/New_York').toISOString()
+  return fromZonedTime(value.replace(' ', 'T'), NEW_YORK_TZ).toISOString()
+}
+
+function normalizeBars(bars: MdBar[]): MdBar[] {
+  const unique = new Map<string, MdBar>()
+  for (const bar of bars) {
+    if (!bar.time || !Number.isFinite(Date.parse(bar.time))) continue
+    if (![bar.open, bar.high, bar.low, bar.close].every(v => Number.isFinite(v) && v > 0)) continue
+    unique.set(bar.time, bar)
+  }
+  return [...unique.values()].sort((a, b) => Date.parse(a.time) - Date.parse(b.time))
+}
+
+function parseTradierBars(json: any, scale = 1): MdBar[] {
+  const raw = json?.series?.data ?? []
+  const arr = Array.isArray(raw) ? raw : [raw]
+  return normalizeBars(arr.map((d: any) => {
+    const timestamp = Number(d?.timestamp)
+    const time = Number.isFinite(timestamp) && timestamp > 0
+      ? new Date(timestamp * 1000).toISOString()
+      : d?.time
+        ? normalizeTradierTime(d.time)
+        : ''
+    return {
+      time,
+      open: +(Number(d?.open) * scale).toFixed(2),
+      high: +(Number(d?.high) * scale).toFixed(2),
+      low: +(Number(d?.low) * scale).toFixed(2),
+      close: +(Number(d?.close) * scale).toFixed(2),
+      volume: Number(d?.volume) || 0,
+    }
+  }))
+}
+
+function mergeVolume(priceBars: MdBar[], volumeBars: MdBar[]): MdBar[] {
+  if (!priceBars.length || !volumeBars.length) return priceBars
+  const volumeByTime = new Map(volumeBars.map(bar => [bar.time, bar.volume]))
+  return priceBars.map(bar => ({ ...bar, volume: volumeByTime.get(bar.time) ?? bar.volume }))
+}
+
+function barsAreCurrent(bars: MdBar[], tradierInterval: string): boolean {
+  if (bars.length < 10) return false
+  const last = bars[bars.length - 1]
+  const minutes = INTRADAY_INTERVAL_MINUTES[tradierInterval] ?? 5
+  return getIntradayFreshness(last.time, minutes).status !== 'delayed'
+}
+
+function newestBars(candidates: MdBar[][]): MdBar[] {
+  return candidates
+    .filter(bars => bars.length >= 10)
+    .sort((a, b) => Date.parse(b[b.length - 1].time) - Date.parse(a[a.length - 1].time))[0] ?? []
+}
+
+async function yahooIntraday(symbol: string, interval: string, range: string, scale = 1): Promise<MdBar[]> {
+  try {
+    const res = await fetch(
+      `${YF}/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}&includePrePost=true`,
+      { headers: UA, cache: 'no-store' },
+    )
+    if (!res.ok) return []
+    return normalizeBars(parseYahooBars(await res.json(), scale))
+  } catch { return [] }
 }
 
 export async function getIntradayBars(tradierInterval: string, days: number): Promise<MdBar[]> {
-  const start = new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10)
-  const end = new Date().toISOString().slice(0, 10)
+  const candidates: MdBar[][] = []
 
+  // السعر من SPX مباشرة، والحجم من SPY لأن المؤشر نفسه لا يملك حجماً متداولاً.
   if (hasTradier()) {
     try {
-      const url = `/markets/timesales?symbol=SPY&interval=${tradierInterval}&start=${start}&end=${end}&session_filter=all`
-      const [json, ratio] = await Promise.all([tradierGet(url), spyToSpxRatio()])
-      const raw = json?.series?.data ?? []
-      const arr = Array.isArray(raw) ? raw : [raw]
-      const bars = arr.filter((d: any) => !!d?.time).map((d: any) => ({
-        time: normalizeTradierTime(d.time),
-        open: +(d.open * ratio).toFixed(2),
-        high: +(d.high * ratio).toFixed(2),
-        low: +(d.low * ratio).toFixed(2),
-        close: +(d.close * ratio).toFixed(2),
-        volume: d.volume ?? 0,
-      }))
-      if (bars.length >= 10) return bars
-    } catch { /* اسقط إلى Yahoo */ }
+      const [spxJson, spyJson] = await Promise.all([
+        tradierGet(buildTradierTimeSalesPath('SPX', tradierInterval, days)),
+        tradierGet(buildTradierTimeSalesPath('SPY', tradierInterval, days)),
+      ])
+      const spxBars = mergeVolume(parseTradierBars(spxJson), parseTradierBars(spyJson))
+      candidates.push(spxBars)
+      if (barsAreCurrent(spxBars, tradierInterval)) return spxBars
+
+      const spyBars = parseTradierBars(spyJson)
+      if (spyBars.length >= 10) {
+        const ratio = await spyToSpxRatio()
+        const scaled = spyBars.map(bar => ({
+          ...bar,
+          open: +(bar.open * ratio).toFixed(2),
+          high: +(bar.high * ratio).toFixed(2),
+          low: +(bar.low * ratio).toFixed(2),
+          close: +(bar.close * ratio).toFixed(2),
+        }))
+        candidates.push(scaled)
+        if (barsAreCurrent(scaled, tradierInterval)) return scaled
+      }
+    } catch { /* اسقط إلى المصدر الاحتياطي */ }
   }
 
   const yInt = TF_TO_YAHOO_INTRADAY[tradierInterval] ?? '5m'
   const range = yahooRangeForDays(days, true)
-  try {
-    const [res, ratio] = await Promise.all([
-      fetch(`${YF}/SPY?interval=${yInt}&range=${range}&includePrePost=true`, { headers: UA, cache: 'no-store' }),
-      spyToSpxRatio(),
-    ])
-    if (!res.ok) return []
-    return parseYahooBars(await res.json(), ratio)
-  } catch { return [] }
+  const [spxYahoo, spyYahoo] = await Promise.all([
+    yahooIntraday('^GSPC', yInt, range),
+    yahooIntraday('SPY', yInt, range),
+  ])
+  const directYahoo = mergeVolume(spxYahoo, spyYahoo)
+  candidates.push(directYahoo)
+  if (barsAreCurrent(directYahoo, tradierInterval)) return directYahoo
+
+  if (spyYahoo.length >= 10) {
+    const ratio = await spyToSpxRatio()
+    const scaledYahoo = spyYahoo.map(bar => ({
+      ...bar,
+      open: +(bar.open * ratio).toFixed(2),
+      high: +(bar.high * ratio).toFixed(2),
+      low: +(bar.low * ratio).toFixed(2),
+      close: +(bar.close * ratio).toFixed(2),
+    }))
+    candidates.push(scaledYahoo)
+    if (barsAreCurrent(scaledYahoo, tradierInterval)) return scaledYahoo
+  }
+
+  // لا نخفي آخر بيانات سليمة، لكن الواجهة ستعلن بوضوح أنها متأخرة.
+  return newestBars(candidates)
 }
 
 // ── 3. شموع تاريخية (يومي/أسبوعي/شهري) ──────────────────────

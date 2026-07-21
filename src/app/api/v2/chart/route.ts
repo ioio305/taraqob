@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { getNewsResult } from '@/app/api/v2/news/route'
 import { evaluateMarketReaction } from '@/lib/v2/marketReaction'
 import { getIntradayBars, getHistoryBars, getMarketSnapshot } from '@/lib/v2/marketData'
+import { getIntradayFreshness } from '@/lib/v2/marketFreshness'
 import {
   type RawBar,
   ema, rsi, macdFn, bollinger, atrFn, computeVwap, aggregateBars,
@@ -24,16 +25,17 @@ const TF_CONFIG: Record<TfId, {
   tradierInterval: string
   aggregate:       number   // bars to merge (1 = none)
   days:            number   // lookback calendar days
+  barMinutes:       number
 }> = {
-  '1m':  { intraday: true,  tradierInterval: '1min',    aggregate: 1, days: 2   },
-  '3m':  { intraday: true,  tradierInterval: '1min',    aggregate: 3, days: 3   },
-  '5m':  { intraday: true,  tradierInterval: '5min',    aggregate: 1, days: 5   },
-  '15m': { intraday: true,  tradierInterval: '15min',   aggregate: 1, days: 10  },
-  '30m': { intraday: true,  tradierInterval: '15min',   aggregate: 2, days: 20  },
-  '1h':  { intraday: true,  tradierInterval: '15min',   aggregate: 4, days: 40  },
-  '1d':  { intraday: false, tradierInterval: 'daily',   aggregate: 1, days: 365 },
-  '1w':  { intraday: false, tradierInterval: 'weekly',  aggregate: 1, days: 1095},
-  '1M':  { intraday: false, tradierInterval: 'monthly', aggregate: 1, days: 1825},
+  '1m':  { intraday: true,  tradierInterval: '1min',    aggregate: 1, days: 2,    barMinutes: 1     },
+  '3m':  { intraday: true,  tradierInterval: '1min',    aggregate: 3, days: 3,    barMinutes: 3     },
+  '5m':  { intraday: true,  tradierInterval: '5min',    aggregate: 1, days: 5,    barMinutes: 5     },
+  '15m': { intraday: true,  tradierInterval: '15min',   aggregate: 1, days: 10,   barMinutes: 15    },
+  '30m': { intraday: true,  tradierInterval: '15min',   aggregate: 2, days: 20,   barMinutes: 30    },
+  '1h':  { intraday: true,  tradierInterval: '15min',   aggregate: 4, days: 40,   barMinutes: 60    },
+  '1d':  { intraday: false, tradierInterval: 'daily',   aggregate: 1, days: 365,  barMinutes: 1440  },
+  '1w':  { intraday: false, tradierInterval: 'weekly',  aggregate: 1, days: 1095, barMinutes: 10080 },
+  '1M':  { intraday: false, tradierInterval: 'monthly', aggregate: 1, days: 1825, barMinutes: 43200 },
 }
 
 // ─── GET handler ──────────────────────────────────────────────────────────────
@@ -111,7 +113,18 @@ export async function GET(request: NextRequest) {
   })
   analysis.marketReaction = reaction
 
-  const news = await getNewsResult().catch(() => null)
+  // الطلبات المستقلة تبدأ معاً لتقليل زمن انتظار الصفحة.
+  const newsPromise = getNewsResult().catch(() => null)
+  const gammaPromise = getGammaExposure().catch(() => null)
+  const snapshotPromise = getMarketSnapshot().catch(() => null)
+  const dailyBarsPromise = cfg.intraday ? getHistoryBars('daily', 60).catch(() => []) : Promise.resolve(bars)
+  const [news, gamma, snap, dailyBars] = await Promise.all([
+    newsPromise,
+    gammaPromise,
+    snapshotPromise,
+    dailyBarsPromise,
+  ])
+
   if (news?.decision) {
     analysis.newsRisk = news.decision
     if (news.decision.action === 'block') {
@@ -137,18 +150,13 @@ export async function GET(request: NextRequest) {
   }
 
   // ── انكشاف جاما: يغذّي القرار (جاما موجبة عند المقاومة → تخفيض) ──────────────
-  const gamma = await getGammaExposure().catch(() => null)
   if (gamma && analysis.summary.decisionCode !== 'no_entry' && reaction.action !== 'block' && news?.decision?.action !== 'block') {
     applyGamma(analysis, gamma)
   }
 
-  let snap: Awaited<ReturnType<typeof getMarketSnapshot>> | null = null
-  try { snap = await getMarketSnapshot() } catch { /* تجاهل */ }
-
   // ── حارس الانهيارات: يفحص الشموع اليومية + مؤشر الخوف ويمنع الدخول في أيام
   // العنف الشديد (مثبت خارج العينة: هذه الأيام تخسر حتى مع أفضل الإشارات) ──────
   try {
-    const dailyBars = cfg.intraday ? await getHistoryBars('daily', 60) : bars
     applyCrashGuard(analysis, crashGuard(dailyBars, snap?.vixPrice ?? null))
   } catch { /* تجاهل */ }
 
@@ -163,6 +171,18 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  const lastCandleAt = bars[bars.length - 1]?.time ?? null
+  const freshness = cfg.intraday ? getIntradayFreshness(lastCandleAt, cfg.barMinutes) : null
+
+  // لا نسمح بتحويل بيانات متأخرة إلى قرار دخول يبدو صالحاً.
+  if (freshness?.status === 'delayed') {
+    analysis.summary.decisionCode = 'no_entry'
+    analysis.summary.decisionText = 'لا تدخل — بيانات السوق متأخرة'
+    analysis.summary.reason = 'آخر شمعة ليست من الوقت الحالي'
+    analysis.summary.entryCondition = 'انتظر عودة البيانات الحديثة'
+    analysis.summary.cancelCondition = 'لا تنفذ أي دخول أثناء تأخر البيانات'
+  }
+
   return NextResponse.json({
     tf,
     symbol: 'SPX',
@@ -171,6 +191,7 @@ export async function GET(request: NextRequest) {
     gamma,
     em,
     updatedAt: new Date().toISOString(),
-    lastCandleAt: bars[bars.length - 1]?.time ?? null,
+    lastCandleAt,
+    freshness,
   }, { headers: NO_STORE })
 }
