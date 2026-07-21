@@ -27,6 +27,8 @@ export function useRiskSettings() {
 // أقوى حماية من «التداول الانتقامي» — أكبر مدمّر لحسابات المتداولين.
 interface DisciplineState { day: string; dayWins: number; dayLosses: number; week: string; weekLosses: number }
 
+const DISCIPLINE_EVENT = 'taraqob-discipline-change'
+
 function tradingDayNY(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
 }
@@ -47,17 +49,20 @@ export const WEEK_LOSS_LIMIT = 5
 export function useDiscipline() {
   const [state, setState] = useState<DisciplineState>(FRESH_DISCIPLINE())
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('taraqob_discipline')
-      if (raw) {
+    function sync() {
+      try {
+        const raw = localStorage.getItem('taraqob_discipline')
+        if (!raw) return
         const saved: DisciplineState = JSON.parse(raw)
-        // يوم جديد يصفّر عدّاد اليوم؛ أسبوع جديد يصفّر عدّاد الأسبوع
         const next = { ...saved }
         if (saved.day !== tradingDayNY()) { next.day = tradingDayNY(); next.dayWins = 0; next.dayLosses = 0 }
         if (saved.week !== weekKeyNY())   { next.week = weekKeyNY(); next.weekLosses = 0 }
         setState(next)
-      }
-    } catch { /* تجاهل */ }
+      } catch { /* تجاهل */ }
+    }
+    sync()
+    window.addEventListener(DISCIPLINE_EVENT, sync)
+    return () => window.removeEventListener(DISCIPLINE_EVENT, sync)
   }, [])
   function record(result: 'win' | 'loss') {
     setState(prev => {
@@ -65,6 +70,7 @@ export function useDiscipline() {
       if (result === 'win') next.dayWins++
       else { next.dayLosses++; next.weekLosses++ }
       try { localStorage.setItem('taraqob_discipline', JSON.stringify(next)) } catch { /* تجاهل */ }
+      queueMicrotask(() => window.dispatchEvent(new Event(DISCIPLINE_EVENT)))
       return next
     })
   }
@@ -72,6 +78,7 @@ export function useDiscipline() {
     setState(() => {
       const next = FRESH_DISCIPLINE()
       try { localStorage.setItem('taraqob_discipline', JSON.stringify(next)) } catch { /* تجاهل */ }
+      queueMicrotask(() => window.dispatchEvent(new Event(DISCIPLINE_EVENT)))
       return next
     })
   }
@@ -181,15 +188,19 @@ export function SizeCard({ settings, entryPerShare, stopPerShare }: {
               <div className="text-xs text-gray-600">عقد</div>
             </div>
             <div>
-              <div className="text-xs text-gray-500">أقصى خسارة</div>
-              <div className="text-xl font-black font-mono text-red-400 mt-0.5">${ps.maxLoss}</div>
-              <div className="text-xs text-gray-600">{settings.riskPct}% من حسابك</div>
+              <div className="text-xs text-gray-500">خسارة الوقف المخططة</div>
+              <div className="text-xl font-black font-mono text-red-400 mt-0.5">${ps.plannedLoss}</div>
+              <div className="text-xs text-gray-600">قد يزيد التنفيذ عنها</div>
             </div>
             <div>
               <div className="text-xs text-gray-500">تكلفة الدخول</div>
               <div className="text-xl font-black font-mono text-[#E8D5A3] mt-0.5">${ps.cost}</div>
               <div className="text-xs text-gray-600">إجمالي</div>
             </div>
+          </div>
+          <div className="mt-2 rounded-lg px-3 py-2 text-xs text-center"
+               style={{ background: 'rgba(240,67,90,0.06)', color: '#F87171', border: '1px solid rgba(240,67,90,0.16)' }}>
+            أقصى خسارة ممكنة إذا انتهى العقد بلا قيمة: ${ps.maximumPossibleLoss}
           </div>
           <p className="text-xs text-gray-500 mt-2 text-center">{ps.note}</p>
         </>

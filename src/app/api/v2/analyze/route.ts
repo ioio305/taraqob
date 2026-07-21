@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { computeStrategy } from '@/lib/v2/strategyEngine'
 import { getNewsResult } from '@/app/api/v2/news/route'
 import { evaluateMarketReaction } from '@/lib/v2/marketReaction'
 import { computeStraddleMove } from '@/lib/v2/optionsExpectedMove'
@@ -8,6 +7,7 @@ import { evaluateSessionQuality } from '@/lib/v2/sessionQuality'
 import { buildTradeFocus } from '@/lib/v2/tradeFocus'
 import { getMarketSnapshot, getIntradayBars, getHistoryBars, getExpirations, getOptionsChain, type MdBar } from '@/lib/v2/marketData'
 import { crashGuard } from '@/lib/v2/marketAnalysis'
+import { computeContractPlanMetrics } from '@/lib/v2/contractAnalysis'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,8 +54,8 @@ function parseOCC(symbol: string) {
   const expirationStr = `${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
   const strike = parseInt(m[4]) / 1000
   const type = cp === 'C' ? 'call' : 'put'
-  const today = new Date(); today.setHours(0, 0, 0, 0)
-  const expDate = new Date(yy, mm - 1, dd); expDate.setHours(0, 0, 0, 0)
+  const today = new Date(`${todayET()}T00:00:00Z`)
+  const expDate = new Date(`${expirationStr}T00:00:00Z`)
   const dte = Math.max(0, Math.round((expDate.getTime() - today.getTime()) / 86400000))
   return { root, expirationStr, strike, type: type as 'call' | 'put', dte }
 }
@@ -78,7 +78,11 @@ function marketClosedNow(): boolean {
 }
 
 // Build OCC symbol from strike + type using nearest SPXW/SPX expiration
-async function strikeToOCC(strikeRaw: number, type: 'call' | 'put'): Promise<{ symbol: string; root: string; expiration: string }> {
+async function strikeToOCC(
+  strikeRaw: number,
+  type: 'call' | 'put',
+  requestedExpiration?: string | null,
+): Promise<{ symbol: string; root: string; expiration: string }> {
   const strike = roundStrike(strikeRaw)
   const todayStr = todayET()
   const cp  = type === 'call' ? 'C' : 'P'
@@ -86,15 +90,25 @@ async function strikeToOCC(strikeRaw: number, type: 'call' | 'put'): Promise<{ s
 
   try {
     const list = await getExpirations()
+    if (requestedExpiration && !list.includes(requestedExpiration)) {
+      throw new Error('تاريخ الانتهاء المحدد غير متاح')
+    }
     // عند إغلاق السوق نتخطّى عقد اليوم (منتهٍ/ميت) ونأخذ الأقرب بعده
     const closed = marketClosedNow()
-    const nearest = list.find(e => closed ? e > todayStr : e >= todayStr)
+    if (requestedExpiration && (requestedExpiration < todayStr || (closed && requestedExpiration === todayStr))) {
+      throw new Error('هذا العقد منتهي، اختر تاريخًا لاحقًا')
+    }
+    const requested = requestedExpiration ?? null
+    const nearest = requested ?? list.find(e => closed ? e > todayStr : e >= todayStr)
       ?? list.find(e => e >= todayStr) ?? list[0]
     if (nearest) {
       const [y, mo, da] = nearest.split('-')
       return { symbol: `SPXW${y.slice(2)}${mo}${da}${cp}${pad}`, root: 'SPXW', expiration: nearest }
     }
-  } catch { /* fallthrough */ }
+  } catch (error) {
+    if (requestedExpiration) throw error
+    /* fallthrough */
+  }
 
   // Fallback: build today's date symbol
   const [y, mo, da] = todayStr.split('-')
@@ -174,15 +188,40 @@ function scoreForShortlist(o: any, spxPrice: number, type: 'call' | 'put', dte: 
 export async function GET(request: NextRequest) {
   const start = Date.now()
   const { searchParams } = new URL(request.url)
+  if (searchParams.get('mode') === 'expirations') {
+    try {
+      const today = todayET()
+      const closed = marketClosedNow()
+      const expirations = (await getExpirations())
+        .filter(date => closed ? date > today : date >= today)
+        .slice(0, 12)
+      return NextResponse.json({ success: true, expirations })
+    } catch {
+      return NextResponse.json({ success: false, expirations: [] }, { status: 503 })
+    }
+  }
   let symbolRaw = (searchParams.get('symbol') ?? '').trim()
   let occInfo: { symbol: string; root: string; expiration: string } | null = null
 
   // ── تحويل رقم الستريك إلى رمز OCC ──────────────────────────────────────
   if (!symbolRaw) {
     const strikeParam = searchParams.get('strike')
-    const typeParam   = (searchParams.get('type') ?? 'call') as 'call' | 'put'
+    const typeParam = searchParams.get('type')
+    const expirationParam = searchParams.get('expiration')
     if (strikeParam && /^\d+(\.\d+)?$/.test(strikeParam.trim())) {
-      occInfo   = await strikeToOCC(parseFloat(strikeParam), typeParam)
+      if (typeParam !== 'call' && typeParam !== 'put') {
+        return NextResponse.json(
+          { success: false, error: 'اختر اتجاه العقد: صاعد أو هابط' },
+          { status: 400 },
+        )
+      }
+      if (expirationParam && !/^\d{4}-\d{2}-\d{2}$/.test(expirationParam)) {
+        return NextResponse.json(
+          { success: false, error: 'تاريخ الانتهاء غير صحيح' },
+          { status: 400 },
+        )
+      }
+      occInfo   = await strikeToOCC(parseFloat(strikeParam), typeParam, expirationParam)
       symbolRaw = occInfo.symbol
     }
   }
@@ -307,7 +346,7 @@ export async function GET(request: NextRequest) {
     // ── وضعية العقد ──────────────────────────────────────────────────────
     const isITM      = type === 'call' ? strike <= spxPrice : strike >= spxPrice
     const distFromATM = Math.abs(strike - spxPrice)
-    const distRatio   = emIntraday > 0 ? distFromATM / emIntraday : 0
+    const distRatio   = emRefPoints > 0 ? distFromATM / emRefPoints : 0
 
     const aboveVWAP = vwap ? spxPrice > vwap : null
     const aboveOR   = orHigh ? spxPrice > orHigh : null
@@ -366,7 +405,7 @@ export async function GET(request: NextRequest) {
     else if (absDelta >= 0.10 && absDelta < dRangeMin)       e4 += 3
     else if (absDelta > dRangeMax && absDelta <= 0.50)        e4 += 4
     // للـ SPX: ترتيب السعر الفعلي للعقد بالنسبة للـ EM
-    const midInEM = mid / (emIntraday > 0 ? emIntraday : 1)
+    const midInEM = mid / (emRefPoints > 0 ? emRefPoints : 1)
     if      (midInEM >= 0.05 && midInEM <= 0.35)  e4 += 8
     else if (midInEM > 0.35  && midInEM <= 0.60)  e4 += 5
     else if (midInEM > 0.60  && midInEM <= 1.00)  e4 += 3
@@ -401,8 +440,30 @@ export async function GET(request: NextRequest) {
       e6 -= 4
     }
     if (dte === 0) {
-      if (absGamma > 0.015) { riskFlags.push(`⚠ Gamma حاد 0DTE (${absGamma.toFixed(4)}) — مخاطرة عالية`); e6 -= 4 }
-      else                  { riskFlags.push('0DTE — Theta يتسارع بعد الساعة 2 ظ'); e6 -= 1 }
+      e6 -= 2
+      riskFlags.push('عقد ينتهي اليوم — يتحرك بسرعة وقد يفقد قيمته كاملة خلال ساعات')
+      if (absGamma > 0.015) {
+        riskFlags.push(`تسارع سعري حاد (${absGamma.toFixed(4)}) — الخطر مرتفع`)
+        e6 -= 3
+      } else if (absGamma > 0.010) {
+        riskFlags.push(`تسارع سعري مرتفع (${absGamma.toFixed(4)})`)
+        e6 -= 1
+      }
+      if (absTheta > 5) {
+        riskFlags.push(`تآكل زمني شديد (${absTheta.toFixed(2)})`)
+        e6 -= 3
+      } else if (absTheta > 3) {
+        riskFlags.push(`تآكل زمني مرتفع (${absTheta.toFixed(2)})`)
+        e6 -= 2
+      } else if (absTheta > 1.5) {
+        riskFlags.push(`تآكل زمني ملحوظ (${absTheta.toFixed(2)})`)
+        e6 -= 1
+      }
+      const nyNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
+      if (nyNow.getHours() >= 14) {
+        riskFlags.push('بعد الثانية ظهرًا بتوقيت نيويورك — الوقت المتبقي قصير جدًا')
+        e6 -= 2
+      }
     } else if (dte === 1) {
       if (absTheta > 3) { riskFlags.push(`⚠ Theta مرتفع (${absTheta.toFixed(2)})`); e6 -= 2 }
     }
@@ -451,7 +512,7 @@ export async function GET(request: NextRequest) {
 
     const dirAr  = spxChgPct >= 0.3 ? 'صاعد' : spxChgPct <= -0.3 ? 'هابط' : 'محايد'
     const vwapAr = vwap ? (spxPrice > vwap ? '، فوق VWAP' : '، تحت VWAP') : ''
-    const decisionReasonAr = isEstimated
+    let decisionReasonAr = isEstimated
       ? `تحليل بأسعار تقديرية (لا مصدر لحظي) — التحليل بناءً على SPX ${spxPrice.toFixed(0)} و VIX ${vixPrice.toFixed(1)}. خذ سعر العقد الفعلي من منصتك.`
       : capReasonAr ? capReasonAr
       : closedOnly ? `قائمة استعداد — السوق مغلق، الدرجة ${total}/100 ستُقيَّم عند الفتح`
@@ -491,6 +552,33 @@ export async function GET(request: NextRequest) {
     const exitT3   = estExit(t3)
     const exitStop = estExit(stopSPX)
 
+    // Hard safety gates for this section. A score can never override an invalid
+    // quote, an impossible stop, a weak reward/risk ratio, or estimated prices.
+    const planMetrics = computeContractPlanMetrics(entryPx, exitStop, exitT1, exitT2)
+    const plannedRiskPerContract = planMetrics.planned_risk_per_contract
+    const rewardRiskT1 = planMetrics.reward_risk_t1
+
+    if (isEstimated) {
+      if (decision === 'execute' || decision === 'conditional') decision = 'watch'
+      capReasonAr = 'الأسعار تقديرية وليست قابلة للتنفيذ — راقب فقط حتى تتوفر أسعار فعلية'
+    }
+    if (!isEstimated && (bid <= 0 || ask <= bid || entryPx <= 0)) {
+      decision = 'reject'
+      capReasonAr = 'سعر العقد غير صالح للتنفيذ — لا تدخل'
+    }
+    if (exitStop <= 0 || exitStop >= entryPx || plannedRiskPerContract <= 0) {
+      decision = 'reject'
+      capReasonAr = 'وقف الخسارة المحسوب غير صالح — لا توجد خطة دخول آمنة'
+    }
+    if ((decision === 'execute' || decision === 'conditional') && rewardRiskT1 < 1) {
+      decision = 'watch'
+      capReasonAr = `العائد المتوقع للهدف الأول أقل من الخسارة المخططة (${rewardRiskT1.toFixed(2)}) — لا دخول الآن`
+    }
+
+    if (capReasonAr) {
+      decisionReasonAr = capReasonAr
+    }
+
     // ── قائمة مختصرة من السلسلة ───────────────────────────────────────────
     let shortlist: any[] = []
     {
@@ -516,22 +604,6 @@ export async function GET(request: NextRequest) {
     }
 
     // ── محرك استراتيجية الأهداف ──────────────────────────────────────────────
-    const strategy = computeStrategy({
-      score:    total,
-      dte,
-      iv,
-      bid,
-      ask,
-      mid,
-      delta,
-      gamma,
-      spxPrice,
-      emUpper,
-      emLower,
-      type,
-      chgPct:   spxChgPct,
-      vixPrice,
-    })
     const focus = buildTradeFocus({
       baseStatus: decision,
       score: total,
@@ -546,8 +618,12 @@ export async function GET(request: NextRequest) {
       success: true,
       analysis: {
         symbol: symbolRaw.toUpperCase(), root, type, strike,
+        direction: type === 'call' ? 'bullish' : 'bearish',
+        direction_label_ar: type === 'call' ? 'صاعد' : 'هابط',
         expiration: expirationStr, dte,
         is_estimated: isEstimated,
+        generated_at: new Date().toISOString(),
+        market_source: snap.source,
         bid, ask, mid, last: cq.last ?? null,
         spread_abs: spreadAbs,
         spread_pct: Math.round(spreadPct * 10000) / 100,
@@ -561,6 +637,7 @@ export async function GET(request: NextRequest) {
         spx_vs_vwap: vwap ? (spxPrice > vwap ? 'above' : 'below') : null,
         em_intraday: Math.round(emIntraday * 100) / 100,
         em_daily:    Math.round(emDaily    * 100) / 100,
+        em_reference: Math.round(emRefPoints * 100) / 100,
         expected_move_live: straddleMove,
         em_upper: emUpper, em_lower: emLower,
         is_itm: isITM,
@@ -576,6 +653,7 @@ export async function GET(request: NextRequest) {
         },
         total_score: total,
         decision,
+        entry_allowed: decision === 'execute' || decision === 'conditional',
         decision_reason_ar: decisionReasonAr,
         entry_conservative:       entryConservative,
         entry_conservative_total: entryConservative ? Math.round(entryConservative * 100) : null,
@@ -589,7 +667,8 @@ export async function GET(request: NextRequest) {
           t3:   { spx: t3,      exit_price: exitT3,   exit_total: Math.round(exitT3   * 100), pnl: Math.round((exitT3   - entryPx) * 100) },
           stop: { spx: stopSPX, exit_price: exitStop, exit_total: Math.round(exitStop * 100), pnl: Math.round((exitStop - entryPx) * 100) },
         },
-        strategy,
+        plan_metrics: planMetrics,
+        target_price_note_ar: 'أسعار العقد عند الأهداف تقديرية وليست أسعار تنفيذ مضمونة',
         focus,
         news_risk: newsDecision,
         market_reaction: marketReaction,

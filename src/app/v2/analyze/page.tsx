@@ -6,24 +6,15 @@ import Link from 'next/link'
 import { useRiskSettings, RiskBar, SizeCard, DisciplineBar } from '@/components/v2/PositionSizing'
 import { computePositionSize } from '@/lib/v2/positionSizing'
 import { PerformanceView } from '@/components/v2/PerformanceView'
+import {
+  buildContractAnalysisUrl,
+  getOccDirection,
+  OCC_SYMBOL_PATTERN,
+  type ContractDirection,
+} from '@/lib/v2/contractAnalysis'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type ScoreEntry = { score: number; max: number; label: string }
-
-type StrategyResult = {
-  strategy: 'fast' | 'balanced' | 'strong'
-  strategyLabel: string; strategyReason: string
-  postT1Action: string; cancelCondition: string; earlyExitCondition: string
-  stopPct: number; t1Pct: number; t2Pct: number; t3Pct: number | null
-  entry: number
-  entryConservative: number; entryBalanced: number
-  entryConservativeTotal: number; entryBalancedTotal: number
-  stopPrice: number; stopTotal: number; stopLoss: number; stopSpxLevel: number | null
-  t1Price: number; t1Total: number; t1Profit: number; t1SpxLevel: number | null; t1InEM: boolean
-  t2Price: number; t2Total: number; t2Profit: number; t2SpxLevel: number | null; t2InEM: boolean
-  t3Price: number | null; t3Total: number | null; t3Profit: number | null
-  t3SpxLevel: number | null; t3InEM: boolean | null
-}
 
 type TargetLevel = {
   spx: number; exit_price: number; exit_total: number; pnl: number
@@ -36,9 +27,11 @@ type ShortlistRow = {
 }
 
 type Analysis = {
-  symbol: string; root: string; type: string; strike: number
+  symbol: string; root: string; type: 'call' | 'put'; strike: number
+  direction: 'bullish' | 'bearish'; direction_label_ar: string
   expiration: string; dte: number
   is_estimated?: boolean
+  generated_at: string; market_source: 'tradier' | 'yahoo'
   bid: number; ask: number; mid: number; last: number | null
   spread_abs: number; spread_pct: number
   volume: number; open_interest: number
@@ -47,7 +40,7 @@ type Analysis = {
   spx_price: number; spx_change_pct: number; vix: number
   vwap: number | null; or_high: number | null; or_low: number | null
   spx_vs_vwap: 'above' | 'below' | null
-  em_intraday: number; em_daily: number; em_upper: number; em_lower: number
+  em_intraday: number; em_daily: number; em_reference: number; em_upper: number; em_lower: number
   expected_move_live?: { points: number | null; source: string; label: string; atmStrike: number | null; callMid: number | null; putMid: number | null }
   is_itm: boolean; dist_from_atm: number
   scores: {
@@ -57,6 +50,7 @@ type Analysis = {
   }
   total_score: number
   decision: 'execute' | 'conditional' | 'watch' | 'reject'
+  entry_allowed: boolean
   decision_reason_ar: string
   entry_conservative: number | null
   entry_conservative_total: number | null
@@ -64,7 +58,13 @@ type Analysis = {
   entry_balanced_total: number
   stop_spx: number; target1_spx: number; target2_spx: number; target3_spx: number
   targets?: { t1: TargetLevel; t2: TargetLevel; t3: TargetLevel; stop: TargetLevel }
-  strategy?: StrategyResult
+  plan_metrics?: {
+    planned_risk_per_contract: number
+    maximum_possible_loss_per_contract: number
+    reward_risk_t1: number
+    reward_risk_t2: number
+  }
+  target_price_note_ar?: string
   focus?: {
     action: 'enter' | 'wait' | 'avoid'
     label: string
@@ -77,6 +77,20 @@ type Analysis = {
   shortlist: ShortlistRow[]
   analysis_duration_ms: number
 }
+
+type FrozenPlan = Pick<Analysis,
+  | 'entry_conservative'
+  | 'entry_conservative_total'
+  | 'entry_balanced'
+  | 'entry_balanced_total'
+  | 'stop_spx'
+  | 'target1_spx'
+  | 'target2_spx'
+  | 'target3_spx'
+  | 'targets'
+  | 'plan_metrics'
+  | 'target_price_note_ar'
+>
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function n(v: number | null | undefined, d = 2) {
@@ -94,9 +108,28 @@ function Sk({ w = 'w-24', h = 'h-5', rounded = 'rounded-lg' }: { w?: string; h?:
 }
 
 // Per-engine Arabic commentary based on score percentage
-function engineRemark(key: string, score: number, max: number): string {
+function engineRemark(key: string, score: number, max: number, analysis: Analysis): string {
   const pct = score / max
   const quality = pct >= 0.8 ? 'ممتاز' : pct >= 0.6 ? 'جيد' : pct >= 0.4 ? 'مقبول' : 'ضعيف'
+  const direction = analysis.type === 'call' ? 'الصاعد' : 'الهابط'
+  if (key === 'market_direction') {
+    return pct >= 0.8
+      ? `اتجاه السوق يدعم العقد ${direction}`
+      : pct >= 0.6
+        ? `اتجاه السوق يميل لدعم العقد ${direction}`
+        : `اتجاه السوق لا يدعم العقد ${direction} بوضوح`
+  }
+  if (key === 'momentum') {
+    const requiredSide = analysis.type === 'call' ? 'فوق' : 'تحت'
+    return pct >= 0.7
+      ? `الزخم متوافق، والسعر في الجانب المطلوب ${requiredSide} متوسط التداول`
+      : `الزخم غير مؤكد للعقد ${direction}، انتظر تأكيدًا`
+  }
+  if (key === 'theta_gamma_risk' && analysis.dte === 0) {
+    return pct >= 0.6
+      ? 'مخاطر انتهاء اليوم قائمة حتى مع درجة مقبولة'
+      : 'مخاطر انتهاء اليوم مرتفعة ولا تُعد آمنة'
+  }
   const remarks: Record<string, Record<string, string>> = {
     market_direction: {
       ممتاز: 'اتجاه السوق واضح ومتوافق تماماً مع نوع العقد',
@@ -223,6 +256,12 @@ function AnalyzeContent() {
   const { settings: riskSettings, update: updateRisk } = useRiskSettings()
   const [tab, setTab]           = useState<'analyze' | 'performance'>('analyze')
   const [input, setInput]       = useState(params.get('symbol') ?? '')
+  const [direction, setDirection] = useState<ContractDirection | null>(() => {
+    const value = params.get('type')
+    return value === 'call' || value === 'put' ? value : null
+  })
+  const [expiration, setExpiration] = useState(params.get('expiration') ?? '')
+  const [expirations, setExpirations] = useState<string[]>([])
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [loading, setLoading]   = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -230,41 +269,49 @@ function AnalyzeContent() {
   const [liveUrl, setLiveUrl]   = useState<string | null>(null)
   const liveTimerRef            = useRef<ReturnType<typeof setTimeout> | null>(null)
   // ── Frozen plan: locked on first analysis, never auto-updated ────────────
-  const [frozenStrategy, setFrozenStrategy] = useState<StrategyResult | null>(null)
+  const [frozenPlan, setFrozenPlan] = useState<FrozenPlan | null>(null)
   // ── Live mode toggle: OFF by default (plan is frozen until user enables) ─
   const [liveMode, setLiveMode] = useState(false)
 
-  function buildUrl(sym: string, strike?: string, type?: string): string | null {
-    const s = sym.trim().toUpperCase()
-    if (s && /^(SPXW|SPX)\d{6}[CP]\d{8}$/i.test(s))
-      return `/api/v2/analyze?symbol=${encodeURIComponent(s)}`
-    if (strike)
-      return `/api/v2/analyze?strike=${encodeURIComponent(strike)}&type=${encodeURIComponent(type ?? 'call')}`
-    if (s && /^\d+(\.\d+)?$/.test(s))
-      return `/api/v2/analyze?strike=${encodeURIComponent(s)}&type=call`
-    if (s)
-      return `/api/v2/analyze?symbol=${encodeURIComponent(s)}`
-    return null
-  }
-
-  const runAnalysis = useCallback(async (sym?: string, strike?: string, type?: string) => {
-    const url = buildUrl(sym ?? input, strike, type)
-    if (!url) { setError('أدخل رقم الستريك (مثال: 7350) أو رمز OCC الكامل'); return }
+  const runAnalysis = useCallback(async (override?: {
+    input?: string
+    direction?: ContractDirection | null
+    expiration?: string
+  }) => {
+    const requestInput = override?.input ?? input
+    const requestDirection = getOccDirection(requestInput) ?? override?.direction ?? direction
+    const requestExpiration = override?.expiration ?? expiration
+    const request = buildContractAnalysisUrl(requestInput, requestDirection, requestExpiration)
+    if (!request.url) { setError(request.error); return }
     setLoading(true); setError(null); setAnalysis(null); setLiveUrl(null)
-    setFrozenStrategy(null)  // reset frozen plan on new analysis
+    setFrozenPlan(null)
     try {
-      const res  = await fetch(url)
+      const res  = await fetch(request.url)
       const data = await res.json()
       if (!data.success) { setError(data.error ?? 'خطأ غير معروف') }
       else {
-        setAnalysis(data.analysis)
-        // Lock the strategy at the moment of first analysis
-        if (data.analysis.strategy) setFrozenStrategy(data.analysis.strategy)
-        setLiveUrl(url)
+        const initial = data.analysis as Analysis
+        setAnalysis(initial)
+        setFrozenPlan({
+          entry_conservative: initial.entry_conservative,
+          entry_conservative_total: initial.entry_conservative_total,
+          entry_balanced: initial.entry_balanced,
+          entry_balanced_total: initial.entry_balanced_total,
+          stop_spx: initial.stop_spx,
+          target1_spx: initial.target1_spx,
+          target2_spx: initial.target2_spx,
+          target3_spx: initial.target3_spx,
+          targets: initial.targets,
+          plan_metrics: initial.plan_metrics,
+          target_price_note_ar: initial.target_price_note_ar,
+        })
+        setDirection(initial.type === 'put' ? 'put' : 'call')
+        setExpiration(initial.expiration)
+        setLiveUrl(request.url)
       }
     } catch { setError('خطأ في الاتصال بالخادم') }
     setLoading(false)
-  }, [input]) // eslint-disable-line
+  }, [direction, expiration, input])
 
   // ── Live polling — only runs when liveMode is ON ──────────────────────
   useEffect(() => {
@@ -279,13 +326,11 @@ function AnalyzeContent() {
         const res  = await fetch(pollUrl)
         const data = await res.json()
         if (!cancelled && data.success) {
-          // In live mode: update market data / price / score, but keep strategy frozen
           setAnalysis(prev => {
             if (!prev) return data.analysis
             return {
               ...data.analysis,
-              // Always preserve the frozen strategy levels even in live mode
-              strategy: frozenStrategy ?? data.analysis.strategy,
+              ...(frozenPlan ?? {}),
             }
           })
         }
@@ -299,25 +344,52 @@ function AnalyzeContent() {
       cancelled = true
       if (liveTimerRef.current) clearTimeout(liveTimerRef.current)
     }
-  }, [liveUrl, liveMode, frozenStrategy])
+  }, [liveUrl, liveMode, frozenPlan])
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/v2/analyze?mode=expirations')
+      .then(res => res.json())
+      .then(data => {
+        if (cancelled || !Array.isArray(data.expirations)) return
+        setExpirations(data.expirations)
+        setExpiration(current => current || data.expirations[0] || '')
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     const sym    = params.get('symbol')
     const strike = params.get('strike')
-    const type   = params.get('type') ?? 'call'
+    const typeParam = params.get('type')
+    const type = typeParam === 'call' || typeParam === 'put' ? typeParam : null
+    const requestedExpiration = params.get('expiration') ?? params.get('expiry') ?? ''
     // If a full OCC symbol is given, use it directly
-    if (sym && /^(SPXW|SPX)\d{6}[CP]\d{8}$/i.test(sym)) {
+    if (sym && OCC_SYMBOL_PATTERN.test(sym)) {
       setInput(sym)
-      runAnalysis(sym)
-    } else if (strike) {
+      setDirection(getOccDirection(sym))
+      runAnalysis({ input: sym })
+    } else if (strike && type) {
       // strike-based (symbol=SPX is context only, not an OCC symbol)
       setInput(strike)
-      runAnalysis('', strike, type)
+      setDirection(type)
+      setExpiration(requestedExpiration)
+      runAnalysis({ input: strike, direction: type, expiration: requestedExpiration })
+    } else if (strike) {
+      setInput(strike)
+      setError('اختر اتجاه العقد قبل التحليل')
     } else if (sym) {
       setInput(sym)
-      runAnalysis(sym)
+      runAnalysis({ input: sym })
     }
   }, []) // eslint-disable-line
+
+  const occDirection = getOccDirection(input)
+  const isOccSymbol = OCC_SYMBOL_PATTERN.test(input.trim())
+  const isNumericStrike = /^\d+(\.\d+)?$/.test(input.trim())
+  const effectiveDirection = occDirection ?? direction
+  const canAnalyze = isOccSymbol || (isNumericStrike && effectiveDirection !== null)
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-6 space-y-4" dir="rtl"
@@ -342,28 +414,71 @@ function AnalyzeContent() {
 
       {/* ── Input ── */}
       <Card>
-        <SectionLabel>تحليل العقد — أدخل رمز OCC أو رقم الستريك</SectionLabel>
-        <div className="flex gap-2">
+        <SectionLabel>تحليل العقد — حدّد العقد كاملًا قبل التحليل</SectionLabel>
+        <div className="flex flex-col sm:flex-row gap-2">
           <input
             value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && runAnalysis()}
-            placeholder="رقم الستريك مثال: 7350"
+            onChange={e => { setInput(e.target.value); setError(null) }}
+            onKeyDown={e => e.key === 'Enter' && canAnalyze && runAnalysis()}
+            placeholder="سعر التنفيذ، مثال: 7350"
+            aria-label="سعر التنفيذ أو الرمز الكامل"
             className="flex-1 rounded-xl px-4 py-3 text-sm text-white outline-none font-mono"
             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
             dir="ltr"
           />
           <button
             onClick={() => runAnalysis()}
-            disabled={loading}
+            disabled={loading || !canAnalyze}
             className="px-6 py-3 rounded-xl text-sm font-bold disabled:opacity-50 transition-all whitespace-nowrap"
-            style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
-            {loading ? 'جاري...' : 'تحليل →'}
+            style={{ background: '#C9943A', color: '#060D14' }}>
+            {loading ? 'جاري التحليل...' : 'ابدأ التحليل'}
           </button>
         </div>
+        {isOccSymbol ? (
+          <div className="mt-3 rounded-xl px-4 py-3 flex items-center justify-between gap-3"
+               style={{ background: 'rgba(96,165,250,0.07)', border: '1px solid rgba(96,165,250,0.22)' }}>
+            <span className="text-xs" style={{ color: '#94A3B8' }}>تم تحديد الاتجاه وتاريخ الانتهاء من الرمز الكامل</span>
+            <span className="text-sm font-bold" style={{ color: occDirection === 'call' ? '#26D07C' : '#F0435A' }}>
+              {occDirection === 'call' ? '▲ عقد صاعد' : '▼ عقد هابط'}
+            </span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+            <fieldset>
+              <legend className="text-xs mb-2" style={{ color: '#94A3B8' }}>اتجاه العقد، اختيار إلزامي</legend>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  { value: 'call' as const, label: '▲ صاعد', color: '#26D07C' },
+                  { value: 'put' as const, label: '▼ هابط', color: '#F0435A' },
+                ]).map(option => (
+                  <button key={option.value} type="button" onClick={() => { setDirection(option.value); setError(null) }}
+                    aria-pressed={direction === option.value}
+                    className="rounded-xl px-4 py-2.5 text-sm font-bold transition-colors"
+                    style={{
+                      background: direction === option.value ? `${option.color}18` : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${direction === option.value ? `${option.color}80` : 'rgba(255,255,255,0.08)'}`,
+                      color: direction === option.value ? option.color : '#6E7E8F',
+                    }}>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <label className="text-xs" style={{ color: '#94A3B8' }}>
+              تاريخ الانتهاء
+              <select value={expiration} onChange={e => setExpiration(e.target.value)}
+                className="mt-2 w-full rounded-xl px-3 py-2.5 text-sm text-white outline-none"
+                style={{ background: '#0A1929', border: '1px solid rgba(255,255,255,0.08)' }}>
+                {!expiration && <option value="">أقرب تاريخ متاح</option>}
+                {expiration && !expirations.includes(expiration) && <option value={expiration}>{expiration}</option>}
+                {expirations.map(date => <option key={date} value={date}>{date}</option>)}
+              </select>
+            </label>
+          </div>
+        )}
         <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
           <p className="text-xs font-mono" style={{ color: '#2D3748' }}>
-            يقبل: رقم الستريك (7350) أو رمز OCC الكامل
+            لا يفترض الموقع الاتجاه تلقائيًا. الرمز الكامل يحدد الاتجاه بنفسه.
           </p>
           <div className="flex items-center gap-3">
             {/* Live mode toggle — advanced option, off by default */}
@@ -377,11 +492,11 @@ function AnalyzeContent() {
                   color:      liveMode ? '#10B981' : '#4A5568',
                 }}>
                 <span className={liveMode ? 'animate-pulse' : ''}>◉</span>
-                تحديث حي للخطة
+                تحديث أسعار السوق
                 <span className="font-mono text-[10px] opacity-60">{liveMode ? 'مفعّل' : 'مغلق'}</span>
               </button>
             )}
-            {frozenStrategy && (
+            {frozenPlan && (
               <span className="text-xs font-mono px-2 py-0.5 rounded-lg"
                     style={{ background: 'rgba(201,148,58,0.1)', color: '#C9943A60', border: '1px solid rgba(201,148,58,0.2)' }}>
                 🔒 الخطة مثبّتة
@@ -466,7 +581,7 @@ function AnalyzeContent() {
                   <span>⚠</span><span>أسعار تقديرية — لا تعتمد الأرقام الدولارية</span>
                 </div>
                 <div className="text-xs leading-relaxed" style={{ color: '#F0435A', opacity: 0.9 }}>
-                  لا يوجد مصدر أسعار لحظي (بلا مفتاح بيانات). سعر العقد الدولاري محسوب رياضياً وقد <b>يختلف عن السوق بأضعاف</b> — خذ السعر الفعلي من منصة وسيطك (دراية). أما <b>التحليل</b> (الاتجاه، المستويات، الدرجة، الأهداف بنقاط SPX) فدقيق ويمكن الاعتماد عليه.
+                  لا يوجد سعر فعلي لهذا العقد الآن. الأرقام السعرية تقديرية وقد <b>تختلف عن السوق بأضعاف</b>. لذلك يمنع الموقع الدخول ويحوّل النتيجة إلى مراقبة فقط حتى تتوفر أسعار فعلية.
                 </div>
               </div>
             )}
@@ -477,7 +592,7 @@ function AnalyzeContent() {
               const stopPx  = analysis.targets?.stop?.exit_price ?? null
               const t1Px    = analysis.targets?.t1?.exit_price ?? null
               const ps = entryPx && stopPx ? computePositionSize(riskSettings, entryPx, stopPx) : null
-              const canEnter = analysis.decision === 'execute' || analysis.decision === 'conditional'
+              const canEnter = analysis.entry_allowed
               const decAr = analysis.decision === 'execute' ? 'نعم — الظروف مناسبة'
                 : analysis.decision === 'conditional' ? 'نعم بشرط — اقرأ السبب'
                 : analysis.decision === 'watch' ? 'ليس الآن — راقب فقط' : 'لا — ابتعد عن هذا العقد'
@@ -487,7 +602,17 @@ function AnalyzeContent() {
               return (
                 <div className="rounded-2xl p-4"
                   style={{ background: `${decClr}08`, border: `1px solid ${decClr}35` }}>
-                  <div className="text-xs font-bold mb-3" style={{ color: decClr }}>💡 الخلاصة ببساطة</div>
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div className="text-xs font-bold" style={{ color: decClr }}>💡 الخلاصة ببساطة</div>
+                    <span className="px-3 py-1 rounded-full text-sm font-black"
+                          style={{
+                            background: analysis.type === 'call' ? 'rgba(38,208,124,0.12)' : 'rgba(240,67,90,0.12)',
+                            border: analysis.type === 'call' ? '1px solid rgba(38,208,124,0.35)' : '1px solid rgba(240,67,90,0.35)',
+                            color: analysis.type === 'call' ? '#26D07C' : '#F0435A',
+                          }}>
+                      {analysis.type === 'call' ? '▲ اتجاه العقد: صاعد' : '▼ اتجاه العقد: هابط'}
+                    </span>
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
                     <div>
                       <div className="text-xs text-gray-500 mb-1">هل أدخل؟</div>
@@ -497,14 +622,14 @@ function AnalyzeContent() {
                       <div className="text-xs text-gray-500 mb-1">كم أشتري؟</div>
                       <div className="text-base font-black text-white">
                         {canEnter && ps && ps.affordable
-                          ? `${ps.contracts} عقد (أقصى خسارة $${ps.maxLoss})`
+                          ? `${ps.contracts} عقد (خسارة الوقف $${ps.plannedLoss})`
                           : canEnter ? 'اضبط رصيدك بالأسفل' : 'صفر — لا دخول'}
                       </div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-500 mb-1">متى أخرج؟</div>
                       <div className="text-base font-black font-mono text-white" dir="ltr">
-                        {t1Px && stopPx ? `🎯 $${t1Px} · 🛑 $${stopPx}` : '—'}
+                        {canEnter && t1Px && stopPx ? `🎯 $${t1Px} · 🛑 $${stopPx}` : 'لا توجد خطة دخول'}
                       </div>
                     </div>
                   </div>
@@ -543,7 +668,7 @@ function AnalyzeContent() {
               )}
               {analysis.or_high && (
                 <div>
-                  <span className="text-xs font-mono" style={{ color: '#2D3748' }}>نطاق الافتتاح </span>
+                  <span className="text-xs font-mono" style={{ color: '#2D3748' }}>نطاق أول 30 دقيقة </span>
                   <span className="text-xs font-mono" style={{ color: '#F59E0B' }}>
                     {n(analysis.or_low, 0)} – {n(analysis.or_high, 0)}
                   </span>
@@ -560,16 +685,21 @@ function AnalyzeContent() {
               </div>
               <div className="mr-auto flex items-center gap-2">
                 <span className="text-xs font-mono" style={{ color: '#4A5568' }}>
-                  {analysis.dte === 0 ? '0DTE' : `${analysis.dte}DTE`}
-                  {' · '}{analysis.type.toUpperCase()}
-                  {' · '}Strike {n(analysis.strike, 0)}
+                  {analysis.dte === 0 ? 'ينتهي اليوم' : `متبقي ${analysis.dte} يوم`}
+                  {' · '}{analysis.type === 'call' ? 'صاعد' : 'هابط'}
+                  {' · '}سعر التنفيذ {n(analysis.strike, 0)}
                 </span>
-                {liveUrl && (
+                {liveUrl && liveMode && (
                   <span className="flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded"
                     style={{ background: refreshing ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.08)', color: '#10B981', border: '1px solid rgba(16,185,129,0.3)' }}>
                     <span className={`inline-block w-1.5 h-1.5 rounded-full ${refreshing ? 'animate-ping' : 'animate-pulse'}`}
                           style={{ background: '#10B981' }} />
-                    مباشر · 3ث
+                    يتحدث كل 3 ثوانٍ
+                  </span>
+                )}
+                {!liveMode && (
+                  <span className="text-[10px] font-mono" style={{ color: '#4A5568' }}>
+                    آخر قراءة {new Date(analysis.generated_at).toLocaleTimeString('ar-SA', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                   </span>
                 )}
               </div>
@@ -588,7 +718,7 @@ function AnalyzeContent() {
                     {analysis.symbol}
                   </div>
                   <div className="text-xs font-mono mb-3" style={{ color: '#4A5568' }}>
-                    {analysis.expiration} · {analysis.type.toUpperCase()} · Strike {n(analysis.strike, 0)} · {analysis.dte}DTE
+                    انتهاء {analysis.expiration} · {analysis.type === 'call' ? 'اتجاه صاعد' : 'اتجاه هابط'} · سعر التنفيذ {n(analysis.strike, 0)}
                   </div>
 
                   <div className="flex flex-wrap gap-2 items-center mb-3">
@@ -636,203 +766,102 @@ function AnalyzeContent() {
               )}
             </div>
 
-            {/* ── Strategy Engine — Full Detail ── */}
-            {analysis.strategy && (() => {
-              const s = analysis.strategy!
-              const stratColor = s.strategy === 'strong' ? '#10B981'
-                : s.strategy === 'balanced' ? '#C9943A' : '#60A5FA'
-              const inEMBadge = (inEM: boolean | null) =>
-                inEM === null ? null
-                : inEM
-                  ? <span className="text-xs font-mono px-1.5 py-0.5 rounded mr-1"
-                           style={{ background: 'rgba(16,185,129,0.12)', color: '#10B981', border: '1px solid rgba(16,185,129,0.25)' }}>
-                      داخل EM ✓
-                    </span>
-                  : <span className="text-xs font-mono px-1.5 py-0.5 rounded mr-1"
-                           style={{ background: 'rgba(245,158,11,0.12)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.25)' }}>
-                      خارج EM ⚠
-                    </span>
-
-              const targets = [
-                {
-                  label:  `هدف ١`,
-                  pct:    `${(s.t1Pct * 100).toFixed(0)}%`,
-                  price:  s.t1Price,
-                  total:  s.t1Total,
-                  profit: s.t1Profit,
-                  spx:    s.t1SpxLevel,
-                  inEM:   s.t1InEM,
-                  color:  '#4ADE80',
-                  bg:     'rgba(74,222,128,0.06)',
-                  border: 'rgba(74,222,128,0.2)',
-                  icon:   '◎',
-                },
-                {
-                  label:  `هدف ٢`,
-                  pct:    `${(s.t2Pct * 100).toFixed(0)}%`,
-                  price:  s.t2Price,
-                  total:  s.t2Total,
-                  profit: s.t2Profit,
-                  spx:    s.t2SpxLevel,
-                  inEM:   s.t2InEM,
-                  color:  '#10B981',
-                  bg:     'rgba(16,185,129,0.06)',
-                  border: 'rgba(16,185,129,0.2)',
-                  icon:   '◎',
-                },
-                ...(s.t3Price ? [{
-                  label:  `هدف ٣`,
-                  pct:    `${((s.t3Pct ?? 0) * 100).toFixed(0)}%`,
-                  price:  s.t3Price!,
-                  total:  s.t3Total!,
-                  profit: s.t3Profit!,
-                  spx:    s.t3SpxLevel,
-                  inEM:   s.t3InEM,
-                  color:  '#A78BFA',
-                  bg:     'rgba(167,139,250,0.06)',
-                  border: 'rgba(167,139,250,0.2)',
-                  icon:   '◎',
-                }] : []),
-                {
-                  label:  `وقف الخسارة`,
-                  pct:    `${(s.stopPct * 100).toFixed(0)}%`,
-                  price:  s.stopPrice,
-                  total:  s.stopTotal,
-                  profit: s.stopLoss,
-                  spx:    s.stopSpxLevel,
-                  inEM:   null,
-                  color:  '#EF4444',
-                  bg:     'rgba(239,68,68,0.06)',
-                  border: 'rgba(239,68,68,0.2)',
-                  icon:   '⊘',
-                },
+            {/* ── One executable plan. Hidden completely when entry is not allowed. ── */}
+            {analysis.entry_allowed && analysis.targets && analysis.entry_balanced ? (() => {
+              const entry = analysis.entry_balanced!
+              const entryTotal = Math.round(entry * 100)
+              const metrics = analysis.plan_metrics
+              const rows = [
+                { label: 'الهدف الأول', data: analysis.targets!.t1, color: '#4ADE80' },
+                { label: 'الهدف الثاني', data: analysis.targets!.t2, color: '#10B981' },
+                { label: 'وقف الخسارة', data: analysis.targets!.stop, color: '#EF4444' },
               ]
-
               return (
                 <Card>
-                  <SectionLabel>محرك الاستراتيجية — الأهداف ووقف الخسارة</SectionLabel>
-
-                  {/* Strategy header */}
-                  <div className="flex flex-wrap items-center gap-3 mb-5 pb-4"
-                       style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <span className="text-sm font-bold px-3 py-1.5 rounded-xl"
-                          style={{ background: `${stratColor}15`, color: stratColor, border: `1px solid ${stratColor}35` }}>
-                      استراتيجية {s.strategyLabel}
-                    </span>
-                    <div className="text-sm leading-snug flex-1" style={{ color: '#94A3B8' }}>
-                      {s.strategyReason}
+                  <SectionLabel>خطة واحدة واضحة — دخول، هدفان، ووقف خسارة</SectionLabel>
+                  <div className="rounded-xl p-4 mb-4 flex flex-wrap items-center justify-between gap-3"
+                       style={{ background: 'rgba(201,148,58,0.08)', border: '1px solid rgba(201,148,58,0.28)' }}>
+                    <div>
+                      <div className="text-xs mb-1" style={{ color: '#C9943A' }}>الدخول بأمر محدد</div>
+                      <div className="text-2xl font-black font-mono" style={{ color: '#E8D5A3' }}>${n(entry)}</div>
                     </div>
-                    <div className="flex gap-3 text-xs font-mono shrink-0">
-                      <span style={{ color: '#EF4444' }}>وقف {(s.stopPct * 100).toFixed(0)}%</span>
-                      <span style={{ color: '#10B981' }}>ه١ +{(s.t1Pct * 100).toFixed(0)}%</span>
-                      <span style={{ color: '#60A5FA' }}>ه٢ +{(s.t2Pct * 100).toFixed(0)}%</span>
-                      {s.t3Pct && <span style={{ color: '#A78BFA' }}>ه٣ +{(s.t3Pct * 100).toFixed(0)}%</span>}
+                    <div className="text-left">
+                      <div className="text-xs" style={{ color: '#6E7E8F' }}>قيمة عقد واحد</div>
+                      <div className="text-lg font-bold font-mono text-white">${entryTotal.toLocaleString()}</div>
+                    </div>
+                    <div className="text-left">
+                      <div className="text-xs" style={{ color: '#6E7E8F' }}>الاتجاه</div>
+                      <div className="text-lg font-bold" style={{ color: analysis.type === 'call' ? '#26D07C' : '#F0435A' }}>
+                        {analysis.type === 'call' ? '▲ صاعد' : '▼ هابط'}
+                      </div>
                     </div>
                   </div>
 
-                  {/* Entry */}
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    {[
-                      { label: 'دخول محافظ',  sub: 'Bid + 35% Spread', px: s.entryConservative, tot: s.entryConservativeTotal, color: '#C9943A', bg: 'rgba(201,148,58,0.08)', border: 'rgba(201,148,58,0.25)' },
-                      { label: 'دخول متوازن', sub: 'Bid + 60% Spread', px: s.entryBalanced,     tot: s.entryBalancedTotal,     color: '#60A5FA', bg: 'rgba(96,165,250,0.08)',  border: 'rgba(96,165,250,0.25)' },
-                    ].map(e => (
-                      <div key={e.label} className="rounded-xl p-4"
-                           style={{ background: e.bg, border: `1px solid ${e.border}` }}>
-                        <div className="text-xs font-mono mb-1" style={{ color: e.color }}>{e.label}</div>
-                        <div className="text-2xl font-bold font-mono leading-none" style={{ color: e.color }}>
-                          ${n(e.px)}
-                        </div>
-                        <div className="text-xs font-mono mt-1" style={{ color: '#4A5568' }}>/ سهم</div>
-                        <div className="mt-2 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                          <div className="text-xs font-mono" style={{ color: '#2D3748' }}>القيمة الفعلية (×100)</div>
-                          <div className="text-base font-bold font-mono" style={{ color: e.color }}>
-                            ${e.tot.toLocaleString()}
+                  <div className="space-y-2 mb-4">
+                    {rows.map(row => {
+                      const changePct = ((row.data.exit_price - entry) / entry) * 100
+                      return (
+                        <div key={row.label} className="rounded-xl px-4 py-3"
+                             style={{ background: `${row.color}0D`, border: `1px solid ${row.color}33` }}>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-center">
+                            <div className="font-bold" style={{ color: row.color }}>{row.label}</div>
+                            <div>
+                              <div className="text-[11px]" style={{ color: '#6E7E8F' }}>مستوى المؤشر</div>
+                              <div className="font-bold font-mono" style={{ color: row.color }}>{row.data.spx.toLocaleString()}</div>
+                            </div>
+                            <div>
+                              <div className="text-[11px]" style={{ color: '#6E7E8F' }}>سعر العقد التقديري</div>
+                              <div className="font-bold font-mono text-white">${n(row.data.exit_price)}</div>
+                            </div>
+                            <div>
+                              <div className="text-[11px]" style={{ color: '#6E7E8F' }}>لعقد واحد</div>
+                              <div className="font-bold font-mono" style={{ color: row.data.pnl >= 0 ? '#10B981' : '#EF4444' }}>
+                                {row.data.pnl >= 0 ? '+' : ''}${row.data.pnl.toLocaleString()} ({changePct >= 0 ? '+' : ''}{n(changePct, 0)}%)
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        <div className="text-xs font-mono mt-1" style={{ color: '#2D3748' }}>{e.sub}</div>
+                      )
+                    })}
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+                    {[
+                      { label: 'العائد مقابل الخسارة، الهدف الأول', value: metrics ? `1 : ${n(metrics.reward_risk_t1, 2)}` : '—', color: '#4ADE80' },
+                      { label: 'العائد مقابل الخسارة، الهدف الثاني', value: metrics ? `1 : ${n(metrics.reward_risk_t2, 2)}` : '—', color: '#10B981' },
+                      { label: 'خسارة الوقف المخططة', value: metrics ? `$${metrics.planned_risk_per_contract}` : '—', color: '#EF4444' },
+                      { label: 'أقصى خسارة ممكنة', value: metrics ? `$${metrics.maximum_possible_loss_per_contract}` : '—', color: '#F87171' },
+                    ].map(item => (
+                      <div key={item.label} className="rounded-xl p-3 text-center"
+                           style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div className="text-[11px] min-h-8" style={{ color: '#6E7E8F' }}>{item.label}</div>
+                        <div className="font-bold font-mono mt-1" style={{ color: item.color }}>{item.value}</div>
                       </div>
                     ))}
                   </div>
 
-                  {/* حجم المركز وإدارة المخاطر */}
                   <div className="space-y-2 mb-4">
                     <RiskBar settings={riskSettings} update={updateRisk} />
                     <DisciplineBar />
-                    <SizeCard settings={riskSettings} entryPerShare={s.entryBalanced} stopPerShare={s.stopPrice} />
+                    <SizeCard settings={riskSettings} entryPerShare={entry} stopPerShare={analysis.targets.stop.exit_price} />
                   </div>
 
-                  {/* Target table */}
-                  {/* Column headers */}
-                  <div className="grid grid-cols-5 gap-1 px-3 pb-1.5 text-xs font-mono text-center"
-                       style={{ color: '#2D3748' }}>
-                    <div>الهدف / الوقف</div>
-                    <div>النسبة</div>
-                    <div>سعر العقد</div>
-                    <div>القيمة (×100)</div>
-                    <div>الربح / الخسارة</div>
-                  </div>
-                  <div className="space-y-1.5 mb-4">
-                    {targets.map(row => (
-                      <div key={row.label} className="rounded-xl px-4 py-3"
-                           style={{ background: row.bg, border: `1px solid ${row.border}` }}>
-                        <div className="grid grid-cols-5 gap-1 items-center text-center">
-                          <div className="text-xs font-bold text-right" style={{ color: row.color }}>
-                            {row.icon} {row.label}
-                          </div>
-                          <div className="font-mono text-xs" style={{ color: '#94A3B8' }}>{row.pct}</div>
-                          <div className="font-bold font-mono text-sm" style={{ color: row.color }}>
-                            ${n(row.price)}
-                          </div>
-                          <div className="font-mono text-sm text-white">
-                            ${row.total.toLocaleString()}
-                          </div>
-                          <div className="font-bold font-mono text-sm"
-                               style={{ color: row.profit >= 0 ? '#10B981' : '#EF4444' }}>
-                            {row.profit >= 0 ? '+' : ''}${Math.abs(row.profit).toLocaleString()}
-                          </div>
-                        </div>
-                        {/* SPX level + EM badge */}
-                        {row.spx && (
-                          <div className="flex items-center gap-2 mt-1.5 pt-1.5"
-                               style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                            <span className="text-xs font-mono" style={{ color: '#4A5568' }}>
-                              مستوى SPX المطلوب:
-                            </span>
-                            <span className="font-bold font-mono text-xs" style={{ color: row.color }}>
-                              {row.spx.toLocaleString()}
-                            </span>
-                            {inEMBadge(row.inEM)}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Conditions */}
-                  <div className="space-y-2">
-                    {[
-                      { icon: '↑', label: 'بعد هدف ١',        text: s.postT1Action,       color: '#C9943A' },
-                      { icon: '✕', label: 'شرط الإلغاء',       text: s.cancelCondition,    color: '#EF4444' },
-                      { icon: '⚡', label: 'شرط الخروج المبكر', text: s.earlyExitCondition, color: '#F59E0B' },
-                    ].map(cond => (
-                      <div key={cond.label} className="flex items-start gap-3 rounded-xl px-4 py-3"
-                           style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        <span className="text-base shrink-0 mt-0.5" style={{ color: cond.color }}>{cond.icon}</span>
-                        <div>
-                          <div className="text-xs font-semibold mb-0.5" style={{ color: cond.color }}>{cond.label}</div>
-                          <div className="text-sm leading-snug" style={{ color: '#94A3B8' }}>{cond.text}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="text-xs font-mono mt-3 pt-3" dir="rtl"
-                       style={{ borderTop: '1px solid rgba(255,255,255,0.04)', color: '#2D3748' }}>
-                    * أسعار العقد تقديرية بناءً على Delta-Gamma Taylor expansion · كل دخول بأمر محدد فقط، لا سوق
+                  <div className="rounded-xl px-4 py-3 text-xs leading-relaxed"
+                       style={{ background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.16)', color: '#94A3B8' }}>
+                    بعد الهدف الأول: ارفع الوقف إلى سعر الدخول. ألغِ الدخول إذا تحرك المؤشر عكس الاتجاه وتجاوز مستوى الوقف قبل تنفيذ الأمر.
+                    <span className="block mt-1" style={{ color: '#F59E0B' }}>{analysis.target_price_note_ar}</span>
                   </div>
                 </Card>
               )
-            })()}
+            })() : (
+              <Card>
+                <div className="rounded-xl px-4 py-4 text-center"
+                     style={{ background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.18)' }}>
+                  <div className="font-bold mb-1" style={{ color: '#60A5FA' }}>لا توجد خطة شراء الآن</div>
+                  <div className="text-sm" style={{ color: '#94A3B8' }}>لن يعرض الموقع عدد عقود أو أمر دخول ما دام القرار مراقبة أو رفضًا.</div>
+                </div>
+              </Card>
+            )}
 
             {/* ── Score Breakdown — 7 Engines ── */}
             <Card>
@@ -841,7 +870,7 @@ function AnalyzeContent() {
                 {scoreEntries.map(([key, s]) => {
                   const clr     = SCORE_COLORS[key] ?? '#4A5568'
                   const pctVal  = Math.round((s.score / s.max) * 100)
-                  const remark  = engineRemark(key, s.score, s.max)
+                  const remark  = engineRemark(key, s.score, s.max, analysis)
                   return (
                     <div key={key}>
                       <div className="flex justify-between items-center mb-1.5">
@@ -880,7 +909,7 @@ function AnalyzeContent() {
                   <div className="font-bold font-mono" style={{ color: '#EF4444' }}>{analysis.em_lower}</div>
                 </div>
                 <div className="text-center flex-1 mx-4">
-                  <div className="text-xs font-mono" style={{ color: '#4A5568' }}>SPX الآن · EM ±{n(analysis.em_intraday, 1)}</div>
+                  <div className="text-xs font-mono" style={{ color: '#4A5568' }}>المؤشر الآن · الحركة المتوقعة ±{n(analysis.em_reference, 1)}</div>
                   <div className="text-xl font-bold font-mono text-white mt-0.5">{n(analysis.spx_price, 2)}</div>
                   <div className="flex items-center gap-1 mt-1.5 mx-auto" style={{ maxWidth: 160 }}>
                     <div className="flex-1 h-1 rounded-full" style={{ background: 'rgba(239,68,68,0.4)' }} />
@@ -897,7 +926,7 @@ function AnalyzeContent() {
 
             {/* ── Contract Details ── */}
             <Card>
-              <SectionLabel>بيانات العقد — Tradier API</SectionLabel>
+              <SectionLabel>بيانات العقد</SectionLabel>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <Stat label="Delta"
                   value={n(analysis.delta, 3)}
@@ -943,56 +972,6 @@ function AnalyzeContent() {
                 </div>
               </div>
             )}
-
-            {/* ── Risk Management (strategy-driven) ── */}
-            {analysis.strategy && (() => {
-              const s         = analysis.strategy!
-              const entryTot  = s.entryBalancedTotal
-              const rr1 = entryTot > 0 && s.t1Profit > 0 ? (s.t1Profit / entryTot).toFixed(1) : '—'
-              const rr2 = entryTot > 0 && s.t2Profit > 0 ? (s.t2Profit / entryTot).toFixed(1) : '—'
-              return (
-                <Card>
-                  <SectionLabel>إدارة المخاطر — عقد واحد (100 سهم)</SectionLabel>
-                  <div className="space-y-3">
-                    <div className="rounded-xl p-3 flex items-center justify-between"
-                         style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                      <div>
-                        <div className="text-xs font-mono" style={{ color: '#4A5568' }}>تكلفة الدخول (دخول متوازن)</div>
-                        <div className="text-xs font-mono mt-0.5" style={{ color: '#2D3748' }}>
-                          ${n(s.entryBalanced)} / سهم × 100
-                        </div>
-                      </div>
-                      <div className="text-xl font-bold font-mono" style={{ color: '#60A5FA' }}>
-                        ${entryTot.toLocaleString()}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { label: 'ربح هدف ١', val: s.t1Profit, rr: rr1, color: '#10B981', bg: 'rgba(16,185,129,0.07)', border: 'rgba(16,185,129,0.2)' },
-                        { label: 'ربح هدف ٢', val: s.t2Profit, rr: rr2, color: '#60A5FA', bg: 'rgba(96,165,250,0.07)', border: 'rgba(96,165,250,0.2)' },
-                        { label: 'خسارة الوقف', val: s.stopLoss, rr: null, color: '#EF4444', bg: 'rgba(239,68,68,0.07)', border: 'rgba(239,68,68,0.2)' },
-                      ].map(row => (
-                        <div key={row.label} className="rounded-xl p-3"
-                             style={{ background: row.bg, border: `1px solid ${row.border}` }}>
-                          <div className="text-xs font-mono mb-1" style={{ color: row.color }}>{row.label}</div>
-                          <div className="text-lg font-bold font-mono" style={{ color: row.color }}>
-                            {row.val >= 0 ? '+' : ''}${Math.abs(row.val).toLocaleString()}
-                          </div>
-                          {row.rr && (
-                            <div className="text-xs font-mono mt-0.5" style={{ color: '#4A5568' }}>R:R 1:{row.rr}</div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="rounded-xl px-4 py-3 text-xs font-mono leading-relaxed" dir="rtl"
-                      style={{ background: 'rgba(201,148,58,0.06)', border: '1px solid rgba(201,148,58,0.15)', color: '#C9943A' }}>
-                      ⚠ لعقد واحد فقط — لا تخاطر بأكثر من 1-2% من رأس المال في صفقة واحدة.
-                      {analysis.dte === 0 && ' عقود 0DTE قد تنتهي بلا قيمة في ساعات.'}
-                    </div>
-                  </div>
-                </Card>
-              )
-            })()}
 
             {/* ── Shortlist ── */}
             {analysis.shortlist.length > 0 && (

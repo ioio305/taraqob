@@ -1,50 +1,66 @@
-// ============================================================
-// حجم المركز وإدارة المخاطر — ترقب v2
-// ------------------------------------------------------------
-// أهم ما يفصل المحترف عن المبتدئ: كم عقداً تشتري؟
-// القاعدة: خاطر بنسبة ثابتة صغيرة من حسابك لكل صفقة (1–2%).
-// ============================================================
-
 export interface RiskSettings {
-  balance: number    // رصيد الحساب $
-  riskPct: number    // نسبة المخاطرة لكل صفقة (%)
+  balance: number
+  riskPct: number
 }
 
 export const DEFAULT_RISK: RiskSettings = { balance: 10000, riskPct: 1 }
 
 export interface PositionSize {
-  contracts: number          // عدد العقود المقترح
-  riskPerContract: number    // خسارة العقد الواحد عند الوقف $
-  maxLoss: number            // أقصى خسارة إجمالية $
-  cost: number               // تكلفة الدخول الإجمالية $
-  budgetRisk: number         // ميزانية المخاطرة (رصيد × نسبة) $
-  affordable: boolean        // هل تتحمّل عقداً واحداً على الأقل؟
-  note: string               // ملاحظة للمتداول
+  contracts: number
+  plannedRiskPerContract: number
+  plannedLoss: number
+  maximumPossibleLoss: number
+  cost: number
+  budgetRisk: number
+  affordable: boolean
+  note: string
 }
 
-// entryPerShare / stopPerShare = سعر السهم (العقد ÷ 100)
+/**
+ * Calculates a long-option position using both constraints:
+ * 1) the loss planned at the stop, and 2) the cash available to pay the premium.
+ *
+ * `plannedLoss` is not the maximum possible loss. A long option can expire
+ * worthless, so `maximumPossibleLoss` is the full premium paid.
+ */
 export function computePositionSize(
-  s: RiskSettings,
+  settings: RiskSettings,
   entryPerShare: number,
   stopPerShare: number,
 ): PositionSize | null {
-  if (!s.balance || s.balance <= 0 || !entryPerShare || entryPerShare <= 0) return null
-  const budgetRisk = Math.round(s.balance * (s.riskPct / 100))
-  const riskPerContract = Math.max(1, Math.round((entryPerShare - stopPerShare) * 100))
-  const rawContracts = Math.floor(budgetRisk / riskPerContract)
-  const contracts = Math.max(0, rawContracts)
-  const cost = Math.round(contracts * entryPerShare * 100)
-  const maxLoss = contracts * riskPerContract
+  if (!Number.isFinite(settings.balance) || settings.balance <= 0) return null
+  if (!Number.isFinite(settings.riskPct) || settings.riskPct <= 0) return null
+  if (!Number.isFinite(entryPerShare) || entryPerShare <= 0) return null
+  if (!Number.isFinite(stopPerShare) || stopPerShare < 0 || stopPerShare >= entryPerShare) return null
 
+  const budgetRisk = Math.floor(settings.balance * (settings.riskPct / 100))
+  const plannedRiskPerContract = Math.max(1, Math.ceil((entryPerShare - stopPerShare) * 100))
+  const costPerContract = Math.ceil(entryPerShare * 100)
+  const contractsByRisk = Math.floor(budgetRisk / plannedRiskPerContract)
+  const contractsByCash = Math.floor(settings.balance / costPerContract)
+  const contracts = Math.max(0, Math.min(contractsByRisk, contractsByCash))
+  const cost = contracts * costPerContract
+  const plannedLoss = contracts * plannedRiskPerContract
+  const maximumPossibleLoss = cost
   const affordable = contracts >= 1
+
   let note: string
-  if (!affordable) {
-    note = `مخاطرة عقد واحد ($${riskPerContract}) أكبر من ميزانيتك ($${budgetRisk}). قلّل المخاطرة أو اختر عقداً أرخص/أقرب وقفاً.`
-  } else if (cost > s.balance) {
-    note = `تكلفة الدخول ($${cost}) تتجاوز رصيدك — قلّل العدد.`
+  if (contractsByRisk < 1) {
+    note = `خسارة الوقف لعقد واحد ($${plannedRiskPerContract}) أكبر من الحد الذي اخترته ($${budgetRisk}).`
+  } else if (contractsByCash < 1) {
+    note = `قيمة عقد واحد ($${costPerContract}) أكبر من رصيدك المتاح.`
   } else {
-    note = `اشترِ ${contracts} عقد — تخاطر بـ$${maxLoss} فقط (${s.riskPct}% من حسابك).`
+    note = `العدد مقيد بحد الخسارة والرصيد معًا. الخسارة عند الوقف تقديرية وقد يزيد التنفيذ عنها.`
   }
 
-  return { contracts, riskPerContract, maxLoss, cost, budgetRisk, affordable, note }
+  return {
+    contracts,
+    plannedRiskPerContract,
+    plannedLoss,
+    maximumPossibleLoss,
+    cost,
+    budgetRisk,
+    affordable,
+    note,
+  }
 }
