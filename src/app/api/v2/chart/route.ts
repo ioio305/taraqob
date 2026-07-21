@@ -150,7 +150,7 @@ export async function GET(request: NextRequest) {
   }
 
   // ── انكشاف جاما: يغذّي القرار (جاما موجبة عند المقاومة → تخفيض) ──────────────
-  if (gamma && analysis.summary.decisionCode !== 'no_entry' && reaction.action !== 'block' && news?.decision?.action !== 'block') {
+  if (gamma?.status === 'live' && analysis.summary.decisionCode !== 'no_entry' && reaction.action !== 'block' && news?.decision?.action !== 'block') {
     applyGamma(analysis, gamma)
   }
 

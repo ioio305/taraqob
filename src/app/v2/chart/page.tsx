@@ -93,15 +93,15 @@ const BASE_CHART = {
   rightPriceScale: { borderColor: '#1e3a50' },
 }
 
-const NEW_YORK_CLOCK = new Intl.DateTimeFormat('en-GB', {
-  timeZone: 'America/New_York',
+const RIYADH_CLOCK = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Riyadh',
   hour: '2-digit',
   minute: '2-digit',
   hourCycle: 'h23',
 })
 
-const NEW_YORK_CROSSHAIR = new Intl.DateTimeFormat('en-GB', {
-  timeZone: 'America/New_York',
+const RIYADH_CROSSHAIR = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Riyadh',
   day: '2-digit',
   month: '2-digit',
   hour: '2-digit',
@@ -125,10 +125,10 @@ function timeValueToDate(time: Time): Date | null {
   return null
 }
 
-function formatNewYorkTime(time: Time, withDate = false): string | null {
+function formatRiyadhTime(time: Time, withDate = false): string | null {
   const date = timeValueToDate(time)
   if (!date || Number.isNaN(date.getTime())) return null
-  return (withDate ? NEW_YORK_CROSSHAIR : NEW_YORK_CLOCK).format(date)
+  return (withDate ? RIYADH_CROSSHAIR : RIYADH_CLOCK).format(date)
 }
 
 function decisionStyle(code: string) {
@@ -454,11 +454,11 @@ export default function ChartPage() {
         height,
         localization: intraday ? {
           locale: 'ar-SA',
-          timeFormatter: (time: Time) => formatNewYorkTime(time, true) ?? '',
+          timeFormatter: (time: Time) => formatRiyadhTime(time, true) ?? '',
         } : { locale: 'ar-SA' },
         timeScale: {
           ...BASE_CHART.timeScale,
-          tickMarkFormatter: intraday ? (time: Time) => formatNewYorkTime(time) : undefined,
+          tickMarkFormatter: intraday ? (time: Time) => formatRiyadhTime(time) : undefined,
         },
       })
       chartInstances.current.push(chart)
@@ -839,7 +839,7 @@ export default function ChartPage() {
   const intraday = !['1d','1w','1M'].includes(tf)
   const lastCandleLabel = data?.lastCandleAt
     ? new Intl.DateTimeFormat('ar-SA-u-ca-gregory', {
-        timeZone: intraday ? 'America/New_York' : 'UTC',
+        timeZone: intraday ? 'Asia/Riyadh' : 'UTC',
         day: 'numeric', month: 'short', hour: intraday ? 'numeric' : undefined, minute: intraday ? '2-digit' : undefined,
       }).format(new Date(intraday ? data.lastCandleAt : `${data.lastCandleAt.slice(0, 10)}T12:00:00Z`))
     : null
@@ -856,6 +856,30 @@ export default function ChartPage() {
     : freshness?.status === 'delayed'
       ? 'text-red-300 bg-red-500/10 border-red-500/40'
       : 'text-gray-300 bg-gray-500/10 border-gray-500/30'
+
+  const timeframeSelector = (
+    <div data-testid="chart-timeframes" className="px-4 py-2.5 flex items-center gap-2 border-t border-[#1e3a50] bg-[#08121D] overflow-x-auto">
+      <span className="text-xs text-gray-500 shrink-0">فترة الرسم:</span>
+      <div className="flex gap-1 shrink-0" dir="ltr">
+        {TIMEFRAMES.map(timeframe => (
+          <button
+            key={timeframe}
+            type="button"
+            title={TF_LABEL[timeframe]}
+            onClick={() => setTf(timeframe)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+              tf === timeframe
+                ? 'bg-[#C9943A] text-[#060D14]'
+                : 'bg-[#0d1f2e] text-gray-400 hover:bg-[#1a3a54]'
+            }`}
+          >
+            {timeframe}
+          </button>
+        ))}
+      </div>
+      <span className="text-[10px] text-gray-600 shrink-0 mr-auto">توقيت الرياض</span>
+    </div>
+  )
 
   return (
     <div className="min-h-screen bg-[#060D14] text-white p-4 space-y-4" dir="rtl">
@@ -887,22 +911,6 @@ export default function ChartPage() {
             {lastRefresh && <span className="text-[10px] text-gray-600">تلقائي كل {intraday ? '15 ثانية' : 'دقيقتين'}</span>}
           </div>
 
-          {/* Timeframe selector */}
-          <div className="flex gap-1 flex-wrap">
-            {TIMEFRAMES.map(t => (
-              <button
-                key={t}
-                onClick={() => setTf(t)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                  tf === t
-                    ? 'bg-[#C9943A] text-[#060D14]'
-                    : 'bg-[#0d1f2e] text-gray-400 hover:bg-[#1a3a54]'
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
         </div>
 
         {freshness?.status === 'delayed' && (
@@ -1115,10 +1123,13 @@ export default function ChartPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-bold px-2 py-0.5 rounded-lg" style={{ background: 'rgba(167,139,250,0.15)', color: '#A78BFA' }}>انكشاف جاما · SPX</span>
-                      <span className="text-[10px] text-amber-300 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded-lg">ليس لحظياً</span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-lg border ${gamma.status === 'live' ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25' : 'text-amber-300 bg-amber-500/10 border-amber-500/25'}`}>
+                        {gamma.status === 'live' ? 'مباشر' : 'متأخر'}
+                      </span>
                       <h3 className="font-bold text-[#E8D5A3]">{v.title}</h3>
                     </div>
                     <p className="text-sm text-gray-300 mt-1.5 leading-relaxed">{v.advice}</p>
+                    <p className="text-[11px] text-gray-500 mt-1">{gamma.dataNoteAr}</p>
                   </div>
                   <div className="text-center shrink-0">
                     <div className="text-2xl font-black" style={{ color: accent }}>{gamma.totalGex >= 0 ? '+' : ''}{gamma.totalGex}</div>
@@ -1291,10 +1302,13 @@ export default function ChartPage() {
             </div>
 
             {chartView === 'tradingview' ? (
-              <div className="px-4 pt-2 pb-3">
-                <TradingViewWidget tf={tf} />
-                <p className="text-xs text-gray-600 mt-2">عرض TradingView للسعر فقط — تحليل ترقّب (جاما، الطبقات، التوصيات) في «شارت ترقّب».</p>
-              </div>
+              <>
+                {timeframeSelector}
+                <div className="px-4 pt-2 pb-3">
+                  <TradingViewWidget tf={tf} />
+                  <p className="text-xs text-gray-600 mt-2">عرض TradingView للسعر فقط — تحليل ترقّب (جاما، الطبقات، التوصيات) في «شارت ترقّب».</p>
+                </div>
+              </>
             ) : (<>
             {/* طبقات الشارت — المحلل يختار ما يظهر (لتفادي الازدحام) */}
             <div className="px-4 pt-2 pb-2 flex items-center gap-2 flex-wrap border-t border-[#1e3a50]">
@@ -1323,6 +1337,8 @@ export default function ChartPage() {
                 )
               })}
             </div>
+
+            {timeframeSelector}
 
             <div className="relative">
               <div ref={trendRef} data-testid="trend-chart" className="w-full" />

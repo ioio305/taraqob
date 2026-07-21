@@ -6,7 +6,7 @@
 // Black-Scholes تركيبية عند غياب Tradier.
 // ============================================================
 
-import { getCboeData, cboeChain, cboeExpirations } from '@/lib/v2/cboe'
+import { getCboeData, cboeChain, cboeExpirations } from './cboe'
 import { fromZonedTime } from 'date-fns-tz'
 import {
   buildTradierTimeSalesPath,
@@ -445,6 +445,8 @@ export interface MdOption {
   greeks: { delta: number; gamma: number; theta: number; vega: number; mid_iv: number; smv_vol: number }
 }
 
+export type OptionChainSource = 'tradier_realtime' | 'cboe_delayed' | 'estimated'
+
 function occSymbol(root: string, expiration: string, type: 'call' | 'put', strike: number): string {
   const [y, mo, da] = expiration.split('-')
   const cp = type === 'call' ? 'C' : 'P'
@@ -521,7 +523,7 @@ export async function getOptionsChain(
   expiration: string,
   spxPrice: number,
   vixPrice: number,
-): Promise<{ options: MdOption[]; estimated: boolean }> {
+): Promise<{ options: MdOption[]; estimated: boolean; source: OptionChainSource }> {
   if (tradierIndexOptionsUsable()) {
     for (const sym of ['SPXW', 'SPX']) {
       try {
@@ -529,7 +531,7 @@ export async function getOptionsChain(
         const opts: any[] = Array.isArray(chain?.options?.option)
           ? chain.options.option
           : [chain?.options?.option].filter(Boolean)
-        if (opts.length > 0) return { options: opts as MdOption[], estimated: false }
+        if (opts.length > 0) return { options: opts as MdOption[], estimated: false, source: 'tradier_realtime' }
       } catch { continue }
     }
     _tradierIndexOptionsFailedAt = Date.now()
@@ -538,8 +540,8 @@ export async function getOptionsChain(
   const cboe = await getCboeData()
   if (cboe) {
     const chain = cboeChain(cboe, expiration)
-    if (chain.length > 0) return { options: chain, estimated: false }
+    if (chain.length > 0) return { options: chain, estimated: false, source: 'cboe_delayed' }
   }
   // آخر حل: سلسلة محسوبة (Black-Scholes)
-  return { options: buildSyntheticChain(spxPrice, vixPrice, expiration), estimated: true }
+  return { options: buildSyntheticChain(spxPrice, vixPrice, expiration), estimated: true, source: 'estimated' }
 }

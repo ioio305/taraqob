@@ -8,6 +8,7 @@ import { buildTradeFocus } from '@/lib/v2/tradeFocus'
 import { getMarketSnapshot, getIntradayBars, getHistoryBars, getExpirations, getOptionsChain, type MdBar } from '@/lib/v2/marketData'
 import { crashGuard } from '@/lib/v2/marketAnalysis'
 import { computeContractPlanMetrics } from '@/lib/v2/contractAnalysis'
+import { buildMarketTargetPlan } from '@/lib/v2/marketTargets'
 
 export const dynamic = 'force-dynamic'
 
@@ -274,7 +275,7 @@ export async function GET(request: NextRequest) {
     const vixPrice  = snap.vixPrice
 
     // ── سلسلة العقود (Tradier حقيقية أو Black-Scholes تركيبية) ──────────
-    const { options: chainOpts, estimated: chainEstimated } = await getOptionsChain(expirationStr, spxPrice, vixPrice)
+    const { options: chainOpts, estimated: chainEstimated, source: chainSource } = await getOptionsChain(expirationStr, spxPrice, vixPrice)
 
     // ── بيانات العقد: من السلسلة، ثم تقدير Black-Scholes ────────────────
     let cq: any = null
@@ -529,16 +530,23 @@ export async function GET(request: NextRequest) {
     const entryBalanced     = bid > 0 && ask > 0 ? Math.round((bid + 0.60 * spreadAbs) * 100) / 100 : mid || null
     const entryPx           = entryBalanced ?? mid
 
-    // ── أهداف بناءً على Expected Move ────────────────────────────────────
-    const emRef = emRefPoints
-    const f1 = dte === 0 ? 0.40 : 0.60
-    const f2 = dte === 0 ? 0.65 : 0.85
-    const f3 = dte === 0 ? 0.90 : 1.10
-    const fs = dte === 0 ? 0.35 : 0.40
-    const t1 = type === 'call' ? Math.round(spxPrice + emRef * f1) : Math.round(spxPrice - emRef * f1)
-    const t2 = type === 'call' ? Math.round(spxPrice + emRef * f2) : Math.round(spxPrice - emRef * f2)
-    const t3 = type === 'call' ? Math.round(spxPrice + emRef * f3) : Math.round(spxPrice - emRef * f3)
-    const stopSPX = type === 'call' ? Math.round(spxPrice - emRef * fs) : Math.round(spxPrice + emRef * fs)
+    // ── أهداف من مستويات السوق الفعلية؛ النسب القديمة احتياط فقط ─────────
+    const marketPlan = buildMarketTargetPlan({
+      spot: spxPrice,
+      direction: type,
+      expectedMove: emRefPoints,
+      dte,
+      bars,
+      vwap,
+      openingRangeHigh: orHigh,
+      openingRangeLow: orLow,
+      options: chainOpts,
+      chainSource,
+    })
+    const t1 = marketPlan.t1.value
+    const t2 = marketPlan.t2.value
+    const t3 = marketPlan.t3.value
+    const stopSPX = marketPlan.stop.value
 
     // ── سعر الخروج المتوقع عند كل هدف (تقريب Delta-Gamma) ───────────────
     // dP ≈ delta × dSPX + 0.5 × gamma × dSPX²  (Taylor expansion, first+second order)
@@ -647,6 +655,7 @@ export async function GET(request: NextRequest) {
         em_daily:    Math.round(emDaily    * 100) / 100,
         em_reference: Math.round(emRefPoints * 100) / 100,
         expected_move_live: straddleMove,
+        options_data_source: chainSource,
         em_upper: emUpper, em_lower: emLower,
         is_itm: isITM,
         dist_from_atm: Math.round(distFromATM * 100) / 100,
@@ -670,11 +679,14 @@ export async function GET(request: NextRequest) {
         stop_spx: stopSPX,
         target1_spx: t1, target2_spx: t2, target3_spx: t3,
         targets: {
-          t1:   { spx: t1,      exit_price: exitT1,   exit_total: Math.round(exitT1   * 100), pnl: Math.round((exitT1   - entryPx) * 100) },
-          t2:   { spx: t2,      exit_price: exitT2,   exit_total: Math.round(exitT2   * 100), pnl: Math.round((exitT2   - entryPx) * 100) },
-          t3:   { spx: t3,      exit_price: exitT3,   exit_total: Math.round(exitT3   * 100), pnl: Math.round((exitT3   - entryPx) * 100) },
-          stop: { spx: stopSPX, exit_price: exitStop, exit_total: Math.round(exitStop * 100), pnl: Math.round((exitStop - entryPx) * 100) },
+          t1:   { spx: t1,      source: marketPlan.t1.source,   fallback: marketPlan.t1.fallback,   exit_price: exitT1,   exit_total: Math.round(exitT1   * 100), pnl: Math.round((exitT1   - entryPx) * 100) },
+          t2:   { spx: t2,      source: marketPlan.t2.source,   fallback: marketPlan.t2.fallback,   exit_price: exitT2,   exit_total: Math.round(exitT2   * 100), pnl: Math.round((exitT2   - entryPx) * 100) },
+          t3:   { spx: t3,      source: marketPlan.t3.source,   fallback: marketPlan.t3.fallback,   exit_price: exitT3,   exit_total: Math.round(exitT3   * 100), pnl: Math.round((exitT3   - entryPx) * 100) },
+          stop: { spx: stopSPX, source: marketPlan.stop.source, fallback: marketPlan.stop.fallback, exit_price: exitStop, exit_total: Math.round(exitStop * 100), pnl: Math.round((exitStop - entryPx) * 100) },
         },
+        target_plan_source_ar: marketPlan.fallbackUsed
+          ? 'مستويات السوق أولاً، والحساب الاحتياطي استُخدم فقط لإكمال المستويات الناقصة'
+          : 'جميع الأهداف والوقف مبنية على مستويات السوق الفعلية',
         plan_metrics: planMetrics,
         target_price_note_ar: 'أسعار العقد عند الأهداف تقديرية وليست أسعار تنفيذ مضمونة',
         focus,

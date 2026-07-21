@@ -1,31 +1,51 @@
 // ============================================================
 // انكشاف جاما لصانعي السوق — SPX Gamma Exposure (GEX)
 // ------------------------------------------------------------
-// يُحسب مجاناً من بيانات CBOE المباشرة (الفائدة المفتوحة + جاما).
-// يكشف تموضع المؤسسات: هل تكبح التذبذب (جاما موجبة) أم تضخّمه (سالبة)،
-// ونقطة الانقلاب، وجدران جاما (مستويات جذب قوية).
+// يستخدم أسعار العقود المباشرة عند توفرها، ويعيد حساب جاما مع كل تحديث.
+// الفائدة المفتوحة تُحدّثها البورصة يومياً، لذلك تُعرض للمستخدم بصراحة.
 // ============================================================
 
+import { fromZonedTime, formatInTimeZone } from 'date-fns-tz'
+import {
+  getExpirations,
+  getMarketSnapshot,
+  getOptionsChain,
+  type MdOption,
+} from './marketData'
+
 const CBOE_URL = 'https://cdn.cboe.com/api/global/delayed_quotes/options/_SPX.json'
+const NEW_YORK_TZ = 'America/New_York'
+const YEAR_MS = 365 * 24 * 60 * 60 * 1000
 
 export interface GammaWall {
   strike: number
-  gex: number   // مليار دولار لكل حركة 1%
+  gex: number
 }
 
 export interface GammaExposure {
   spot: number
-  totalGex: number            // إجمالي الانكشاف ($Bn لكل 1%)
+  totalGex: number
   regime: 'positive' | 'negative'
-  flipLevel: number | null    // نقطة الانقلاب (جاما صفرية)
-  callWall: number | null     // أكبر جدار فوق السعر = مقاومة
-  putWall: number | null      // أكبر جدار تحت السعر = دعم
-  maxPain: number | null      // سعر أقصى ألم للمشترين = مغناطيس عند الانتهاء
-  putCallRatio: number        // نسبة الشراء/البيع (الفائدة المفتوحة) — مزاج
-  walls: GammaWall[]          // أقوى المستويات (مغناطيس)
-  profile: { strike: number; gex: number }[]  // ملف كامل قرب السعر
+  flipLevel: number | null
+  callWall: number | null
+  putWall: number | null
+  maxPain: number | null
+  putCallRatio: number
+  walls: GammaWall[]
+  profile: { strike: number; gex: number }[]
   fetchedAt: string
-  source: 'cboe'
+  source: 'tradier' | 'cboe'
+  status: 'live' | 'delayed'
+  expirationCount: number
+  dataNoteAr: string
+}
+
+interface GammaRecord {
+  expiration: string
+  type: 'call' | 'put'
+  strike: number
+  gamma: number
+  openInterest: number
 }
 
 type CboeOption = {
@@ -35,126 +55,243 @@ type CboeOption = {
 }
 
 const OCC = /^(SPXW|SPX)(\d{6})([CP])(\d{8})$/
+let exposureCache: { value: GammaExposure; at: number } | null = null
 
-export async function getGammaExposure(): Promise<GammaExposure | null> {
-  let json: any
-  try {
-    const res = await fetch(CBOE_URL, { headers: { Accept: 'application/json' }, cache: 'no-store' })
-    if (!res.ok) return null
-    json = await res.json()
-  } catch { return null }
+function normalCDF(x: number): number {
+  const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741, a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911
+  const sign = x < 0 ? -1 : 1
+  const t = 1 / (1 + p * Math.abs(x))
+  const poly = t * (a1 + t * (a2 + t * (a3 + t * (a4 + t * a5))))
+  return 0.5 * (1 + sign * (1 - poly * Math.exp(-x * x / 2)))
+}
 
-  const data = json?.data
-  const spot: number = data?.current_price ?? data?.close ?? 0
-  const options: CboeOption[] = data?.options ?? []
-  if (!spot || options.length === 0) return null
+function normalPDF(x: number): number {
+  return Math.exp(-x * x / 2) / Math.sqrt(2 * Math.PI)
+}
 
-  // تجميع صافي الانكشاف لكل ستريك (call موجب، put سالب — العرف المعياري)
+function optionMath(S: number, K: number, T: number, sigma: number, type: 'call' | 'put') {
+  const r = 0.05
+  const safeT = Math.max(T, 1 / (365 * 24 * 60))
+  const safeSigma = Math.max(0.01, sigma)
+  const rootT = Math.sqrt(safeT)
+  const d1 = (Math.log(S / K) + (r + safeSigma * safeSigma / 2) * safeT) / (safeSigma * rootT)
+  const d2 = d1 - safeSigma * rootT
+  const price = type === 'call'
+    ? S * normalCDF(d1) - K * Math.exp(-r * safeT) * normalCDF(d2)
+    : K * Math.exp(-r * safeT) * normalCDF(-d2) - S * normalCDF(-d1)
+  const gamma = normalPDF(d1) / (S * safeSigma * rootT)
+  return { price, gamma }
+}
+
+function impliedVolatility(
+  marketPrice: number,
+  spot: number,
+  strike: number,
+  timeToExpiry: number,
+  type: 'call' | 'put',
+): number | null {
+  const intrinsic = type === 'call' ? Math.max(0, spot - strike) : Math.max(0, strike - spot)
+  if (!Number.isFinite(marketPrice) || marketPrice <= intrinsic + 0.005) return null
+  let low = 0.01
+  let high = 4
+  for (let i = 0; i < 55; i++) {
+    const mid = (low + high) / 2
+    const price = optionMath(spot, strike, timeToExpiry, mid, type).price
+    if (price > marketPrice) high = mid
+    else low = mid
+  }
+  const result = (low + high) / 2
+  return result >= 0.01 && result <= 4 ? result : null
+}
+
+function timeToExpiryYears(expiration: string, now: Date): number {
+  const expiry = fromZonedTime(`${expiration}T16:00:00`, NEW_YORK_TZ)
+  return Math.max((expiry.getTime() - now.getTime()) / YEAR_MS, 10 / (365 * 24 * 60))
+}
+
+function maxPainFromRecords(records: GammaRecord[]): number | null {
+  const nearExpiration = [...new Set(records.map(record => record.expiration))].sort()[0]
+  if (!nearExpiration) return null
+  const byStrike = new Map<number, { c: number; p: number }>()
+  for (const record of records.filter(item => item.expiration === nearExpiration)) {
+    const current = byStrike.get(record.strike) ?? { c: 0, p: 0 }
+    if (record.type === 'call') current.c += record.openInterest
+    else current.p += record.openInterest
+    byStrike.set(record.strike, current)
+  }
+  let level: number | null = null
+  let best = Infinity
+  for (const settlement of [...byStrike.keys()].sort((a, b) => a - b)) {
+    let pain = 0
+    for (const [strike, oi] of byStrike) {
+      if (strike < settlement) pain += oi.c * (settlement - strike)
+      else if (strike > settlement) pain += oi.p * (strike - settlement)
+    }
+    if (pain < best) {
+      best = pain
+      level = settlement
+    }
+  }
+  return level
+}
+
+function buildExposure(
+  spot: number,
+  records: GammaRecord[],
+  meta: Pick<GammaExposure, 'source' | 'status' | 'expirationCount' | 'dataNoteAr'>,
+): GammaExposure | null {
   const perStrike = new Map<number, number>()
   const S2 = spot * spot
-  for (const o of options) {
-    const m = o.option?.match(OCC)
-    if (!m) continue
-    const type = m[3]
-    const strike = parseInt(m[4]) / 1000
-    const gamma = o.gamma ?? 0
-    const oi = o.open_interest ?? 0
-    if (!gamma || !oi) continue
-    // نتجاهل الستريكات البعيدة جداً (ضجيج)
-    if (Math.abs(strike - spot) > spot * 0.15) continue
-    // $ جاما لكل حركة 1%
-    const gex = gamma * oi * 100 * S2 * 0.01 * (type === 'C' ? 1 : -1)
-    perStrike.set(strike, (perStrike.get(strike) ?? 0) + gex)
+  let callOi = 0
+  let putOi = 0
+  for (const record of records) {
+    if (!record.gamma || !record.openInterest) continue
+    if (Math.abs(record.strike - spot) > spot * 0.15) continue
+    const signed = record.type === 'call' ? 1 : -1
+    const gex = record.gamma * record.openInterest * 100 * S2 * 0.01 * signed
+    perStrike.set(record.strike, (perStrike.get(record.strike) ?? 0) + gex)
+    if (record.type === 'call') callOi += record.openInterest
+    else putOi += record.openInterest
   }
   if (perStrike.size === 0) return null
 
   const strikes = [...perStrike.entries()]
-    .map(([strike, gex]) => ({ strike, gex: gex / 1e9 }))   // إلى مليارات
+    .map(([strike, gex]) => ({ strike, gex: gex / 1e9 }))
     .sort((a, b) => a.strike - b.strike)
+  const totalGex = strikes.reduce((sum, level) => sum + level.gex, 0)
 
-  const totalGex = strikes.reduce((s, x) => s + x.gex, 0)
-  const regime: 'positive' | 'negative' = totalGex >= 0 ? 'positive' : 'negative'
-
-  // نقطة الانقلاب: حيث يعبر التراكم من أسفل لأعلى الصفر
-  let cum = 0, flipLevel: number | null = null
+  let cumulative = 0
+  let flipLevel: number | null = null
   for (let i = 0; i < strikes.length; i++) {
-    const prev = cum
-    cum += strikes[i].gex
-    if (i > 0 && ((prev < 0 && cum >= 0) || (prev > 0 && cum <= 0))) {
-      // استيفاء خطي بين الستريكين
-      const a = strikes[i - 1], b = strikes[i]
-      const t = Math.abs(prev) / (Math.abs(prev) + Math.abs(cum) || 1)
-      flipLevel = Math.round(a.strike + (b.strike - a.strike) * t)
+    const previous = cumulative
+    cumulative += strikes[i].gex
+    if (i > 0 && ((previous < 0 && cumulative >= 0) || (previous > 0 && cumulative <= 0))) {
+      const a = strikes[i - 1]
+      const b = strikes[i]
+      const weight = Math.abs(previous) / (Math.abs(previous) + Math.abs(cumulative) || 1)
+      flipLevel = Math.round(a.strike + (b.strike - a.strike) * weight)
       break
     }
   }
 
-  // جدران جاما: أقوى المستويات المطلقة
   const walls = [...strikes]
     .sort((a, b) => Math.abs(b.gex) - Math.abs(a.gex))
     .slice(0, 5)
-    .map(w => ({ strike: w.strike, gex: Math.round(w.gex * 100) / 100 }))
-
-  // جدار الشراء (مقاومة): أكبر انكشاف موجب فوق السعر
-  const callWall = strikes.filter(s => s.strike > spot && s.gex > 0)
-    .sort((a, b) => b.gex - a.gex)[0]?.strike ?? null
-  // جدار البيع (دعم): أكبر انكشاف سالب تحت السعر
-  const putWall = strikes.filter(s => s.strike < spot && s.gex < 0)
-    .sort((a, b) => a.gex - b.gex)[0]?.strike ?? null
-
-  // نسبة الشراء/البيع + أقصى ألم (من نفس بيانات CBOE)
-  let sumCallOI = 0, sumPutOI = 0
-  const todayYY = new Date().toISOString().slice(2, 10).replace(/-/g, '')
-  const expMap = new Map<string, Map<number, { c: number; p: number }>>()
-  for (const o of options) {
-    const m = o.option?.match(OCC); if (!m) continue
-    const exp = m[2], type = m[3], strike = parseInt(m[4]) / 1000
-    const oi = o.open_interest ?? 0
-    if (!oi || Math.abs(strike - spot) > spot * 0.15) continue
-    if (type === 'C') sumCallOI += oi; else sumPutOI += oi
-    if (!expMap.has(exp)) expMap.set(exp, new Map())
-    const sm = expMap.get(exp)!
-    const cur = sm.get(strike) ?? { c: 0, p: 0 }
-    if (type === 'C') cur.c += oi; else cur.p += oi
-    sm.set(strike, cur)
-  }
-  const putCallRatio = sumCallOI > 0 ? Math.round((sumPutOI / sumCallOI) * 100) / 100 : 0
-
-  // Max Pain من أقرب انتهاء (0DTE يهيمن على التثبيت)
-  let maxPain: number | null = null
-  const nearExp = [...expMap.keys()].filter(e => e >= todayYY).sort()[0] ?? [...expMap.keys()].sort()[0]
-  if (nearExp) {
-    const sm = expMap.get(nearExp)!
-    let best = Infinity
-    for (const P of [...sm.keys()].sort((a, b) => a - b)) {
-      let pain = 0
-      for (const [K, oi] of sm) {
-        if (K < P) pain += oi.c * (P - K)
-        else if (K > P) pain += oi.p * (K - P)
-      }
-      if (pain < best) { best = pain; maxPain = P }
-    }
-  }
+    .map(level => ({ strike: level.strike, gex: Math.round(level.gex * 100) / 100 }))
+  const callWall = strikes.filter(level => level.strike > spot && level.gex > 0).sort((a, b) => b.gex - a.gex)[0]?.strike ?? null
+  const putWall = strikes.filter(level => level.strike < spot && level.gex < 0).sort((a, b) => a.gex - b.gex)[0]?.strike ?? null
 
   return {
     spot,
     totalGex: Math.round(totalGex * 100) / 100,
-    regime,
+    regime: totalGex >= 0 ? 'positive' : 'negative',
     flipLevel,
     callWall,
     putWall,
-    maxPain,
-    putCallRatio,
+    maxPain: maxPainFromRecords(records),
+    putCallRatio: callOi > 0 ? Math.round((putOi / callOi) * 100) / 100 : 0,
     walls,
-    profile: strikes.map(s => ({ strike: s.strike, gex: Math.round(s.gex * 100) / 100 })),
+    profile: strikes.map(level => ({ strike: level.strike, gex: Math.round(level.gex * 100) / 100 })),
     fetchedAt: new Date().toISOString(),
-    source: 'cboe',
+    ...meta,
   }
 }
 
-// نص تفسيري بالعربية للحالة
-export function gammaVerdict(g: GammaExposure): { title: string; advice: string; tone: 'calm' | 'volatile' } {
-  if (g.regime === 'positive') {
+export function calculateLiveGammaExposure(
+  spot: number,
+  options: MdOption[],
+  now = new Date(),
+): GammaExposure | null {
+  const records: GammaRecord[] = []
+  for (const option of options) {
+    const bid = Number(option.bid) || 0
+    const ask = Number(option.ask) || 0
+    const marketPrice = bid > 0 && ask >= bid ? (bid + ask) / 2 : Number(option.last) || 0
+    const time = timeToExpiryYears(option.expiration_date, now)
+    const liveIv = impliedVolatility(marketPrice, spot, option.strike, time, option.option_type)
+    const suppliedIv = Number(option.greeks?.mid_iv) || Number(option.greeks?.smv_vol) || 0.20
+    const gamma = optionMath(spot, option.strike, time, liveIv ?? suppliedIv, option.option_type).gamma
+    records.push({
+      expiration: option.expiration_date,
+      type: option.option_type,
+      strike: option.strike,
+      gamma,
+      openInterest: Math.max(0, Number(option.open_interest) || 0),
+    })
+  }
+  return buildExposure(spot, records, {
+    source: 'tradier',
+    status: 'live',
+    expirationCount: new Set(options.map(option => option.expiration_date)).size,
+    dataNoteAr: 'أسعار العقود مباشرة، وجاما يعاد حسابها فوراً؛ الفائدة المفتوحة يومية',
+  })
+}
+
+async function getDelayedCboeExposure(): Promise<GammaExposure | null> {
+  let json: any
+  try {
+    const response = await fetch(CBOE_URL, { headers: { Accept: 'application/json' }, cache: 'no-store' })
+    if (!response.ok) return null
+    json = await response.json()
+  } catch {
+    return null
+  }
+
+  const data = json?.data
+  const spot = Number(data?.current_price ?? data?.close ?? 0)
+  const options: CboeOption[] = data?.options ?? []
+  if (!spot || options.length === 0) return null
+  const records: GammaRecord[] = []
+  for (const option of options) {
+    const match = option.option?.match(OCC)
+    if (!match) continue
+    records.push({
+      expiration: `20${match[2].slice(0, 2)}-${match[2].slice(2, 4)}-${match[2].slice(4, 6)}`,
+      type: match[3] === 'C' ? 'call' : 'put',
+      strike: parseInt(match[4]) / 1000,
+      gamma: Number(option.gamma) || 0,
+      openInterest: Math.max(0, Number(option.open_interest) || 0),
+    })
+  }
+  return buildExposure(spot, records, {
+    source: 'cboe',
+    status: 'delayed',
+    expirationCount: new Set(records.map(record => record.expiration)).size,
+    dataNoteAr: 'هذا المصدر متأخر، لذلك يُعرض للمعلومة ولا يحسم قرار الدخول',
+  })
+}
+
+export async function getGammaExposure(): Promise<GammaExposure | null> {
+  const now = Date.now()
+  const cacheTtl = exposureCache?.value.status === 'live' ? 12_000 : 60_000
+  if (exposureCache && now - exposureCache.at < cacheTtl) return exposureCache.value
+
+  try {
+    const [snapshot, expirations] = await Promise.all([getMarketSnapshot(), getExpirations()])
+    const today = formatInTimeZone(new Date(), NEW_YORK_TZ, 'yyyy-MM-dd')
+    const nearest = expirations.filter(expiration => expiration >= today).sort().slice(0, 2)
+    const chains = await Promise.all(nearest.map(expiration => getOptionsChain(expiration, snapshot.spxPrice, snapshot.vixPrice)))
+    const liveOptions = chains
+      .filter(chain => chain.source === 'tradier_realtime')
+      .flatMap(chain => chain.options)
+    if (liveOptions.length > 0) {
+      const live = calculateLiveGammaExposure(snapshot.spxPrice, liveOptions)
+      if (live) {
+        exposureCache = { value: live, at: now }
+        return live
+      }
+    }
+  } catch {
+    // يسقط للمصدر المتأخر أدناه مع وسم واضح، ولا يؤثر في القرار.
+  }
+
+  const delayed = await getDelayedCboeExposure()
+  if (delayed) exposureCache = { value: delayed, at: now }
+  return delayed
+}
+
+export function gammaVerdict(gamma: GammaExposure): { title: string; advice: string; tone: 'calm' | 'volatile' } {
+  if (gamma.regime === 'positive') {
     return {
       title: 'جاما موجبة — المؤسسات تكبح التذبذب',
       advice: 'سوق يميل للهدوء والتذبذب العرضي. الأفضل: البيع قرب القمة والشراء قرب القاع، وتوقّع انجذاب السعر لجدران جاما.',

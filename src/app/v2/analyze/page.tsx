@@ -18,6 +18,7 @@ type ScoreEntry = { score: number; max: number; label: string }
 
 type TargetLevel = {
   spx: number; exit_price: number; exit_total: number; pnl: number
+  source?: string; fallback?: boolean
 }
 type ShortlistRow = {
   symbol: string; strike: number
@@ -65,6 +66,7 @@ type Analysis = {
     reward_risk_t2: number
   }
   target_price_note_ar?: string
+  target_plan_source_ar?: string
   focus?: {
     action: 'enter' | 'wait' | 'avoid'
     label: string
@@ -806,6 +808,11 @@ function AnalyzeContent() {
                   </div>
 
                   <div className="space-y-2 mb-4">
+                    {analysis.target_plan_source_ar && (
+                      <div className="text-xs rounded-lg px-3 py-2" style={{ color: '#C9943A', background: 'rgba(201,148,58,0.07)', border: '1px solid rgba(201,148,58,0.2)' }}>
+                        {analysis.target_plan_source_ar}
+                      </div>
+                    )}
                     {rows.map(row => {
                       const changePct = ((row.data.exit_price - entry) / entry) * 100
                       return (
@@ -816,6 +823,7 @@ function AnalyzeContent() {
                             <div>
                               <div className="text-[11px]" style={{ color: '#6E7E8F' }}>مستوى المؤشر</div>
                               <div className="font-bold font-mono" style={{ color: row.color }}>{row.data.spx.toLocaleString()}</div>
+                              {row.data.source && <div className="text-[10px] mt-0.5" style={{ color: row.data.fallback ? '#F59E0B' : '#94A3B8' }}>{row.data.source}</div>}
                             </div>
                             <div>
                               <div className="text-[11px]" style={{ color: '#6E7E8F' }}>سعر العقد التقديري</div>
