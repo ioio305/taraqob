@@ -273,6 +273,14 @@ function AnalyzeContent() {
   // ── Live mode toggle: OFF by default (plan is frozen until user enables) ─
   const [liveMode, setLiveMode] = useState(false)
 
+  function clearCurrentResult() {
+    setAnalysis(null)
+    setLiveUrl(null)
+    setFrozenPlan(null)
+    setLiveMode(false)
+    setRefreshing(false)
+  }
+
   const runAnalysis = useCallback(async (override?: {
     input?: string
     direction?: ContractDirection | null
@@ -418,7 +426,7 @@ function AnalyzeContent() {
         <div className="flex flex-col sm:flex-row gap-2">
           <input
             value={input}
-            onChange={e => { setInput(e.target.value); setError(null) }}
+            onChange={e => { setInput(e.target.value); setError(null); clearCurrentResult() }}
             onKeyDown={e => e.key === 'Enter' && canAnalyze && runAnalysis()}
             placeholder="سعر التنفيذ، مثال: 7350"
             aria-label="سعر التنفيذ أو الرمز الكامل"
@@ -451,7 +459,7 @@ function AnalyzeContent() {
                   { value: 'call' as const, label: '▲ صاعد', color: '#26D07C' },
                   { value: 'put' as const, label: '▼ هابط', color: '#F0435A' },
                 ]).map(option => (
-                  <button key={option.value} type="button" onClick={() => { setDirection(option.value); setError(null) }}
+                  <button key={option.value} type="button" onClick={() => { setDirection(option.value); setError(null); clearCurrentResult() }}
                     aria-pressed={direction === option.value}
                     className="rounded-xl px-4 py-2.5 text-sm font-bold transition-colors"
                     style={{
@@ -466,7 +474,7 @@ function AnalyzeContent() {
             </fieldset>
             <label className="text-xs" style={{ color: '#94A3B8' }}>
               تاريخ الانتهاء
-              <select value={expiration} onChange={e => setExpiration(e.target.value)}
+              <select value={expiration} onChange={e => { setExpiration(e.target.value); clearCurrentResult() }}
                 className="mt-2 w-full rounded-xl px-3 py-2.5 text-sm text-white outline-none"
                 style={{ background: '#0A1929', border: '1px solid rgba(255,255,255,0.08)' }}>
                 {!expiration && <option value="">أقرب تاريخ متاح</option>}
