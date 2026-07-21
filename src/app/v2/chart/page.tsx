@@ -19,6 +19,7 @@ import {
 import type { AnalysisResult, SRZone } from '@/lib/v2/marketAnalysis'
 import type { GammaExposure } from '@/lib/v2/gammaExposure'
 import { gammaVerdict } from '@/lib/v2/gammaExposure'
+import { keepsLatestCandlePosition, preserveLogicalRangeWidth } from '@/lib/v2/chartViewport'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -69,6 +70,7 @@ interface SavedChartViewport {
   logicalRange: LogicalRange | null
   timeRange: { from: Time; to: Time } | null
   followsLatest: boolean
+  rightOffset: number
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -781,13 +783,13 @@ export default function ChartPage() {
         if (!view) return
         const scale = chart.timeScale()
         if (view.followsLatest && view.logicalRange) {
-          const fitted = scale.getVisibleLogicalRange()
-          if (!fitted) return
-          const width = Math.max(5, Number(view.logicalRange.to) - Number(view.logicalRange.from))
+          const restoredRange = preserveLogicalRangeWidth(scale.getVisibleLogicalRange(), view.logicalRange)
+          if (!restoredRange) return
           scale.setVisibleLogicalRange({
-            from: (Number(fitted.to) - width) as LogicalRange['from'],
-            to: fitted.to,
+            from: restoredRange.from as LogicalRange['from'],
+            to: restoredRange.to as LogicalRange['to'],
           })
+          scale.scrollToPosition(view.rightOffset, false)
         } else if (view.timeRange) {
           scale.setVisibleRange(view.timeRange)
         }
@@ -817,10 +819,12 @@ export default function ChartPage() {
         timeframe: tf,
         views: Object.fromEntries(chartInstances.current.map((chart, index) => {
           const scale = chart.timeScale()
+          const rightOffset = scale.scrollPosition()
           return [chartKeys[index], {
             logicalRange: scale.getVisibleLogicalRange(),
             timeRange: scale.getVisibleRange(),
-            followsLatest: Math.abs(scale.scrollPosition()) <= 1,
+            followsLatest: keepsLatestCandlePosition(rightOffset),
+            rightOffset,
           }]
         })) as Partial<Record<ChartViewKey, SavedChartViewport>>,
       }
