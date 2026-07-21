@@ -323,49 +323,78 @@ function computeKeyLevels(candles: Candle[], tf: string): { price: number; title
   return out
 }
 
-// ── نقاط القوة (التلاقي): تُعلّم «لحظة الدخول» لا كل شمعة في الاتجاه ──────────
-// الشمعة الذهبية/البنفسجية = محفّز طازج (استعادة VWAP، تقاطع زخم، ارتداد RSI،
-// ارتداد من منطقة) + سياق داعم (متوسطات/VWAP) + الشمعة نفسها في الاتجاه.
-// مع تهدئة (لا تكرار متلاصق) لتبقى نادرة ودالّة على لحظة قرار، لا حالة مستمرة.
+// ── نقاط القوة: تُطبّق أسلوب المحترفين الثلاثة حرفياً قبل أن تُلوّن الشمعة ──────
+//  (1) تلاقي ٤ إشارات فأكثر — لا دخول على إشارة واحدة.
+//  (2) وقف قريب محدّد قبل الدخول (عند دعم/مقاومة) + عائد يفوق الخسارة (≥1.5).
+//  (3) لا مطاردة — تُشترط الهندسة السليمة والتهدئة، فتفوّت الكثير عمداً وتبقى نادرة.
 function computeConfluence(candles: Candle[], zones: SRZone[]): Map<string, { kind: 'gold' | 'purple'; strength: number }> {
   const out = new Map<string, { kind: 'gold' | 'purple'; strength: number }>()
   const demand = zones.filter(z => z.type === 'demand')
   const supply = zones.filter(z => z.type === 'supply')
   const touches = (c: Candle, zs: SRZone[]) => zs.some(z => c.low <= z.top && c.high >= z.bottom)
+  // أقرب دعم تحت السعر (قاعه = مستوى الوقف) / أقرب مقاومة فوقه (قاعها = الهدف)
+  const supportBelow = (price: number) => {
+    let best: number | null = null
+    for (const z of demand) if (z.top < price && (best === null || z.bottom > best)) best = z.bottom
+    return best
+  }
+  const resistAbove = (price: number) => {
+    let best: number | null = null
+    for (const z of supply) if (z.bottom > price && (best === null || z.bottom < best)) best = z.bottom
+    return best
+  }
 
-  const COOLDOWN = 3          // لا تعليم جديد قبل مرور 3 شموع على السابق
+  const COOLDOWN = 3
   let lastMark = -COOLDOWN - 1
 
   for (let i = 2; i < candles.length; i++) {
     if (i - lastMark < COOLDOWN) continue
     const c = candles[i], p = candles[i - 1]
+    const atr = c.atr ?? c.close * 0.003
 
-    // سياق (خلفية الاتجاه) — كم إشارة داعمة مستقرة
-    let ctxBull = 0, ctxBear = 0
-    if (c.vwap != null) { if (c.close > c.vwap) ctxBull++; else ctxBear++ }
+    // (1) تلاقي الإشارات المستقلة — نعدّها في الاتجاهين
+    let bull = 0, bear = 0
+    if (c.vwap != null) { if (c.close > c.vwap) bull++; else bear++ }
     if (c.ema9 != null && c.ema21 != null && c.ema50 != null) {
-      if (c.ema9 > c.ema21 && c.ema21 > c.ema50) ctxBull++
-      else if (c.ema9 < c.ema21 && c.ema21 < c.ema50) ctxBear++
+      if (c.ema9 > c.ema21 && c.ema21 > c.ema50) bull++
+      else if (c.ema9 < c.ema21 && c.ema21 < c.ema50) bear++
     }
-    if (c.ema9 != null) { if (c.close > c.ema9) ctxBull++; else ctxBear++ }
+    if (c.ema9 != null) { if (c.close > c.ema9) bull++; else bear++ }
+    if (c.macdHist != null) { if (c.macdHist > 0) bull++; else if (c.macdHist < 0) bear++ }
+    if (c.rsi != null && p.rsi != null) {
+      if (c.rsi > p.rsi && c.rsi >= 45 && c.rsi < 70) bull++
+      else if (c.rsi < p.rsi && c.rsi <= 55 && c.rsi > 30) bear++
+    }
+    if (touches(c, demand)) bull++
+    if (touches(c, supply)) bear++
 
-    // محفّز طازج على هذه الشمعة تحديداً (حدث، لا حالة)
+    // محفّز طازج (لحظة الدخول، لا حالة مستمرة)
     const bullTrigger =
-      (p.vwap != null && c.vwap != null && p.close < p.vwap && c.close > c.vwap) ||      // استعادة السعر العادل
-      (p.macdHist != null && c.macdHist != null && p.macdHist <= 0 && c.macdHist > 0) || // تقاطع MACD صاعد
-      (p.rsi != null && c.rsi != null && p.rsi < 45 && c.rsi > p.rsi) ||                  // ارتداد RSI من الضعف
-      (touches(c, demand) && c.close > c.open)                                            // ارتداد صاعد من منطقة طلب
+      (p.vwap != null && c.vwap != null && p.close < p.vwap && c.close > c.vwap) ||
+      (p.macdHist != null && c.macdHist != null && p.macdHist <= 0 && c.macdHist > 0) ||
+      (p.rsi != null && c.rsi != null && p.rsi < 45 && c.rsi > p.rsi) ||
+      (touches(c, demand) && c.close > c.open)
     const bearTrigger =
       (p.vwap != null && c.vwap != null && p.close > p.vwap && c.close < c.vwap) ||
       (p.macdHist != null && c.macdHist != null && p.macdHist >= 0 && c.macdHist < 0) ||
       (p.rsi != null && c.rsi != null && p.rsi > 55 && c.rsi < p.rsi) ||
       (touches(c, supply) && c.close < c.open)
 
-    // ذهبية = محفّز صاعد + سياق داعم (≥2) + شمعة صاعدة. والعكس للبنفسجية.
-    if (bullTrigger && ctxBull >= 2 && c.close >= c.open) {
-      out.set(c.time, { kind: 'gold', strength: ctxBull }); lastMark = i
-    } else if (bearTrigger && ctxBear >= 2 && c.close <= c.open) {
-      out.set(c.time, { kind: 'purple', strength: ctxBear }); lastMark = i
+    // (2)+(3) هندسة الوقف/العائد: وقف قريب (≤2.2×ATR = محدّد ولا مطاردة) + عائد ≥1.5×الخسارة
+    const geometryOk = (stopLvl: number | null, tgtLvl: number | null, up: boolean) => {
+      if (stopLvl == null || tgtLvl == null) return false
+      const stopDist = up ? c.close - stopLvl : stopLvl - c.close
+      const tgtDist  = up ? tgtLvl - c.close : c.close - tgtLvl
+      if (stopDist <= 0 || tgtDist <= 0) return false
+      return stopDist <= 2.2 * atr && tgtDist / stopDist >= 1.5
+    }
+
+    if (bull >= 4 && bull - bear >= 2 && bullTrigger && c.close >= c.open &&
+        geometryOk(supportBelow(c.close), resistAbove(c.close), true)) {
+      out.set(c.time, { kind: 'gold', strength: bull }); lastMark = i
+    } else if (bear >= 4 && bear - bull >= 2 && bearTrigger && c.close <= c.open &&
+        geometryOk(resistAbove(c.close), supportBelow(c.close), false)) {
+      out.set(c.time, { kind: 'purple', strength: bear }); lastMark = i
     }
   }
   return out
@@ -1423,15 +1452,18 @@ export default function ChartPage() {
                 <div className="flex items-center gap-x-5 gap-y-1 flex-wrap">
                   <span>
                     <span className="font-bold" style={{ color: '#C9943A' }}>✦ ذهبية</span>
-                    {' '}= لحظة يترجّح فيها الصعود (فرصة كول محتملة)
+                    {' '}= لحظة كول بأسلوب المحترفين
                   </span>
                   <span>
                     <span className="font-bold" style={{ color: '#A78BFA' }}>✦ بنفسجية</span>
-                    {' '}= لحظة يترجّح فيها الهبوط (فرصة بوت محتملة)
+                    {' '}= لحظة بوت بأسلوب المحترفين
                   </span>
                 </div>
+                <div style={{ color: '#8A97A6' }}>
+                  تظهر فقط حين تجتمع ثلاثتها: ① تلاقي ٤ إشارات فأكثر · ② وقف قريب محدّد عند دعم/مقاومة · ③ العائد يفوق الخسارة (≥1.5). لذلك هي نادرة عمداً.
+                </div>
                 <div style={{ color: '#C99' }}>
-                  ⚠ ترجيح لا ضمان — قد تفشل، لذلك ضع وقفاً دائماً. وليست «اشترِ فوراً»: حلّل العقد وتأكّد أن العائد يفوق الخسارة أولاً.
+                  ⚠ ترجيح لا ضمان — قد تفشل، لذلك الوقف جزء من الخطة، لا خيار.
                 </div>
               </div>
             )}
