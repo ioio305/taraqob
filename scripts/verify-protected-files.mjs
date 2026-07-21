@@ -6,7 +6,7 @@ const protectedFiles = {
   'src/app/api/v2/analyze/route.ts': 'e05ef2eb34dd5063e9c0c67e7c1a8ae2ce90bef261f9b7b597fec803ae72217c',
   'src/app/api/v2/strategy/route.ts': '872d47563057ee8a2d4a7b8dcd7a5204e165c9272be3b48766bea199656670e5',
   'src/app/api/v2/chart/route.ts': '76ed5736b3dcf250bf1ff0c01ef842649784540706cc52df1fc5d27b3de3b057',
-  'src/app/v2/chart/page.tsx': '454da8d9e6139ef34dd2c5769fc06879a46bf40541a0efda83288f7a9276ae71',
+  'src/app/v2/chart/page.tsx': '60f0e356a8b6225962f169b69740f4cef5bf42c5d96ff66f0d7563ac2e157920',
   'src/lib/v2/strategyEngine.ts': '66fe695430338632decfe09c58352768ea8082d1fa4e2db412e88f9f9b8afaf0',
   'src/lib/v2/marketAnalysis.ts': 'bc92d45f51f9d27ca604aa9b2430d157b205bcd47858210e8c736880b1bd2fcc',
   'src/lib/v2/marketReaction.ts': '264380454674d8db2bc4ec558edb4db28122f4b311694c2801abea4c6a906c5e',

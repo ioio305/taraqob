@@ -1289,14 +1289,20 @@ export default function ChartPage() {
             <div className="px-4 pt-3 flex items-center gap-2 border-t border-[#1e3a50]">
               <span className="text-xs text-gray-500 ml-1">العرض:</span>
               {(['taraqob', 'tradingview'] as const).map(v => (
-                <button key={v} onClick={() => setChartView(v)}
+                <button key={v} onClick={() => {
+                  if (v === 'tradingview') {
+                    window.open('https://www.tradingview.com/chart/?symbol=SP%3ASPX', '_blank', 'noopener,noreferrer')
+                    return
+                  }
+                  setChartView('taraqob')
+                }}
                   className="text-xs px-3 py-1 rounded-lg transition-colors font-bold"
                   style={{
                     background: chartView === v ? 'rgba(201,148,58,0.18)' : 'rgba(255,255,255,0.03)',
                     border: chartView === v ? '1px solid rgba(201,148,58,0.5)' : '1px solid rgba(255,255,255,0.06)',
                     color: chartView === v ? '#E8D5A3' : '#6E7E8F',
                   }}>
-                  {v === 'taraqob' ? 'شارت ترقّب (بالطبقات)' : 'TradingView'}
+                  {v === 'taraqob' ? 'شارت ترقّب (بالطبقات)' : 'فتح تريدنغ فيو ↗'}
                 </button>
               ))}
             </div>
