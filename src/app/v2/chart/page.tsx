@@ -771,10 +771,7 @@ export default function ChartPage() {
       chart.timeScale().fitContent()
     }
 
-    // Sync trend ↔ vol ↔ dec time scales
-    const syncKeys = new Set<ChartViewKey>(['trend', 'volatility', 'decision'])
-    const syncGroup = chartInstances.current.filter((_, index) => syncKeys.has(chartKeys[index]))
-
+    // Restore the user's independent viewport for every chart after data refreshes.
     // إعادة الحجم والمكان اللذين اختارهما المستخدم بعد تحديث البيانات.
     // إذا كان يتابع آخر شمعة نبقي نفس حجم الشموع ونلحق آخر شمعة الجديدة.
     const saved = savedChartView.current
@@ -797,12 +794,23 @@ export default function ChartPage() {
       })
     }
 
-    syncGroup.forEach(src => {
-      src.timeScale().subscribeVisibleLogicalRangeChange(range => {
+    // Only the full-history main chart may drive the shared viewport. The decision
+    // chart contains just 80 bars, so bidirectional syncing makes it clamp the
+    // range and push the main chart backwards while the user is zooming.
+    const trendIndex = chartKeys.indexOf('trend')
+    const volatilityIndex = chartKeys.indexOf('volatility')
+    const trendChart = trendIndex >= 0 ? chartInstances.current[trendIndex] : null
+    const volatilityChart = volatilityIndex >= 0 ? chartInstances.current[volatilityIndex] : null
+
+    if (trendChart && volatilityChart) {
+      const syncVolatilityWithTrend = (range: LogicalRange | null) => {
         if (!range) return
-        syncGroup.forEach(dst => { if (dst !== src) dst.timeScale().setVisibleLogicalRange(range) })
-      })
-    })
+        volatilityChart.timeScale().setVisibleLogicalRange(range)
+      }
+      syncVolatilityWithTrend(trendChart.timeScale().getVisibleLogicalRange())
+      trendChart.timeScale().subscribeVisibleLogicalRangeChange(syncVolatilityWithTrend)
+      roCallbacks.push(() => trendChart.timeScale().unsubscribeVisibleLogicalRangeChange(syncVolatilityWithTrend))
+    }
 
     return () => {
       savedChartView.current = {
