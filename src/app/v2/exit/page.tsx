@@ -28,6 +28,13 @@ const VERDICT_STYLE: Record<string, { bg: string; border: string; color: string;
   standby:       { bg: 'rgba(96,165,250,0.10)', border: '#60A5FA', color: '#60A5FA', icon: '⏸' },
 }
 
+async function fetchExitPlan(strike: string, type: 'call' | 'put', entry: string, expiry?: string): Promise<ExitPlan> {
+  const query = new URLSearchParams({ strike, type, entry })
+  if (expiry) query.set('expiry', expiry)
+  const response = await fetch(`/api/v2/exit?${query.toString()}`)
+  return response.json()
+}
+
 export default function ExitPage() {
   const [strike, setStrike]   = useState('')
   const [type, setType]       = useState<'call' | 'put'>('call')
@@ -36,7 +43,28 @@ export default function ExitPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [watched, setWatched] = useState<WatchedPosition[]>([])
-  useEffect(() => { setWatched(loadPositions()) }, [])
+  useEffect(() => {
+    setWatched(loadPositions())
+
+    const params = new URLSearchParams(window.location.search)
+    const linkedStrike = params.get('strike') ?? ''
+    const linkedEntry = params.get('entry') ?? ''
+    const linkedType = params.get('type') === 'put' ? 'put' : 'call'
+    const linkedExpiry = params.get('expiry') ?? undefined
+    if (!linkedStrike || !linkedEntry) return
+
+    setStrike(linkedStrike)
+    setEntry(linkedEntry)
+    setType(linkedType)
+    setLoading(true)
+    void fetchExitPlan(linkedStrike, linkedType, linkedEntry, linkedExpiry)
+      .then(result => {
+        if (result.error) { setError(result.error); setPlan(null) }
+        else setPlan(result)
+      })
+      .catch(() => setError('فشل الاتصال'))
+      .finally(() => setLoading(false))
+  }, [])
 
   const isWatched = plan
     ? watched.some(w => w.strike === plan.contract.strike && w.type === plan.contract.type)
@@ -72,8 +100,7 @@ export default function ExitPage() {
     if (!strike || !entry) { setError('أدخل رقم السترايك وسعر دخولك'); return }
     setLoading(true); setError('')
     try {
-      const r = await fetch(`/api/v2/exit?strike=${strike}&type=${type}&entry=${entry}`)
-      const d: ExitPlan = await r.json()
+      const d = await fetchExitPlan(strike, type, entry)
       if (d.error) { setError(d.error); setPlan(null) }
       else setPlan(d)
     } catch { setError('فشل الاتصال') }

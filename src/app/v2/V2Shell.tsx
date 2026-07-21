@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, type ReactNode } from 'react'
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
@@ -105,6 +105,19 @@ type Notification = {
   url: string | null; is_read: boolean; created_at: string
 }
 
+function notificationTime(value: string): string {
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return ''
+  return new Intl.DateTimeFormat('ar-SA-u-ca-gregory', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Riyadh',
+  }).format(parsed)
+}
+
 // ── Main Shell ─────────────────────────────────────────────────
 export default function V2Shell({ children, userName, userRole, userSecondaryRoles = [], subscriptionTier = 'radar', trialDaysLeft = null }: {
   children: ReactNode; userName: string; userRole: string
@@ -151,19 +164,24 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
   const tierColor = TIER_COLOR[subscriptionTier]  ?? '#4A5568'
 
   // ── Fetch notifications ────────────────────────────────────
-  async function fetchNotifications() {
+  const fetchNotifications = useCallback(async () => {
     try {
       const res  = await fetch('/api/v2/notifications')
       const data = await res.json()
       if (Array.isArray(data.notifications)) setNotifications(data.notifications)
     } catch { /* silent */ }
-  }
+  }, [])
 
   useEffect(() => {
-    fetchNotifications()
+    void fetchNotifications()
     const id = setInterval(fetchNotifications, 60_000)
-    return () => clearInterval(id)
-  }, []) // eslint-disable-line
+    const refreshNow = () => { void fetchNotifications() }
+    window.addEventListener('taraqob:notifications-changed', refreshNow)
+    return () => {
+      clearInterval(id)
+      window.removeEventListener('taraqob:notifications-changed', refreshNow)
+    }
+  }, [fetchNotifications])
 
   // Close bell on outside click
   useEffect(() => {
@@ -174,15 +192,38 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  async function openBell() {
+  function openBell() {
     setBellOpen(v => !v)
-    const unread = notifications.filter(n => !n.is_read)
-    if (!bellOpen && unread.length > 0) {
-      try {
-        await fetch('/api/v2/notifications', { method: 'PATCH' })
-        setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
-      } catch { /* silent */ }
-    }
+  }
+
+  async function markNotificationRead(id: string) {
+    const current = notifications.find(n => n.id === id)
+    if (!current || current.is_read) return
+
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
+    try {
+      const response = await fetch('/api/v2/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      if (!response.ok) void fetchNotifications()
+    } catch { void fetchNotifications() }
+  }
+
+  async function markAllNotificationsRead() {
+    const previous = notifications
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+    try {
+      const response = await fetch('/api/v2/notifications', { method: 'PATCH' })
+      if (!response.ok) setNotifications(previous)
+    } catch { setNotifications(previous) }
+  }
+
+  async function openNotification(notification: Notification) {
+    await markNotificationRead(notification.id)
+    setBellOpen(false)
+    if (notification.url) router.push(notification.url)
   }
 
   const unreadCount = notifications.filter(n => !n.is_read).length
@@ -354,7 +395,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
 
           {/* ── Notification bell ── */}
           <div ref={bellRef} className="relative">
-            <button onClick={openBell}
+            <button onClick={openBell} aria-label="الإشعارات" aria-expanded={bellOpen}
               className="relative w-8 h-8 rounded-lg flex items-center justify-center transition-all"
               style={{ background: bellOpen ? 'rgba(201,148,58,0.1)' : 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: '#4A5568' }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -375,7 +416,15 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
                 <div className="px-4 py-3 flex items-center justify-between"
                   style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                   <span className="text-sm font-semibold text-white">الإشعارات</span>
-                  <span className="text-xs font-mono" style={{ color: '#2D3748' }}>{notifications.length} إشعار</span>
+                  <div className="flex items-center gap-2">
+                    {unreadCount > 0 && (
+                      <button type="button" onClick={() => void markAllNotificationsRead()}
+                        className="text-[10px] transition-colors hover:text-white" style={{ color: '#C9943A' }}>
+                        قرأت الكل
+                      </button>
+                    )}
+                    <span className="text-xs font-mono" style={{ color: '#4A5568' }}>{notifications.length} إشعار</span>
+                  </div>
                 </div>
                 {notifications.length === 0 ? (
                   <div className="px-4 py-8 text-center text-sm" style={{ color: '#2D3748' }}>لا توجد إشعارات</div>
@@ -385,7 +434,8 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
                       const typeColor: Record<string, string> = { alert: '#EF4444', signal: '#10B981', info: '#60A5FA', system: '#C9943A' }
                       const tc = typeColor[n.type] ?? '#4A5568'
                       return (
-                        <div key={n.id} className="px-4 py-3"
+                        <button key={n.id} type="button" onClick={() => void openNotification(n)}
+                          className="px-4 py-3 w-full text-right transition-colors hover:bg-white/[0.03]"
                           style={{
                             borderBottom: '1px solid rgba(255,255,255,0.04)',
                             background: n.is_read ? 'transparent' : 'rgba(201,148,58,0.04)',
@@ -394,16 +444,16 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
                             <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: n.is_read ? '#1A2A3A' : tc }} />
                             <div className="min-w-0 flex-1">
                               <div className="text-xs font-semibold text-white mb-0.5">{n.title}</div>
-                              {n.body && <div className="text-xs leading-relaxed" style={{ color: '#4A5568' }}>{n.body}</div>}
+                              {n.body && <div className="text-xs leading-relaxed whitespace-pre-line" style={{ color: '#7C8A99' }}>{n.body}</div>}
                               {n.url && (
-                                <a href={n.url} className="text-xs mt-1 inline-block" style={{ color: tc }}>فتح ←</a>
+                                <span className="text-xs mt-1 inline-block" style={{ color: tc }}>فتح ←</span>
                               )}
                               <div className="text-[10px] font-mono mt-1" style={{ color: '#1A2A3A' }}>
-                                {new Date(n.created_at).toLocaleString('ar-SA')}
+                                {notificationTime(n.created_at)} · الرياض
                               </div>
                             </div>
                           </div>
-                        </div>
+                        </button>
                       )
                     })}
                   </div>

@@ -27,6 +27,15 @@ function fmt(n: number | null | undefined, d = 2) {
   return n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })
 }
 
+function signalTime(value: string) {
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return ''
+  return new Intl.DateTimeFormat('ar-SA-u-ca-gregory', {
+    day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Riyadh',
+  }).format(parsed)
+}
+
 const statusMap: Record<string, { ar: string; cls: string }> = {
   active:      { ar: 'نشط',    cls: 'bg-emerald-900/50 text-emerald-300 border-emerald-800' },
   watching:    { ar: 'مراقبة', cls: 'bg-blue-900/50 text-blue-300 border-blue-800'          },
@@ -177,6 +186,9 @@ export default function SignalsPage() {
                       {s.summary_ar}
                     </div>
                   )}
+                  <div className="mt-2 text-[11px] text-surface-500">
+                    صدرت {signalTime(s.created_at)} بتوقيت الرياض
+                  </div>
                 </div>
               )
             })}
