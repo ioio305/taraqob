@@ -323,6 +323,49 @@ function computeKeyLevels(candles: Candle[], tf: string): { price: number; title
   return out
 }
 
+// ── نقاط القوة (التلاقي): شمعة ذهبية = تلاقي إشارات صاعدة قوية، بنفسجية = هابطة قوية ──
+// تفحص كل شمعة: كم مؤشراً مستقلاً يتّفق في نفس الاتجاه (السعر العادل، ترتيب المتوسطات،
+// الزخم، RSI، الموقع من مناطق العرض/الطلب). تُلوَّن فقط عند تلاقٍ نادر وقوي (٤ إشارات فأكثر).
+function computeConfluence(candles: Candle[], zones: SRZone[]): Map<string, { kind: 'gold' | 'purple'; strength: number }> {
+  const out = new Map<string, { kind: 'gold' | 'purple'; strength: number }>()
+  const demand = zones.filter(z => z.type === 'demand')
+  const supply = zones.filter(z => z.type === 'supply')
+  const inZone = (c: Candle, zs: SRZone[]) => zs.some(z => c.low <= z.top && c.high >= z.bottom)
+
+  for (let i = 1; i < candles.length; i++) {
+    const c = candles[i], p = candles[i - 1]
+    let bull = 0, bear = 0
+
+    // 1. مقابل السعر العادل (VWAP)
+    if (c.vwap != null) { if (c.close > c.vwap) bull++; else if (c.close < c.vwap) bear++ }
+    // 2. ترتيب المتوسطات (اصطفاف صاعد/هابط)
+    if (c.ema9 != null && c.ema21 != null && c.ema50 != null) {
+      if (c.ema9 > c.ema21 && c.ema21 > c.ema50) bull++
+      else if (c.ema9 < c.ema21 && c.ema21 < c.ema50) bear++
+    }
+    // 3. السعر مقابل المتوسط السريع
+    if (c.ema9 != null) { if (c.close > c.ema9) bull++; else if (c.close < c.ema9) bear++ }
+    // 4. زخم MACD: الاتجاه + التسارع
+    if (c.macdHist != null && p.macdHist != null) {
+      if (c.macdHist > 0 && c.macdHist >= p.macdHist) bull++
+      else if (c.macdHist < 0 && c.macdHist <= p.macdHist) bear++
+    }
+    // 5. RSI صاعد دون تشبع / هابط دون تشبع
+    if (c.rsi != null && p.rsi != null) {
+      if (c.rsi > p.rsi && c.rsi >= 50 && c.rsi < 70) bull++
+      else if (c.rsi < p.rsi && c.rsi <= 50 && c.rsi > 30) bear++
+    }
+    // 6. الموقع من مناطق الطلب/العرض
+    if (inZone(c, demand)) bull++
+    if (inZone(c, supply)) bear++
+
+    // ذهبية/بنفسجية فقط عند تلاقٍ قوي ونادر: ٤ إشارات فأكثر بفارق واضح
+    if (bull >= 4 && bull - bear >= 3) out.set(c.time, { kind: 'gold', strength: bull })
+    else if (bear >= 4 && bear - bull >= 3) out.set(c.time, { kind: 'purple', strength: bear })
+  }
+  return out
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ChartPage() {
@@ -333,7 +376,7 @@ export default function ChartPage() {
   const [showAdv, setShowAdv]     = useState(false)
   const [showPanels, setShowPanels] = useState(false)   // لوحات المؤشرات التفصيلية — مخفية افتراضياً ليبقى شارت السعر البطل
   // طبقات الشارت — المحلل يختار ما يظهر (إعداد افتراضي نظيف)
-  const [layers, setLayers] = useState({ emas: true, vwap: true, gamma: true, zones: true, structure: true, em: true, priorDay: false, rounds: false })
+  const [layers, setLayers] = useState({ emas: true, vwap: true, gamma: true, zones: true, structure: true, em: true, confluence: true, priorDay: false, rounds: false })
   const [chartView, setChartView] = useState<'taraqob' | 'tradingview'>('taraqob')
   const [support, setSupport]     = useState<SupportQuote[]>([])
   const [gamma, setGamma]         = useState<GammaExposure | null>(null)
@@ -548,9 +591,16 @@ export default function ChartPage() {
         borderUpColor: '#26D07C', borderDownColor: '#F0435A',
         wickUpColor: '#5FE3A5', wickDownColor: '#FF7385',
       })
-      cSeries.setData(candles.map(c => ({
-        time: toTime(c.time, intraday), open: c.open, high: c.high, low: c.low, close: c.close,
-      })))
+      // ── طبقة قوة القرار: نلوّن الشموع النادرة القوية (ذهبي صاعد / بنفسجي هابط) ──
+      const conf = layers.confluence ? computeConfluence(candles, data.analysis.sr.zones) : null
+      const GOLD = '#C9943A', GOLD_WICK = '#E8D5A3', PURPLE = '#A78BFA', PURPLE_WICK = '#C4B5FD'
+      cSeries.setData(candles.map(c => {
+        const base = { time: toTime(c.time, intraday), open: c.open, high: c.high, low: c.low, close: c.close }
+        const cf = conf?.get(c.time)
+        if (cf?.kind === 'gold')   return { ...base, color: GOLD,   borderColor: GOLD,   wickColor: GOLD_WICK }
+        if (cf?.kind === 'purple') return { ...base, color: PURPLE, borderColor: PURPLE, wickColor: PURPLE_WICK }
+        return base
+      }))
 
       const sr = data.analysis.sr
 
@@ -601,6 +651,23 @@ export default function ChartPage() {
           shape: b.dir === 'up' ? 'arrowUp' : 'arrowDown',
           text: b.dir === 'up' ? 'كسر ↑' : 'كسر ↓',
         })
+      }
+      // ── طبقة قوة القرار: علامة تشير للشمعة الذهبية/البنفسجية (نص على أول شمعة من كل عنقود) ──
+      if (conf) {
+        let prevKind: string | null = null
+        for (const c of candles) {
+          const cf = conf.get(c.time)
+          if (!cf) { prevKind = null; continue }
+          const isGold = cf.kind === 'gold'
+          markers.push({
+            time: toTime(c.time, intraday),
+            position: isGold ? 'belowBar' : 'aboveBar',
+            color: isGold ? '#C9943A' : '#A78BFA',
+            shape: isGold ? 'arrowUp' : 'arrowDown',
+            text: cf.kind !== prevKind ? (isGold ? '✦ ذهبية' : '✦ بنفسجية') : undefined,
+          })
+          prevKind = cf.kind
+        }
       }
       if (markers.length) {
         markers.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0))
@@ -1325,6 +1392,7 @@ export default function ChartPage() {
                 ['gamma', 'جاما'],
                 ['zones', 'عرض/طلب'],
                 ['structure', 'بنية السوق'],
+                ['confluence', 'قوة القرار ✦'],
                 ['em', 'الحركة المتوقعة'],
                 ['priorDay', 'مستويات الأمس'],
                 ['rounds', 'أرقام مستديرة'],
@@ -1343,6 +1411,21 @@ export default function ChartPage() {
                 )
               })}
             </div>
+
+            {/* شرح طبقة قوة القرار — حتى لا يستغرب المستخدم الشمعة الملوّنة */}
+            {layers.confluence && (
+              <div className="px-4 pb-2 flex items-center gap-x-5 gap-y-1 flex-wrap text-xs" style={{ color: '#8A97A6' }}>
+                <span className="flex items-center gap-1.5">
+                  <span className="font-bold" style={{ color: '#C9943A' }}>✦ شمعة ذهبية</span>
+                  = تلاقي إشارات صاعدة قوية (لحظة كول)
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="font-bold" style={{ color: '#A78BFA' }}>✦ شمعة بنفسجية</span>
+                  = تلاقي إشارات هابطة قوية (لحظة بوت)
+                </span>
+                <span style={{ color: '#5E6E7F' }}>— نادرة عمداً: تظهر فقط حين تتّفق ٤ مؤشرات فأكثر.</span>
+              </div>
+            )}
 
             {timeframeSelector}
 
