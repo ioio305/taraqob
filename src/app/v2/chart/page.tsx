@@ -14,6 +14,7 @@ import {
   ISeriesApi,
   LineStyle,
   Time,
+  type LogicalRange,
 } from 'lightweight-charts'
 import type { AnalysisResult, SRZone } from '@/lib/v2/marketAnalysis'
 import type { GammaExposure } from '@/lib/v2/gammaExposure'
@@ -62,6 +63,13 @@ interface ChartData {
 }
 
 interface SupportQuote { symbol: string; label: string; price: number | null; change: number | null }
+type ChartViewKey = 'trend' | 'rsi' | 'macd' | 'volatility' | 'decision'
+
+interface SavedChartViewport {
+  logicalRange: LogicalRange | null
+  timeRange: { from: Time; to: Time } | null
+  followsLatest: boolean
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -345,6 +353,10 @@ export default function ChartPage() {
 
   const chartInstances = useRef<IChartApi[]>([])
   const requestSequence = useRef(0)
+  const savedChartView = useRef<{
+    timeframe: string
+    views: Partial<Record<ChartViewKey, SavedChartViewport>>
+  } | null>(null)
 
   // ── Fetch chart data ────────────────────────────────────────────────────────
   const fetchData = useCallback(async (timeframe: string, silent = false) => {
@@ -431,8 +443,9 @@ export default function ChartPage() {
     chartInstances.current = []
 
     const roCallbacks: (() => void)[] = []
+    const chartKeys: ChartViewKey[] = []
 
-    function mkChart(el: HTMLDivElement, height: number): IChartApi {
+    function mkChart(el: HTMLDivElement, height: number, key: ChartViewKey): IChartApi {
       const chart = createChart(el, {
         ...BASE_CHART,
         width: el.clientWidth,
@@ -447,6 +460,7 @@ export default function ChartPage() {
         },
       })
       chartInstances.current.push(chart)
+      chartKeys.push(key)
       const ro = new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth }))
       ro.observe(el)
       roCallbacks.push(() => ro.disconnect())
@@ -525,7 +539,7 @@ export default function ChartPage() {
 
     // ── Chart 1: Trend (candles + EMAs + VWAP) ─────────────────────────────
     if (trendRef.current) {
-      const chart = mkChart(trendRef.current, 560)
+      const chart = mkChart(trendRef.current, 560, 'trend')
 
       const cSeries = chart.addSeries(CandlestickSeries, {
         upColor: '#26D07C', downColor: '#F0435A',
@@ -632,7 +646,7 @@ export default function ChartPage() {
 
     // ── Chart 2a: RSI ──────────────────────────────────────────────────────
     if (rsiRef.current) {
-      const chart = mkChart(rsiRef.current, 150)
+      const chart = mkChart(rsiRef.current, 150, 'rsi')
       const rsiS = chart.addSeries(LineSeries, { color: '#818cf8', lineWidth: 2, title: 'RSI' })
       const rsiData = candles.filter(c => c.rsi !== null).map(c => ({ time: toTime(c.time, intraday), value: c.rsi! }))
       rsiS.setData(rsiData)
@@ -653,7 +667,7 @@ export default function ChartPage() {
 
     // ── Chart 2b: MACD ─────────────────────────────────────────────────────
     if (macdRef.current) {
-      const chart = mkChart(macdRef.current, 120)
+      const chart = mkChart(macdRef.current, 120, 'macd')
 
       const histValid = candles.filter(c => c.macdHist !== null)
       if (histValid.length > 0) {
@@ -686,7 +700,7 @@ export default function ChartPage() {
 
     // ── Chart 3: Volatility (BB + candles) ────────────────────────────────
     if (volRef.current) {
-      const chart = mkChart(volRef.current, 300)
+      const chart = mkChart(volRef.current, 300, 'volatility')
 
       const cSeries = chart.addSeries(CandlestickSeries, {
         upColor: '#22c55e88', downColor: '#ef444488',
@@ -712,7 +726,7 @@ export default function ChartPage() {
 
     // ── Chart 4: Decision (candles + price levels) ────────────────────────
     if (decRef.current) {
-      const chart = mkChart(decRef.current, 300)
+      const chart = mkChart(decRef.current, 300, 'decision')
       const { summary } = data.analysis
 
       // Use last 80 candles max for clarity
@@ -758,7 +772,31 @@ export default function ChartPage() {
     }
 
     // Sync trend ↔ vol ↔ dec time scales
-    const syncGroup = chartInstances.current.filter((_, i) => i === 0 || i === 3 || i === 4)
+    const syncKeys = new Set<ChartViewKey>(['trend', 'volatility', 'decision'])
+    const syncGroup = chartInstances.current.filter((_, index) => syncKeys.has(chartKeys[index]))
+
+    // إعادة الحجم والمكان اللذين اختارهما المستخدم بعد تحديث البيانات.
+    // إذا كان يتابع آخر شمعة نبقي نفس حجم الشموع ونلحق آخر شمعة الجديدة.
+    const saved = savedChartView.current
+    if (saved?.timeframe === tf) {
+      chartInstances.current.forEach((chart, index) => {
+        const view = saved.views[chartKeys[index]]
+        if (!view) return
+        const scale = chart.timeScale()
+        if (view.followsLatest && view.logicalRange) {
+          const fitted = scale.getVisibleLogicalRange()
+          if (!fitted) return
+          const width = Math.max(5, Number(view.logicalRange.to) - Number(view.logicalRange.from))
+          scale.setVisibleLogicalRange({
+            from: (Number(fitted.to) - width) as LogicalRange['from'],
+            to: fitted.to,
+          })
+        } else if (view.timeRange) {
+          scale.setVisibleRange(view.timeRange)
+        }
+      })
+    }
+
     syncGroup.forEach(src => {
       src.timeScale().subscribeVisibleLogicalRangeChange(range => {
         if (!range) return
@@ -767,6 +805,17 @@ export default function ChartPage() {
     })
 
     return () => {
+      savedChartView.current = {
+        timeframe: tf,
+        views: Object.fromEntries(chartInstances.current.map((chart, index) => {
+          const scale = chart.timeScale()
+          return [chartKeys[index], {
+            logicalRange: scale.getVisibleLogicalRange(),
+            timeRange: scale.getVisibleRange(),
+            followsLatest: Math.abs(scale.scrollPosition()) <= 1,
+          }]
+        })) as Partial<Record<ChartViewKey, SavedChartViewport>>,
+      }
       roCallbacks.forEach(cb => cb())
       chartInstances.current.forEach(c => { try { c.remove() } catch {} })
       chartInstances.current = []
@@ -849,6 +898,10 @@ export default function ChartPage() {
             بيانات الشارت متأخرة الآن — أوقفنا قرار الدخول تلقائياً حتى تعود البيانات الحديثة.
           </div>
         )}
+
+        <div className="text-[11px] text-gray-500">
+          السعر والمؤشرات المحسوبة تتجدد كل 15 ثانية · الأخبار كل دقيقتين · تموضع العقود قد يتأخر حسب المصدر
+        </div>
 
         {/* Strike input row */}
         <div className="flex items-end gap-3 flex-wrap">
@@ -1050,6 +1103,7 @@ export default function ChartPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-bold px-2 py-0.5 rounded-lg" style={{ background: 'rgba(167,139,250,0.15)', color: '#A78BFA' }}>انكشاف جاما · SPX</span>
+                      <span className="text-[10px] text-amber-300 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded-lg">ليس لحظياً</span>
                       <h3 className="font-bold text-[#E8D5A3]">{v.title}</h3>
                     </div>
                     <p className="text-sm text-gray-300 mt-1.5 leading-relaxed">{v.advice}</p>
