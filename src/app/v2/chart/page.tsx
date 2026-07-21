@@ -1313,7 +1313,7 @@ export default function ChartPage() {
             </div>
 
             <div className="relative">
-              <div ref={trendRef} className="w-full" />
+              <div ref={trendRef} data-testid="trend-chart" className="w-full" />
               <div ref={trendSrRef} className="absolute inset-0 pointer-events-none z-10" />
             </div>
             </>)}
