@@ -27,6 +27,7 @@ export interface WatchedPosition {
   entry: number
   expiry?: string
   addedAt: string
+  source?: 'manual' | 'recommendation'
 }
 
 export function loadPositions(): WatchedPosition[] {
@@ -64,6 +65,7 @@ function watchRecommendation(contract: {
     entry,
     expiry: contract.expiration,
     addedAt: new Date().toISOString(),
+    source: 'recommendation',
   }].slice(-5)
   try { localStorage.setItem(RECOMMENDED_POSITIONS_KEY, JSON.stringify(next)) } catch { /* تجاهل */ }
 }
@@ -232,7 +234,10 @@ export function AlertsWatcher() {
               `exit-${pos.type}${pos.strike}`,
               buildExitNotification(pos, ex, 'exit'),
             )
-          } else if (ex?.verdict === 'manage_profit') {
+          } else if (
+            ex?.verdict === 'manage_profit' &&
+            (pos.source !== 'recommendation' || (ex?.pnl?.pct ?? 0) >= 30)
+          ) {
             notifyOnce(`profit-${pos.type}${pos.strike}`,
               '💰 أدر ربحك — ترقب',
               `${pos.type === 'put' ? 'بوت' : 'كول'} ${pos.strike}: ${ex.verdictText ?? 'حان وقت جني جزء من الربح'}`)
