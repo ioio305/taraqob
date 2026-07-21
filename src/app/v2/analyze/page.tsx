@@ -631,7 +631,7 @@ function AnalyzeContent() {
                       <div className="text-base font-black text-white">
                         {canEnter && ps && ps.affordable
                           ? `${ps.contracts} عقد (خسارة الوقف $${ps.plannedLoss})`
-                          : canEnter ? 'اضبط رصيدك بالأسفل' : 'صفر — لا دخول'}
+                          : canEnter ? 'صفر — يتجاوز حد الخسارة' : 'صفر — لا دخول'}
                       </div>
                     </div>
                     <div>

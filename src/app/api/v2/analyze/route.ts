@@ -570,6 +570,14 @@ export async function GET(request: NextRequest) {
       decision = 'reject'
       capReasonAr = 'وقف الخسارة المحسوب غير صالح — لا توجد خطة دخول آمنة'
     }
+    if ((decision === 'execute' || decision === 'conditional') && (e1 < 7 || e2 < 7)) {
+      decision = 'watch'
+      capReasonAr = `اتجاه السوق والزخم لا يدعمان العقد ${type === 'call' ? 'الصاعد' : 'الهابط'} — لا دخول حتى يتغير الاتجاه`
+    }
+    if ((decision === 'execute' || decision === 'conditional') && dte === 0 && e6 < 5) {
+      decision = 'watch'
+      capReasonAr = 'مخاطر عقد انتهاء اليوم مرتفعة — راقب فقط ولا تدخل الآن'
+    }
     if ((decision === 'execute' || decision === 'conditional') && rewardRiskT1 < 1) {
       decision = 'watch'
       capReasonAr = `العائد المتوقع للهدف الأول أقل من الخسارة المخططة (${rewardRiskT1.toFixed(2)}) — لا دخول الآن`

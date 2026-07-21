@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 
 const protectedFiles = {
   'src/app/api/v2/recommend/route.ts': '0ec924a3acf41ff3e34dca30a4381ee41629252439b17bcbe7fc8b5fc8145a12',
-  'src/app/api/v2/analyze/route.ts': '4c602a544122615d3e9098655fb1fa63efa23dac0c228a8deec984747e9a482a',
+  'src/app/api/v2/analyze/route.ts': 'be867b138c57f160bdd7572e9f71c06af34f04371c0c1d527b799ab879cf0bb5',
   'src/app/api/v2/strategy/route.ts': '872d47563057ee8a2d4a7b8dcd7a5204e165c9272be3b48766bea199656670e5',
   'src/app/api/v2/chart/route.ts': '05206135e9ca19b39e8f70c1a590e336316a9e887be9443d5d4b4dc18e6d83ae',
   'src/app/v2/chart/page.tsx': 'b70a242931685f34ddb3be385a6bb7c9d854bf2f95ae26b7978bdb608a1df4f2',
