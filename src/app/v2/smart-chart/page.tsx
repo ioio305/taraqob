@@ -43,18 +43,6 @@ function fmtRiyadhFull(time: Time): string {
   if (typeof time === 'number') return new Date(time * 1000).toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
   return String(time)
 }
-// أقرب مستوى فوق/تحت السعر من مجموعة مرشّحات (لأهداف عملية قريبة)
-function nearestAbove(spot: number, cands: (number | null | undefined)[]): number | null {
-  let best: number | null = null
-  for (const v of cands) if (v != null && v > spot && (best === null || v < best)) best = v
-  return best
-}
-function nearestBelow(spot: number, cands: (number | null | undefined)[]): number | null {
-  let best: number | null = null
-  for (const v of cands) if (v != null && v < spot && (best === null || v > best)) best = v
-  return best
-}
-
 const GOLD = '#C9943A', GOLD_WICK = '#E8D5A3', PURPLE = '#A78BFA', PURPLE_WICK = '#C4B5FD'
 
 export default function SmartChartPage() {
@@ -113,27 +101,18 @@ export default function SmartChartPage() {
       lastKind === 'gold' ? 'call' : lastKind === 'purple' ? 'put'
       : s.bias === 'صاعد' ? 'call' : s.bias === 'هابط' ? 'put' : null
 
-    // مرشّحات المستويات: جاما + الحركة المتوقعة + مناطق العرض/الطلب — ونختار الأقرب
-    const g = data.gamma, em = data.em
-    const zones = data.analysis.sr.zones
-    const supports    = zones.filter(z => z.type === 'demand').map(z => z.top)     // دعوم
-    const resistances = zones.filter(z => z.type === 'supply').map(z => z.bottom)  // مقاومات
-    const aboveCands = [g?.callWall, g?.flipLevel, em?.upper, ...resistances]
-    const belowCands = [g?.putWall, g?.flipLevel, em?.lower, ...supports]
+    // مسافات لحظية معقولة من محرّك الملخّص، موجّهة حسب اتجاه الصفقة
+    const em = data.em
+    const entryLvl = s.entryLevel ?? spot
+    const tDist = s.t1Level != null ? Math.abs(s.t1Level - entryLvl) : (em?.points ? Math.max(3, em.points * 0.35) : spot * 0.003)
+    const sDist = s.stopLevel != null ? Math.abs(s.stopLevel - entryLvl) : tDist * 0.6
     let target: number | null = null, stop: number | null = null
-    if (dir === 'call') {
-      // كول: الهدف أقرب مقاومة فوق، الوقف أقرب دعم تحت
-      target = nearestAbove(spot, aboveCands) ?? (em ? em.upper : Math.round(spot * 1.003))
-      stop   = nearestBelow(spot, belowCands) ?? (em ? em.lower : Math.round(spot * 0.997))
-    } else if (dir === 'put') {
-      // بوت: الهدف أقرب دعم تحت، الوقف أقرب مقاومة فوق
-      target = nearestBelow(spot, belowCands) ?? (em ? em.lower : Math.round(spot * 0.997))
-      stop   = nearestAbove(spot, aboveCands) ?? (em ? em.upper : Math.round(spot * 1.003))
-    }
+    if (dir === 'call') { target = entryLvl + tDist; stop = entryLvl - sDist }   // كول: هدف فوق، وقف تحت
+    else if (dir === 'put') { target = entryLvl - tDist; stop = entryLvl + sDist } // بوت: هدف تحت، وقف فوق
     return {
       dir, spot, strike: nearestStrike(spot), hasSignal: lastKind !== null,
       bias: s.bias, score: s.score, decisionCode: s.decisionCode, decisionText: s.decisionText, reason: s.reason,
-      entry: Math.round(spot), target: target != null ? Math.round(target) : null, stop: stop != null ? Math.round(stop) : null,
+      entry: Math.round(entryLvl), target: target != null ? Math.round(target) : null, stop: stop != null ? Math.round(stop) : null,
     }
   }, [data, candles, conf])
 
