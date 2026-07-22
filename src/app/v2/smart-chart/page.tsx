@@ -104,8 +104,10 @@ export default function SmartChartPage() {
     // مسافات لحظية معقولة من محرّك الملخّص، موجّهة حسب اتجاه الصفقة
     const em = data.em
     const entryLvl = s.entryLevel ?? spot
-    const tDist = s.t1Level != null ? Math.abs(s.t1Level - entryLvl) : (em?.points ? Math.max(3, em.points * 0.35) : spot * 0.003)
-    const sDist = s.stopLevel != null ? Math.abs(s.stopLevel - entryLvl) : tDist * 0.6
+    // حدّ أدنى للمسافة حتى لا يلتصق الهدف/الوقف بالسعر
+    const volMove = em?.points ? Math.max(5, em.points * 0.3) : Math.max(5, spot * 0.0025)
+    const tDist = Math.max(volMove, s.t1Level != null ? Math.abs(s.t1Level - entryLvl) : 0)
+    const sDist = Math.max(Math.round(volMove * 0.6), s.stopLevel != null ? Math.abs(s.stopLevel - entryLvl) : 0)
     let target: number | null = null, stop: number | null = null
     if (dir === 'call') { target = entryLvl + tDist; stop = entryLvl - sDist }   // كول: هدف فوق، وقف تحت
     else if (dir === 'put') { target = entryLvl - tDist; stop = entryLvl + sDist } // بوت: هدف تحت، وقف فوق
