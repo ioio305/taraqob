@@ -33,6 +33,28 @@ function toTime(t: string, intraday: boolean): Time {
 }
 function nearestStrike(px: number): number { return Math.round(px / 5) * 5 }
 
+// ── توقيت الرياض على محور الشارت (بدل UTC الخام) ─────────────────────────────
+function fmtRiyadhTick(time: Time): string {
+  if (typeof time === 'number') return new Date(time * 1000).toLocaleTimeString('en-GB', { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit', hour12: false })
+  const d = new Date(String(time) + 'T00:00:00Z')
+  return isNaN(d.getTime()) ? String(time) : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+}
+function fmtRiyadhFull(time: Time): string {
+  if (typeof time === 'number') return new Date(time * 1000).toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
+  return String(time)
+}
+// أقرب مستوى فوق/تحت السعر من مجموعة مرشّحات (لأهداف عملية قريبة)
+function nearestAbove(spot: number, cands: (number | null | undefined)[]): number | null {
+  let best: number | null = null
+  for (const v of cands) if (v != null && v > spot && (best === null || v < best)) best = v
+  return best
+}
+function nearestBelow(spot: number, cands: (number | null | undefined)[]): number | null {
+  let best: number | null = null
+  for (const v of cands) if (v != null && v < spot && (best === null || v > best)) best = v
+  return best
+}
+
 const GOLD = '#C9943A', GOLD_WICK = '#E8D5A3', PURPLE = '#A78BFA', PURPLE_WICK = '#C4B5FD'
 
 export default function SmartChartPage() {
@@ -91,18 +113,22 @@ export default function SmartChartPage() {
       lastKind === 'gold' ? 'call' : lastKind === 'purple' ? 'put'
       : s.bias === 'صاعد' ? 'call' : s.bias === 'هابط' ? 'put' : null
 
+    // مرشّحات المستويات: جاما + الحركة المتوقعة + مناطق العرض/الطلب — ونختار الأقرب
     const g = data.gamma, em = data.em
+    const zones = data.analysis.sr.zones
+    const supports    = zones.filter(z => z.type === 'demand').map(z => z.top)     // دعوم
+    const resistances = zones.filter(z => z.type === 'supply').map(z => z.bottom)  // مقاومات
+    const aboveCands = [g?.callWall, g?.flipLevel, em?.upper, ...resistances]
+    const belowCands = [g?.putWall, g?.flipLevel, em?.lower, ...supports]
     let target: number | null = null, stop: number | null = null
     if (dir === 'call') {
-      // كول: الهدف مقاومة فوق، الوقف دعم تحت
-      target = (g?.callWall && g.callWall > spot) ? g.callWall : (em ? em.upper : null)
-      stop   = (g?.putWall && g.putWall < spot) ? g.putWall
-             : (g?.flipLevel && g.flipLevel < spot) ? g.flipLevel : (em ? em.lower : null)
+      // كول: الهدف أقرب مقاومة فوق، الوقف أقرب دعم تحت
+      target = nearestAbove(spot, aboveCands) ?? (em ? em.upper : Math.round(spot * 1.003))
+      stop   = nearestBelow(spot, belowCands) ?? (em ? em.lower : Math.round(spot * 0.997))
     } else if (dir === 'put') {
-      // بوت: الهدف دعم تحت، الوقف مقاومة فوق
-      target = (g?.putWall && g.putWall < spot) ? g.putWall : (em ? em.lower : null)
-      stop   = (g?.callWall && g.callWall > spot) ? g.callWall
-             : (g?.flipLevel && g.flipLevel > spot) ? g.flipLevel : (em ? em.upper : null)
+      // بوت: الهدف أقرب دعم تحت، الوقف أقرب مقاومة فوق
+      target = nearestBelow(spot, belowCands) ?? (em ? em.lower : Math.round(spot * 0.997))
+      stop   = nearestAbove(spot, aboveCands) ?? (em ? em.upper : Math.round(spot * 1.003))
     }
     return {
       dir, spot, strike: nearestStrike(spot), hasSignal: lastKind !== null,
@@ -127,7 +153,8 @@ export default function SmartChartPage() {
         layout: { background: { type: ColorType.Solid, color: '#0A1420' }, textColor: '#B8C4D4', fontFamily: '"IBM Plex Sans Arabic", sans-serif' },
         grid: { vertLines: { color: 'rgba(255,255,255,0.02)' }, horzLines: { color: 'rgba(255,255,255,0.04)' } },
         crosshair: { mode: CrosshairMode.Normal },
-        timeScale: { borderColor: '#1e3a50', timeVisible: intraday },
+        localization: { timeFormatter: fmtRiyadhFull },
+        timeScale: { borderColor: '#1e3a50', timeVisible: intraday, tickMarkFormatter: fmtRiyadhTick },
         rightPriceScale: { borderColor: '#1e3a50' },
       })
       apiRef.current = chart
