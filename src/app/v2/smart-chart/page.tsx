@@ -1,14 +1,14 @@
 'use client'
 
 // ── الشارت الذكي — قرار لا كومة بيانات ───────────────────────────────────────
-// فلسفة الصفحة: عينك تقع فوراً على «الاتجاه · هل أدخل · ماذا أحلّل».
-// شارت نظيف (سعر + قوة القرار) + جسر مباشر لتحليل العقد. التفاصيل عند الطلب فقط.
+// عينك تقع فوراً على «الاتجاه · قوة القرار · الخطوة». شارت نظيف + جسر لتحليل العقد.
+// التحديث يتم في مكانه (بلا مسح/وميض)، والمستويات تتبع اتجاه الصفقة (كول أعلى، بوت أسفل).
 
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import {
   createChart, createSeriesMarkers, CandlestickSeries, LineSeries,
-  ColorType, CrosshairMode, IChartApi, LineStyle, Time,
+  ColorType, CrosshairMode, IChartApi, ISeriesApi, LineStyle, Time,
 } from 'lightweight-charts'
 import type { AnalysisResult } from '@/lib/v2/marketAnalysis'
 import type { GammaExposure } from '@/lib/v2/gammaExposure'
@@ -39,26 +39,37 @@ export default function SmartChartPage() {
   const [tf, setTf]           = useState('5m')
   const [data, setData]       = useState<ChartData | null>(null)
   const [loading, setLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError]     = useState('')
   const [showDetails, setShowDetails] = useState(false)
-  const chartRef = useRef<HTMLDivElement>(null)
-  const instances = useRef<IChartApi[]>([])
+
+  const chartRef  = useRef<HTMLDivElement>(null)
+  const loadedOnce = useRef(false)
+  // مراجع الشارت — لنحدّث في مكانه بلا إعادة بناء (لا وميض)
+  const apiRef    = useRef<IChartApi | null>(null)
+  const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
+  const vwapRef   = useRef<ISeriesApi<'Line'> | null>(null)
+  const emaRef    = useRef<ISeriesApi<'Line'>[]>([])
+  const markersRef = useRef<ReturnType<typeof createSeriesMarkers<Time>> | null>(null)
+  const priceLinesRef = useRef<ReturnType<ISeriesApi<'Candlestick'>['createPriceLine']>[]>([])
+  const roRef     = useRef<ResizeObserver | null>(null)
+  const shellKey  = useRef('')
 
   const fetchData = useCallback(async (timeframe: string) => {
-    setLoading(true); setError('')
+    if (!loadedOnce.current) setLoading(true); else setRefreshing(true)
     try {
       const res = await fetch(`/api/v2/chart?tf=${timeframe}`)
       if (!res.ok) throw new Error('تعذّر الاتصال')
       const d: ChartData = await res.json()
       if (d.error && !d.candles?.length) throw new Error(d.error)
-      setData(d)
-    } catch (e) { setError(e instanceof Error ? e.message : 'تعذّر تحميل البيانات') }
-    finally { setLoading(false) }
+      setData(d); loadedOnce.current = true; setError('')
+    } catch (e) { if (!loadedOnce.current) setError(e instanceof Error ? e.message : 'تعذّر تحميل البيانات') }
+    finally { setLoading(false); setRefreshing(false) }
   }, [])
 
-  useEffect(() => { fetchData(tf) }, [tf, fetchData])
+  useEffect(() => { loadedOnce.current = false; fetchData(tf) }, [tf, fetchData])
   useEffect(() => {
-    const id = setInterval(() => fetchData(tf), 60_000)   // تحديث هادئ كل دقيقة
+    const id = setInterval(() => fetchData(tf), 60_000)   // تحديث هادئ في مكانه
     return () => clearInterval(id)
   }, [tf, fetchData])
 
@@ -69,48 +80,79 @@ export default function SmartChartPage() {
     [candles, data],
   )
 
-  // ── الخلاصة: الاتجاه + الخطوة (الجسر للعقد) ─────────────────────────────────
+  // ── الخلاصة: الاتجاه + مستويات متّسقة مع الاتجاه (كول أعلى، بوت أسفل) ─────────
   const verdict = useMemo(() => {
     if (!data || !candles.length) return null
     const s = data.analysis.summary
     const spot = candles[candles.length - 1].close
-    // آخر إشارة تلاقٍ تحدّد الاتجاه؛ وإلا نعتمد ميل السوق العام
     let lastKind: 'gold' | 'purple' | null = null
     for (const c of candles) { const p = conf.get(c.time); if (p) lastKind = p.kind }
     const dir: 'call' | 'put' | null =
       lastKind === 'gold' ? 'call' : lastKind === 'purple' ? 'put'
       : s.bias === 'صاعد' ? 'call' : s.bias === 'هابط' ? 'put' : null
+
+    const g = data.gamma, em = data.em
+    let target: number | null = null, stop: number | null = null
+    if (dir === 'call') {
+      // كول: الهدف مقاومة فوق، الوقف دعم تحت
+      target = (g?.callWall && g.callWall > spot) ? g.callWall : (em ? em.upper : null)
+      stop   = (g?.putWall && g.putWall < spot) ? g.putWall
+             : (g?.flipLevel && g.flipLevel < spot) ? g.flipLevel : (em ? em.lower : null)
+    } else if (dir === 'put') {
+      // بوت: الهدف دعم تحت، الوقف مقاومة فوق
+      target = (g?.putWall && g.putWall < spot) ? g.putWall : (em ? em.lower : null)
+      stop   = (g?.callWall && g.callWall > spot) ? g.callWall
+             : (g?.flipLevel && g.flipLevel > spot) ? g.flipLevel : (em ? em.upper : null)
+    }
     return {
-      dir, spot, strike: nearestStrike(spot),
-      hasSignal: lastKind !== null,
-      bias: s.bias, score: s.score, decisionCode: s.decisionCode,
-      decisionText: s.decisionText, reason: s.reason,
-      entry: s.entryLevel, t1: s.t1Level, stop: s.stopLevel,
+      dir, spot, strike: nearestStrike(spot), hasSignal: lastKind !== null,
+      bias: s.bias, score: s.score, decisionCode: s.decisionCode, decisionText: s.decisionText, reason: s.reason,
+      entry: Math.round(spot), target: target != null ? Math.round(target) : null, stop: stop != null ? Math.round(stop) : null,
     }
   }, [data, candles, conf])
 
-  // ── بناء الشارت النظيف ──────────────────────────────────────────────────────
+  // ── الشارت: بناء الهيكل مرة لكل إطار، وتغذية البيانات في مكانها (بلا وميض) ────
   useEffect(() => {
-    if (!data || !candles.length || !chartRef.current) return
-    instances.current.forEach(c => { try { c.remove() } catch {} }); instances.current = []
+    if (!chartRef.current || !candles.length) return
     const el = chartRef.current
-    const chart = createChart(el, {
-      width: el.clientWidth, height: 460,
-      layout: { background: { type: ColorType.Solid, color: '#0A1420' }, textColor: '#B8C4D4', fontFamily: '"IBM Plex Sans Arabic", sans-serif' },
-      grid: { vertLines: { color: 'rgba(255,255,255,0.02)' }, horzLines: { color: 'rgba(255,255,255,0.04)' } },
-      crosshair: { mode: CrosshairMode.Normal },
-      timeScale: { borderColor: '#1e3a50', timeVisible: intraday },
-      rightPriceScale: { borderColor: '#1e3a50' },
-    })
-    instances.current.push(chart)
-    const ro = new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth }))
-    ro.observe(el)
+    const key = `${tf}|${showDetails}`
 
-    const cs = chart.addSeries(CandlestickSeries, {
-      upColor: '#1F6B4A', downColor: '#7A2230',
-      borderUpColor: '#26D07C', borderDownColor: '#F0435A',
-      wickUpColor: '#5FE3A5', wickDownColor: '#FF7385',
-    })
+    // (أ) بناء الهيكل فقط عند تغيّر الإطار/التفاصيل أو أول مرة
+    if (!apiRef.current || shellKey.current !== key) {
+      if (roRef.current) { roRef.current.disconnect(); roRef.current = null }
+      if (apiRef.current) { try { apiRef.current.remove() } catch {} }
+      markersRef.current = null; priceLinesRef.current = []
+      const chart = createChart(el, {
+        width: el.clientWidth, height: 460,
+        layout: { background: { type: ColorType.Solid, color: '#0A1420' }, textColor: '#B8C4D4', fontFamily: '"IBM Plex Sans Arabic", sans-serif' },
+        grid: { vertLines: { color: 'rgba(255,255,255,0.02)' }, horzLines: { color: 'rgba(255,255,255,0.04)' } },
+        crosshair: { mode: CrosshairMode.Normal },
+        timeScale: { borderColor: '#1e3a50', timeVisible: intraday },
+        rightPriceScale: { borderColor: '#1e3a50' },
+      })
+      apiRef.current = chart
+      candleRef.current = chart.addSeries(CandlestickSeries, {
+        upColor: '#1F6B4A', downColor: '#7A2230',
+        borderUpColor: '#26D07C', borderDownColor: '#F0435A',
+        wickUpColor: '#5FE3A5', wickDownColor: '#FF7385',
+      })
+      vwapRef.current = intraday ? chart.addSeries(LineSeries, { color: '#fbbf24', lineWidth: 2, title: 'السعر العادل' }) : null
+      emaRef.current = showDetails
+        ? [
+            chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 1, title: 'EMA9' }),
+            chart.addSeries(LineSeries, { color: '#06b6d4', lineWidth: 1, title: 'EMA21' }),
+            chart.addSeries(LineSeries, { color: '#a855f7', lineWidth: 1, title: 'EMA50' }),
+          ]
+        : []
+      const ro = new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth }))
+      ro.observe(el); roRef.current = ro
+      shellKey.current = key
+      // نضبط الإطار الزمني مرة واحدة عند البناء (لا نعيده كل تحديث حتى لا يقفز)
+      requestAnimationFrame(() => { try { chart.timeScale().fitContent() } catch {} })
+    }
+
+    // (ب) تغذية البيانات في مكانها — كل تحديث
+    const cs = candleRef.current!
     cs.setData(candles.map(c => {
       const base = { time: toTime(c.time, intraday), open: c.open, high: c.high, low: c.low, close: c.close }
       const cf = conf.get(c.time)
@@ -119,7 +161,6 @@ export default function SmartChartPage() {
       return base
     }))
 
-    // علامات التلاقي — نص على أول شمعة من كل عنقود
     const markers: { time: Time; position: 'aboveBar' | 'belowBar'; color: string; shape: 'arrowUp' | 'arrowDown'; text?: string }[] = []
     let prev: string | null = null
     for (const c of candles) {
@@ -128,31 +169,34 @@ export default function SmartChartPage() {
       markers.push({ time: toTime(c.time, intraday), position: gold ? 'belowBar' : 'aboveBar', color: gold ? GOLD : PURPLE, shape: gold ? 'arrowUp' : 'arrowDown', text: cf.kind !== prev ? (gold ? '✦ كول' : '✦ بوت') : undefined })
       prev = cf.kind
     }
-    if (markers.length) createSeriesMarkers(cs, markers)
+    if (!markersRef.current) markersRef.current = createSeriesMarkers(cs, markers)
+    else markersRef.current.setMarkers(markers)
 
-    // سياق خفيف: السعر العادل + جدران جاما
-    if (intraday) {
-      const vw = candles.filter(c => c.vwap != null)
-      if (vw.length) { const s = chart.addSeries(LineSeries, { color: '#fbbf24', lineWidth: 2, title: 'السعر العادل' }); s.setData(vw.map(c => ({ time: toTime(c.time, intraday), value: c.vwap! }))) }
+    if (vwapRef.current) vwapRef.current.setData(candles.filter(c => c.vwap != null).map(c => ({ time: toTime(c.time, intraday), value: c.vwap! })))
+    if (emaRef.current.length === 3) {
+      const feed = (s: ISeriesApi<'Line'>, k: 'ema9' | 'ema21' | 'ema50') =>
+        s.setData(candles.filter(c => c[k] != null).map(c => ({ time: toTime(c.time, intraday), value: c[k]! })))
+      feed(emaRef.current[0], 'ema9'); feed(emaRef.current[1], 'ema21'); feed(emaRef.current[2], 'ema50')
     }
-    const g = data.gamma
+
+    // جدران جاما — نزيل القديمة ونضيف الحالية
+    priceLinesRef.current.forEach(pl => { try { cs.removePriceLine(pl) } catch {} }); priceLinesRef.current = []
+    const g = data!.gamma
     if (g) {
-      if (g.putWall)   cs.createPriceLine({ price: g.putWall,   color: '#26D07C88', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'دعم جاما' })
-      if (g.callWall)  cs.createPriceLine({ price: g.callWall,  color: '#F0435A88', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'مقاومة جاما' })
-      if (g.flipLevel) cs.createPriceLine({ price: g.flipLevel, color: '#A78BFA88', lineWidth: 1, lineStyle: LineStyle.Solid,  axisLabelVisible: true, title: 'انقلاب' })
-    }
-    // تفاصيل (عند الطلب): المتوسطات
-    if (showDetails) {
-      const add = (key: 'ema9' | 'ema21' | 'ema50', color: string, name: string) => {
-        const v = candles.filter(c => c[key] != null)
-        if (v.length) { const s = chart.addSeries(LineSeries, { color, lineWidth: 1, title: name }); s.setData(v.map(c => ({ time: toTime(c.time, intraday), value: c[key]! }))) }
+      const add = (price: number | null | undefined, color: string, style: LineStyle, title: string) => {
+        if (price) priceLinesRef.current.push(cs.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title }))
       }
-      add('ema9', '#f59e0b', 'EMA9'); add('ema21', '#06b6d4', 'EMA21'); add('ema50', '#a855f7', 'EMA50')
+      add(g.putWall,   '#26D07C88', LineStyle.Dashed, 'دعم جاما')
+      add(g.callWall,  '#F0435A88', LineStyle.Dashed, 'مقاومة جاما')
+      add(g.flipLevel, '#A78BFA88', LineStyle.Solid,  'انقلاب')
     }
+  }, [data, candles, conf, tf, showDetails, intraday])
 
-    chart.timeScale().fitContent()
-    return () => { ro.disconnect(); instances.current.forEach(c => { try { c.remove() } catch {} }); instances.current = [] }
-  }, [data, candles, conf, intraday, showDetails])
+  // تنظيف عند مغادرة الصفحة
+  useEffect(() => () => {
+    if (roRef.current) roRef.current.disconnect()
+    if (apiRef.current) { try { apiRef.current.remove() } catch {} ; apiRef.current = null }
+  }, [])
 
   const dirColor = verdict?.dir === 'call' ? '#26D07C' : verdict?.dir === 'put' ? '#A78BFA' : '#8A97A6'
   const decClr = verdict?.decisionCode === 'execute' ? '#26D07C' : verdict?.decisionCode === 'conditional' ? '#C9943A' : verdict?.decisionCode === 'watch' ? '#60A5FA' : '#F0435A'
@@ -165,6 +209,7 @@ export default function SmartChartPage() {
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-bold" style={{ color: '#E8D5A3' }}>الشارت الذكي ✦</h1>
           <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(201,148,58,0.12)', border: '1px solid rgba(201,148,58,0.3)', color: '#C9943A' }}>قرار لا كومة بيانات</span>
+          {refreshing && <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#26D07C' }} title="يتحدّث" />}
         </div>
         <div className="flex gap-1">
           {TFS.map(t => (
@@ -178,10 +223,9 @@ export default function SmartChartPage() {
       </div>
 
       {/* ── الخلاصة الآن ── */}
-      {verdict && !loading && (
+      {verdict && (
         <div className="rounded-2xl p-5" style={{ background: `${decClr}0C`, border: `1px solid ${decClr}40` }}>
           <div className="flex items-center justify-between gap-4 flex-wrap">
-            {/* الاتجاه */}
             <div className="flex items-center gap-4">
               <div className="text-center">
                 <div className="text-xs mb-1" style={{ color: '#6E7E8F' }}>الاتجاه الآن</div>
@@ -200,7 +244,6 @@ export default function SmartChartPage() {
               </div>
             </div>
 
-            {/* الخطوة التالية — الجسر للعقد */}
             {verdict.dir ? (
               <Link href={`/v2/analyze?symbol=SPX&strike=${verdict.strike}&type=${verdict.dir}`}
                 className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold shrink-0 transition-transform hover:scale-105"
@@ -215,38 +258,37 @@ export default function SmartChartPage() {
             )}
           </div>
 
-          {/* مستويات مختصرة عند وجود خطة */}
-          {verdict.dir && (verdict.entry || verdict.t1 || verdict.stop) && (
-            <div className="flex gap-4 mt-3 pt-3 text-xs flex-wrap" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-              {verdict.entry != null && <span style={{ color: '#8A97A6' }}>الدخول قرب <b className="font-mono" style={{ color: '#E8D5A3' }}>{Math.round(verdict.entry)}</b></span>}
-              {verdict.t1 != null && <span style={{ color: '#8A97A6' }}>🎯 الهدف <b className="font-mono" style={{ color: '#26D07C' }}>{Math.round(verdict.t1)}</b></span>}
-              {verdict.stop != null && <span style={{ color: '#8A97A6' }}>🛑 الوقف <b className="font-mono" style={{ color: '#F0435A' }}>{Math.round(verdict.stop)}</b></span>}
+          {verdict.dir && (verdict.target != null || verdict.stop != null) && (
+            <div className="flex gap-4 mt-3 pt-3 text-xs flex-wrap items-center" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <span style={{ color: '#8A97A6' }}>الدخول قرب <b className="font-mono" style={{ color: '#E8D5A3' }}>{verdict.entry}</b></span>
+              {verdict.target != null && <span style={{ color: '#8A97A6' }}>🎯 الهدف <b className="font-mono" style={{ color: '#26D07C' }}>{verdict.target}</b></span>}
+              {verdict.stop != null && <span style={{ color: '#8A97A6' }}>🛑 الوقف <b className="font-mono" style={{ color: '#F0435A' }}>{verdict.stop}</b></span>}
+              <span className="text-[11px]" style={{ color: '#5E6E7F' }}>
+                ({verdict.dir === 'put' ? 'بوت: الهدف تحت والوقف فوق' : 'كول: الهدف فوق والوقف تحت'})
+              </span>
               <span className="mr-auto" style={{ color: '#5E6E7F' }}>SPX <b className="font-mono text-white">{verdict.spot.toLocaleString()}</b></span>
             </div>
           )}
         </div>
       )}
 
-      {loading && <div className="text-center py-16 text-sm animate-pulse" style={{ color: '#4A5568' }}>جارٍ قراءة السوق...</div>}
-      {error && !loading && <div className="rounded-xl p-4 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#F87171' }}>{error}</div>}
+      {loading && !data && <div className="text-center py-16 text-sm animate-pulse" style={{ color: '#4A5568' }}>جارٍ قراءة السوق...</div>}
+      {error && !data && <div className="rounded-xl p-4 text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#F87171' }}>{error}</div>}
 
-      {/* ── الشارت النظيف ── */}
-      {!loading && data && (
-        <div className="rounded-2xl overflow-hidden" style={{ background: '#0A1420', border: '1px solid rgba(255,255,255,0.06)' }}>
-          <div ref={chartRef} className="w-full" />
-          {/* الأسطورة + التفاصيل */}
-          <div className="px-4 py-3 space-y-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-            <div className="flex items-center gap-x-5 gap-y-1 flex-wrap text-xs" style={{ color: '#8A97A6' }}>
-              <span><span className="font-bold" style={{ color: GOLD }}>✦ ذهبية</span> = لحظة كول بأسلوب المحترفين</span>
-              <span><span className="font-bold" style={{ color: PURPLE }}>✦ بنفسجية</span> = لحظة بوت بأسلوب المحترفين</span>
-              <span style={{ color: '#5E6E7F' }}>— نادرة عمداً: ٤ إشارات + وقف قريب + عائد ≥1.5. ترجيح لا ضمان.</span>
-            </div>
-            <button onClick={() => setShowDetails(v => !v)} className="text-xs font-bold" style={{ color: '#C9943A' }}>
-              {showDetails ? '▲ إخفاء التفاصيل' : '▼ عرض المتوسطات (تفاصيل)'}
-            </button>
+      {/* ── الشارت النظيف — يبقى ثابتاً ويتحدّث في مكانه ── */}
+      <div className={data ? 'rounded-2xl overflow-hidden' : 'hidden'} style={{ background: '#0A1420', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <div ref={chartRef} className="w-full" />
+        <div className="px-4 py-3 space-y-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          <div className="flex items-center gap-x-5 gap-y-1 flex-wrap text-xs" style={{ color: '#8A97A6' }}>
+            <span><span className="font-bold" style={{ color: GOLD }}>✦ ذهبية</span> = لحظة كول بأسلوب المحترفين</span>
+            <span><span className="font-bold" style={{ color: PURPLE }}>✦ بنفسجية</span> = لحظة بوت بأسلوب المحترفين</span>
+            <span style={{ color: '#5E6E7F' }}>— نادرة عمداً: ٤ إشارات + وقف قريب + عائد ≥1.5. ترجيح لا ضمان.</span>
           </div>
+          <button onClick={() => setShowDetails(v => !v)} className="text-xs font-bold" style={{ color: '#C9943A' }}>
+            {showDetails ? '▲ إخفاء التفاصيل' : '▼ عرض المتوسطات (تفاصيل)'}
+          </button>
         </div>
-      )}
+      </div>
 
       <p className="text-xs text-center font-mono pb-2" style={{ color: '#2D3748' }}>
         أداة دعم قرار تعليمية — ليست توصية استثمارية. البيانات قد تكون مؤخرة أو تقديرية.
