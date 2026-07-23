@@ -24,8 +24,8 @@ interface ChartData {
   gamma?: GammaExposure | null; em?: { upper: number; lower: number; points: number } | null; error?: string
 }
 
-const TFS = ['5m', '15m', '1h', '1d'] as const
-const TF_AR: Record<string, string> = { '5m': '5 دقائق', '15m': '15 دقيقة', '1h': 'ساعة', '1d': 'يومي' }
+const TFS = ['1m', '3m', '5m', '15m', '1h', '1d'] as const
+const TF_AR: Record<string, string> = { '1m': 'دقيقة', '3m': '3 دقائق', '5m': '5 دقائق', '15m': '15 دقيقة', '1h': 'ساعة', '1d': 'يومي' }
 
 function toTime(t: string, intraday: boolean): Time {
   if (!intraday) return t.slice(0, 10) as Time
