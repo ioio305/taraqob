@@ -43,6 +43,21 @@ function fmtRiyadhFull(time: Time): string {
   if (typeof time === 'number') return new Date(time * 1000).toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
   return String(time)
 }
+
+// ── طور جلسة نيويورك — نافذة «قرب الإغلاق» ───────────────────────────────────
+// آخر ساعتين من الجلسة الأمريكية (14:00–16:00 ت.شرقي = 21:00–23:00 الرياض):
+// يشتد فيها تحوّط الجاما وأوامر الإغلاق (MOC)، فتضعف استمرارية الإشارات ونجاح
+// الشموع الذهبية/البنفسجية — لذا نكبحها هنا ونعرض تنبيهاً.
+const NEAR_CLOSE_START = 14 * 60   // 14:00 ت.شرقي
+const POWER_HOUR_START = 15 * 60   // 15:00 ت.شرقي (الساعة الأخيرة)
+const NY_CLOSE         = 16 * 60   // 16:00 ت.شرقي
+function nyPart(ms: number): { min: number; wd: string } {
+  const p = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', weekday: 'short', hour12: false }).formatToParts(new Date(ms))
+  const get = (t: string) => p.find(x => x.type === t)?.value ?? '0'
+  return { min: (Number(get('hour')) % 24) * 60 + Number(get('minute')), wd: get('weekday') }
+}
+function inNearClose(ms: number): boolean { const m = nyPart(ms).min; return m >= NEAR_CLOSE_START && m < NY_CLOSE }
+
 const GOLD = '#C9943A', GOLD_WICK = '#E8D5A3', PURPLE = '#A78BFA', PURPLE_WICK = '#C4B5FD'
 
 export default function SmartChartPage() {
@@ -89,6 +104,15 @@ export default function SmartChartPage() {
     () => (candles.length ? computeConfluence(candles, data!.analysis.sr.zones) : new Map()),
     [candles, data],
   )
+  // نكبح شموع التلاقي داخل نافذة قرب الإغلاق (نسبة نجاحها ضعيفة هناك)
+  const confShown = useMemo(() => {
+    if (!intraday || !candles.length) return conf
+    const m = new Map(conf)
+    for (const c of candles) {
+      if (inNearClose(new Date(c.time.replace(' ', 'T')).getTime())) m.delete(c.time)
+    }
+    return m
+  }, [conf, candles, intraday])
 
   // ── الخلاصة: الاتجاه + مستويات متّسقة مع الاتجاه (كول أعلى، بوت أسفل) ─────────
   const verdict = useMemo(() => {
@@ -96,7 +120,7 @@ export default function SmartChartPage() {
     const s = data.analysis.summary
     const spot = candles[candles.length - 1].close
     let lastKind: 'gold' | 'purple' | null = null
-    for (const c of candles) { const p = conf.get(c.time); if (p) lastKind = p.kind }
+    for (const c of candles) { const p = confShown.get(c.time); if (p) lastKind = p.kind }
     const dir: 'call' | 'put' | null =
       lastKind === 'gold' ? 'call' : lastKind === 'purple' ? 'put'
       : s.bias === 'صاعد' ? 'call' : s.bias === 'هابط' ? 'put' : null
@@ -116,7 +140,7 @@ export default function SmartChartPage() {
       bias: s.bias, score: s.score, decisionCode: s.decisionCode, decisionText: s.decisionText, reason: s.reason,
       entry: Math.round(entryLvl), target: target != null ? Math.round(target) : null, stop: stop != null ? Math.round(stop) : null,
     }
-  }, [data, candles, conf])
+  }, [data, candles, confShown])
 
   // ── الشارت: بناء الهيكل مرة لكل إطار، وتغذية البيانات في مكانها (بلا وميض) ────
   useEffect(() => {
@@ -163,7 +187,7 @@ export default function SmartChartPage() {
     const cs = candleRef.current!
     cs.setData(candles.map(c => {
       const base = { time: toTime(c.time, intraday), open: c.open, high: c.high, low: c.low, close: c.close }
-      const cf = conf.get(c.time)
+      const cf = confShown.get(c.time)
       if (cf?.kind === 'gold')   return { ...base, color: GOLD,   borderColor: GOLD,   wickColor: GOLD_WICK }
       if (cf?.kind === 'purple') return { ...base, color: PURPLE, borderColor: PURPLE, wickColor: PURPLE_WICK }
       return base
@@ -172,7 +196,7 @@ export default function SmartChartPage() {
     const markers: { time: Time; position: 'aboveBar' | 'belowBar'; color: string; shape: 'arrowUp' | 'arrowDown'; text?: string }[] = []
     let prev: string | null = null
     for (const c of candles) {
-      const cf = conf.get(c.time); if (!cf) { prev = null; continue }
+      const cf = confShown.get(c.time); if (!cf) { prev = null; continue }
       const gold = cf.kind === 'gold'
       markers.push({ time: toTime(c.time, intraday), position: gold ? 'belowBar' : 'aboveBar', color: gold ? GOLD : PURPLE, shape: gold ? 'arrowUp' : 'arrowDown', text: cf.kind !== prev ? (gold ? '✦ كول' : '✦ بوت') : undefined })
       prev = cf.kind
@@ -198,7 +222,7 @@ export default function SmartChartPage() {
       add(g.callWall,  '#F0435A88', LineStyle.Dashed, 'مقاومة جاما')
       add(g.flipLevel, '#A78BFA88', LineStyle.Solid,  'انقلاب')
     }
-  }, [data, candles, conf, tf, showDetails, intraday])
+  }, [data, candles, confShown, tf, showDetails, intraday])
 
   // تنظيف عند مغادرة الصفحة
   useEffect(() => () => {
@@ -208,6 +232,12 @@ export default function SmartChartPage() {
 
   const dirColor = verdict?.dir === 'call' ? '#26D07C' : verdict?.dir === 'put' ? '#A78BFA' : '#8A97A6'
   const decClr = verdict?.decisionCode === 'execute' ? '#26D07C' : verdict?.decisionCode === 'conditional' ? '#C9943A' : verdict?.decisionCode === 'watch' ? '#60A5FA' : '#F0435A'
+
+  // حالة السوق الآن: هل نحن في نافذة قرب الإغلاق؟ (بتوقيت نيويورك الحيّ)
+  const nowNy = nyPart(Date.now())
+  const isWeekday = nowNy.wd !== 'Sat' && nowNy.wd !== 'Sun'
+  const nearCloseNow = isWeekday && nowNy.min >= NEAR_CLOSE_START && nowNy.min < NY_CLOSE
+  const powerHourNow = isWeekday && nowNy.min >= POWER_HOUR_START && nowNy.min < NY_CLOSE
 
   return (
     <main className="max-w-4xl mx-auto px-4 py-5 space-y-4" dir="rtl" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
@@ -277,6 +307,17 @@ export default function SmartChartPage() {
               <span className="mr-auto" style={{ color: '#5E6E7F' }}>SPX <b className="font-mono text-white">{verdict.spot.toLocaleString()}</b></span>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── تنبيه قرب الإغلاق (آخر ساعتين من الجلسة الأمريكية) ── */}
+      {nearCloseNow && (
+        <div className="rounded-xl px-4 py-3 flex items-start gap-2 text-xs" style={{ background: 'rgba(240,67,90,0.08)', border: '1px solid rgba(240,67,90,0.28)' }}>
+          <span className="text-sm leading-none">⏰</span>
+          <div style={{ color: '#F0899B' }}>
+            <b style={{ color: '#F0435A' }}>قرب الإغلاق — {powerHourNow ? 'الساعة الأخيرة' : 'آخر ساعتين'} من الجلسة الأمريكية.</b>{' '}
+            التقلّب هنا آليّ أكثر منه اتجاهياً (تحوّط الجاما + أوامر الإغلاق)، والاستمرارية أضعف، ونسبة نجاح الشموع الذهبية/البنفسجية تتراجع — لذلك أوقفناها في هذه النافذة. الأفضل غالباً عدم فتح صفقة جديدة؛ وإن دخلت فبحجم أصغر ووقف أضيق.
+          </div>
         </div>
       )}
 
