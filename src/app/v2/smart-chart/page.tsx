@@ -44,19 +44,20 @@ function fmtRiyadhFull(time: Time): string {
   return String(time)
 }
 
-// ── طور جلسة نيويورك — نافذة «قرب الإغلاق» ───────────────────────────────────
-// آخر ساعتين من الجلسة الأمريكية (14:00–16:00 ت.شرقي = 21:00–23:00 الرياض):
-// يشتد فيها تحوّط الجاما وأوامر الإغلاق (MOC)، فتضعف استمرارية الإشارات ونجاح
-// الشموع الذهبية/البنفسجية — لذا نكبحها هنا ونعرض تنبيهاً.
-const NEAR_CLOSE_START = 14 * 60   // 14:00 ت.شرقي
+// ── طور جلسة نيويورك — النافذة الضعيفة ───────────────────────────────────────
+// من الساعة 14:00 ت.شرقي (21:00 الرياض) حتى نهاية اليوم: آخر ساعتين من الجلسة
+// (تحوّط الجاما + أوامر الإغلاق MOC → تقلّب آليّ واستمرارية أضعف) ثم ما بعد
+// الإغلاق (سيولة رقيقة وبيانات تقديرية للمؤشر). نكبح شموع التلاقي في كل هذا النطاق.
+const NEAR_CLOSE_START = 14 * 60   // 14:00 ت.شرقي — بداية آخر ساعتين والنافذة الضعيفة
 const POWER_HOUR_START = 15 * 60   // 15:00 ت.شرقي (الساعة الأخيرة)
-const NY_CLOSE         = 16 * 60   // 16:00 ت.شرقي
+const NY_CLOSE         = 16 * 60   // 16:00 ت.شرقي — جرس الإغلاق
 function nyPart(ms: number): { min: number; wd: string } {
   const p = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', weekday: 'short', hour12: false }).formatToParts(new Date(ms))
   const get = (t: string) => p.find(x => x.type === t)?.value ?? '0'
   return { min: (Number(get('hour')) % 24) * 60 + Number(get('minute')), wd: get('weekday') }
 }
-function inNearClose(ms: number): boolean { const m = nyPart(ms).min; return m >= NEAR_CLOSE_START && m < NY_CLOSE }
+// نكبح التلاقي من آخر ساعتين فصاعداً (بما فيها ما بعد الإغلاق حتى منتصف الليل)
+function inWeakWindow(ms: number): boolean { return nyPart(ms).min >= NEAR_CLOSE_START }
 
 const GOLD = '#C9943A', GOLD_WICK = '#E8D5A3', PURPLE = '#A78BFA', PURPLE_WICK = '#C4B5FD'
 
@@ -109,7 +110,7 @@ export default function SmartChartPage() {
     if (!intraday || !candles.length) return conf
     const m = new Map(conf)
     for (const c of candles) {
-      if (inNearClose(new Date(c.time.replace(' ', 'T')).getTime())) m.delete(c.time)
+      if (inWeakWindow(new Date(c.time.replace(' ', 'T')).getTime())) m.delete(c.time)
     }
     return m
   }, [conf, candles, intraday])
