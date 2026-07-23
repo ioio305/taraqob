@@ -575,9 +575,9 @@ function AnalyzeContent() {
       {/* ── Results ── */}
       {analysis && !loading && (() => {
         const dec      = DECISION[analysis.decision] ?? DECISION.reject
-        const scoreClr = analysis.total_score >= 80 ? '#10B981'
-          : analysis.total_score >= 65 ? '#C9943A'
-          : analysis.total_score >= 50 ? '#60A5FA' : '#EF4444'
+        // لون الدائرة يتبع القرار لا الرقم: درجة 90 مع «مراقبة فقط» تظهر أزرق لا أخضر
+        // حتى لا يُفهم الرقم العالي على أنه أمر شراء قوي بينما القرار «لا تدخل».
+        const scoreClr = dec.color
         const scoreEntries = Object.entries(analysis.scores) as [string, ScoreEntry][]
 
         return (
@@ -647,6 +647,34 @@ function AnalyzeContent() {
                 </div>
               )
             })()}
+
+            {/* ── سعر العقد الآن — أهم رقم للمتداول ── */}
+            <div className="rounded-2xl px-5 py-3 flex flex-wrap items-center justify-between gap-3"
+              style={{ background: 'rgba(13,27,42,0.9)', border: `1px solid ${analysis.is_estimated ? 'rgba(240,67,90,0.3)' : 'rgba(201,148,58,0.28)'}` }}>
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span className="text-xs" style={{ color: '#6E7E8F' }}>سعر العقد الآن</span>
+                <span className="text-2xl font-black font-mono" dir="ltr"
+                  style={{ color: analysis.is_estimated ? '#F0435A' : '#E8D5A3' }}>
+                  ${n(analysis.mid, 2)}
+                </span>
+                <span className="text-xs font-mono" style={{ color: '#6E7E8F' }}>
+                  × 100 = ${Math.round((analysis.mid || 0) * 100).toLocaleString()}
+                </span>
+                {analysis.is_estimated && (
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+                    style={{ background: 'rgba(240,67,90,0.15)', color: '#F0435A', border: '1px solid rgba(240,67,90,0.3)' }}>
+                    تقديري — لا تعتمده
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3 text-xs font-mono" dir="ltr">
+                <span style={{ color: '#94A3B8' }}>شراء (Ask) <b className="text-white">${n(analysis.ask, 2)}</b></span>
+                <span style={{ color: '#4A5568' }}>·</span>
+                <span style={{ color: '#94A3B8' }}>بيع (Bid) <b className="text-white">${n(analysis.bid, 2)}</b></span>
+                <span style={{ color: '#4A5568' }}>·</span>
+                <span style={{ color: analysis.spread_pct > 15 ? '#F59E0B' : '#6E7E8F' }}>الفرق {n(analysis.spread_pct, 0)}%</span>
+              </div>
+            </div>
 
             {/* ── Market Status Bar ── */}
             <div className="rounded-2xl px-5 py-3 flex flex-wrap items-center gap-x-5 gap-y-2"
@@ -993,7 +1021,7 @@ function AnalyzeContent() {
             {analysis.shortlist.length > 0 && (
               <Card>
                 <SectionLabel>
-                  قائمة مختصرة — أفضل {analysis.type.toUpperCase()} · انتهاء {analysis.expiration}
+                  سترايكات قريبة من المطلوب — {analysis.type.toUpperCase()} · انتهاء {analysis.expiration}
                 </SectionLabel>
                 <div className="overflow-x-auto rounded-xl overflow-hidden"
                      style={{ border: '1px solid rgba(255,255,255,0.05)' }}>
@@ -1049,7 +1077,7 @@ function AnalyzeContent() {
                   </table>
                 </div>
                 <div className="mt-2 text-xs font-mono" style={{ color: '#1A2A3A' }}>
-                  العقد المحدد مُظلَّل · delta 0.22–0.35 مُميَّز بالأخضر · OTM صارم · مرتب بالجودة
+                  العقد المحدد مُظلَّل · ٤ سترايكات قبله و٤ بعده · delta 0.22–0.35 مُميَّز بالأخضر
                 </div>
               </Card>
             )}

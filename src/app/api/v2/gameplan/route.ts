@@ -46,7 +46,10 @@ export async function GET() {
     applyCrashGuard(a, guard)
 
     const spot = snap.spxPrice || daily[daily.length - 1].close
-    const prior = daily[daily.length - 1]          // آخر يوم مكتمل
+    // آخر يوم *مكتمل* — نتخطى شمعة اليوم غير المكتملة إن ضمّتها المزوّد
+    const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+    const prior = [...daily].reverse().find(b => String((b as { time?: string }).time ?? '').slice(0, 10) !== todayET)
+      ?? daily[daily.length - 1]
     const atrV = inds.atrArr[daily.length - 1] ?? 40
     const em = Math.round(spot * (snap.vixPrice / 100) * Math.sqrt(1 / 252))
 
@@ -128,15 +131,20 @@ export async function GET() {
           ? 'جاما موجبة: سوق مكبوح — الارتدادات من الجدران مرجحة'
           : 'جاما سالبة: سوق مضخّم — الحركات تتسارع، احترم الوقف',
       } : null,
+      // سلّم مستويات *اليوم* فقط — مستويات الأمس المرجعية تُعرض منفصلة أدناه
       levels: [
         { label: 'مقاومة اليوم (جدار الكول)', value: callWall, tone: 'res' },
         { label: 'أعلى الحركة المتوقعة', value: Math.round(spot + em), tone: 'res' },
-        { label: 'قمة الأمس', value: prior.high, tone: 'res' },
-        { label: 'إغلاق الأمس', value: prior.close, tone: 'mid' },
+        { label: 'السعر الآن', value: Math.round(spot), tone: 'mid' },
         { label: 'نقطة انقلاب الجاما', value: flip, tone: 'mid' },
-        { label: 'قاع الأمس', value: prior.low, tone: 'sup' },
         { label: 'أدنى الحركة المتوقعة', value: Math.round(spot - em), tone: 'sup' },
         { label: 'دعم اليوم (جدار البوت)', value: putWall, tone: 'sup' },
+      ].filter(l => l.value != null),
+      // مستويات الأمس المرجعية (منفصلة، بعنوانها الصحيح)
+      priorLevels: [
+        { label: 'قمة الأمس', value: prior.high, tone: 'res' },
+        { label: 'إغلاق الأمس', value: prior.close, tone: 'mid' },
+        { label: 'قاع الأمس', value: prior.low, tone: 'sup' },
       ].filter(l => l.value != null),
       crashGuard: guard,
       econToday: econ,

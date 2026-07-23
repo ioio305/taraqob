@@ -16,6 +16,7 @@ interface Plan {
   expectedMove: { points: number; upper: number; lower: number }
   gamma: { regime: string; flipLevel: number | null; callWall: number | null; putWall: number | null; note: string } | null
   levels: { label: string; value: number; tone: 'res' | 'mid' | 'sup' }[]
+  priorLevels?: { label: string; value: number; tone: 'res' | 'mid' | 'sup' }[]
   crashGuard: { active: boolean; reasons: string[] }
   econToday: { nameAr: string; when: string; advice: string } | null
   preMarketNote: string | null
@@ -129,6 +130,22 @@ export default function PlanPage() {
               </div>
             ))}
           </div>
+
+          {/* مستويات الأمس المرجعية — منفصلة بعنوانها الصحيح */}
+          {(plan.priorLevels?.length ?? 0) > 0 && (
+            <div className="rounded-2xl overflow-hidden" style={{ background: '#0a1929', border: '1px solid #1e3a50' }}>
+              <div className="px-4 py-2.5 text-sm font-bold text-gray-400" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                📆 مستويات الأمس (مرجعية)
+              </div>
+              {plan.priorLevels!.map((l, i) => (
+                <div key={i} className="flex items-center justify-between px-4 py-2 text-sm"
+                  style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                  <span className="text-gray-400">{l.label}</span>
+                  <span className="font-mono font-bold" style={{ color: TONE[l.tone] }}>{Math.round(l.value).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* أدلة الصعود والهبوط */}
           <div className="grid sm:grid-cols-2 gap-3">

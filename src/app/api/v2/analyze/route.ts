@@ -598,8 +598,9 @@ export async function GET(request: NextRequest) {
     // ── قائمة مختصرة من السلسلة ───────────────────────────────────────────
     let shortlist: any[] = []
     {
+      // جيران السترايك المطلوب: ٤ قبله و٤ بعده — لا أرخص السترايكات البعيدة
       shortlist = chainOpts
-        .filter(o => o.option_type === type)
+        .filter(o => o.option_type === type && (o.ask ?? 0) > 0)
         .map(o => ({
           symbol:     o.symbol,
           strike:     o.strike,
@@ -611,12 +612,10 @@ export async function GET(request: NextRequest) {
           gamma:      o.greeks?.gamma ?? null,
           iv:         o.greeks?.mid_iv ?? o.greeks?.smv_vol ?? null,
           isSelected: Math.round(o.strike) === Math.round(strike),
-          _score:     scoreForShortlist(o, spxPrice, type, dte),
         }))
-        .filter(o => o._score > 0)
-        .sort((a, b) => b._score - a._score)
-        .slice(0, 8)
-        .map(({ _score, ...rest }) => rest)
+        .sort((a, b) => Math.abs(a.strike - strike) - Math.abs(b.strike - strike))   // الأقرب أولاً
+        .slice(0, 9)                                                                  // ٤ قبل + المطلوب + ٤ بعد
+        .sort((a, b) => a.strike - b.strike)                                          // ترتيب تصاعدي للعرض
     }
 
     // ── محرك استراتيجية الأهداف ──────────────────────────────────────────────

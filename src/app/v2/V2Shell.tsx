@@ -382,7 +382,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
         {/* Top bar */}
-        <header className="flex items-center justify-between px-4 h-12 shrink-0 gap-3"
+        <header className="relative z-30 flex items-center justify-between px-4 h-12 shrink-0 gap-3"
           style={{ background: 'rgba(8,16,26,0.95)', borderBottom: '1px solid rgba(255,255,255,0.04)', backdropFilter: 'blur(10px)' }}>
 
           <button onClick={() => setMobileOpen(true)} className="lg:hidden p-1.5 rounded-lg"

@@ -1649,14 +1649,23 @@ export default function ChartPage() {
                 <p className="text-xs text-gray-500 mt-0.5">آخر 80 شمعة + خطوط الأهداف ووقف الخسارة</p>
               </div>
               {analysis && (
-                <span className={`text-xs font-bold px-2 py-1 rounded-full ${
-                  analysis.summary.decisionCode === 'execute'     ? 'bg-emerald-500/20 text-emerald-300' :
-                  analysis.summary.decisionCode === 'conditional' ? 'bg-yellow-500/20 text-yellow-300' :
-                  analysis.summary.decisionCode === 'watch'       ? 'bg-blue-500/20 text-blue-300' :
-                  'bg-red-500/20 text-red-300'
-                }`}>
-                  {analysis.summary.score}/85
-                </span>
+                <div className="flex items-center gap-2">
+                  {/* اتجاه الخطة صريح — حتى لا يبدو ككول بينما الاتجاه بوت أو العكس */}
+                  <span className="text-xs font-bold px-2 py-1 rounded-full" style={{
+                    background: analysis.summary.bias === 'صاعد' ? 'rgba(16,185,129,0.15)' : analysis.summary.bias === 'هابط' ? 'rgba(239,68,68,0.15)' : 'rgba(148,163,184,0.15)',
+                    color:      analysis.summary.bias === 'صاعد' ? '#26D07C' : analysis.summary.bias === 'هابط' ? '#F0435A' : '#94A3B8',
+                  }}>
+                    {analysis.summary.bias === 'صاعد' ? '▲ خطة كول (صاعد)' : analysis.summary.bias === 'هابط' ? '▼ خطة بوت (هابط)' : '↔ محايد'}
+                  </span>
+                  <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                    analysis.summary.decisionCode === 'execute'     ? 'bg-emerald-500/20 text-emerald-300' :
+                    analysis.summary.decisionCode === 'conditional' ? 'bg-yellow-500/20 text-yellow-300' :
+                    analysis.summary.decisionCode === 'watch'       ? 'bg-blue-500/20 text-blue-300' :
+                    'bg-red-500/20 text-red-300'
+                  }`}>
+                    {analysis.summary.score}/85
+                  </span>
+                </div>
               )}
             </div>
 
