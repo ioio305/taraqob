@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useRiskSettings, RiskBar, SizeCard, DisciplineBar } from '@/components/v2/PositionSizing'
 import { computePositionSize } from '@/lib/v2/positionSizing'
 import { PerformanceView } from '@/components/v2/PerformanceView'
+import ContractChart from '@/components/v2/ContractChart'
 import {
   buildContractAnalysisUrl,
   getOccDirection,
@@ -813,6 +814,14 @@ function AnalyzeContent() {
                 </div>
               )}
             </div>
+
+            {/* ── شارت العقد الذكي — مسار SPX ومستويات هذا العقد عليه ── */}
+            <ContractChart
+              strike={analysis.strike} type={analysis.type} mid={analysis.mid}
+              spxPrice={analysis.spx_price}
+              stopSpx={analysis.stop_spx} target1Spx={analysis.target1_spx} target2Spx={analysis.target2_spx}
+              emUpper={analysis.em_upper} emLower={analysis.em_lower}
+            />
 
             {/* ── One executable plan. Hidden completely when entry is not allowed. ── */}
             {analysis.entry_allowed && analysis.targets && analysis.entry_balanced ? (() => {
