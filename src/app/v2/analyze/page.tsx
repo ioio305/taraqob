@@ -575,9 +575,9 @@ function AnalyzeContent() {
       {/* ── Results ── */}
       {analysis && !loading && (() => {
         const dec      = DECISION[analysis.decision] ?? DECISION.reject
-        // لون الدائرة يتبع القرار لا الرقم: درجة 90 مع «مراقبة فقط» تظهر أزرق لا أخضر
-        // حتى لا يُفهم الرقم العالي على أنه أمر شراء قوي بينما القرار «لا تدخل».
-        const scoreClr = dec.color
+        // «ادخل الآن؟» هو البطل الواضح؛ الرقم مجرد «جودة إعداد» جانبية لا أمر شراء.
+        const entryAnswer = analysis.decision === 'execute' ? '✓ نعم'
+          : analysis.decision === 'conditional' ? '◈ بشرط' : '✕ لا'
         const scoreEntries = Object.entries(analysis.scores) as [string, ScoreEntry][]
 
         return (
@@ -748,8 +748,18 @@ function AnalyzeContent() {
                  style={{ background: 'rgba(13,27,42,0.9)', border: `1px solid ${dec.border}` }}>
               <div className="flex items-start gap-5">
 
-                {/* SVG gauge */}
-                <ScoreGauge score={analysis.total_score} color={scoreClr} />
+                {/* هل أدخل الآن؟ — البطل الواضح. أخضر «نعم» فقط حين يستحق فعلاً.
+                    الرقم صار «جودة إعداد» جانبية، لا يُخلَط بأمر الشراء. */}
+                <div className="shrink-0 flex flex-col items-center justify-center rounded-2xl px-3 py-4"
+                     style={{ width: 130, background: `${dec.color}12`, border: `1px solid ${dec.color}40` }}>
+                  <div className="text-[11px] mb-1" style={{ color: '#6E7E8F' }}>ادخل الآن؟</div>
+                  <div className="text-2xl font-black leading-none" style={{ color: dec.color }}>{entryAnswer}</div>
+                  <div className="text-xs font-bold mt-1.5 text-center" style={{ color: dec.color }}>{dec.ar}</div>
+                  <div className="text-[10px] font-mono mt-2.5 px-2 py-0.5 rounded-full"
+                       style={{ background: 'rgba(255,255,255,0.05)', color: '#8A97A6', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    جودة الإعداد {analysis.total_score}
+                  </div>
+                </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="font-mono text-sm text-white mb-1 break-all leading-snug">
