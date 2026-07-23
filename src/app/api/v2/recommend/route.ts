@@ -250,7 +250,7 @@ async function fetchYesterdaySPX(): Promise<{ high: number; low: number; close: 
 }
 
 // ── London pre-market from SPY × 10 (03:00–09:29 ET, includePrePost) ──────
-async function fetchLondonSession(): Promise<{ high: number | null; low: number | null; close: number | null; changePct: number | null }> {
+async function fetchLondonSession(spxPrevClose: number | null): Promise<{ high: number | null; low: number | null; close: number | null; changePct: number | null }> {
   try {
     const res = await fetch(
       'https://query1.finance.yahoo.com/v8/finance/chart/SPY?interval=5m&range=1d&includePrePost=true',
@@ -260,6 +260,10 @@ async function fetchLondonSession(): Promise<{ high: number | null; low: number 
     const json = await res.json()
     const result = json?.chart?.result?.[0]
     if (!result?.timestamp?.length) return { high: null, low: null, close: null, changePct: null }
+
+    // نسبة التحويل الحقيقية SPX/SPY (بدل ×10 الثابت) — من إغلاقَي الأمس
+    const spyPrevClose = result?.meta?.regularMarketPreviousClose ?? result?.meta?.previousClose ?? result?.meta?.chartPreviousClose ?? null
+    const ratio = (spxPrevClose && spyPrevClose && spyPrevClose > 0) ? spxPrevClose / spyPrevClose : 10
 
     const timestamps: number[] = result.timestamp
     const highs:  number[] = result.indicators.quote[0].high  ?? []
@@ -280,18 +284,18 @@ async function fetchLondonSession(): Promise<{ high: number | null; low: number 
       const inLondon = (hourET >= 3 && hourET <= 8) || (hourET === 9 && minuteET < 30)
       if (!inLondon) continue
 
-      H.push(h * 10); L.push(l * 10)
-      if (c && !isNaN(c)) C.push(c * 10)
+      H.push(h * ratio); L.push(l * ratio)
+      if (c && !isNaN(c)) C.push(c * ratio)
     }
 
     if (!H.length) return { high: null, low: null, close: null, changePct: null }
 
     const high  = Math.round(Math.max(...H))
     const low   = Math.round(Math.min(...L))
-    const close = C.length ? Math.round(C[C.length - 1]) : null
-    const open  = C.length >= 2 ? C[0] : null
-    const changePct = open && close && open > 0
-      ? Math.round(((close - open) / open) * 10000) / 100 : null
+    const close = C.length ? Math.round(C[C.length - 1]) : null   // آخر سعر قبل الافتتاح
+    // التغيّر مقارنةً بإغلاق أمس (لا داخل نافذة لندن نفسها)
+    const changePct = (close != null && spxPrevClose && spxPrevClose > 0)
+      ? Math.round(((close - spxPrevClose) / spxPrevClose) * 10000) / 100 : null
 
     return { high, low, close, changePct }
   } catch { return { high: null, low: null, close: null, changePct: null } }
@@ -299,10 +303,8 @@ async function fetchLondonSession(): Promise<{ high: number | null; low: number 
 
 // ── Session data: combine yesterday SPX + London pre-market ───────────────
 async function fetchSPXSessions() {
-  const [yesterday, london] = await Promise.all([
-    fetchYesterdaySPX(),
-    fetchLondonSession(),
-  ])
+  const yesterday = await fetchYesterdaySPX()
+  const london = await fetchLondonSession(yesterday?.close ?? null)
 
   return {
     // "طوكيو" box = yesterday's US session (accurate SPX H/L/C, no ES proxy noise)

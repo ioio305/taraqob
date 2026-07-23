@@ -466,8 +466,8 @@ export default function V2Dashboard() {
       {/* ── Session Levels: London + Tokyo ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {([
-          { name: 'لندن / قبل الافتتاح', flag: '🇬🇧', sess: data?.sessions?.london },
-          { name: 'جلسة أمس',    flag: '🇺🇸', sess: data?.sessions?.tokyo  },
+          { name: 'لندن / قبل الافتتاح', flag: '🇬🇧', sess: data?.sessions?.london, closeLabel: 'آخر سعر قبل الافتتاح' },
+          { name: 'جلسة أمس',    flag: '🇺🇸', sess: data?.sessions?.tokyo, closeLabel: 'الإغلاق'  },
         ] as const).map(m => (
           <div key={m.name} className="rounded-2xl p-4"
                style={{ background: 'rgba(13,27,42,0.6)', border: '1px solid rgba(255,255,255,0.04)' }}>
@@ -506,7 +506,7 @@ export default function V2Dashboard() {
                 </div>
                 <div className="flex items-center justify-between rounded-lg px-3 py-2"
                      style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
-                  <span className="text-xs font-mono" style={{ color: '#4A5568' }}>الإغلاق</span>
+                  <span className="text-xs font-mono" style={{ color: '#4A5568' }}>{m.closeLabel}</span>
                   <span className="text-sm font-bold font-mono text-white">{n(m.sess?.close)}</span>
                 </div>
               </div>
