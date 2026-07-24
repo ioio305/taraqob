@@ -815,12 +815,13 @@ function AnalyzeContent() {
               )}
             </div>
 
-            {/* ── شارت العقد الذكي — مسار SPX ومستويات هذا العقد عليه ── */}
+            {/* ── شارت سعر العقد (البريميوم) — سعر العقد نفسه لحظياً ── */}
             <ContractChart
-              strike={analysis.strike} type={analysis.type} mid={analysis.mid}
-              spxPrice={analysis.spx_price}
-              stopSpx={analysis.stop_spx} target1Spx={analysis.target1_spx} target2Spx={analysis.target2_spx}
-              emUpper={analysis.em_upper} emLower={analysis.em_lower}
+              symbol={analysis.symbol} type={analysis.type} mid={analysis.mid}
+              entryPx={analysis.entry_balanced}
+              t1Px={analysis.targets?.t1?.exit_price ?? null}
+              t2Px={analysis.targets?.t2?.exit_price ?? null}
+              stopPx={analysis.targets?.stop?.exit_price ?? null}
             />
 
             {/* ── One executable plan. Hidden completely when entry is not allowed. ── */}

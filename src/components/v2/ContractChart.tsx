@@ -1,71 +1,70 @@
 'use client'
 
-// ── شارت العقد الذكي ─────────────────────────────────────────────────────────
-// شارت SPX الحيّ + طبقات مؤشرات، ومرسومة عليه مستويات *هذا العقد تحديداً*:
-// السترايك · التعادل · الهدف ١/٢ · الوقف · نطاق الحركة المتوقعة.
-// يجيب بصرياً: «إلى أين يحتاج SPX أن يصل ليربح عقدك، وأين يخسر».
+// ── شارت سعر العقد (البريميوم) ───────────────────────────────────────────────
+// شموع سعر *العقد نفسه* لحظة بلحظة (لا المؤشر)، مع خطوط الدولار: الدخول ·
+// الهدف ١/٢ · الوقف · السعر الآن. مركّز تماماً على العقد الذي تحلّله.
 
 import { useEffect, useRef, useState } from 'react'
 import {
   createChart, CandlestickSeries, LineSeries,
-  ColorType, CrosshairMode, IChartApi, ISeriesApi, LineStyle, Time,
+  ColorType, CrosshairMode, IChartApi, LineStyle, Time,
 } from 'lightweight-charts'
 
-interface Candle {
-  time: string; open: number; high: number; low: number; close: number
-  ema9: number | null; ema21: number | null; ema50: number | null; vwap: number | null
-}
+interface Bar { time: string; open: number; high: number; low: number; close: number; volume: number }
 
-const TFS = ['5m', '15m', '1h'] as const
-const TF_AR: Record<string, string> = { '5m': '5 دقائق', '15m': '15 دقيقة', '1h': 'ساعة' }
+const TFS = ['1m', '3m', '5m', '15m', '1h'] as const
+const TF_AR: Record<string, string> = { '1m': 'دقيقة', '3m': '3 دقائق', '5m': '5 دقائق', '15m': '15 دقيقة', '1h': 'ساعة' }
 
-function toTime(t: string): Time {
-  return Math.floor(new Date(t.replace(' ', 'T')).getTime() / 1000) as unknown as Time
-}
+function toTime(t: string): Time { return Math.floor(new Date(t).getTime() / 1000) as unknown as Time }
 function fmtRiyadhTick(time: Time): string {
   if (typeof time === 'number') return new Date(time * 1000).toLocaleTimeString('en-GB', { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit', hour12: false })
-  const d = new Date(String(time) + 'T00:00:00Z')
-  return isNaN(d.getTime()) ? String(time) : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+  return String(time)
 }
 function fmtRiyadhFull(time: Time): string {
   if (typeof time === 'number') return new Date(time * 1000).toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
   return String(time)
 }
+function emaSeries(vals: number[], period: number): (number | null)[] {
+  const k = 2 / (period + 1); const out: (number | null)[] = []; let prev: number | null = null
+  for (let i = 0; i < vals.length; i++) { const v = vals[i]; prev = prev == null ? v : v * k + prev * (1 - k); out.push(i >= period - 1 ? prev : null) }
+  return out
+}
 
 export default function ContractChart(props: {
-  strike: number; type: 'call' | 'put'; mid: number; spxPrice: number
-  stopSpx: number; target1Spx: number; target2Spx: number
-  emUpper: number; emLower: number
+  symbol: string; type: 'call' | 'put'; mid: number
+  entryPx?: number | null; t1Px?: number | null; t2Px?: number | null; stopPx?: number | null
 }) {
-  const { strike, type, mid, spxPrice, stopSpx, target1Spx, target2Spx, emUpper, emLower } = props
-  const isCall = type === 'call'
-  const dirColor = isCall ? '#26D07C' : '#A78BFA'
-  const breakeven = Math.round(isCall ? strike + mid : strike - mid)
+  const { symbol, type, mid, entryPx, t1Px, t2Px, stopPx } = props
+  const dirColor = type === 'call' ? '#26D07C' : '#A78BFA'
 
   const [tf, setTf]         = useState('5m')
-  const [candles, setCandles] = useState<Candle[]>([])
+  const [bars, setBars]     = useState<Bar[]>([])
   const [loading, setLoading] = useState(true)
-  const [showEma, setShowEma] = useState(false)
-  const [showEm, setShowEm]   = useState(true)
+  const [err, setErr]       = useState('')
+  const [showEma, setShowEma] = useState(true)
 
-  const wrapRef  = useRef<HTMLDivElement>(null)
-  const apiRef   = useRef<IChartApi | null>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const apiRef  = useRef<IChartApi | null>(null)
 
-  // جلب شموع SPX للإطار المختار
+  // جلب تاريخ سعر العقد نفسه
   useEffect(() => {
     let alive = true
-    setLoading(true)
-    fetch(`/api/v2/chart?tf=${tf}`)
+    setLoading(true); setErr('')
+    fetch(`/api/v2/contract-history?symbol=${encodeURIComponent(symbol)}&tf=${tf}`)
       .then(r => r.json())
-      .then(d => { if (alive && Array.isArray(d.candles)) setCandles(d.candles) })
-      .catch(() => {})
+      .then(d => {
+        if (!alive) return
+        if (Array.isArray(d.candles) && d.candles.length) { setBars(d.candles); setErr('') }
+        else { setBars([]); setErr(d.error || 'لا يتوفّر تاريخ سعر لحظي لهذا العقد الآن (سيولة/توقيت).') }
+      })
+      .catch(() => { if (alive) { setBars([]); setErr('تعذّر جلب تاريخ العقد') } })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [tf])
+  }, [symbol, tf])
 
-  // بناء الشارت + الطبقات + مستويات العقد
+  // بناء الشارت + خطوط الدولار
   useEffect(() => {
-    if (!wrapRef.current || !candles.length) return
+    if (!wrapRef.current || !bars.length) return
     const el = wrapRef.current
     if (apiRef.current) { try { apiRef.current.remove() } catch {} ; apiRef.current = null }
 
@@ -74,7 +73,7 @@ export default function ContractChart(props: {
       layout: { background: { type: ColorType.Solid, color: '#0A1420' }, textColor: '#B8C4D4', fontFamily: '"IBM Plex Sans Arabic", sans-serif' },
       grid: { vertLines: { color: 'rgba(255,255,255,0.02)' }, horzLines: { color: 'rgba(255,255,255,0.04)' } },
       crosshair: { mode: CrosshairMode.Normal },
-      localization: { timeFormatter: fmtRiyadhFull },
+      localization: { timeFormatter: fmtRiyadhFull, priceFormatter: (p: number) => '$' + p.toFixed(2) },
       timeScale: { borderColor: '#1e3a50', timeVisible: true, tickMarkFormatter: fmtRiyadhTick },
       rightPriceScale: { borderColor: '#1e3a50' },
     })
@@ -85,57 +84,46 @@ export default function ContractChart(props: {
       borderUpColor: '#26D07C', borderDownColor: '#F0435A',
       wickUpColor: '#5FE3A5', wickDownColor: '#FF7385',
     })
-    cs.setData(candles.map(c => ({ time: toTime(c.time), open: c.open, high: c.high, low: c.low, close: c.close })))
+    cs.setData(bars.map(b => ({ time: toTime(b.time), open: b.open, high: b.high, low: b.low, close: b.close })))
 
-    // السعر العادل (VWAP) — طبقة دائمة
-    const vw = chart.addSeries(LineSeries, { color: '#fbbf24', lineWidth: 2, title: 'السعر العادل' })
-    vw.setData(candles.filter(c => c.vwap != null).map(c => ({ time: toTime(c.time), value: c.vwap! })))
-
-    // المتوسطات — طبقة اختيارية
     if (showEma) {
-      const feed = (color: string, k: 'ema9' | 'ema21' | 'ema50', title: string) => {
-        const s = chart.addSeries(LineSeries, { color, lineWidth: 1, title })
-        s.setData(candles.filter(c => c[k] != null).map(c => ({ time: toTime(c.time), value: c[k]! })))
-      }
-      feed('#f59e0b', 'ema9', 'EMA9'); feed('#06b6d4', 'ema21', 'EMA21'); feed('#a855f7', 'ema50', 'EMA50')
+      const e = emaSeries(bars.map(b => b.close), 9)
+      const s = chart.addSeries(LineSeries, { color: '#fbbf24', lineWidth: 2, title: 'متوسط ٩' })
+      s.setData(bars.map((b, i) => ({ time: toTime(b.time), value: e[i] })).filter(x => x.value != null) as { time: Time; value: number }[])
     }
 
-    // ── مستويات هذا العقد على السعر ──
-    const line = (price: number, color: string, style: LineStyle, title: string) => {
+    const line = (price: number | null | undefined, color: string, style: LineStyle, title: string) => {
       if (price && price > 0) cs.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title })
     }
-    line(strike,     '#C9943A', LineStyle.Solid,  `سترايك ${Math.round(strike)}`)
-    line(breakeven,  '#F59E0B', LineStyle.Dashed, `تعادل ${breakeven}`)
-    line(target1Spx, dirColor,  LineStyle.Dashed, 'هدف ١')
-    line(target2Spx, dirColor,  LineStyle.Dotted, 'هدف ٢')
-    line(stopSpx,    '#F0435A', LineStyle.Dashed, 'وقف')
-    if (showEm) {
-      line(emUpper, '#60A5FA66', LineStyle.Dotted, 'أعلى الحركة')
-      line(emLower, '#60A5FA66', LineStyle.Dotted, 'أدنى الحركة')
-    }
+    line(mid,     '#E8D5A3', LineStyle.Dotted, `الآن $${mid.toFixed(2)}`)
+    line(entryPx, '#C9943A', LineStyle.Solid,  'دخول')
+    line(t1Px,    '#26D07C', LineStyle.Dashed, 'هدف ١')
+    line(t2Px,    '#26D07C', LineStyle.Dotted, 'هدف ٢')
+    line(stopPx,  '#F0435A', LineStyle.Dashed, 'وقف')
 
     const ro = new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth }))
     ro.observe(el)
     requestAnimationFrame(() => { try { chart.timeScale().fitContent() } catch {} })
-
     return () => { ro.disconnect(); try { chart.remove() } catch {} ; apiRef.current = null }
-  }, [candles, showEma, showEm, strike, breakeven, target1Spx, target2Spx, stopSpx, emUpper, emLower, dirColor])
+  }, [bars, showEma, mid, entryPx, t1Px, t2Px, stopPx])
 
-  const dist = Math.round(Math.abs(target1Spx - spxPrice))
-  const summary = isCall
-    ? `ليربح عقدك: يحتاج SPX أن يصعد من ${Math.round(spxPrice)} نحو الهدف ${Math.round(target1Spx)} (+${dist} نقطة). يبدأ ربحك الحقيقي فوق التعادل ${breakeven} · ويُلغى إن هبط إلى الوقف ${Math.round(stopSpx)}.`
-    : `ليربح عقدك: يحتاج SPX أن يهبط من ${Math.round(spxPrice)} نحو الهدف ${Math.round(target1Spx)} (−${dist} نقطة). يبدأ ربحك الحقيقي تحت التعادل ${breakeven} · ويُلغى إن صعد إلى الوقف ${Math.round(stopSpx)}.`
+  const base = entryPx ?? mid
+  const pctOf = (v: number | null | undefined) => (v && base) ? Math.round(((v - base) / base) * 100) : null
+  const t1p = pctOf(t1Px), stopp = pctOf(stopPx)
+  const summary = (t1Px && stopPx)
+    ? `سعر عقدك الآن $${mid.toFixed(2)} · الهدف $${t1Px.toFixed(2)} (${t1p! >= 0 ? '+' : ''}${t1p}%) · الوقف $${stopPx.toFixed(2)} (${stopp}%) — لكل عقد ×100.`
+    : `سعر عقدك الآن $${mid.toFixed(2)} (×100 = $${Math.round(mid * 100).toLocaleString()}). لا خطة دخول الآن — الشارت للمتابعة.`
 
   return (
     <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(13,27,42,0.9)', border: '1px solid rgba(255,255,255,0.06)' }}>
-      {/* رأس + خلاصة احترافية */}
+      {/* رأس + خلاصة بالدولار */}
       <div className="px-5 pt-4 pb-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-        <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-bold" style={{ color: '#E8D5A3' }}>🎯 شارت العقد الذكي</span>
+            <span className="text-sm font-bold" style={{ color: '#E8D5A3' }}>📈 شارت سعر العقد (البريميوم)</span>
             <span className="text-xs px-2 py-0.5 rounded-full font-bold"
               style={{ background: `${dirColor}18`, color: dirColor, border: `1px solid ${dirColor}40` }}>
-              {isCall ? '▲ كول' : '▼ بوت'} {Math.round(strike)}
+              {type === 'call' ? '▲ كول' : '▼ بوت'}
             </span>
           </div>
           <div className="flex gap-1">
@@ -148,34 +136,35 @@ export default function ContractChart(props: {
             ))}
           </div>
         </div>
+        <div className="text-[11px] mb-2" style={{ color: '#5E6E7F' }}>سعر عقدك أنت لحظة بلحظة — لا المؤشر</div>
         <p className="text-xs leading-relaxed" style={{ color: '#94A3B8' }}>{summary}</p>
       </div>
 
-      {/* الشارت */}
-      {loading && !candles.length
-        ? <div className="text-center py-16 text-sm animate-pulse" style={{ color: '#4A5568' }}>جارٍ رسم مسار العقد...</div>
-        : <div ref={wrapRef} className="w-full" />}
+      {/* الشارت / التحميل / التعذّر */}
+      {loading && !bars.length
+        ? <div className="text-center py-16 text-sm animate-pulse" style={{ color: '#4A5568' }}>جارٍ جلب سعر العقد...</div>
+        : err && !bars.length
+          ? <div className="text-center py-12 px-4 text-sm" style={{ color: '#6E7E8F' }}>
+              {err}<div className="text-xs mt-1" style={{ color: '#4A5568' }}>السعر الحالي ${mid.toFixed(2)} (×100 = ${Math.round(mid * 100).toLocaleString()})</div>
+            </div>
+          : <div ref={wrapRef} className="w-full" />}
 
-      {/* الطبقات + مفتاح المستويات */}
-      <div className="px-4 py-3 space-y-2" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-        <div className="flex gap-2 flex-wrap">
+      {/* الطبقة + مفتاح الخطوط */}
+      {bars.length > 0 && (
+        <div className="px-4 py-3 space-y-2" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
           <button onClick={() => setShowEma(v => !v)} className="text-xs font-bold px-2.5 py-1 rounded-lg"
             style={{ background: showEma ? 'rgba(201,148,58,0.15)' : 'rgba(255,255,255,0.04)', color: showEma ? '#E8D5A3' : '#8A97A6', border: '1px solid rgba(255,255,255,0.08)' }}>
-            {showEma ? '● ' : '○ '}المتوسطات
+            {showEma ? '● ' : '○ '}متوسط ٩
           </button>
-          <button onClick={() => setShowEm(v => !v)} className="text-xs font-bold px-2.5 py-1 rounded-lg"
-            style={{ background: showEm ? 'rgba(96,165,250,0.15)' : 'rgba(255,255,255,0.04)', color: showEm ? '#93B8E8' : '#8A97A6', border: '1px solid rgba(255,255,255,0.08)' }}>
-            {showEm ? '● ' : '○ '}الحركة المتوقعة
-          </button>
+          <div className="flex items-center gap-x-4 gap-y-1 flex-wrap text-xs" style={{ color: '#8A97A6' }}>
+            <span><b style={{ color: '#E8D5A3' }}>··</b> السعر الآن</span>
+            <span><b style={{ color: '#C9943A' }}>—</b> الدخول</span>
+            <span><b style={{ color: '#26D07C' }}>--</b> الهدف ١/٢</span>
+            <span><b style={{ color: '#F0435A' }}>--</b> الوقف</span>
+            <span className="text-[11px]" style={{ color: '#5E6E7F' }}>— المحور بالدولار (سعر العقد)</span>
+          </div>
         </div>
-        <div className="flex items-center gap-x-4 gap-y-1 flex-wrap text-xs" style={{ color: '#8A97A6' }}>
-          <span><b style={{ color: '#C9943A' }}>—</b> السترايك</span>
-          <span><b style={{ color: '#F59E0B' }}>--</b> التعادل (تبدأ الربحية الفعلية)</span>
-          <span><b style={{ color: dirColor }}>--</b> الهدف ١/٢</span>
-          <span><b style={{ color: '#F0435A' }}>--</b> الوقف</span>
-          <span><b style={{ color: '#fbbf24' }}>—</b> السعر العادل</span>
-        </div>
-      </div>
+      )}
     </div>
   )
 }
