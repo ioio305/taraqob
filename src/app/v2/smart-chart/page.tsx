@@ -14,6 +14,7 @@ import type { GammaExposure } from '@/lib/v2/gammaExposure'
 import { computeConfluence } from '@/lib/v2/confluence'
 import { MarketPulse } from '@/components/v2/MarketPulse'
 import { ShareCard } from '@/components/v2/ShareCard'
+import { CountUp } from '@/components/v2/CountUp'
 
 interface Candle {
   time: string; open: number; high: number; low: number; close: number; volume: number
@@ -289,7 +290,7 @@ export default function SmartChartPage() {
               <div className="w-px h-10" style={{ background: 'rgba(255,255,255,0.1)' }} />
               <div className="text-center">
                 <div className="text-xs mb-1" style={{ color: '#6E7E8F' }}>قوة القرار</div>
-                <div className="text-2xl font-black font-mono" style={{ color: decClr }}>{verdict.score}<span className="text-xs" style={{ color: '#4A5568' }}>/100</span></div>
+                <div className="text-2xl font-black font-mono" style={{ color: decClr }}><CountUp value={verdict.score} /><span className="text-xs" style={{ color: '#4A5568' }}>/100</span></div>
               </div>
               <div className="min-w-0">
                 <div className="text-sm font-bold" style={{ color: decClr }}>{verdict.decisionText}</div>
