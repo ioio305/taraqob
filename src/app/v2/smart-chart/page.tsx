@@ -5,7 +5,6 @@
 // التحديث يتم في مكانه (بلا مسح/وميض)، والمستويات تتبع اتجاه الصفقة (كول أعلى، بوت أسفل).
 
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
-import Link from 'next/link'
 import {
   createChart, createSeriesMarkers, CandlestickSeries, LineSeries,
   ColorType, CrosshairMode, IChartApi, ISeriesApi, LineStyle, Time,
@@ -68,6 +67,14 @@ export default function SmartChartPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError]     = useState('')
   const [showDetails, setShowDetails] = useState(false)
+  const [strikeInput, setStrikeInput] = useState('')   // سترايك يدوي لجسر التحليل
+
+  // انتقال مباشر لتحليل عقد بالسترايك والاتجاه المختارين
+  const goAnalyze = (type: 'call' | 'put', fallbackStrike?: number) => {
+    const s = (strikeInput.trim() || (fallbackStrike ?? '')).toString().trim()
+    if (!s) return
+    window.location.href = `/v2/analyze?strike=${encodeURIComponent(s)}&type=${type}`
+  }
 
   const chartRef  = useRef<HTMLDivElement>(null)
   const loadedOnce = useRef(false)
@@ -142,6 +149,11 @@ export default function SmartChartPage() {
       entry: Math.round(entryLvl), target: target != null ? Math.round(target) : null, stop: stop != null ? Math.round(stop) : null,
     }
   }, [data, candles, confShown])
+
+  // نعبّئ حقل السترايك تلقائياً بالسترايك المقترح (يبقى قابلاً للتعديل)
+  useEffect(() => {
+    if (verdict?.strike && !strikeInput) setStrikeInput(String(verdict.strike))
+  }, [verdict?.strike, strikeInput])
 
   // ── الشارت: بناء الهيكل مرة لكل إطار، وتغذية البيانات في مكانها (بلا وميض) ────
   useEffect(() => {
@@ -283,18 +295,33 @@ export default function SmartChartPage() {
               </div>
             </div>
 
-            {verdict.dir ? (
-              <Link href={`/v2/analyze?symbol=SPX&strike=${verdict.strike}&type=${verdict.dir}`}
-                className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold shrink-0 transition-transform hover:scale-105"
-                style={{ background: verdict.dir === 'call' ? 'linear-gradient(135deg,#26D07C,#159957)' : 'linear-gradient(135deg,#A78BFA,#7C5CE0)', color: '#060D14' }}>
-                <span>حلّل عقد {verdict.dir === 'call' ? 'كول' : 'بوت'} الآن</span>
-                <span>←</span>
-              </Link>
-            ) : (
-              <span className="px-4 py-3 rounded-xl text-xs font-bold shrink-0" style={{ background: 'rgba(255,255,255,0.04)', color: '#6E7E8F', border: '1px solid rgba(255,255,255,0.08)' }}>
-                لا اتجاه واضح — راقب فقط
-              </span>
-            )}
+            {/* اكتب السترايك واختر كول/بوت — انتقال مباشر لتحليل العقد */}
+            <div className="shrink-0">
+              <div className="flex items-center gap-1.5">
+                <input
+                  value={strikeInput}
+                  onChange={e => setStrikeInput(e.target.value.replace(/[^\d]/g, ''))}
+                  onKeyDown={e => { if (e.key === 'Enter' && verdict.dir) goAnalyze(verdict.dir, verdict.strike) }}
+                  inputMode="numeric" dir="ltr" placeholder={String(verdict.strike)}
+                  aria-label="رقم السترايك"
+                  className="w-24 rounded-lg px-3 py-2.5 text-sm font-mono text-white outline-none text-center"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.14)' }}
+                />
+                <button onClick={() => goAnalyze('call', verdict.strike)}
+                  className="px-3 py-2.5 rounded-lg text-xs font-bold transition-transform hover:scale-105 relative"
+                  style={{ background: 'linear-gradient(135deg,#26D07C,#159957)', color: '#060D14' }}>
+                  حلّل كول ▲
+                  {verdict.dir === 'call' && <span className="absolute -top-2 -left-1 text-[9px] px-1 rounded-full font-bold" style={{ background: '#26D07C', color: '#060D14' }}>مقترح</span>}
+                </button>
+                <button onClick={() => goAnalyze('put', verdict.strike)}
+                  className="px-3 py-2.5 rounded-lg text-xs font-bold transition-transform hover:scale-105 relative"
+                  style={{ background: 'linear-gradient(135deg,#A78BFA,#7C5CE0)', color: '#060D14' }}>
+                  حلّل بوت ▼
+                  {verdict.dir === 'put' && <span className="absolute -top-2 -left-1 text-[9px] px-1 rounded-full font-bold" style={{ background: '#A78BFA', color: '#060D14' }}>مقترح</span>}
+                </button>
+              </div>
+              <div className="text-[10px] mt-1 text-center" style={{ color: '#5E6E7F' }}>اكتب سترايكاً أو استخدم المقترح</div>
+            </div>
           </div>
 
           {verdict.dir && (verdict.target != null || verdict.stop != null) && (
