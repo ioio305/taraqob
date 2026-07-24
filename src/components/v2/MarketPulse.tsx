@@ -59,9 +59,9 @@ export function MarketPulse() {
 
   // خريطة الجاما — نافذة حول السعر
   const spot = g?.spot ?? 0
-  const near = (g?.profile ?? [])
-    .filter(p => spot > 0 && Math.abs(p.strike - spot) <= spot * 0.028)
-    .sort((a, b) => b.strike - a.strike)
+  let near = (g?.profile ?? []).filter(p => spot > 0 && Math.abs(p.strike - spot) <= spot * 0.02)
+  if (near.length > 26) near = [...near].sort((a, b) => Math.abs(a.strike - spot) - Math.abs(b.strike - spot)).slice(0, 26)
+  near = near.sort((a, b) => b.strike - a.strike)
   const maxAbs = Math.max(1, ...near.map(p => Math.abs(p.gex)))
 
   return (
@@ -89,7 +89,7 @@ export function MarketPulse() {
         {/* مؤشر الخوف/الطمع — شريط */}
         {fg && (
           <div>
-            <div className="flex items-center justify-between text-[10px] mb-1" style={{ color: '#5E6E7F' }}>
+            <div dir="ltr" className="flex items-center justify-between text-[10px] mb-1" style={{ color: '#5E6E7F' }}>
               <span>خوف</span><span>محايد</span><span>طمع</span>
             </div>
             <div className="h-2 rounded-full overflow-hidden relative" style={{ background: 'linear-gradient(90deg,#EF4444,#F59E0B,#C9943A,#26D07C)' }}>
