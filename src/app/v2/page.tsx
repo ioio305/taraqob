@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { NewsBar, NewsImpactBadge, useNews } from '@/components/v2/NewsBar'
+import { NewsImpactBadge, useNews } from '@/components/v2/NewsBar'
 import { DisciplineBar } from '@/components/v2/PositionSizing'
 
 type Market = {
@@ -274,9 +274,6 @@ export default function V2Dashboard() {
   return (
     <div className="min-h-full p-4 pb-10 space-y-4 max-w-4xl mx-auto"
          style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }} dir="rtl">
-
-      {/* ── News bar ── */}
-      <NewsBar news={news} loading={newsLoading} failed={newsFailed} />
 
       {/* ── الانضباط: حد الخسارة اليومي/الأسبوعي ── */}
       <DisciplineBar />

@@ -182,7 +182,7 @@ export default function PlanPage() {
             </Link>
             <Link href="/v2/chart" className="px-5 py-3 rounded-xl text-sm font-bold text-gray-300"
               style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
-              الشارت
+              الشارت المتقدم
             </Link>
           </div>
 

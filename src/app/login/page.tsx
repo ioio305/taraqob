@@ -20,7 +20,7 @@ export default async function LoginPage({ searchParams }: { searchParams?: Promi
       if (query?.plan) redirect('/v2/upgrade')
       const next = query?.next
       if (next && next.startsWith('/') && !next.startsWith('//')) redirect(next)
-      redirect('/v2')
+      redirect('/v2/plan')
     }
     // ملف مفقود/معطل: أنهِ الجلسة ليتمكن من الدخول بحساب سليم
     await supabase.auth.signOut()

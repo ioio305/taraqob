@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { AlertsWatcher } from '@/components/v2/AlertsWatcher'
 import { BeginnerHelpers } from '@/components/v2/BeginnerGuide'
 import { AssistantWidget } from '@/components/v2/AssistantWidget'
+import { NewsTicker } from '@/components/v2/NewsTicker'
 
 const ROLE_LABEL_MAP: Record<string, string>  = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
 const ROLE_COLOR_MAP: Record<string, string>  = { admin: '#C9943A', moderator: '#60A5FA', user: '#4A5568' }
@@ -24,21 +25,31 @@ function tierAllows(userTier: string, required: string): boolean {
 
 // ── Nav definitions ────────────────────────────────────────────
 // ── التقسيم الهادئ: رحلة التداول اليومية أولاً، ثم أدوات التعمق ──
-const NAV_TRADING = [
-  { href: '/v2/plan',        label: 'خطة اليوم',   icon: '📋', exact: false, requiredTier: 'radar'  },
-  { href: '/v2',             label: 'الداشبورد',   icon: '◈', exact: true,  requiredTier: 'radar'  },
-  { href: '/v2/analyze',     label: 'تحليل العقد', icon: '⬡', exact: false, requiredTier: 'radar'  },
-  { href: '/v2/signals',     label: 'الإشارات',    icon: '◉', exact: false, requiredTier: 'signal' },
-  { href: '/v2/exit',        label: 'مساعد الخروج', icon: '🚪', exact: false, requiredTier: 'radar'  },
+// قرار اليوم — أول ما يحتاجه المتداول يومياً (للجميع)
+const NAV_DECISION = [
+  { href: '/v2/plan',        label: 'خطة اليوم',    icon: '📋', exact: false, requiredTier: 'radar' },
+  { href: '/v2/smart-chart', label: 'الشارت الذكي ✦', icon: '✨', exact: false, requiredTier: 'radar' },
+  { href: '/v2/analyze',     label: 'تحليل العقد',  icon: '⬡', exact: false, requiredTier: 'radar' },
+  { href: '/v2',             label: 'الداشبورد',    icon: '◈', exact: true,  requiredTier: 'radar' },
 ]
 
-const NAV_TOOLS = [
-  { href: '/v2/smart-chart', label: 'الشارت الذكي ✦', icon: '✨', exact: false, requiredTier: 'radar' },
-  { href: '/v2/chart',   label: 'الشارت',         icon: '📈', exact: false, requiredTier: 'edge' },
+// الرصد والإشارات — للمشترك المدفوع
+const NAV_SIGNALS = [
+  { href: '/v2/signals', label: 'الإشارات',     icon: '◉', exact: false, requiredTier: 'signal' },
   { href: '/v2/radar',   label: 'رادار الأموال', icon: '📡', exact: false, requiredTier: 'signal' },
-  { href: '/v2/console', label: 'مرصد العقود', icon: '🖥', exact: false, requiredTier: 'signal' },
-  { href: '/v2/journal', label: 'دفتر الصفقات', icon: '📔', exact: false, requiredTier: 'radar'  },
-  { href: '/v2/paper',   label: 'محفظة تجريبية', icon: '🎮', exact: false, requiredTier: 'radar'  },
+  { href: '/v2/console', label: 'مرصد العقود',  icon: '🖥', exact: false, requiredTier: 'signal' },
+]
+
+// أدواتك — إدارة صفقاتك (للجميع)
+const NAV_TOOLS = [
+  { href: '/v2/paper',   label: 'محفظة تجريبية', icon: '🎮', exact: false, requiredTier: 'radar' },
+  { href: '/v2/journal', label: 'دفتر الصفقات',  icon: '📔', exact: false, requiredTier: 'radar' },
+  { href: '/v2/exit',    label: 'مساعد الخروج',  icon: '🚪', exact: false, requiredTier: 'radar' },
+]
+
+// مميّز — حصري لإيدج/VIP
+const NAV_PREMIUM = [
+  { href: '/v2/chart', label: 'الشارت المتقدم', icon: '📈', exact: false, requiredTier: 'edge' },
 ]
 
 // روابط خفيفة أسفل القائمة — بلا أيقونات صاخبة
@@ -265,7 +276,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
       {/* Logo */}
       <div className="px-5 pt-5 pb-4 shrink-0"
         style={{ borderBottom: '1px solid rgba(201,148,58,0.1)' }}>
-        <Link href={showAdminNav ? '/v2/admin' : '/v2'} className="flex items-center gap-3">
+        <Link href={showAdminNav ? '/v2/admin' : '/v2/plan'} className="flex items-center gap-3">
           <Image src="/logo.png" alt="ترقّب" width={36} height={36} priority className="w-9 h-9 object-contain shrink-0" />
           <div>
             <div className="font-bold text-white text-sm tracking-wider">ترقّب</div>
@@ -310,18 +321,35 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
           <div className="mx-4 my-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }} />
         )}
 
-        {/* ── Trading nav ── */}
+        {/* ── قرار اليوم ── */}
         <div className="px-3 pt-1 pb-1">
-          <SectionTitle>التداول</SectionTitle>
+          <SectionTitle>قرار اليوم</SectionTitle>
           <div className="space-y-0.5 mt-1">
-            {NAV_TRADING.map(item => renderNavItem(item, showAdminNav ? '#60A5FA' : '#C9943A'))}
+            {NAV_DECISION.map(item => renderNavItem(item, showAdminNav ? '#60A5FA' : '#C9943A'))}
           </div>
         </div>
 
-        <div className="px-3 pt-1 pb-2">
-          <SectionTitle>الأدوات</SectionTitle>
+        {/* ── الرصد والإشارات ── */}
+        <div className="px-3 pt-1 pb-1">
+          <SectionTitle>الرصد والإشارات</SectionTitle>
+          <div className="space-y-0.5 mt-1">
+            {NAV_SIGNALS.map(item => renderNavItem(item, showAdminNav ? '#60A5FA' : '#C9943A'))}
+          </div>
+        </div>
+
+        {/* ── أدواتك ── */}
+        <div className="px-3 pt-1 pb-1">
+          <SectionTitle>أدواتك</SectionTitle>
           <div className="space-y-0.5 mt-1">
             {NAV_TOOLS.map(item => renderNavItem(item, showAdminNav ? '#60A5FA' : '#C9943A'))}
+          </div>
+        </div>
+
+        {/* ── مميّز (إيدج/VIP) ── */}
+        <div className="px-3 pt-1 pb-2">
+          <SectionTitle color="#C9943A">⭐ مميّز</SectionTitle>
+          <div className="space-y-0.5 mt-1">
+            {NAV_PREMIUM.map(item => renderNavItem(item, showAdminNav ? '#60A5FA' : '#C9943A'))}
           </div>
         </div>
 
@@ -531,6 +559,9 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
           </button>
         </header>
 
+        {/* شريط الأخبار المتحرك — ثابت في كل الأقسام */}
+        <NewsTicker />
+
         {/* شريط التجربة المجانية */}
         {trialDaysLeft != null && (
           <div className="shrink-0 px-4 py-1.5 text-center text-xs font-bold" dir="rtl"
@@ -562,7 +593,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
             { href: '/v2',         icon: '◈', label: 'التداول',  exact: true  },
             { href: '/v2/analyze', icon: '⬡', label: 'التحليل', exact: false },
             { href: '/v2/signals', icon: '◉', label: 'الإشارات', exact: false },
-          ] : NAV_TRADING.slice(0, 4)).map(item => (
+          ] : NAV_DECISION.slice(0, 4)).map(item => (
             <MobileTab key={item.href} {...item} />
           ))}
         </nav>

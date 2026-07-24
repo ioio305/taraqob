@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
               redirect = '/v2/admin'
               break
             default:
-              redirect = '/v2'
+              redirect = '/v2/plan'   // الرئيسية: خطة اليوم (قرار لا كومة بيانات)
               break
           }
         }

@@ -18,6 +18,7 @@ export type NewsEvent = {
   spxImpact:   number       // 0–100 estimated SPX price impact
   category:    string
   reason:      string       // Arabic explanation
+  url?:        string | null // رابط المصدر (لأخبار السوق فقط؛ الأحداث المجدولة بلا رابط)
 }
 
 // ── Arabic title generation ───────────────────────────────────────────────────
@@ -353,6 +354,7 @@ async function fetchFinnhub(): Promise<NewsEvent[]> {
           spxImpact:   Math.round(impact * 0.6),
           category,
           reason:      buildReason(category, minutesAway, impact),
+          url:         typeof item.url === 'string' && item.url.startsWith('http') ? item.url : null,
         })
       }
     }
