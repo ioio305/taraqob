@@ -6,9 +6,11 @@
 
 import { useEffect, useState } from 'react'
 
+interface Unusual { strike: number; type: 'call' | 'put'; volume: number; oi: number; ratio: number | null }
 interface Pulse {
   vix: number | null
   fearGreed: { value: number; label: string; color: string } | null
+  unusual?: Unusual[]
   gamma: {
     spot: number; regime: 'positive' | 'negative'; totalGex: number
     flipLevel: number | null; callWall: number | null; putWall: number | null
@@ -140,6 +142,37 @@ export function MarketPulse() {
               <span><b style={{ color: '#26D07C' }}>▮</b> جاما موجبة (دعم/تثبيت)</span>
               <span><b style={{ color: '#F0435A' }}>▮</b> جاما سالبة (تسارع)</span>
             </div>
+          </div>
+        )}
+
+        {/* النشاط غير المعتاد — أكبر تدفّق اليوم */}
+        {(d.unusual?.length ?? 0) > 0 && (
+          <div>
+            <div className="text-[11px] mb-1.5 font-bold" style={{ color: '#8A97A6' }}>🔥 أكبر تدفّق اليوم — أين يتحرّك المال</div>
+            <div className="space-y-1">
+              {d.unusual!.map((u, i) => {
+                const isCall = u.type === 'call'
+                const hot = u.ratio != null && u.ratio >= 2
+                return (
+                  <div key={i} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <span className="text-xs font-bold px-1.5 py-0.5 rounded shrink-0"
+                      style={{ background: isCall ? 'rgba(38,208,124,0.12)' : 'rgba(167,139,250,0.12)', color: isCall ? '#26D07C' : '#A78BFA' }}>
+                      {isCall ? '▲ كول' : '▼ بوت'}
+                    </span>
+                    <span className="text-sm font-mono font-bold text-white shrink-0" dir="ltr">{Math.round(u.strike).toLocaleString()}</span>
+                    <span className="flex-1" />
+                    <span className="text-[11px] font-mono" style={{ color: '#8A97A6' }}>حجم {u.volume.toLocaleString()}</span>
+                    {u.ratio != null && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full shrink-0"
+                        style={{ background: hot ? 'rgba(240,67,90,0.14)' : 'rgba(255,255,255,0.04)', color: hot ? '#F0435A' : '#6E7E8F', border: `1px solid ${hot ? 'rgba(240,67,90,0.3)' : 'rgba(255,255,255,0.08)'}` }}>
+                        {hot ? '🔥 ' : ''}×{u.ratio} من المفتوح
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            <div className="text-[10px] mt-1.5" style={{ color: '#5E6E7F' }}>نسبة الحجم للفائدة المفتوحة (×) الأعلى = تمركز جديد نشط اليوم. ترجيح لا ضمان.</div>
           </div>
         )}
 

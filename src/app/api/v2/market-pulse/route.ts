@@ -1,15 +1,36 @@
 import { NextResponse } from 'next/server'
 import { getGammaExposure } from '@/lib/v2/gammaExposure'
-import { getMarketSnapshot } from '@/lib/v2/marketData'
+import { getMarketSnapshot, getExpirations, getOptionsChain } from '@/lib/v2/marketData'
 
 export const dynamic = 'force-dynamic'
 
-// ── نبض السوق: الخوف/الطمع + Put/Call + Max Pain + جاما (جدران + خريطة) ────────
+// ── نبض السوق: الخوف/الطمع + Put/Call + Max Pain + جاما + تدفّق غير معتاد ──────
 export async function GET() {
-  const [gamma, snap] = await Promise.all([
+  const snap = await getMarketSnapshot().catch(() => null)
+
+  const [gamma, chainOpts] = await Promise.all([
     getGammaExposure().catch(() => null),
-    getMarketSnapshot().catch(() => null),
+    (async () => {
+      if (!snap?.spxPrice) return null
+      try {
+        const exps = await getExpirations()
+        if (!exps.length) return null
+        const chain = await getOptionsChain(exps[0], snap.spxPrice, snap.vixPrice)
+        return chain.options
+      } catch { return null }
+    })(),
   ])
+
+  // النشاط غير المعتاد: أعلى الحجم اليوم + نسبة الحجم/الفائدة المفتوحة (تمركز طازج)
+  const unusual = (chainOpts ?? [])
+    .filter(o => (o.volume ?? 0) >= 200)
+    .map(o => {
+      const oi = Math.max(0, Number(o.open_interest) || 0)
+      const vol = Number(o.volume) || 0
+      return { strike: o.strike, type: o.option_type, volume: vol, oi, ratio: oi > 0 ? Math.round((vol / oi) * 10) / 10 : null }
+    })
+    .sort((a, b) => b.volume - a.volume)
+    .slice(0, 6)
 
   const vix = snap?.vixPrice ?? null
 
@@ -28,6 +49,7 @@ export async function GET() {
     ok: true,
     vix,
     fearGreed,
+    unusual,
     gamma: gamma
       ? {
           spot: gamma.spot,
