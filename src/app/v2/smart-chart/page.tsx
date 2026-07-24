@@ -13,6 +13,7 @@ import type { AnalysisResult } from '@/lib/v2/marketAnalysis'
 import type { GammaExposure } from '@/lib/v2/gammaExposure'
 import { computeConfluence } from '@/lib/v2/confluence'
 import { MarketPulse } from '@/components/v2/MarketPulse'
+import { ShareCard } from '@/components/v2/ShareCard'
 
 interface Candle {
   time: string; open: number; high: number; low: number; close: number; volume: number
@@ -337,6 +338,12 @@ export default function SmartChartPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* ── بطاقة القرار القابلة للمشاركة ── */}
+      {verdict && (
+        <ShareCard dir={verdict.dir} score={verdict.score} decisionText={verdict.decisionText}
+          spot={verdict.spot} entry={verdict.entry} target={verdict.target} stop={verdict.stop} strike={verdict.strike} />
       )}
 
       {/* ── تنبيه قرب الإغلاق (آخر ساعتين من الجلسة الأمريكية) ── */}
