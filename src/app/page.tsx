@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { HomepageNewsBar } from '@/components/HomepageNewsBar'
+import { LiveTeaser } from '@/components/LiveTeaser'
 import { AssistantWidget } from '@/components/v2/AssistantWidget'
 import { NewsletterBox } from '@/components/NewsletterBox'
 
@@ -89,6 +90,9 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
           <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#C9943A' }} />
           أسعار فورية · مُختبَر على 8 سنوات · سجل عام مفتوح للجميع
         </div>
+
+        {/* شريط حيّ — إثبات أن المنصة تعمل بأسعار فعلية الآن */}
+        <div><LiveTeaser /></div>
 
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
           تداول
@@ -311,6 +315,16 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
               icon: '🧲', color: '#F59E0B',
               title: 'خريطة أموال صنّاع السوق',
               desc: 'جدران الجاما ونقطة الانقلاب: أين يرتد السعر وأين يتسارع — مدمجة في القرار والخطة والشارت، وتحذّرك إن كان هدفك خلف جدار',
+            },
+            {
+              icon: '🫀', color: '#EF4444',
+              title: 'لوحة نبض السوق المؤسسية',
+              desc: 'الخوف/الطمع · نسبة Put/Call · Max Pain · خريطة جاما حرارية لتمركز صانعي السوق حول السعر — بصمة كانت حكراً على منصات المؤسسات',
+            },
+            {
+              icon: '📈', color: '#26D07C',
+              title: 'شارت سعر العقد نفسه',
+              desc: 'ليس شارت المؤشر — بل رحلة سعر عقدك أنت لحظة بلحظة (البريميوم) مع خطوط الدخول والهدف والوقف بالدولار. ترى ربحك وخسارتك على سعر عقدك مباشرة',
             },
             {
               icon: '🚪', color: '#EF4444',

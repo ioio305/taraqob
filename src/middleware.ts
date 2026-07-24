@@ -46,7 +46,7 @@ export async function middleware(request: NextRequest) {
   // /api/v2/signals/evaluate: يستدعيه مجدول Vercel يومياً بعد الإغلاق (بلا جلسة)
   const publicRoutes = [
     '/', '/login', '/register', '/compliance', '/how-it-works', '/track',
-    '/manifest.webmanifest', '/api/health', '/api/v2/signals/evaluate', '/api/v2/backup',
+    '/manifest.webmanifest', '/api/health', '/api/public/teaser', '/api/v2/signals/evaluate', '/api/v2/backup',
     '/api/invite/validate',
     '/api/v2/chat', '/api/v2/leads', '/api/v2/unsubscribe',
     '/api/v2/digest', '/api/v2/daily-recommendation', '/unsubscribe',
