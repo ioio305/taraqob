@@ -586,9 +586,20 @@ export async function GET(request: NextRequest) {
       decision = 'watch'
       capReasonAr = 'مخاطر عقد انتهاء اليوم مرتفعة — راقب فقط ولا تدخل الآن'
     }
-    if ((decision === 'execute' || decision === 'conditional') && rewardRiskT1 < 1) {
-      decision = 'watch'
-      capReasonAr = `العائد المتوقع للهدف الأول أقل من الخسارة المخططة (${rewardRiskT1.toFixed(2)}) — لا دخول الآن`
+    // ── معيار واعٍ بالتكلفة ───────────────────────────────────────────────
+    // العائد/المخاطرة الصافي *بعد* فرق السوق يجب أن يتجاوز 1.3، لأن «1:1» تأكله
+    // التكاليف. نخصم الفرق (ذهاباً وإياباً) من الربح ونضيفه للخسارة، فلا نُصدّر
+    // «نفّذ» إلا إذا بقيت الحافة موجبة فعلاً بعد كل التكاليف (عند فوز ~51٪).
+    if (decision === 'execute' || decision === 'conditional') {
+      const spreadCostC = Math.round(spreadAbs * 100)               // تكلفة الفرق لكل عقد
+      const grossReward = rewardRiskT1 * plannedRiskPerContract
+      const netReward   = grossReward - spreadCostC
+      const netRisk     = plannedRiskPerContract + spreadCostC
+      const netRR       = netRisk > 0 ? netReward / netRisk : 0
+      if (netRR < 1.3) {
+        decision = 'watch'
+        capReasonAr = `بعد خصم فرق السوق، الربح لا يكفي مقابل الخسارة (عائد/مخاطرة صافٍ ${netRR.toFixed(2)} — المطلوب ≥ 1.3) — لا دخول`
+      }
     }
 
     if (capReasonAr) {

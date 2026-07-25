@@ -549,6 +549,17 @@ export async function GET(request: NextRequest) {
       // ── تصنيف الفرصة A+/A/B/C — اتفاق الأدلة المستقلة ──────────────────────
       const absDelta = Math.abs(o.delta ?? 0)
       const rr = strat.stopLoss !== 0 ? Math.abs(strat.t1Profit / strat.stopLoss) : 0
+
+      // ── معيار واعٍ بالتكلفة: لا «نفّذ» إلا إذا بقيت الحافة موجبة بعد فرق السوق ──
+      // نخصم فرق الشراء/البيع من الربح ونضيفه للخسارة، ونشترط عائد/مخاطرة صافٍ ≥ 1.3
+      // (عند فوز ~51٪ يبقى موجباً بعد التكاليف). «1:1» وحدها تأكلها التكاليف.
+      const spreadCostC = Math.round(Math.max(0, (o.ask ?? 0) - (o.bid ?? 0)) * 100)
+      const netRR = (Math.abs(strat.stopLoss) + spreadCostC) > 0
+        ? (Math.abs(strat.t1Profit) - spreadCostC) / (Math.abs(strat.stopLoss) + spreadCostC) : 0
+      if (status === 'execute' && netRR < 1.3) {
+        status = 'watch'
+        capReason = `بعد فرق السوق، الربح لا يكفي مقابل الخسارة (عائد/مخاطرة صافٍ ${netRR.toFixed(2)} — المطلوب ≥ 1.3) — راقب لا تنفّذ`
+      }
       const nearWall = gammaEx ? (
         (gammaEx.callWall != null && Math.abs(spxPrice - gammaEx.callWall) < spxPrice * 0.006) ||
         (gammaEx.putWall  != null && Math.abs(spxPrice - gammaEx.putWall)  < spxPrice * 0.006)
