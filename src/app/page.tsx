@@ -6,6 +6,7 @@ import { HomepageNewsBar } from '@/components/HomepageNewsBar'
 import { LiveTeaser } from '@/components/LiveTeaser'
 import { AssistantWidget } from '@/components/v2/AssistantWidget'
 import { NewsletterBox } from '@/components/NewsletterBox'
+import { PLATFORMS } from '@/lib/v2/adapters/registry'
 
 export default async function RootPage({ searchParams }: { searchParams?: Promise<{ preview?: string }> }) {
   const query = await searchParams
@@ -245,6 +246,55 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
               marginTop: -2,
               filter: 'blur(4px)',
             }} />
+        </div>
+      </section>
+
+      {/* ── منصات ترقّب الثلاث ── */}
+      <section className="max-w-5xl mx-auto px-6 pb-4">
+        <div className="text-center mb-8">
+          <div className="text-xs font-mono tracking-widest mb-3" style={{ color: '#C9943A' }}>منصّات ترقّب</div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">ثلاث منصّات · محرّك قرار واحد</h2>
+          <p className="text-sm max-w-xl mx-auto" style={{ color: '#4A5568' }}>
+            نفس الجودة التي بُنيت لـSPX — توصية أولاً، خطة مكتوبة، وسجل صادق — تمتدّ للأسهم والصناديق
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {PLATFORMS.map(p => {
+            const available = p.status === 'available'
+            const card = (
+              <div className="rounded-2xl p-6 h-full flex flex-col transition-all"
+                style={{
+                  background: `linear-gradient(160deg, ${p.color}08 0%, rgba(13,27,42,0.9) 100%)`,
+                  border: `1px solid ${p.color}${available ? '35' : '18'}`,
+                  opacity: available ? 1 : 0.75,
+                }}>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-3xl">{p.icon}</span>
+                  {available ? (
+                    <span className="text-xs font-mono px-2 py-0.5 rounded-full font-bold"
+                      style={{ background: `${p.color}18`, color: p.color, border: `1px solid ${p.color}40` }}>
+                      متاحة الآن
+                    </span>
+                  ) : (
+                    <span className="text-xs font-mono px-2 py-0.5 rounded-full"
+                      style={{ background: 'rgba(255,255,255,0.04)', color: '#4A5568', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      قريباً
+                    </span>
+                  )}
+                </div>
+                <div className="text-lg font-bold text-white mb-2 leading-tight">{p.label}</div>
+                <div className="text-sm leading-relaxed flex-1" style={{ color: '#4A5568' }}>{p.tagline}</div>
+                <div className="mt-4 text-sm font-bold flex items-center gap-1"
+                  style={{ color: available ? p.color : '#3A4A5C' }}>
+                  {available ? 'ادخل المنصة ←' : 'قيد التطوير'}
+                </div>
+              </div>
+            )
+            return available
+              ? <Link key={p.key} href={user ? p.route : '/register'}>{card}</Link>
+              : <div key={p.key}>{card}</div>
+          })}
         </div>
       </section>
 
