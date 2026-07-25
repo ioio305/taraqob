@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef, Suspense } from 'react'
+import { useEffect, useState, useCallback, useRef, Suspense, Fragment } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { NewsImpactBadge, useNews } from '@/components/v2/NewsBar'
@@ -285,9 +285,9 @@ export default function V2Dashboard() {
   const hasExecute = contracts.some(c => c.status === 'execute')
 
   function statusMeta(s: Contract['status']) {
-    if (s === 'execute') return { label: 'نفّذ الآن', color: '#10B981', bg: 'rgba(16,185,129,0.14)', border: 'rgba(16,185,129,0.35)' }
-    if (s === 'watch')   return { label: 'راقب — لا تدخل بعد', color: '#F59E0B', bg: 'rgba(245,158,11,0.14)', border: 'rgba(245,158,11,0.35)' }
-    return                      { label: 'لا تدخل',   color: '#EF4444', bg: 'rgba(239,68,68,0.14)',  border: 'rgba(239,68,68,0.35)'  }
+    if (s === 'execute') return { label: 'اشترِ الآن', color: '#10B981', bg: 'rgba(16,185,129,0.14)', border: 'rgba(16,185,129,0.35)' }
+    if (s === 'watch')   return { label: 'راقب — لا تشترِ بعد', color: '#F59E0B', bg: 'rgba(245,158,11,0.14)', border: 'rgba(245,158,11,0.35)' }
+    return                      { label: 'لا تشترِ',   color: '#EF4444', bg: 'rgba(239,68,68,0.14)',  border: 'rgba(239,68,68,0.35)'  }
   }
 
   return (
@@ -326,7 +326,7 @@ export default function V2Dashboard() {
                style={{ background: 'rgba(13,27,42,0.82)', border: '1px solid rgba(201,148,58,0.18)' }}>
 
         {/* رأس القسم: العنوان + فئة الترشيح + التحديث */}
-        <div className="flex items-center justify-between gap-3 px-5 py-4 flex-wrap"
+        <div className="flex items-center justify-between gap-3 px-5 py-3 flex-wrap"
              style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
           <div className="flex items-center gap-2.5">
             <span className="text-lg">🎯</span>
@@ -382,7 +382,7 @@ export default function V2Dashboard() {
           </div>
         </div>
 
-        <div className="p-4 space-y-3">
+        <div className="p-3 space-y-2.5">
 
           {/* Loading skeletons */}
           {loading && [...Array(2)].map((_, i) => (
@@ -461,47 +461,71 @@ export default function V2Dashboard() {
             const isPrimary = i === 0
             const showFull  = isPrimary || fullAlt.has(c.symbol)
 
-            // ── البدائل المضغوطة: صف واحد يتوسّع بالضغط ──
+            // فاصل واضح قبل أول توصية بديلة — كي لا تُخلَط بالتوصية الأولى
+            const altDivider = i === 1 ? (
+              <div className="flex items-center gap-3 pt-1.5 pb-0.5">
+                <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.1)' }} />
+                <span className="text-xs font-bold tracking-wide" style={{ color: '#8A97A6' }}>توصيات أخرى</span>
+                <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.1)' }} />
+              </div>
+            ) : null
+
+            // ── البدائل المضغوطة: بطاقة مستقلة واضحة (اتجاه + سعر + خطة مصغّرة) تتوسّع بالضغط ──
             if (!showFull) {
               return (
-                <button key={c.symbol} onClick={() => toggleFullAlt(c.symbol)}
-                        className="w-full rounded-xl px-4 py-3 flex items-center justify-between gap-2 flex-wrap transition-all text-right"
-                        style={{ background: 'rgba(0,0,0,0.12)', border: `1px solid ${lc}22` }}>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-md"
-                          style={{ background: `${lc}1A`, color: lc, border: `1px solid ${lc}40` }}>
-                      {RANK_LABELS[i] ?? `#${i + 1}`}
-                    </span>
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-lg"
-                          style={{
-                            background: isCall ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
-                            color:      isCall ? '#10B981' : '#EF4444',
-                            border:     isCall ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(239,68,68,0.3)',
-                          }}>
-                      {isCall ? '▲ CALL' : '▼ PUT'}
-                    </span>
-                    <span className="text-lg font-bold font-mono text-white leading-none">{c.strike.toLocaleString()}</span>
-                    <span className="text-xs font-mono" style={{ color: '#7C8A99' }}>{c.dte} يوم</span>
-                    {c.grade && (
-                      <span className="text-xs font-black px-1.5 py-0.5 rounded-md"
-                            style={{ background: `${gradeCol}1A`, color: gradeCol, border: `1px solid ${gradeCol}55` }}>
-                        {c.grade}
-                      </span>
+                <Fragment key={c.symbol}>
+                  {altDivider}
+                  <button onClick={() => toggleFullAlt(c.symbol)}
+                          className="w-full rounded-xl px-4 py-3 flex flex-col gap-2 text-right transition-all"
+                          style={{ background: 'rgba(0,0,0,0.15)', border: `1px solid ${lc}33` }}>
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-md"
+                              style={{ background: `${lc}1A`, color: lc, border: `1px solid ${lc}40` }}>
+                          توصية {i + 1} · {RANK_LABELS[i] ?? 'بديل'}
+                        </span>
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-lg"
+                              style={{
+                                background: isCall ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                                color:      isCall ? '#10B981' : '#EF4444',
+                                border:     isCall ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(239,68,68,0.3)',
+                              }}>
+                          {isCall ? '▲ عقد صاعد (Call)' : '▼ عقد هابط (Put)'}
+                        </span>
+                        <span className="text-lg font-bold font-mono text-white leading-none">{c.strike.toLocaleString()}</span>
+                        <span className="text-xs font-mono" style={{ color: '#7C8A99' }}>{c.dte} يوم</span>
+                        {c.grade && (
+                          <span className="text-xs font-black px-1.5 py-0.5 rounded-md"
+                                style={{ background: `${gradeCol}1A`, color: gradeCol, border: `1px solid ${gradeCol}55` }}>
+                            {c.grade}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-lg"
+                              style={{ background: sm.bg, color: sm.color, border: `1px solid ${sm.border}` }}>
+                          {sm.label}
+                        </span>
+                        <span className="text-xs font-mono" style={{ color: '#8A97A6' }}>التفاصيل ▾</span>
+                      </div>
+                    </div>
+                    {/* خطة مصغّرة — كي تُقرأ كتوصية كاملة بلا توسيع */}
+                    {strat && (
+                      <div className="flex items-center gap-4 text-xs font-mono pr-0.5" style={{ color: '#8A97A6' }}>
+                        <span>ادخل <span style={{ color: '#E8D5A3' }}>${n(strat.entryBalanced)}</span></span>
+                        <span>الهدف <span style={{ color: '#26D07C' }}>${n(strat.t1Price)}</span></span>
+                        <span>الوقف <span style={{ color: '#F87171' }}>${n(strat.stopPrice)}</span></span>
+                      </div>
                     )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold px-2.5 py-1 rounded-lg"
-                          style={{ background: sm.bg, color: sm.color, border: `1px solid ${sm.border}` }}>
-                      {sm.label}
-                    </span>
-                    <span className="text-xs font-mono" style={{ color: '#64748B' }}>توسعة ▼</span>
-                  </div>
-                </button>
+                  </button>
+                </Fragment>
               )
             }
 
             return (
-              <div key={c.symbol} className="rounded-2xl overflow-hidden"
+              <Fragment key={c.symbol}>
+                {altDivider}
+              <div className="rounded-2xl overflow-hidden"
                    style={{
                      border: `1px solid ${isStale ? '#F59E0B' : lc}${i === 0 ? '45' : '25'}`,
                      background: 'rgba(0,0,0,0.18)',
@@ -509,7 +533,7 @@ export default function V2Dashboard() {
                    }}>
 
                 {/* ── الرأس: الرتبة + الاتجاه + الستريك + التصنيف + القرار ── */}
-                <div className="flex items-center justify-between gap-2 px-4 py-3 flex-wrap"
+                <div className="flex items-center justify-between gap-2 px-4 py-2.5 flex-wrap"
                      style={{ background: `${lc}0C`, borderBottom: `1px solid ${lc}1A` }}>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-bold px-2 py-0.5 rounded-md"
@@ -522,7 +546,7 @@ export default function V2Dashboard() {
                             color:      isCall ? '#10B981' : '#EF4444',
                             border:     isCall ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(239,68,68,0.3)',
                           }}>
-                      {isCall ? '▲ شراء CALL' : '▼ شراء PUT'}
+                      {isCall ? '▲ عقد صاعد (Call)' : '▼ عقد هابط (Put)'}
                     </span>
                     <span className="text-2xl font-bold font-mono text-white leading-none">{c.strike.toLocaleString()}</span>
                     <span className="text-xs font-mono" style={{ color: '#7C8A99' }}>ينتهي خلال {c.dte} يوم</span>
@@ -556,24 +580,24 @@ export default function V2Dashboard() {
                   </div>
                 </div>
 
-                <div className="p-4 space-y-3">
+                <div className="p-3.5 space-y-2.5">
 
                   {/* ═══ لماذا هذه التوصية؟ — الهدف الثاني: الشرح ═══ */}
-                  <div className="rounded-xl px-4 py-3"
+                  <div className="rounded-xl px-3.5 py-2.5"
                        style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                    <div className="text-xs font-bold mb-1.5" style={{ color: '#C9943A' }}>لماذا هذه التوصية؟</div>
-                    <div className="text-sm leading-relaxed" style={{ color: '#CBD5E1' }}>
+                    <div className="text-xs font-bold mb-1" style={{ color: '#C9943A' }}>لماذا هذه التوصية؟</div>
+                    <div className="text-sm leading-snug" style={{ color: '#CBD5E1' }}>
                       {c.focus?.primaryReason || c.reason}
                     </div>
                     {c.focus?.nextStep && (
-                      <div className="text-xs mt-1.5 font-semibold" style={{ color: '#E8D5A3' }}>
+                      <div className="text-xs mt-1 font-semibold" style={{ color: '#E8D5A3' }}>
                         ← الخطوة التالية: {c.focus.nextStep}
                       </div>
                     )}
-                    {/* أقوى الأدلة المؤيدة */}
+                    {/* أقوى الأدلة المؤيدة — أهم 4 كي تبقى البطاقة مضغوطة */}
                     {okEdges.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-2.5">
-                        {okEdges.map(e => (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {okEdges.slice(0, 4).map(e => (
                           <span key={e.label} className="text-xs px-2 py-0.5 rounded-md"
                             style={{ background: 'rgba(38,208,124,0.1)', color: '#34D399', border: '1px solid rgba(38,208,124,0.25)' }}>
                             ✓ {e.label}
@@ -589,8 +613,8 @@ export default function V2Dashboard() {
                     )}
                   </div>
 
-                  {/* ── تحذير الخبر ── */}
-                  <NewsImpactBadge news={news} />
+                  {/* ── تحذير الخبر — يظهر مضغوطاً فقط عند وجود خطر إخباري ── */}
+                  {news && news.score >= 26 && <NewsImpactBadge news={news} compact />}
 
                   {/* ── تحذير قِدم الخطة ── */}
                   {isStale && (
@@ -618,29 +642,29 @@ export default function V2Dashboard() {
                     </div>
                   )}
 
-                  {/* ═══ الخطة: ثلاثة أرقام واضحة — الدخول · الهدف · الوقف ═══ */}
+                  {/* ═══ الخطة: ثلاثة أرقام واضحة — اشترِ · الهدف · الوقف ═══ */}
                   {strat && (
                     <div className="grid grid-cols-3 gap-2">
-                      <div className="rounded-xl p-3 text-center"
+                      <div className="rounded-xl p-2.5 text-center"
                            style={{ background: 'rgba(201,148,58,0.08)', border: '1px solid rgba(201,148,58,0.25)' }}>
-                        <div className="text-xs font-bold mb-1" style={{ color: '#C9943A' }}>ادخل عند</div>
+                        <div className="text-xs font-bold mb-1" style={{ color: '#C9943A' }}>اشترِ بسعر</div>
                         <div className="text-xl font-black font-mono" style={{ color: '#E8D5A3' }}>${n(strat.entryBalanced)}</div>
-                        <div className="text-xs font-mono mt-0.5" style={{ color: '#8F6415' }}>${strat.entryBalancedTotal} للعقد</div>
+                        <div className="text-xs font-mono mt-0.5" style={{ color: '#8F6415' }}>تكلفة العقد ${strat.entryBalancedTotal.toLocaleString()}</div>
                       </div>
-                      <div className="rounded-xl p-3 text-center"
+                      <div className="rounded-xl p-2.5 text-center"
                            style={{ background: t1Hit || t2Hit ? 'rgba(16,185,129,0.16)' : 'rgba(16,185,129,0.08)', border: `1px solid ${t1Hit || t2Hit ? '#10B981' : 'rgba(16,185,129,0.25)'}` }}>
-                        <div className="text-xs font-bold mb-1" style={{ color: '#10B981' }}>{t1Hit || t2Hit ? '✓ الهدف' : 'الهدف'}</div>
+                        <div className="text-xs font-bold mb-1" style={{ color: '#10B981' }}>{t1Hit || t2Hit ? '✓ بِع عند' : 'بِع عند (الهدف)'}</div>
                         <div className="text-xl font-black font-mono" style={{ color: '#26D07C' }}>${n(strat.t1Price)}</div>
-                        <div className="text-xs font-mono mt-0.5" style={{ color: '#10B981' }}>+${strat.t1Profit}
-                          {strat.t1SpxLevel ? <span style={{ color: '#2D5A45' }}> · SPX {strat.t1SpxLevel.toLocaleString()}</span> : null}
+                        <div className="text-xs font-mono mt-0.5" style={{ color: '#10B981' }}>الربح +${strat.t1Profit.toLocaleString()}
+                          {strat.t1SpxLevel ? <span style={{ color: '#4E7D68' }}> · المؤشر {strat.t1SpxLevel.toLocaleString()}</span> : null}
                         </div>
                       </div>
-                      <div className="rounded-xl p-3 text-center"
+                      <div className="rounded-xl p-2.5 text-center"
                            style={{ background: stopHit ? 'rgba(239,68,68,0.16)' : 'rgba(239,68,68,0.08)', border: `1px solid ${stopHit ? '#EF4444' : 'rgba(239,68,68,0.25)'}` }}>
-                        <div className="text-xs font-bold mb-1" style={{ color: '#EF4444' }}>{stopHit ? '✓ الوقف' : 'أوقف عند'}</div>
+                        <div className="text-xs font-bold mb-1" style={{ color: '#EF4444' }}>{stopHit ? '✓ بِع (الوقف)' : 'بِع لو نزل إلى'}</div>
                         <div className="text-xl font-black font-mono" style={{ color: '#F87171' }}>${n(strat.stopPrice)}</div>
-                        <div className="text-xs font-mono mt-0.5" style={{ color: '#EF4444' }}>${strat.stopLoss}
-                          {strat.stopSpxLevel ? <span style={{ color: '#5A2D2D' }}> · SPX {strat.stopSpxLevel.toLocaleString()}</span> : null}
+                        <div className="text-xs font-mono mt-0.5" style={{ color: '#EF4444' }}>الخسارة −${Math.abs(strat.stopLoss).toLocaleString()}
+                          {strat.stopSpxLevel ? <span style={{ color: '#8A5050' }}> · المؤشر {strat.stopSpxLevel.toLocaleString()}</span> : null}
                         </div>
                       </div>
                     </div>
@@ -648,7 +672,7 @@ export default function V2Dashboard() {
 
                   {/* ── الشريط الحي: السعر + الربح/الخسارة + الحالة ── */}
                   {strat && (
-                    <div className="rounded-lg px-3 py-2.5 flex items-center justify-between gap-3 flex-wrap"
+                    <div className="rounded-lg px-3 py-2 flex items-center justify-between gap-3 flex-wrap"
                          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
                       <div className="flex items-center gap-4 flex-wrap">
                         <div>
@@ -656,14 +680,14 @@ export default function V2Dashboard() {
                           <div className="text-base font-bold font-mono text-white">${n(liveMid)}</div>
                         </div>
                         <div>
-                          <div className="text-xs font-mono" style={{ color: '#7C8A99' }}>ربح / خسارة</div>
+                          <div className="text-xs font-mono" style={{ color: '#7C8A99' }}>ربحك الآن</div>
                           <div className="text-base font-bold font-mono" style={{ color: pnlColor }}>
-                            {livePnL == null ? '—' : (livePnL >= 0 ? '+' : '') + '$' + Math.abs(livePnL)}
+                            {livePnL == null ? '—' : (livePnL >= 0 ? '+' : '−') + '$' + Math.abs(livePnL)}
                           </div>
                         </div>
                         {plan && (
                           <div className="text-xs font-mono flex items-center gap-1" style={{ color: '#C9943A70' }}>
-                            🔒 <span>{lockedTimeStr} · SPX {plan.spxAtLock.toFixed(0)}</span>
+                            🔒 <span>{lockedTimeStr} · المؤشر {plan.spxAtLock.toFixed(0)}</span>
                           </div>
                         )}
                       </div>
@@ -765,30 +789,31 @@ export default function V2Dashboard() {
                   )}
 
                   {/* ═══ أزرار الانتقال — دليل «لماذا» بأدوات التعمق ═══ */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <Link href={`/v2/analyze?symbol=${encodeURIComponent(c.symbol)}`}
-                          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-center"
+                          className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-center"
                           style={{ background: `${lc}18`, border: `1px solid ${lc}40`, color: lc }}>
                       ⬡ حلّل العقد
                     </Link>
                     <Link href="/v2/smart-chart"
-                          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-center"
+                          className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-center"
                           style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', color: '#60A5FA' }}>
                       ✨ الشارت الذكي
                     </Link>
                     <Link href="/v2/signals"
-                          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-center"
+                          className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-center"
                           style={{ background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', color: '#A78BFA' }}>
                       ◉ الإشارات
                     </Link>
                     <button onClick={() => reanalyze(c.symbol)}
-                            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold"
+                            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold"
                             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#64748B' }}>
                       ↺ إعادة تحليل
                     </button>
                   </div>
                 </div>
               </div>
+              </Fragment>
             )
           })}
         </div>
