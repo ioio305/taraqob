@@ -1,17 +1,17 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { computeStrategy } from '@/lib/v2/strategyEngine'
 import { getNewsResult } from '@/app/api/v2/news/route'
 import { evaluateMarketReaction } from '@/lib/v2/marketReaction'
 import { computeStraddleMove } from '@/lib/v2/optionsExpectedMove'
 import { evaluateSessionQuality } from '@/lib/v2/sessionQuality'
-import { buildTradeFocus } from '@/lib/v2/tradeFocus'
 import { getMarketSnapshot, getExpirations, getOptionsChain, getHistoryBars } from '@/lib/v2/marketData'
 import { getGammaExposure } from '@/lib/v2/gammaExposure'
 import { crashGuard } from '@/lib/v2/marketAnalysis'
 import { econWarning, upcomingEvents } from '@/lib/v2/econCalendar'
-import { findDebitSpread } from '@/lib/v2/spreads'
 import { timingZone } from '@/lib/v2/timingZones'
+import { getAdapter } from '@/lib/v2/adapters/registry'
+import { collectBest, enrichContracts, SPX_BANDS, type RecMode, type EnrichContext } from '@/lib/v2/recommendCore'
+import { recommendForStock } from '@/lib/v2/stocksRecommend'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,172 +26,10 @@ function isMarketOpen(): { open: boolean; label: string } {
   return { open: true, label: 'مفتوح' }
 }
 
-// ── Market direction from SPX change + VIX ──────────────────────────────
-function getDirection(changePct: number, vix: number) {
-  if (vix > 28)           return { type: null,   label: 'توقّف — مؤشر الخوف مرتفع', color: '#EF4444', reason: `مؤشر الخوف ${vix.toFixed(1)} — خطر عالٍ` }
-  if (changePct >= 0.5)   return { type: 'call', label: '▲ السوق صاعد — عقود شراء (Call)', color: '#10B981', reason: `المؤشر +${changePct.toFixed(2)}% — اتجاه صاعد` }
-  if (changePct <= -0.5)  return { type: 'put',  label: '▼ السوق هابط — عقود هبوط (Put)',  color: '#EF4444', reason: `المؤشر ${changePct.toFixed(2)}% — اتجاه هابط` }
-  if (changePct >= 0.15)  return { type: 'call', label: '▲ صعود خفيف — عقود شراء (Call)', color: '#34D399', reason: `المؤشر +${changePct.toFixed(2)}%` }
-  if (changePct <= -0.15) return { type: 'put',  label: '▼ هبوط خفيف — عقود هبوط (Put)',  color: '#F87171', reason: `المؤشر ${changePct.toFixed(2)}%` }
-  return { type: null, label: '↔ بلا اتجاه — انتظر', color: '#F59E0B', reason: 'المؤشر يتحرك بلا اتجاه واضح — انتظر' }
-}
-
-// ── Mandatory Pre-Filter ─────────────────────────────────────────────────
-// Executed BEFORE any scoring. Order is fixed and cannot be bypassed.
-// فئات الترشيح الثلاث — تغيّر الترتيب والاختيار فقط، لا تضيف أي منع جديد:
-//   safe     🟢 المحافظ: دلتا 0.30-0.45، فرق ضيق جداً، هدف قريب — أعلى احتمال
-//   balanced 🟡 المتوسط (الافتراضي): دلتا 0.25-0.45 — منطق «الجودة أولاً» المثبت
-//   bold     🔴 المغامر: عقود $0.50-$5 — رخيصة سريعة الحركة، سقف تصنيفها B
-export type RecMode = 'safe' | 'balanced' | 'bold'
-
-// Returns rejection reason string, or null if contract passes all gates.
-function mandatoryFilter(
-  o: any,
-  spxPrice: number,
-  type: 'call' | 'put',
-  mode: RecMode,
-): string | null {
-  const ask = o.ask ?? 0
-  const bid = o.bid ?? 0
-
-  // ── Gate 1: ITM check (absolute — no exceptions) ──────────────
-  if (type === 'call' && o.strike <= spxPrice)
-    return 'ITM Contract Not Allowed'          // call ITM: strike ≤ underlying
-  if (type === 'put' && o.strike >= spxPrice)
-    return 'ITM Contract Not Allowed'          // put ITM: strike ≥ underlying
-
-  // ── Gate 2: OTM confirmation (redundant guard, belt-and-suspenders) ──
-  const isOTM = type === 'call' ? o.strike > spxPrice : o.strike < spxPrice
-  if (!isOTM) return 'Not OTM'
-
-  // ── Gate 3: Quote validity ────────────────────────────────────
-  if (!bid || !ask || bid <= 0 || ask <= 0 || ask <= bid)
-    return 'Invalid Quote'
-
-  // ── Gate 4: Ask price range (حسب الفئة) ───────────────────────
-  if (mode === 'bold') {
-    if (ask < 0.50) return 'Ask Below $0.50'
-    if (ask > 5.00) return 'Ask Above $5.00'
-  } else if (mode === 'safe') {
-    // المحافظ: عقد الدلتا 0.30-0.45 القريب يعيش بين $4 و $40
-    if (ask < 4.00)  return 'Ask Below $4.00'
-    if (ask > 40.00) return 'Ask Above $40.00'
-  } else {
-    // المتوسط: عقد الدلتا 0.25-0.45 يعيش بين $2 و $40
-    if (ask < 2.00)  return 'Ask Below $2.00'
-    if (ask > 40.00) return 'Ask Above $40.00'
-  }
-
-  return null   // passed all gates → proceed to scoring
-}
-
-// ── Live Strike Rotation Engine ─────────────────────────────────────────
-// Only contracts that pass mandatoryFilter() reach this function.
-// Returns quality score 0–100.
-function liveScore(
-  o: any,
-  spxPrice: number,
-  type: 'call' | 'put',
-  em: number | null,
-  mode: RecMode,
-): number {
-  // ── Run mandatory filter first — hard stop ────────────────────
-  if (mandatoryFilter(o, spxPrice, type, mode) !== null) return -1
-
-  const ask    = o.ask
-  const bid    = o.bid
-  const mid    = (bid + ask) / 2
-  const volume = o.volume ?? 0
-  const spread = (ask - bid) / mid
-  const absDelta = Math.abs(o.greeks?.delta ?? o.delta ?? 0)
-  const oi = o.open_interest ?? 0
-
-  // ── Quality filter: spread too wide ───────────────────────────
-  if (spread > 0.50) return -1
-
-  let score = 0
-
-  if (mode === 'safe' || mode === 'balanced') {
-    // ═══ المحافظ والمتوسط — الدلتا هي الملك (النسبة المثبتة 51% قيست على هذا المنطق) ═══
-    const dSweet = mode === 'safe' ? [0.30, 0.45] : [0.25, 0.45]   // المحافظ يطلب دلتا أسرع
-    // 1. الدلتا (35 نقطة)
-    if      (absDelta >= dSweet[0] && absDelta <= dSweet[1]) score += 35
-    else if (absDelta >= dSweet[0] - 0.05 && absDelta < dSweet[0]) score += 22
-    else if (absDelta >  0.45 && absDelta <= 0.55) score += 18
-    else if (absDelta >= 0.15 && absDelta <  dSweet[0] - 0.05) score += 8
-    // 2. ضيق الفرق (20 نقطة) — المحافظ أشد صرامة
-    const sBands = mode === 'safe' ? [0.02, 0.04, 0.07, 0.12] : [0.03, 0.06, 0.10, 0.20]
-    if      (spread < sBands[0]) score += 20
-    else if (spread < sBands[1]) score += 15
-    else if (spread < sBands[2]) score += 9
-    else if (spread < sBands[3]) score += 3
-    // 3. الموقع ضمن الحركة المتوقعة (15) — المحافظ يريد ستريكاً أقرب (هدفاً أسهل)
-    if (em && em > 0) {
-      const pct = Math.abs(o.strike - spxPrice) / em
-      const sweet: [number, number] = mode === 'safe' ? [0.15, 0.70] : [0.30, 1.00]
-      if      (pct >= sweet[0] && pct <= sweet[1]) score += 15
-      else if (pct >  sweet[1] && pct <= sweet[1] + 0.5) score += 9
-      else if (pct <  sweet[0])                    score += 6
-      else                                         score += 0
-    } else score += 8
-    // 4. السعر (15) — نطاق عملي واسع
-    if      (mid >= 4 && mid <= 25) score += 15
-    else if (mid >= 2 && mid <  4)  score += 10
-    else if (mid >  25 && mid <= 40) score += 8
-    // 5. السيولة: حجم اليوم (10) + عقود مفتوحة (5)
-    if      (volume >= 1000) score += 10
-    else if (volume >= 300)  score += 7
-    else if (volume >= 50)   score += 4
-    else if (volume >= 10)   score += 1
-    if      (oi >= 1000) score += 5
-    else if (oi >= 200)  score += 3
-    else if (oi >= 50)   score += 1
-    return score
-  }
-
-  // ═══ 🔴 المغامر «الاقتناص الرخيص» — المنطق الأصلي كما هو ═══
-  // ── 1. Ask Price Quality (35 pts) — $1–$3 is the sweet spot ───
-  if      (ask >= 1.00 && ask <= 3.00) score += 35
-  else if (ask >= 0.50 && ask <  1.00) score += 22
-  else if (ask >  3.00 && ask <= 5.00) score += 16
-
-  // ── 2. EM Fit (20 pts) — cheap OTM sits 0.8x–2.5x EM from ATM ─
-  if (em && em > 0) {
-    const dist = Math.abs(o.strike - spxPrice)
-    const pct  = dist / em
-    if      (pct >= 0.80 && pct <= 1.60) score += 20   // sweet spot
-    else if (pct >= 0.50 && pct <  0.80) score += 14
-    else if (pct >  1.60 && pct <= 2.50) score += 9
-    else if (pct >= 0.30 && pct <  0.50) score += 5
-    else                                 score += 0    // >2.5× EM = lottery
-  } else {
-    if      (ask >= 0.75 && ask <= 2.50) score += 14
-    else if (ask < 0.75)                 score += 8
-    else                                 score += 5
-  }
-
-  // ── 3. Delta Quality (15 pts) — 0.25–0.45 = عقد سريع التفاعل ──
-  if      (absDelta >= 0.25 && absDelta <= 0.45) score += 15   // مثالي
-  else if (absDelta >= 0.18 && absDelta <  0.25) score += 10
-  else if (absDelta >  0.45 && absDelta <= 0.60) score += 8
-  else if (absDelta >= 0.12 && absDelta <  0.18) score += 4
-  else                                            score += 0   // <0.12 بطيء جداً
-
-  // ── 4. Spread Tightness (20 pts) ───────────────────────────────
-  if      (spread < 0.05) score += 20
-  else if (spread < 0.10) score += 15
-  else if (spread < 0.20) score += 8
-  else if (spread < 0.35) score += 3
-
-  // ── 5. Volume / Liquidity (10 pts) ─────────────────────────────
-  if      (volume >= 1000) score += 10
-  else if (volume >= 500)  score += 7
-  else if (volume >= 200)  score += 5
-  else if (volume >= 50)   score += 3
-  else if (volume >= 10)   score += 1
-
-  return score
-}
+// ملاحظة: منطق الترشيح (mandatoryFilter) والتسجيل (liveScore) وجمع المرشّحات
+// (collectBest) وإثراء العقود (enrichContracts) انتقل إلى النواة المشتركة
+// src/lib/v2/recommendCore.ts — يستدعيها SPX (هنا) والأسهم والصناديق بنفس
+// المنطق. تمرير SPX_BANDS وعتبات adapter.calibration يعيد سلوك SPX حرفياً.
 
 // ── Parse ET hour/date cleanly from a Unix timestamp ──────────────────────
 function etParts(ts: number): { dateKey: string; hourET: number; minuteET: number } {
@@ -327,6 +165,20 @@ export async function GET(request: NextRequest) {
     : (rawMode === 'bold' || rawMode === 'cheap') ? 'bold'
     : 'balanced'
 
+  // ── توجيه فئة الأصول (رؤية 3 منصات) — الافتراضي spx (توافق خلفي كامل) ──────
+  const asset = (searchParams.get('asset') ?? 'spx').toLowerCase()
+  if (asset === 'stocks') {
+    const symbol = (searchParams.get('symbol') ?? 'AAPL').toUpperCase()
+    try {
+      const result = await recommendForStock(symbol, { mode: recMode, forceType, full: true })
+      return NextResponse.json(result)
+    } catch (err: any) {
+      return NextResponse.json({ success: false, error: err.message, contracts: [] }, { status: 200 })
+    }
+  }
+  // من هنا فصاعداً: مسار SPX المرجعي — يبقى مطابقاً 100%.
+  const adapter = await getAdapter('spx')
+
   try {
     // ── 1. Fetch SPX, VIX, sessions in parallel ──────────────────
     const [snapshot, sessions, news] = await Promise.all([
@@ -363,7 +215,13 @@ export async function GET(request: NextRequest) {
       ? Math.round(spxPrice * (vixPrice / 100) * Math.sqrt(1 / 252))
       : null
 
-    const dir          = getDirection(spxChgPct, vixPrice)
+    // الاتجاه عبر المحوّل المرجعي (يطابق منطق SPX السابق: تغيّر المؤشر + مؤشر الخوف)
+    const spxSnap = {
+      symbol: 'SPX', price: spxPrice, prevClose: spxPrev, changePct: spxChgPct,
+      high: spxHigh, low: spxLow, volMeasure: vixPrice, volLabel: 'مؤشر الخوف',
+      atrPct: null, expectedMove: em, source: dataSource,
+    }
+    const dir          = adapter.getDirection('SPX', spxSnap)
     const contractType = (forceType ?? dir.type) as 'call' | 'put' | null
     const mktStatus    = isMarketOpen()
 
@@ -384,44 +242,15 @@ export async function GET(request: NextRequest) {
 
     const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
 
-    // Helper: score + collect best N contracts for a given type from chain
-    function collectBest(opts: any[], type: 'call' | 'put', base: number, n: number) {
-      const STEP      = 5
-      // Search wide range: up to 200 pts OTM to find $0.50–$5 contracts
+    // Helper: score + collect best N contracts — عبر النواة المشتركة بنطاقات SPX.
+    // نطاق البحث ±200 نقطة (STEP*40) كما في السابق تماماً.
+    function collectBestSpx(opts: any[], type: 'call' | 'put', base: number, n: number) {
+      const STEP = 5
       const searchLow  = type === 'call' ? base            : base - STEP * 40
       const searchHigh = type === 'call' ? base + STEP * 40 : base - STEP
-
-      return opts
-        .filter(o => o.option_type === type && o.strike >= searchLow && o.strike <= searchHigh)
-        .map(o => {
-          const mid   = o.bid != null && o.ask != null ? Math.round((o.bid + o.ask) / 2 * 100) / 100 : 0
-          const eDate = new Date(o.expiration_date + 'T12:00:00Z')
-          const tDate = new Date(todayStr + 'T12:00:00Z')
-          const dte   = Math.max(0, Math.round((eDate.getTime() - tDate.getTime()) / 86400000))
-          const live  = liveScore(o, spxPrice, type, em, recMode)
-          return {
-            symbol:       o.symbol,
-            type:         o.option_type,
-            strike:       o.strike,
-            expiration:   o.expiration_date,
-            dte,
-            bid:          o.bid  ?? 0,
-            ask:          o.ask  ?? 0,
-            mid,
-            last:         o.last ?? 0,
-            volume:       o.volume ?? 0,
-            openInterest: o.open_interest ?? 0,
-            delta:        o.greeks?.delta   ?? null,
-            gamma:        o.greeks?.gamma   ?? null,
-            theta:        o.greeks?.theta   ?? null,
-            vega:         o.greeks?.vega    ?? null,
-            iv:           o.greeks?.mid_iv  ?? o.greeks?.smv_vol ?? null,
-            _score:       live,
-          }
-        })
-        .filter(o => o._score > 0)
-        .sort((a, b) => b._score - a._score)
-        .slice(0, n)
+      return collectBest(opts, type, n, {
+        price: spxPrice, em, mode: recMode, bands: SPX_BANDS, todayStr, searchLow, searchHigh,
+      })
     }
 
     if (spxPrice > 0 && expirations.length > 0) {
@@ -454,13 +283,13 @@ export async function GET(request: NextRequest) {
           let collected: any[] = []
           if (!contractType) {
             // Neutral market: 1 best call + 1 best put
-            const bestCall = collectBest(opts, 'call', base, 1)
-            const bestPut  = collectBest(opts, 'put',  base, 1)
+            const bestCall = collectBestSpx(opts, 'call', base, 1)
+            const bestPut  = collectBestSpx(opts, 'put',  base, 1)
             collected = [...bestCall, ...bestPut]
             if (collected.length > 0) watchMode = true
           } else {
             // Fetch up to 15 to populate shortlist; top3 = first 3
-            collected = collectBest(opts, contractType, base, 15)
+            collected = collectBestSpx(opts, contractType, base, 15)
           }
 
           if (collected.length > 0) {
@@ -498,136 +327,38 @@ export async function GET(request: NextRequest) {
     const dailyForGuard = await getHistoryBars('daily', 60).catch(() => [])
     const guard = crashGuard(dailyForGuard, vixPrice)
 
-    const enrichedTop3 = top3.map(o => {
-      const score = o._score ?? 0
-      const absDeltaEarly = Math.abs(o.delta ?? 0)
-      const midEarly = o.mid ?? 0
-      const spreadFrac = midEarly > 0 ? ((o.ask ?? 0) - (o.bid ?? 0)) / midEarly : 1
-
-      let status: 'execute' | 'watch' | 'no-trade'
-      let capReason: string | null = null
-      if (closedWatchlist)             status = 'watch'   // قائمة استعداد
-      else if (newsBlocked || reactionBlocked || sessionBlocked) status = 'no-trade'
-      else if (watchMode || vixPrice >= 28) status = score >= 50 ? 'watch' : 'no-trade'
-      else if (score >= 80)            status = 'execute'
-      else if (score >= 74)            status = 'watch'
-      else                             status = 'no-trade'
-
-      // حارس الانهيارات: يمنع أي تنفيذ في يوم عنيف
-      if (guard.active && status === 'execute') {
-        status = 'watch'
-        capReason = `السوق متقلّب وخطير اليوم (${guard.reasons[0]}) — لا شراء اليوم`
-      }
-      // تشديد السرعة: عقد بطيء (دلتا أقل من 0.20) لا يرتفع فوق «راقب» مهما كانت درجته
-      if (absDeltaEarly < 0.20 && status === 'execute') {
-        status = 'watch'
-        capReason = `هذا العقد بطيء التفاعل مع حركة السوق — راقب فقط ولا تشترِ`
-      }
-      // فرق شراء/بيع واسع (فوق 12%): تكلفة التنفيذ تأكل الأفضلية
-      if (spreadFrac > 0.12 && status === 'execute') {
-        status = 'watch'
-        capReason = `الفرق بين سعر الشراء والبيع كبير (${(spreadFrac * 100).toFixed(0)}%) — التكلفة تأكل ربحك`
-      }
-
-      const strat = computeStrategy({
-        score,
-        dte:      o.dte   ?? 0,
-        iv:       o.iv    ?? null,
-        bid:      o.bid   ?? 0,
-        ask:      o.ask   ?? 0,
-        mid:      o.mid   ?? 0,
-        delta:    o.delta ?? null,
-        gamma:    o.gamma ?? null,
-        spxPrice,
-        emUpper,
-        emLower,
-        type:     o.type as 'call' | 'put',
-        chgPct:   spxChgPct,
-        vixPrice,
-      })
-
-      // ── تصنيف الفرصة A+/A/B/C — اتفاق الأدلة المستقلة ──────────────────────
-      const absDelta = Math.abs(o.delta ?? 0)
-      const rr = strat.stopLoss !== 0 ? Math.abs(strat.t1Profit / strat.stopLoss) : 0
-
-      // ── معيار واعٍ بالتكلفة: لا «نفّذ» إلا إذا بقيت الحافة موجبة بعد فرق السوق ──
-      // نخصم فرق الشراء/البيع من الربح ونضيفه للخسارة، ونشترط عائد/مخاطرة صافٍ ≥ 1.3
-      // (عند فوز ~51٪ يبقى موجباً بعد التكاليف). «1:1» وحدها تأكلها التكاليف.
-      const spreadCostC = Math.round(Math.max(0, (o.ask ?? 0) - (o.bid ?? 0)) * 100)
-      const netRR = (Math.abs(strat.stopLoss) + spreadCostC) > 0
-        ? (Math.abs(strat.t1Profit) - spreadCostC) / (Math.abs(strat.stopLoss) + spreadCostC) : 0
-      if (status === 'execute' && netRR < 1.3) {
-        status = 'watch'
-        capReason = `بعد حساب تكلفة الفرق بين الشراء والبيع، الربح المتوقع لا يكفي مقابل الخطر — راقب ولا تشترِ`
-      }
-      const nearWall = gammaEx ? (
-        (gammaEx.callWall != null && Math.abs(spxPrice - gammaEx.callWall) < spxPrice * 0.006) ||
-        (gammaEx.putWall  != null && Math.abs(spxPrice - gammaEx.putWall)  < spxPrice * 0.006)
-      ) : false
-      const gammaAlign = gammaEx ? (gammaEx.regime === 'negative' || nearWall) : false
-      const edges = [
-        { ok: !!contractType,                                        label: 'اتجاه واضح' },
-        { ok: absDelta >= 0.22 && absDelta <= 0.48,                  label: 'العقد سريع التفاعل' },
-        { ok: score >= 80,                                           label: 'درجة الفرصة عالية' },
-        { ok: !newsBlocked && !reactionBlocked && !sessionBlocked,   label: 'لا أخبار خطرة' },
-        { ok: rr >= 1.5,                                             label: 'الربح المتوقع أكبر من الخطر' },
-        { ok: vixPrice < 24,                                         label: 'تذبذب السوق معقول' },
-        { ok: gammaAlign,                                            label: 'قوى السوق تدعم الاتجاه' },
-      ]
-      const edgeCount = edges.filter(e => e.ok).length
-      // دليل السرعة (دلتا 0.22-0.48) شرط إلزامي للتصنيفات العليا:
-      // عقد بطيء = يانصيب مهما اجتمعت الأدلة الأخرى — لا يستحق A أبداً
-      const deltaEdgeOk = absDelta >= 0.22 && absDelta <= 0.48
-      const grade = (edgeCount >= 6 && deltaEdgeOk) ? 'A+'
-        : (edgeCount >= 4 && deltaEdgeOk) ? 'A'
-        : edgeCount >= 2 ? 'B' : 'C'
-
-      // One-line display reason for dashboard card
-      const reason = capReason
-        ? capReason
-        : closedWatchlist
-        ? 'السوق مغلق الآن — هذه عقود جاهزة سنقيّمها فور فتح السوق'
-        : watchMode
-        ? 'السوق يتحرك بلا اتجاه واضح — راقب فقط، لا تشترِ الآن'
-        : newsBlocked
-          ? newsDecision.reason
-        : reactionBlocked
-          ? marketReaction.reason
-        : sessionBlocked
-          ? sessionQuality.reason
-        : vixPrice >= 28
-          ? `مؤشر الخوف مرتفع (${vixPrice.toFixed(0)}) — توقّف عن الشراء الآن`
-          : strat.strategyReason
-
-      const { _score, ...rest } = o
-      const focus = buildTradeFocus({
-        baseStatus: status === 'execute' ? 'execute' : status === 'watch' ? 'watch' : 'no-trade',
-        score,
-        directionLabel: reason,
-        newsRisk: newsDecision,
-        marketReaction,
-        session: sessionQuality,
-        liquidityOk: (o.mid ?? 0) > 0 && ((o.ask ?? 0) - (o.bid ?? 0)) / (o.mid ?? 1) < 0.30,
-      })
-      // احتمال صادق وحيد: الاحتمال الرياضي من الدلتا (تقريب معروف لاحتمال الانتهاء داخل المال)
-      const probItmPct = Math.round(Math.abs(o.delta ?? 0) * 100)
-
-      // نسخة السبريد (مخاطرة محددة) — للفئتين المحافظ والمتوسط حيث العقود مؤهلة
-      const spread = (recMode !== 'bold')
-        ? findDebitSpread(usedChain as any, { strike: o.strike, type: o.type, ask: o.ask ?? 0, delta: o.delta ?? null })
-        : null
-
-      // تحذير الجدار المؤسسي: الستريك أو الهدف خلف جدار جاما = طريق عسير (معلومة لا منع)
-      let wallNote: string | null = null
-      if (gammaEx) {
-        if (o.type === 'call' && gammaEx.callWall != null && o.strike >= gammaEx.callWall)
-          wallNote = `الهدف خلف حاجز مقاومة قوي عند ${Math.round(gammaEx.callWall)} — الوصول إليه صعب`
-        else if (o.type === 'put' && gammaEx.putWall != null && o.strike <= gammaEx.putWall)
-          wallNote = `الهدف خلف حاجز دعم قوي عند ${Math.round(gammaEx.putWall)} — الوصول إليه صعب`
-      }
-
-      return { ...rest, score, status, reason, strategy: strat, focus, grade, edgeCount, edges, probItmPct, spread, wallNote }
-    })
+    // ── إثراء العقود عبر النواة المشتركة — سياق SPX يعيد السلوك السابق حرفياً ──
+    const spxCtx: EnrichContext = {
+      underlyingPrice: spxPrice,
+      emUpper,
+      emLower,
+      chgPct: spxChgPct,
+      volValue: vixPrice,
+      volExtreme: vixPrice >= 28,
+      volExtremeReason: `مؤشر الخوف مرتفع (${vixPrice.toFixed(0)}) — توقّف عن الشراء الآن`,
+      volCalmForEdge: vixPrice < 24,
+      hasDirection: !!contractType,
+      recMode,
+      usedChain,
+      gammaEx,
+      guard,
+      blocked: newsBlocked || reactionBlocked || sessionBlocked,
+      blockedReason: newsBlocked ? (newsDecision?.reason ?? '')
+        : reactionBlocked ? marketReaction.reason
+        : sessionBlocked ? sessionQuality.reason : '',
+      closedWatchlist,
+      watchMode,
+      watchModeReason: 'السوق يتحرك بلا اتجاه واضح — راقب فقط، لا تشترِ الآن',
+      executeScore: adapter.calibration.executeScore,
+      watchScore:   adapter.calibration.watchScore,
+      minNetRR:     adapter.calibration.minNetRR,
+      validated:    adapter.calibration.validated,
+      notCalibratedReason: adapter.calibration.note,
+      newsRisk: newsDecision,
+      marketReaction,
+      session: sessionQuality,
+    }
+    const enrichedTop3 = enrichContracts(top3, spxCtx)
 
     // OTM range description
     const STEP  = 5

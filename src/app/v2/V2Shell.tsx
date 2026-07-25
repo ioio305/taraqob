@@ -111,6 +111,42 @@ function SectionTitle({ children, color = '#7C8A99' }: { children: string; color
   )
 }
 
+// ── محوّل المنصّات (رؤية 3 منصات) — نواة واحدة، محوّلات متعددة ─────────────────
+const PLATFORM_LINKS = [
+  { href: '/v2',     match: '/v2',     label: 'المؤشر SPX', icon: '📈', color: '#C9943A', status: 'available' as const },
+  { href: '/stocks', match: '/stocks', label: 'الشركات',    icon: '🏢', color: '#60A5FA', status: 'available' as const },
+  { href: '#',       match: '__soon',  label: 'الصناديق',   icon: '🧺', color: '#26D07C', status: 'soon' as const },
+]
+
+function PlatformSwitcher() {
+  const pathname = usePathname()
+  return (
+    <div className="px-3 pt-3 pb-1">
+      <SectionTitle>منصّات ترقّب</SectionTitle>
+      <div className="grid grid-cols-3 gap-1.5 mt-1">
+        {PLATFORM_LINKS.map(p => {
+          const active = p.status === 'available' && (p.match === '/v2' ? pathname === '/v2' || pathname.startsWith('/v2/') : pathname.startsWith(p.match))
+          const soon = p.status === 'soon'
+          const inner = (
+            <div className="flex flex-col items-center gap-1 py-2 rounded-lg transition-all"
+                 style={{
+                   background: active ? `${p.color}18` : 'rgba(255,255,255,0.02)',
+                   border: `1px solid ${active ? `${p.color}55` : 'rgba(255,255,255,0.05)'}`,
+                   opacity: soon ? 0.45 : 1,
+                 }}>
+              <span className="text-base leading-none">{p.icon}</span>
+              <span className="text-[11px] font-bold" style={{ color: active ? p.color : '#8A97A6' }}>{p.label}</span>
+              {soon && <span className="text-[9px] font-mono" style={{ color: '#55657A' }}>قريباً</span>}
+            </div>
+          )
+          if (soon) return <div key={p.label} title="قريباً">{inner}</div>
+          return <Link key={p.label} href={p.href}>{inner}</Link>
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Notification types ────────────────────────────────────────
 type Notification = {
   id: string; type: string; title: string; body: string | null
@@ -308,6 +344,10 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
 
       {/* ── منطقة الأقسام: قابلة للتمرير — ذيل السايدبار (الخروج) مثبت دائماً ── */}
       <div className="flex-1 min-h-0 overflow-y-auto">
+        {/* محوّل المنصّات — المؤشر · الشركات · الصناديق */}
+        <PlatformSwitcher />
+        <div className="mx-4 my-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }} />
+
         {showAdminNav && (
           <div className="px-3 pt-3 pb-1">
             <SectionTitle color="#C9943A">الإدارة</SectionTitle>

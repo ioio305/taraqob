@@ -20,7 +20,7 @@ export const PLATFORMS: PlatformMeta[] = [
     tagline: 'أفضل فرص خيارات الأسهم الأمريكية السائلة — ماسح متعدد الرموز + تقويم الأرباح',
     icon:    '🏢',
     route:   '/stocks',
-    status:  'coming_soon',
+    status:  'available',
     color:   '#60A5FA',
   },
   {
@@ -62,4 +62,17 @@ export const FUNDS_CALIBRATION: CalibrationConfig = {
 
 export function platformByKey(key: string): PlatformMeta | undefined {
   return PLATFORMS.find(p => p.key === key)
+}
+
+// ── منتقي المحوّل حسب فئة الأصول ──────────────────────────────────────────────
+// يُستورد ديناميكياً لتفادي دورات الاستيراد (المحوّلات تستورد من هذا السجل).
+// الافتراضي spx (توافق خلفي — المسار بلا ?asset= يبقى SPX).
+export async function getAdapter(asset: string | null | undefined) {
+  const key = (asset ?? 'spx').toLowerCase()
+  if (key === 'stocks') {
+    const { stocksAdapter } = await import('./stocksAdapter')
+    return stocksAdapter
+  }
+  const { spxAdapter } = await import('./spxAdapter')
+  return spxAdapter
 }
