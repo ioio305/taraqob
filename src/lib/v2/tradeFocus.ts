@@ -24,15 +24,15 @@ export function buildTradeFocus(input: {
   if (input.session?.action === 'block') blockers.push(input.session.reason)
   if (input.newsRisk?.action === 'block') blockers.push(input.newsRisk.reason)
   if (input.marketReaction?.action === 'block') blockers.push(input.marketReaction.reason)
-  if (input.liquidityOk === false) blockers.push('السيولة أو السبريد غير مناسبين للتنفيذ النظيف.')
+  if (input.liquidityOk === false) blockers.push('حركة تداول العقد ضعيفة والفرق بين سعر الشراء والبيع كبير — يصعب الدخول والخروج بسعر عادل.')
 
   if (blockers.length > 0 || input.baseStatus === 'reject' || input.baseStatus === 'no-trade') {
     return {
       action: 'avoid',
-      label: 'لا تدخل الآن',
+      label: 'لا تشترِ الآن',
       confidence: Math.max(0, Math.min(100, input.score)),
-      primaryReason: blockers[0] ?? 'الشروط الأساسية لا تدعم الدخول.',
-      nextStep: 'انتظر إشارة جديدة بعد زوال السبب، ولا تطارد الحركة.',
+      primaryReason: blockers[0] ?? 'الوضع الحالي لا يناسب الشراء.',
+      nextStep: 'انتظر فرصة أوضح، ولا تشترِ بدافع الاستعجال.',
       blockers: blockers.slice(0, 3),
     }
   }
@@ -44,10 +44,10 @@ export function buildTradeFocus(input: {
   if (input.baseStatus === 'execute' && blockers.length === 0 && input.score >= 80) {
     return {
       action: 'enter',
-      label: 'إعداد صالح للدخول',
+      label: 'فرصة جاهزة للشراء',
       confidence: Math.min(100, input.score),
-      primaryReason: input.directionLabel ?? 'الشروط الرئيسية متوافقة.',
-      nextStep: 'نفّذ فقط عند سعر الدخول المحدد، ثم حرّك الوقف بعد الهدف الأول.',
+      primaryReason: input.directionLabel ?? 'كل العلامات المهمة تدعم الصفقة.',
+      nextStep: 'اشترِ عند السعر المكتوب فقط. وبعد وصولك للهدف الأول، ارفع حدّ الخسارة إلى سعر شرائك حتى لا تخسر.',
       blockers: [],
     }
   }
@@ -56,8 +56,8 @@ export function buildTradeFocus(input: {
     action: 'wait',
     label: 'انتظر تأكيداً',
     confidence: Math.min(100, input.score),
-    primaryReason: blockers[0] ?? 'الإعداد ليس سيئاً، لكنه يحتاج تأكيداً إضافياً قبل الدخول.',
-    nextStep: 'راقب الشمعة التالية أو إعادة اختبار منطقة SR/VWAP قبل أي قرار.',
+    primaryReason: blockers[0] ?? 'الفرصة مقبولة لكنها تحتاج تأكيداً قبل الشراء.',
+    nextStep: 'راقب حركة السعر القادمة قليلاً قبل أي قرار.',
     blockers: blockers.slice(0, 3),
   }
 }

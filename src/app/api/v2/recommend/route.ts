@@ -28,12 +28,12 @@ function isMarketOpen(): { open: boolean; label: string } {
 
 // ── Market direction from SPX change + VIX ──────────────────────────────
 function getDirection(changePct: number, vix: number) {
-  if (vix > 28)           return { type: null,   label: 'لا تداول — VIX مرتفع',  color: '#EF4444', reason: `VIX ${vix.toFixed(1)} — خطر عالٍ` }
-  if (changePct >= 0.5)   return { type: 'call', label: '▲ صاعد — شراء فقط',    color: '#10B981', reason: `SPX +${changePct.toFixed(2)}% — بيئة صاعدة` }
-  if (changePct <= -0.5)  return { type: 'put',  label: '▼ هابط — بيع فقط',     color: '#EF4444', reason: `SPX ${changePct.toFixed(2)}% — بيئة هابطة` }
-  if (changePct >= 0.15)  return { type: 'call', label: '▲ صاعد معتدل — شراء',  color: '#34D399', reason: `SPX +${changePct.toFixed(2)}%` }
-  if (changePct <= -0.15) return { type: 'put',  label: '▼ هابط معتدل — بيع',   color: '#F87171', reason: `SPX ${changePct.toFixed(2)}%` }
-  return { type: null, label: '↔ محايد — انتظر', color: '#F59E0B', reason: 'SPX يتداول عرضياً — لا اتجاه' }
+  if (vix > 28)           return { type: null,   label: 'توقّف — مؤشر الخوف مرتفع', color: '#EF4444', reason: `مؤشر الخوف ${vix.toFixed(1)} — خطر عالٍ` }
+  if (changePct >= 0.5)   return { type: 'call', label: '▲ السوق صاعد — عقود شراء (Call)', color: '#10B981', reason: `المؤشر +${changePct.toFixed(2)}% — اتجاه صاعد` }
+  if (changePct <= -0.5)  return { type: 'put',  label: '▼ السوق هابط — عقود هبوط (Put)',  color: '#EF4444', reason: `المؤشر ${changePct.toFixed(2)}% — اتجاه هابط` }
+  if (changePct >= 0.15)  return { type: 'call', label: '▲ صعود خفيف — عقود شراء (Call)', color: '#34D399', reason: `المؤشر +${changePct.toFixed(2)}%` }
+  if (changePct <= -0.15) return { type: 'put',  label: '▼ هبوط خفيف — عقود هبوط (Put)',  color: '#F87171', reason: `المؤشر ${changePct.toFixed(2)}%` }
+  return { type: null, label: '↔ بلا اتجاه — انتظر', color: '#F59E0B', reason: 'المؤشر يتحرك بلا اتجاه واضح — انتظر' }
 }
 
 // ── Mandatory Pre-Filter ─────────────────────────────────────────────────
@@ -516,17 +516,17 @@ export async function GET(request: NextRequest) {
       // حارس الانهيارات: يمنع أي تنفيذ في يوم عنيف
       if (guard.active && status === 'execute') {
         status = 'watch'
-        capReason = `حارس الانهيارات: ${guard.reasons[0]} — لا دخول اليوم`
+        capReason = `السوق متقلّب وخطير اليوم (${guard.reasons[0]}) — لا شراء اليوم`
       }
       // تشديد السرعة: عقد بطيء (دلتا أقل من 0.20) لا يرتفع فوق «راقب» مهما كانت درجته
       if (absDeltaEarly < 0.20 && status === 'execute') {
         status = 'watch'
-        capReason = `العقد بطيء الحركة (دلتا ${absDeltaEarly.toFixed(2)}) — راقب ولا تنفذ`
+        capReason = `هذا العقد بطيء التفاعل مع حركة السوق — راقب فقط ولا تشترِ`
       }
       // فرق شراء/بيع واسع (فوق 12%): تكلفة التنفيذ تأكل الأفضلية
       if (spreadFrac > 0.12 && status === 'execute') {
         status = 'watch'
-        capReason = `فرق الشراء/البيع واسع (${(spreadFrac * 100).toFixed(0)}%) — التكلفة تأكل الربح`
+        capReason = `الفرق بين سعر الشراء والبيع كبير (${(spreadFrac * 100).toFixed(0)}%) — التكلفة تأكل ربحك`
       }
 
       const strat = computeStrategy({
@@ -558,7 +558,7 @@ export async function GET(request: NextRequest) {
         ? (Math.abs(strat.t1Profit) - spreadCostC) / (Math.abs(strat.stopLoss) + spreadCostC) : 0
       if (status === 'execute' && netRR < 1.3) {
         status = 'watch'
-        capReason = `بعد فرق السوق، الربح لا يكفي مقابل الخسارة (عائد/مخاطرة صافٍ ${netRR.toFixed(2)} — المطلوب ≥ 1.3) — راقب لا تنفّذ`
+        capReason = `بعد حساب تكلفة الفرق بين الشراء والبيع، الربح المتوقع لا يكفي مقابل الخطر — راقب ولا تشترِ`
       }
       const nearWall = gammaEx ? (
         (gammaEx.callWall != null && Math.abs(spxPrice - gammaEx.callWall) < spxPrice * 0.006) ||
@@ -567,12 +567,12 @@ export async function GET(request: NextRequest) {
       const gammaAlign = gammaEx ? (gammaEx.regime === 'negative' || nearWall) : false
       const edges = [
         { ok: !!contractType,                                        label: 'اتجاه واضح' },
-        { ok: absDelta >= 0.22 && absDelta <= 0.48,                  label: 'دلتا سريعة' },
-        { ok: score >= 80,                                           label: 'درجة عالية' },
-        { ok: !newsBlocked && !reactionBlocked && !sessionBlocked,   label: 'بيئة نظيفة' },
-        { ok: rr >= 1.5,                                             label: 'مخاطرة/عائد ≥ 1.5' },
-        { ok: vixPrice < 24,                                         label: 'تذبذب معقول' },
-        { ok: gammaAlign,                                            label: 'جاما تدعم' },
+        { ok: absDelta >= 0.22 && absDelta <= 0.48,                  label: 'العقد سريع التفاعل' },
+        { ok: score >= 80,                                           label: 'درجة الفرصة عالية' },
+        { ok: !newsBlocked && !reactionBlocked && !sessionBlocked,   label: 'لا أخبار خطرة' },
+        { ok: rr >= 1.5,                                             label: 'الربح المتوقع أكبر من الخطر' },
+        { ok: vixPrice < 24,                                         label: 'تذبذب السوق معقول' },
+        { ok: gammaAlign,                                            label: 'قوى السوق تدعم الاتجاه' },
       ]
       const edgeCount = edges.filter(e => e.ok).length
       // دليل السرعة (دلتا 0.22-0.48) شرط إلزامي للتصنيفات العليا:
@@ -586,9 +586,9 @@ export async function GET(request: NextRequest) {
       const reason = capReason
         ? capReason
         : closedWatchlist
-        ? 'قائمة استعداد — السوق مغلق، هذه المرشّحات ستُقيَّم عند الفتح'
+        ? 'السوق مغلق الآن — هذه عقود جاهزة سنقيّمها فور فتح السوق'
         : watchMode
-        ? 'السوق عرضي — مراقبة فقط، لا تدخل دون اتجاه واضح'
+        ? 'السوق يتحرك بلا اتجاه واضح — راقب فقط، لا تشترِ الآن'
         : newsBlocked
           ? newsDecision.reason
         : reactionBlocked
@@ -596,7 +596,7 @@ export async function GET(request: NextRequest) {
         : sessionBlocked
           ? sessionQuality.reason
         : vixPrice >= 28
-          ? `VIX مرتفع (${vixPrice.toFixed(0)}) — توقف عن الدخول`
+          ? `مؤشر الخوف مرتفع (${vixPrice.toFixed(0)}) — توقّف عن الشراء الآن`
           : strat.strategyReason
 
       const { _score, ...rest } = o
@@ -621,9 +621,9 @@ export async function GET(request: NextRequest) {
       let wallNote: string | null = null
       if (gammaEx) {
         if (o.type === 'call' && gammaEx.callWall != null && o.strike >= gammaEx.callWall)
-          wallNote = `الستريك خلف جدار مقاومة الجاما (${Math.round(gammaEx.callWall)}) — الوصول إليه عسير`
+          wallNote = `الهدف خلف حاجز مقاومة قوي عند ${Math.round(gammaEx.callWall)} — الوصول إليه صعب`
         else if (o.type === 'put' && gammaEx.putWall != null && o.strike <= gammaEx.putWall)
-          wallNote = `الستريك خلف جدار دعم الجاما (${Math.round(gammaEx.putWall)}) — الوصول إليه عسير`
+          wallNote = `الهدف خلف حاجز دعم قوي عند ${Math.round(gammaEx.putWall)} — الوصول إليه صعب`
       }
 
       return { ...rest, score, status, reason, strategy: strat, focus, grade, edgeCount, edges, probItmPct, spread, wallNote }
@@ -662,10 +662,10 @@ export async function GET(request: NextRequest) {
       // وعي تسعير الخوف — معلومة توجيهية فقط، لا تمنع أي دخول
       pricing:
         vixPrice < 14
-          ? { level: 'رخيص', color: '#26D07C', advice: 'العقود رخيصة التسعير — وقت ممتاز للشراء المفرد' }
+          ? { level: 'رخيص', color: '#26D07C', advice: 'أسعار العقود رخيصة الآن — وقت ممتاز للشراء' }
           : vixPrice <= 20
-          ? { level: 'عادل', color: '#60A5FA', advice: 'تسعير العقود طبيعي — ادخل بخطتك المعتادة' }
-          : { level: 'غالٍ', color: '#F59E0B', advice: `العقود منتفخة التسعير (خوف ${vixPrice.toFixed(0)}) — قلّل حجم الصفقة أو اختر انتهاءً أقرب` },
+          ? { level: 'عادل', color: '#60A5FA', advice: 'أسعار العقود طبيعية — اشترِ بخطتك المعتادة' }
+          : { level: 'غالٍ', color: '#F59E0B', advice: `أسعار العقود مرتفعة بسبب توتر السوق (${vixPrice.toFixed(0)}) — صغّر حجم صفقتك أو اختر عقداً أقرب انتهاءً` },
       sessions: {
         london: sessions.london,
         tokyo:  sessions.tokyo,

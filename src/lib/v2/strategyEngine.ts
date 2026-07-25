@@ -152,14 +152,14 @@ export function computeStrategy(inp: StrategyInput): StrategyResult {
     t3Pct         = null
     strategyLabel = 'سريعة'
     const reasons: string[] = []
-    if (dte === 0)      reasons.push('0DTE')
-    if (urgentSpread)   reasons.push(`سبريد واسع (${(spreadRatio * 100).toFixed(0)}%)`)
-    if (urgentVIX)      reasons.push(`VIX مرتفع (${vixPrice.toFixed(0)})`)
+    if (dte === 0)      reasons.push('العقد ينتهي اليوم')
+    if (urgentSpread)   reasons.push(`الفرق بين الشراء والبيع كبير (${(spreadRatio * 100).toFixed(0)}%)`)
+    if (urgentVIX)      reasons.push(`مؤشر الخوف مرتفع (${vixPrice.toFixed(0)})`)
     strategyReasonParts = [
-      `استراتيجية سريعة — ${reasons.join(' · ')}`,
-      'الخروج السريع أفضل من التمسك بالمركز',
+      `خطة سريعة — ${reasons.join(' · ')}`,
+      'الأفضل أن تبيع بسرعة ولا تتمسك بالصفقة',
     ]
-    postT1Action = `ارفع وقف الخسارة إلى سعر الدخول ($${entry}) فوراً عند تحقق هدف ١`
+    postT1Action = `بعد وصول الهدف الأول، ارفع حدّ الخسارة إلى سعر شرائك ($${entry}) فوراً — بهذا لن تخسر شيئاً`
   } else if (score >= 85) {
     strategy      = 'strong'
     stopPct       = 0.35
@@ -169,10 +169,10 @@ export function computeStrategy(inp: StrategyInput): StrategyResult {
     strategyLabel = 'قوية'
     const momentum = Math.abs(chgPct) >= 0.5 ? 'قوي' : 'معقول'
     strategyReasonParts = [
-      `استراتيجية قوية — درجة الفرصة ${score} ≥ 85`,
-      `الزخم ${momentum} — نسبة المكافأة/المخاطرة ممتازة`,
+      `خطة قوية — قوة الفرصة ${score} من 100 (ممتازة)`,
+      `اتجاه السوق ${momentum} والربح المتوقع أكبر من الخطر بكثير`,
     ]
-    postT1Action = `ارفع وقف الخسارة إلى سعر الدخول ($${entry}) بعد تحقق هدف ١ — أبقِ المركز لهدف ٢ وهدف ٣`
+    postT1Action = `بعد الهدف الأول، اجعل حدّ الخسارة = سعر شرائك ($${entry}) وواصل نحو الهدف ٢ والهدف ٣`
   } else {
     // balanced: score 74–84 or any non-urgent contract
     strategy      = 'balanced'
@@ -182,10 +182,10 @@ export function computeStrategy(inp: StrategyInput): StrategyResult {
     t3Pct         = null
     strategyLabel = 'متوازنة'
     strategyReasonParts = [
-      `استراتيجية متوازنة — درجة الفرصة ${score}`,
-      `الزخم مناسب والمخاطرة مقبولة`,
+      `خطة متوازنة — قوة الفرصة ${score} من 100`,
+      `اتجاه السوق مناسب والمخاطرة مقبولة`,
     ]
-    postT1Action = `ارفع وقف الخسارة إلى سعر الدخول ($${entry}) بعد تحقق هدف ١ — احتفظ بالمركز لهدف ٢`
+    postT1Action = `بعد الهدف الأول، اجعل حدّ الخسارة = سعر شرائك ($${entry}) واحتفظ بالصفقة حتى الهدف ٢`
   }
 
   const strategyReason = strategyReasonParts.join(' — ')
@@ -229,10 +229,10 @@ export function computeStrategy(inp: StrategyInput): StrategyResult {
   const stopLvlStr  = stopSpxLevel ? stopSpxLevel.toLocaleString() : 'غير محدد'
   const vixWarning  = vixPrice > 25 ? '35' : '28'
   const cancelCondition = type === 'call'
-    ? `ألغِ الدخول إذا كسر SPX مستوى ${stopLvlStr} للأسفل قبل تنفيذ الأمر`
-    : `ألغِ الدخول إذا اخترق SPX مستوى ${stopLvlStr} للأعلى قبل تنفيذ الأمر`
+    ? `لا تشترِ إذا نزل المؤشر تحت ${stopLvlStr} قبل تنفيذ الأمر`
+    : `لا تشترِ إذا صعد المؤشر فوق ${stopLvlStr} قبل تنفيذ الأمر`
   const earlyExitCondition =
-    `اخرج مبكراً إذا: تبخّر الزخم · ضاق نطاق التداول · ارتفع VIX فوق ${vixWarning} · أو انعكس الاتجاه`
+    `اخرج مبكراً إذا: توقّف الاتجاه · صار السوق عرضياً · ارتفع مؤشر الخوف فوق ${vixWarning} · أو انقلب الاتجاه ضدك`
 
   return {
     strategy,

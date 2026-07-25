@@ -345,9 +345,9 @@ export default function V2Dashboard() {
             {/* فئة الترشيح — تغيّر الترتيب فقط، لا تمنع شيئاً */}
             <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
               {([
-                { m: 'safe' as const,     label: '🟢 محافظ', tip: 'عقود أسرع (دلتا 0.30-0.45) بأهداف أقرب وفرق أضيق — أعلى احتمال، ربح أهدأ' },
-                { m: 'balanced' as const, label: '🟡 متوسط', tip: 'التوازن المثبت (دلتا 0.25-0.45) — المنطق الذي قيست عليه نسبة 51%' },
-                { m: 'bold' as const,     label: '🔴 مغامر', tip: 'عقود $0.50-$5 رخيصة — خسائر متكررة صغيرة وربحة نادرة كبيرة، سقفها B' },
+                { m: 'safe' as const,     label: '🟢 محافظ', tip: 'عقود أسرع تفاعلاً بأهداف قريبة وفرق ضيق — أعلى احتمال ربح، لكن الربح أهدأ' },
+                { m: 'balanced' as const, label: '🟡 متوسط', tip: 'التوازن المُثبت — المنطق الذي قِيست عليه نسبة النجاح 51%' },
+                { m: 'bold' as const,     label: '🔴 مغامر', tip: 'عقود رخيصة ($0.50-$5) — خسائر صغيرة متكررة وربحة نادرة كبيرة' },
               ]).map(x => (
                 <button key={x.m} onClick={() => switchMode(x.m)}
                   className="text-xs px-2.5 py-1 font-bold"
@@ -679,7 +679,7 @@ export default function V2Dashboard() {
                     <button onClick={() => toggleExpand(c.symbol)}
                             className="w-full text-xs font-semibold py-1.5 rounded-lg transition-all"
                             style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', color: '#64748B' }}>
-                      {isOpen ? '▲ إخفاء التفاصيل' : '▼ تفاصيل أكثر (دخول محافظ · أهداف إضافية · نسخة السبريد)'}
+                      {isOpen ? '▲ إخفاء التفاصيل' : '▼ تفاصيل أكثر (دخول أأمن · أهداف إضافية · خطة محدودة الخسارة)'}
                     </button>
                   )}
 
@@ -712,7 +712,7 @@ export default function V2Dashboard() {
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-xs font-semibold shrink-0" style={{ color: row.color }}>
                                 {row.hit && '✓ '}{row.icon} {row.label}
-                                {row.inEM === false && <span className="mr-1 text-xs font-mono" style={{ color: '#F59E0B' }}>⚠ خارج EM</span>}
+                                {row.inEM === false && <span className="mr-1 text-xs font-mono" style={{ color: '#F59E0B' }}>⚠ خارج الحركة المتوقعة</span>}
                               </span>
                               <div className="flex items-center gap-3 font-mono text-xs text-left">
                                 <span className="font-bold" style={{ color: row.color }}>${n(row.price)}</span>
@@ -724,7 +724,7 @@ export default function V2Dashboard() {
                             </div>
                             {row.spx && (
                               <div className="text-xs font-mono mt-0.5" style={{ color: '#2D3748' }}>
-                                مستوى SPX المطلوب: <span style={{ color: '#94A3B8' }}>{row.spx.toLocaleString()}</span>
+                                مستوى المؤشر المطلوب: <span style={{ color: '#94A3B8' }}>{row.spx.toLocaleString()}</span>
                               </div>
                             )}
                           </div>
@@ -735,8 +735,8 @@ export default function V2Dashboard() {
                       {c.spread && (
                         <div className="rounded-lg p-3" style={{ background: 'rgba(167,139,250,0.05)', border: '1px solid rgba(167,139,250,0.25)' }}>
                           <div className="flex items-center justify-between flex-wrap gap-2 mb-1.5">
-                            <span className="text-xs font-bold" style={{ color: '#A78BFA' }}>🛡 نسخة السبريد — مخاطرة محددة السقف</span>
-                            <span className="text-xs font-mono" style={{ color: '#A78BFA' }}>عائد/مخاطرة {c.spread.rr}</span>
+                            <span className="text-xs font-bold" style={{ color: '#A78BFA' }}>🛡 خطة محدودة الخسارة — أقصى خسارة معروفة مسبقاً</span>
+                            <span className="text-xs font-mono" style={{ color: '#A78BFA' }}>الربح ÷ الخطر {c.spread.rr}</span>
                           </div>
                           <div className="grid grid-cols-3 gap-2 text-center mb-1.5">
                             <div>
@@ -996,7 +996,7 @@ export default function V2Dashboard() {
                   <table className="w-full text-xs font-mono" style={{ borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: 'rgba(0,0,0,0.3)' }}>
-                        {['Strike', 'Bid', 'Ask', 'Mid', 'Delta', 'IV', 'Volume', 'وقف SPX', ''].map(h => (
+                        {['الستريك', 'شراء', 'بيع', 'المتوسط', 'دلتا', 'التذبذب', 'الحجم', 'خروج (المؤشر)', ''].map(h => (
                           <th key={h} className="py-2.5 px-3 text-left font-semibold" style={{ color: '#2D3748', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{h}</th>
                         ))}
                       </tr>
@@ -1033,7 +1033,7 @@ export default function V2Dashboard() {
                   </table>
                 </div>
                 <div className="px-5 py-2 text-xs font-mono" style={{ color: '#1A2A3A', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                  ★ أفضل 3 · {recMode === 'safe' ? 'المحافظ: دلتا 0.30–0.45، أهداف قريبة، فرق ضيق جداً' : recMode === 'balanced' ? 'المتوسط: دلتا 0.25–0.45 وفرق ضيق' : 'المغامر: سعر $0.50–$5'} · وقف SPX = SPX الحالي ∓ 35% من EM · OTM صارم
+                  ★ أفضل 3 · {recMode === 'safe' ? 'المحافظ: عقود سريعة التفاعل بأهداف قريبة وفرق ضيق جداً' : recMode === 'balanced' ? 'المتوسط: توازن بين سرعة العقد وضيق الفرق' : 'المغامر: عقود رخيصة $0.50–$5'} · سعر الخروج = المؤشر الحالي ∓ 35% من الحركة المتوقعة · عقود خارج المال فقط
                 </div>
               </div>
             )}

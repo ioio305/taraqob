@@ -26,10 +26,10 @@ export type ReactionBar = {
 }
 
 export const MARKET_REACTION_GLOSSARY: Record<string, string> = {
-  vix_spike: 'ارتفاع مفاجئ في VIX: يعني أن الخوف/التذبذب ارتفع بسرعة، وغالباً تصبح عقود الخيارات أغلى وأخطر.',
-  vwap_break: 'كسر VWAP: السعر اخترق متوسط سعر اليوم المرجح بالحجم. فوقه يميل المشترون للسيطرة، وتحته يميل البائعون للسيطرة.',
-  volume_surge: 'اندفاع حجم التداول: حجم الشمعة الحالية أعلى بكثير من المتوسط، وهذا يدل على دخول أو خروج قوي من السوق.',
-  wide_candle: 'شمعة واسعة: مدى الشمعة أكبر من المعتاد، وهذا يعني حركة سريعة قد تسبب انزلاقاً أو انعكاساً حاداً.',
+  vix_spike: 'ارتفاع مفاجئ في مؤشر الخوف: يعني أن توتر السوق ارتفع بسرعة، وغالباً تصبح عقود الخيارات أغلى وأخطر.',
+  vwap_break: 'كسر متوسط اليوم: السعر اخترق متوسط سعر اليوم. فوقه يميل المشترون للسيطرة، وتحته يميل البائعون للسيطرة.',
+  volume_surge: 'اندفاع حجم التداول: حجم التداول في آخر فترة أعلى بكثير من المعتاد، وهذا يدل على دخول أو خروج قوي من السوق.',
+  wide_candle: 'حركة سعرية واسعة: حركة السعر في آخر فترة أكبر من المعتاد، وهذا يعني حركة سريعة قد تسبب انعكاساً حاداً.',
 }
 
 function avg(nums: number[]): number {
@@ -53,8 +53,8 @@ export function evaluateMarketReaction(input: {
     if (vixMovePct >= 8 || input.vixPrice >= 28) {
       signals.push({
         code: 'vix_spike',
-        label: 'ارتفاع مفاجئ في VIX',
-        description: `VIX تحرك ${vixMovePct.toFixed(1)}% — التذبذب يرتفع بسرعة`,
+        label: 'ارتفاع مفاجئ في مؤشر الخوف',
+        description: `مؤشر الخوف تحرّك ${vixMovePct.toFixed(1)}% — توتر السوق يرتفع بسرعة`,
         severity: vixMovePct >= 12 || input.vixPrice >= 30 ? 'high' : 'medium',
       })
     }
@@ -68,8 +68,8 @@ export function evaluateMarketReaction(input: {
       if (crossedDown || crossedUp) {
         signals.push({
           code: 'vwap_break',
-          label: crossedUp ? 'استعادة VWAP للأعلى' : 'كسر VWAP للأسفل',
-          description: crossedUp ? 'السعر عاد فوق VWAP — المشترون يحاولون السيطرة' : 'السعر كسر VWAP — البائعون يضغطون على السوق',
+          label: crossedUp ? 'تجاوز متوسط اليوم للأعلى' : 'كسر متوسط اليوم للأسفل',
+          description: crossedUp ? 'السعر عاد فوق متوسط اليوم — المشترون يحاولون السيطرة' : 'السعر نزل تحت متوسط اليوم — البائعون يضغطون على السوق',
           severity: 'medium',
         })
       }
@@ -81,7 +81,7 @@ export function evaluateMarketReaction(input: {
       signals.push({
         code: 'volume_surge',
         label: 'اندفاع حجم التداول',
-        description: `حجم آخر شمعة أعلى من المتوسط بـ ${(last.volume / avgVolume).toFixed(1)}x`,
+        description: `حجم التداول في آخر فترة أعلى من المعتاد بـ ${(last.volume / avgVolume).toFixed(1)} مرة`,
         severity: last.volume >= avgVolume * 2.5 ? 'high' : 'medium',
       })
     }
@@ -91,8 +91,8 @@ export function evaluateMarketReaction(input: {
     if (avgRange > 0 && lastRange >= avgRange * 1.8) {
       signals.push({
         code: 'wide_candle',
-        label: 'شمعة واسعة',
-        description: `مدى آخر شمعة أكبر من المعتاد بـ ${(lastRange / avgRange).toFixed(1)}x`,
+        label: 'حركة سعرية واسعة',
+        description: `حركة السعر في آخر فترة أكبر من المعتاد بـ ${(lastRange / avgRange).toFixed(1)} مرة`,
         severity: lastRange >= avgRange * 2.5 ? 'high' : 'medium',
       })
     }
@@ -113,7 +113,7 @@ export function evaluateMarketReaction(input: {
         ? 'السوق يتحرك بوضوح — انتظر اتجاه الإشارة'
         : 'رد فعل السوق طبيعي'
 
-  const reason = signals[0]?.description ?? 'لا توجد حركة غير طبيعية في التذبذب أو الحجم أو VWAP.'
+  const reason = signals[0]?.description ?? 'لا توجد حركة غير طبيعية في السوق حالياً.'
 
   return { action, score, label, reason, signals, glossary: MARKET_REACTION_GLOSSARY }
 }

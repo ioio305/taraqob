@@ -23,19 +23,19 @@ export function evaluateSessionQuality(now = new Date()): SessionQuality {
     return { action: 'block', phase: 'pre_market', label: 'قبل الافتتاح', reason: 'انتظر افتتاح السوق وتكوّن السيولة الفعلية.', minutesFromOpen, minutesToClose }
   }
   if (minutesFromOpen < 15) {
-    return { action: 'block', phase: 'open_risk', label: 'أول 15 دقيقة — ممنوع', reason: 'أول 15 دقيقة غالباً فيها اتساع سبريد وذبذبة افتتاحية مضللة.', minutesFromOpen, minutesToClose }
+    return { action: 'block', phase: 'open_risk', label: 'أول 15 دقيقة — ممنوع', reason: 'أول 15 دقيقة عادةً يكون الفرق بين الشراء والبيع واسعاً والحركة مضلّلة.', minutesFromOpen, minutesToClose }
   }
   if (minutesFromOpen < 45) {
     return { action: 'caution', phase: 'morning', label: 'افتتاح مبكر — حذر', reason: 'السوق ما زال يحدد اتجاهه. لا تدخل إلا مع تأكيد واضح.', minutesFromOpen, minutesToClose }
   }
   if (t >= 12 * 60 && t < 13 * 60 + 30) {
-    return { action: 'caution', phase: 'lunch', label: 'منتصف اليوم — حركة أبطأ', reason: 'منتصف اليوم قد يكون ضعيف الحركة، خصوصاً لعقود 0DTE.', minutesFromOpen, minutesToClose }
+    return { action: 'caution', phase: 'lunch', label: 'منتصف اليوم — حركة أبطأ', reason: 'منتصف اليوم قد تكون الحركة ضعيفة، خصوصاً للعقود التي تنتهي اليوم.', minutesFromOpen, minutesToClose }
   }
   if (minutesToClose <= 45) {
     return { action: 'caution', phase: 'power_hour', label: 'آخر 45 دقيقة — سريع وخطر', reason: 'آخر الجلسة سريع، الأهداف قد تتحقق بسرعة لكن الانعكاس أعنف.', minutesFromOpen, minutesToClose }
   }
   if (t >= 14 * 60) {
-    return { action: 'caution', phase: 'afternoon', label: 'بعد 2:00 — Theta/Gamma أعلى', reason: 'في 0DTE يزداد ذوبان الوقت وحساسية العقد بعد 2:00.', minutesFromOpen, minutesToClose }
+    return { action: 'caution', phase: 'afternoon', label: 'بعد 2:00 — ذوبان الوقت أسرع', reason: 'للعقود التي تنتهي اليوم، تتسارع خسارة قيمة العقد مع مرور الوقت بعد الساعة 2:00.', minutesFromOpen, minutesToClose }
   }
   return { action: 'allow', phase: 'morning', label: 'وقت مناسب نسبياً', reason: 'السيولة أوضح والمخاطرة الزمنية مقبولة نسبياً.', minutesFromOpen, minutesToClose }
 }
