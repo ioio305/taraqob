@@ -1,0 +1,189 @@
+'use client'
+
+import { useState, type ReactNode } from 'react'
+import Link from 'next/link'
+import Image from 'next/image'
+import { usePathname } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+
+// ══════════════════════════════════════════════════════════════════════════
+// قوقعة منصة الشركات — مستقلة تماماً عن منصة المؤشر (SPX)
+// ──────────────────────────────────────────────────────────────────────────
+// تنقّل خاص بالشركات فقط (الماسح · تحليل السهم) + محوّل منصّات علوي للانتقال
+// بين المنصّات الثلاث. لا أي رابط إلى أدوات SPX الداخلية.
+// ══════════════════════════════════════════════════════════════════════════
+
+const ACCENT = '#60A5FA'   // هوية منصة الشركات
+
+const STOCKS_NAV = [
+  { href: '/stocks',         label: 'الماسح',      icon: '📡', exact: true  },
+  { href: '/stocks/analyze', label: 'تحليل سهم',   icon: '⬡',  exact: false },
+]
+
+const PLATFORMS = [
+  { href: '/v2',     label: 'المؤشر SPX', icon: '📈', color: '#C9943A', match: '/v2',     status: 'available' as const },
+  { href: '/stocks', label: 'الشركات',    icon: '🏢', color: ACCENT,    match: '/stocks', status: 'available' as const },
+  { href: '#',       label: 'الصناديق',   icon: '🧺', color: '#26D07C', match: '__soon',  status: 'soon' as const },
+]
+
+function isActive(pathname: string, href: string, exact: boolean) {
+  return exact ? pathname === href : pathname.startsWith(href)
+}
+
+function PlatformSwitcher() {
+  const pathname = usePathname()
+  return (
+    <div className="px-3 pt-3 pb-1">
+      <div className="px-2 pb-1.5 text-[11px] font-mono font-semibold tracking-widest" style={{ color: '#5E6E7F', letterSpacing: '0.16em' }}>
+        منصّات ترقّب
+      </div>
+      <div className="grid grid-cols-3 gap-1.5">
+        {PLATFORMS.map(p => {
+          const active = p.status === 'available' && pathname.startsWith(p.match)
+          const soon = p.status === 'soon'
+          const inner = (
+            <div className="flex flex-col items-center gap-1 py-2 rounded-lg transition-all"
+                 style={{
+                   background: active ? `${p.color}18` : 'rgba(255,255,255,0.02)',
+                   border: `1px solid ${active ? `${p.color}55` : 'rgba(255,255,255,0.05)'}`,
+                   opacity: soon ? 0.45 : 1,
+                 }}>
+              <span className="text-base leading-none">{p.icon}</span>
+              <span className="text-[11px] font-bold" style={{ color: active ? p.color : '#8A97A6' }}>{p.label}</span>
+              {soon && <span className="text-[9px] font-mono" style={{ color: '#55657A' }}>قريباً</span>}
+            </div>
+          )
+          if (soon) return <div key={p.label} title="قريباً">{inner}</div>
+          return <Link key={p.label} href={p.href}>{inner}</Link>
+        })}
+      </div>
+    </div>
+  )
+}
+
+function NavLink({ href, label, icon, exact, onClick }: { href: string; label: string; icon: string; exact: boolean; onClick?: () => void }) {
+  const pathname = usePathname()
+  const active = isActive(pathname, href, exact)
+  return (
+    <Link href={href} onClick={onClick}
+      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+      style={{
+        color:       active ? '#DBEAFE' : '#8A97A6',
+        background:  active ? `${ACCENT}14` : 'transparent',
+        borderRight: active ? `2px solid ${ACCENT}` : '2px solid transparent',
+      }}>
+      <span className="w-4 text-center text-sm shrink-0" style={{ color: active ? ACCENT : '#6E7E8F' }}>{icon}</span>
+      <span className="font-medium">{label}</span>
+      {active && <span className="mr-auto w-1.5 h-1.5 rounded-full shrink-0" style={{ background: ACCENT }} />}
+    </Link>
+  )
+}
+
+function MobileTab({ href, icon, label, exact }: { href: string; icon: string; label: string; exact: boolean }) {
+  const pathname = usePathname()
+  const active = isActive(pathname, href, exact)
+  return (
+    <Link href={href} className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl min-w-[52px]"
+      style={{ color: active ? ACCENT : '#6B7B8D', background: active ? `${ACCENT}12` : 'transparent' }}>
+      <span className="text-base leading-none">{icon}</span>
+      <span className="text-[9px] font-medium mt-0.5">{label}</span>
+    </Link>
+  )
+}
+
+export default function StocksShell({ children, userName }: { children: ReactNode; userName: string }) {
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
+
+  async function logout() {
+    setLoggingOut(true)
+    try { await createClient().auth.signOut() } finally { window.location.href = '/' }
+  }
+
+  const Sidebar = (
+    <div className="flex flex-col h-full select-none" style={{ background: '#08101A' }}>
+      {/* الشعار + هوية المنصة */}
+      <div className="px-5 pt-5 pb-4 shrink-0" style={{ borderBottom: `1px solid ${ACCENT}18` }}>
+        <Link href="/stocks" className="flex items-center gap-3" onClick={() => setMobileOpen(false)}>
+          <Image src="/logo.png" alt="ترقّب" width={36} height={36} priority className="w-9 h-9 object-contain shrink-0" />
+          <div>
+            <div className="font-bold text-white text-sm tracking-wider">ترقّب</div>
+            <div className="text-xs font-mono" style={{ color: ACCENT, letterSpacing: '0.12em' }}>منصة الشركات</div>
+          </div>
+        </Link>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {/* محوّل المنصّات */}
+        <PlatformSwitcher />
+        <div className="mx-4 my-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }} />
+
+        {/* تنقّل الشركات فقط */}
+        <div className="px-3 pt-1 pb-2">
+          <div className="px-2 pb-1 pt-1 text-[11px] font-mono font-semibold tracking-widest" style={{ color: '#5E6E7F', letterSpacing: '0.16em' }}>
+            الشركات
+          </div>
+          <div className="space-y-0.5 mt-1">
+            {STOCKS_NAV.map(item => <NavLink key={item.href} {...item} onClick={() => setMobileOpen(false)} />)}
+          </div>
+        </div>
+
+        <div className="px-5 pt-1 pb-3">
+          <Link href="/track" className="text-xs transition-colors hover:text-white" style={{ color: '#7C8A99' }}>السجل العام</Link>
+        </div>
+      </div>
+
+      {/* ذيل: المستخدم + الخروج */}
+      <div className="shrink-0 px-4 py-3" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-xs font-bold text-white truncate">{userName}</div>
+            <div className="text-[10px]" style={{ color: '#5E6E7F' }}>عضو ترقّب</div>
+          </div>
+          <button onClick={logout} disabled={loggingOut}
+                  className="text-xs px-3 py-1.5 rounded-lg shrink-0 disabled:opacity-40"
+                  style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#F87171' }}>
+            {loggingOut ? '…' : 'خروج'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="flex h-screen overflow-hidden" style={{ background: '#0A1420' }} dir="rtl">
+      {/* Sidebar سطح المكتب */}
+      <aside className="hidden lg:block w-60 shrink-0 h-full">{Sidebar}</aside>
+
+      {/* Drawer الجوال */}
+      {mobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-40 flex">
+          <div className="w-64 h-full shadow-2xl">{Sidebar}</div>
+          <div className="flex-1" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setMobileOpen(false)} />
+        </div>
+      )}
+
+      <div className="flex-1 flex flex-col min-w-0 h-full">
+        {/* شريط علوي (جوال) */}
+        <header className="lg:hidden shrink-0 flex items-center justify-between px-4 py-3"
+                style={{ background: '#08101A', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+          <button onClick={() => setMobileOpen(true)} className="text-xl" style={{ color: '#8A97A6' }} aria-label="القائمة">☰</button>
+          <div className="flex items-center gap-2">
+            <span className="text-base">🏢</span>
+            <span className="text-sm font-bold text-white">منصة الشركات</span>
+          </div>
+          <div className="w-6" />
+        </header>
+
+        <main className="flex-1 min-h-0 overflow-y-auto">{children}</main>
+
+        {/* تنقّل سفلي (جوال) */}
+        <nav className="lg:hidden shrink-0 flex items-center justify-around px-1 py-2"
+             style={{ background: '#08101A', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          {STOCKS_NAV.map(item => <MobileTab key={item.href} {...item} />)}
+          <MobileTab href="/v2" icon="📈" label="المؤشر" exact={false} />
+        </nav>
+      </div>
+    </div>
+  )
+}

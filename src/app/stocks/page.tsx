@@ -303,12 +303,6 @@ export default function StocksScanner() {
         </div>
       </section>
 
-      {/* رابط العودة للمؤشر */}
-      <div className="text-center">
-        <Link href="/v2" className="text-xs font-semibold" style={{ color: '#5E6E7F' }}>
-          ← العودة لمنصة المؤشر SPX
-        </Link>
-      </div>
     </div>
   )
 }
@@ -414,10 +408,10 @@ function StockDetail({ detail }: { detail: DetailData }) {
         </div>
       )}
 
-      <Link href={`/v2/analyze?symbol=${encodeURIComponent(c.symbol)}`}
+      <Link href={`/stocks/analyze?symbol=${encodeURIComponent(detail.symbol)}`}
             className="block text-center text-xs font-bold py-2 rounded-lg"
             style={{ background: `${ACCENT}18`, border: `1px solid ${ACCENT}40`, color: ACCENT }}>
-        ⬡ حلّل هذا العقد بالتفصيل
+        ⬡ تحليل {detail.symbol} بالتفصيل
       </Link>
     </div>
   )

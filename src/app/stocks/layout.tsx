@@ -1,24 +1,19 @@
 import { redirect } from 'next/navigation'
 import { getV2Viewer } from '@/lib/v2/access'
 import type { ReactNode } from 'react'
-import V2Shell from '../v2/V2Shell'
+import StocksShell from './StocksShell'
 
 export const metadata = {
   title: 'ترقب — منصة الشركات',
 }
 
-// منصة الشركات تشترك مع منصة المؤشر في نفس القوقعة (V2Shell) والمصادقة —
-// نواة واحدة وواجهة واحدة (رؤية 3 منصات). محوّل المنصات في رأس القوقعة.
+// منصة الشركات منصّة مستقلة تماماً بقوقعتها الخاصة (StocksShell) — لا ترابط مع
+// أدوات المؤشر SPX. المصادقة مشتركة (نفس الحساب)، والتنقّل بين المنصّات عبر
+// محوّل المنصّات فقط.
 export default async function StocksLayout({ children }: { children: ReactNode }) {
   const viewer = await getV2Viewer()
   if (!viewer) redirect('/login')
   if (!viewer.profile || viewer.profile.is_active === false) redirect('/login?error=inactive')
 
-  return (
-    <V2Shell userName={viewer.displayName} userRole={viewer.profile.role}
-             userSecondaryRoles={viewer.secondaryRoles} subscriptionTier={viewer.effectiveTier}
-             trialDaysLeft={viewer.trialDaysLeft}>
-      {children}
-    </V2Shell>
-  )
+  return <StocksShell userName={viewer.displayName}>{children}</StocksShell>
 }
