@@ -91,7 +91,7 @@ export default function LoginForm() {
     if (['admin', 'moderator'].includes(profile.role)) {
       window.location.href = '/v2/admin'
     } else {
-      window.location.href = '/v2/plan'
+      window.location.href = '/v2'
     }
   }
 

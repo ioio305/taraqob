@@ -25,12 +25,12 @@ function tierAllows(userTier: string, required: string): boolean {
 
 // ── Nav definitions ────────────────────────────────────────────
 // ── التقسيم الهادئ: رحلة التداول اليومية أولاً، ثم أدوات التعمق ──
-// قرار اليوم — أول ما يحتاجه المتداول يومياً (للجميع)
+// قرار اليوم — الداشبورد (التوصية) أولاً، ثم بقية القرار (للجميع)
 const NAV_DECISION = [
+  { href: '/v2',             label: 'الداشبورد',    icon: '◈', exact: true,  requiredTier: 'radar' },
   { href: '/v2/plan',        label: 'خطة اليوم',    icon: '📋', exact: false, requiredTier: 'radar' },
   { href: '/v2/smart-chart', label: 'الشارت الذكي ✦', icon: '✨', exact: false, requiredTier: 'radar' },
   { href: '/v2/analyze',     label: 'تحليل العقد',  icon: '⬡', exact: false, requiredTier: 'radar' },
-  { href: '/v2',             label: 'الداشبورد',    icon: '◈', exact: true,  requiredTier: 'radar' },
 ]
 
 // الرصد والإشارات — للمشترك المدفوع
@@ -276,7 +276,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
       {/* Logo */}
       <div className="px-5 pt-5 pb-4 shrink-0"
         style={{ borderBottom: '1px solid rgba(201,148,58,0.1)' }}>
-        <Link href={showAdminNav ? '/v2/admin' : '/v2/plan'} className="flex items-center gap-3">
+        <Link href={showAdminNav ? '/v2/admin' : '/v2'} className="flex items-center gap-3">
           <Image src="/logo.png" alt="ترقّب" width={36} height={36} priority className="w-9 h-9 object-contain shrink-0" />
           <div>
             <div className="font-bold text-white text-sm tracking-wider">ترقّب</div>
