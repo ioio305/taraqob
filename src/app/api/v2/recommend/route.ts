@@ -12,6 +12,7 @@ import { timingZone } from '@/lib/v2/timingZones'
 import { getAdapter } from '@/lib/v2/adapters/registry'
 import { collectBest, enrichContracts, SPX_BANDS, type RecMode, type EnrichContext } from '@/lib/v2/recommendCore'
 import { recommendForStock } from '@/lib/v2/stocksRecommend'
+import { recommendForFund } from '@/lib/v2/fundsRecommend'
 
 export const dynamic = 'force-dynamic'
 
@@ -171,6 +172,15 @@ export async function GET(request: NextRequest) {
     const symbol = (searchParams.get('symbol') ?? 'AAPL').toUpperCase()
     try {
       const result = await recommendForStock(symbol, { mode: recMode, forceType, full: true })
+      return NextResponse.json(result)
+    } catch (err: any) {
+      return NextResponse.json({ success: false, error: err.message, contracts: [] }, { status: 200 })
+    }
+  }
+  if (asset === 'funds') {
+    const symbol = (searchParams.get('symbol') ?? 'SPY').toUpperCase()
+    try {
+      const result = await recommendForFund(symbol, { mode: recMode, forceType, full: true })
       return NextResponse.json(result)
     } catch (err: any) {
       return NextResponse.json({ success: false, error: err.message, contracts: [] }, { status: 200 })

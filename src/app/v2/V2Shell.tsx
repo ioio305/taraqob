@@ -112,10 +112,14 @@ function SectionTitle({ children, color = '#7C8A99' }: { children: string; color
 }
 
 // ── محوّل المنصّات (رؤية 3 منصات) — نواة واحدة، محوّلات متعددة ─────────────────
-const PLATFORM_LINKS = [
-  { href: '/v2',     match: '/v2',     label: 'المؤشر SPX', icon: '📈', color: '#C9943A', status: 'available' as const },
-  { href: '/stocks', match: '/stocks', label: 'الشركات',    icon: '🏢', color: '#60A5FA', status: 'available' as const },
-  { href: '#',       match: '__soon',  label: 'الصناديق',   icon: '🧺', color: '#26D07C', status: 'soon' as const },
+type PlatformLink = {
+  href: string; match: string; label: string; icon: string; color: string
+  status: 'available' | 'soon'
+}
+const PLATFORM_LINKS: PlatformLink[] = [
+  { href: '/v2',     match: '/v2',     label: 'المؤشر SPX', icon: '📈', color: '#C9943A', status: 'available' },
+  { href: '/stocks', match: '/stocks', label: 'الشركات',    icon: '🏢', color: '#60A5FA', status: 'available' },
+  { href: '/funds',  match: '/funds',  label: 'الصناديق',   icon: '🧺', color: '#26D07C', status: 'available' },
 ]
 
 function PlatformSwitcher() {

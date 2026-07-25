@@ -29,7 +29,7 @@ export const PLATFORMS: PlatformMeta[] = [
     tagline: 'خيارات الصناديق (SPY · QQQ · القطاعات) مع دوران القطاعات',
     icon:    '🧺',
     route:   '/funds',
-    status:  'coming_soon',
+    status:  'available',
     color:   '#26D07C',
   },
 ]
@@ -72,6 +72,10 @@ export async function getAdapter(asset: string | null | undefined) {
   if (key === 'stocks') {
     const { stocksAdapter } = await import('./stocksAdapter')
     return stocksAdapter
+  }
+  if (key === 'funds') {
+    const { fundsAdapter } = await import('./fundsAdapter')
+    return fundsAdapter
   }
   const { spxAdapter } = await import('./spxAdapter')
   return spxAdapter
