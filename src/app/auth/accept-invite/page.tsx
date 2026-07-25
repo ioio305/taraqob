@@ -99,7 +99,7 @@ export default function AcceptInvitePage() {
       </div>
       <div>
         <div className="font-bold text-white mb-2">رابط غير صالح</div>
-        <p className="text-sm font-mono" style={{ color: '#4A5568' }}>
+        <p className="text-sm font-mono" style={{ color: '#7C8A99' }}>
           هذا الرابط منتهي الصلاحية أو تم استخدامه مسبقاً.
           تواصل مع المسؤول للحصول على دعوة جديدة.
         </p>
@@ -119,7 +119,7 @@ export default function AcceptInvitePage() {
                style={{ filter: 'drop-shadow(0 0 20px rgba(201,148,58,0.3))' }} />
         </div>
         <h1 className="text-xl font-bold text-white">مرحباً بك في ترقّب</h1>
-        <p className="text-sm mt-1 font-mono" style={{ color: '#4A5568' }}>
+        <p className="text-sm mt-1 font-mono" style={{ color: '#7C8A99' }}>
           تمت دعوتك كـ{' '}
           <span className="font-bold" style={{ color: roleColor }}>
             {ROLE_AR[invitation?.role] ?? invitation?.role}
@@ -137,14 +137,14 @@ export default function AcceptInvitePage() {
         )}
 
         <div>
-          <label className="block text-xs font-mono mb-2" style={{ color: '#4A5568' }}>البريد الإلكتروني</label>
+          <label className="block text-xs font-mono mb-2" style={{ color: '#7C8A99' }}>البريد الإلكتروني</label>
           <input type="email" value={invitation?.email ?? ''} disabled dir="ltr"
                  className="w-full rounded-xl px-4 py-3 text-sm font-mono cursor-not-allowed"
-                 style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', color: '#4A5568' }} />
+                 style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', color: '#7C8A99' }} />
         </div>
 
         <div>
-          <label className="block text-xs font-mono mb-2" style={{ color: '#4A5568' }}>الاسم الكامل</label>
+          <label className="block text-xs font-mono mb-2" style={{ color: '#7C8A99' }}>الاسم الكامل</label>
           <input type="text" value={name} onChange={e => setName(e.target.value)}
                  required placeholder="اكتب اسمك"
                  className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none"
@@ -152,7 +152,7 @@ export default function AcceptInvitePage() {
         </div>
 
         <div>
-          <label className="block text-xs font-mono mb-2" style={{ color: '#4A5568' }}>كلمة المرور</label>
+          <label className="block text-xs font-mono mb-2" style={{ color: '#7C8A99' }}>كلمة المرور</label>
           <input type="password" value={password} onChange={e => setPassword(e.target.value)}
                  required minLength={8} dir="ltr" placeholder="8 أحرف على الأقل"
                  className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none"

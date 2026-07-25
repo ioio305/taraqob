@@ -62,12 +62,12 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
         <nav className="flex items-center gap-4">
           <Link href="/how-it-works"
             className="text-sm transition-colors hidden sm:block"
-            style={{ color: '#4A5568' }}>
+            style={{ color: '#7C8A99' }}>
             كيف يعمل
           </Link>
           <Link href="/compliance"
             className="text-sm transition-colors hidden sm:block"
-            style={{ color: '#4A5568' }}>
+            style={{ color: '#7C8A99' }}>
             الإفصاح
           </Link>
           <Link href={user ? '/v2' : '/login'}
@@ -115,7 +115,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
           المنصة الوحيدة التي تتخذ موقفاً وتتحمّله: خطة مكتوبة كل صباح، توصيات بثلاث فئات
           لكل مستوى، حماية آلية من أيام الانهيارات — وكل إشارة قوية تُسجَّل في سجل عام لا يُمكن تجميله
         </p>
-        <p className="text-sm mb-10 max-w-xl mx-auto" style={{ color: '#3A4A5C' }}>
+        <p className="text-sm mb-10 max-w-xl mx-auto" style={{ color: '#6B7B8D' }}>
           بصدق كامل: نسبة الربح المثبتة على 8 سنوات لم يرها النظام هي 51% بأفضلية +0.25 —
           أفضلية حقيقية إحصائياً، وليست وعداً بالثراء. من يعدك بأكثر فاسأله عن سجله العام.
         </p>
@@ -151,7 +151,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
               <span className="w-3 h-3 rounded-full" style={{ background: '#FF5F57' }} />
               <span className="w-3 h-3 rounded-full" style={{ background: '#FEBC2E' }} />
               <span className="w-3 h-3 rounded-full" style={{ background: '#28C840' }} />
-              <span className="text-xs font-mono mx-auto" style={{ color: '#2D3748' }}>
+              <span className="text-xs font-mono mx-auto" style={{ color: '#6B7B8D' }}>
                 TARAQOB PRO — الداشبورد
               </span>
             </div>
@@ -165,10 +165,10 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
                   <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#10B981' }} />
                   <span style={{ color: '#10B981' }}>▲ صاعد — Call فقط</span>
                 </div>
-                <span style={{ color: '#2D3748' }}>·</span>
-                <span style={{ color: '#4A5568' }}>SPX <span style={{ color: 'white' }}>7,376</span></span>
-                <span style={{ color: '#4A5568' }}>VIX <span style={{ color: '#10B981' }}>17.2</span></span>
-                <span style={{ color: '#4A5568' }}>EM <span style={{ color: '#C9943A' }}>±80</span></span>
+                <span style={{ color: '#6B7B8D' }}>·</span>
+                <span style={{ color: '#7C8A99' }}>SPX <span style={{ color: 'white' }}>7,376</span></span>
+                <span style={{ color: '#7C8A99' }}>VIX <span style={{ color: '#10B981' }}>17.2</span></span>
+                <span style={{ color: '#7C8A99' }}>EM <span style={{ color: '#C9943A' }}>±80</span></span>
               </div>
 
               {/* Mock contract card */}
@@ -186,7 +186,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
                     </span>
                   </div>
                   <div className="flex items-center gap-3 text-sm font-mono">
-                    <span style={{ color: '#4A5568' }}>0DTE · Spread 7.4%</span>
+                    <span style={{ color: '#7C8A99' }}>0DTE · Spread 7.4%</span>
                     <span className="text-white font-bold">7,460</span>
                   </div>
                 </div>
@@ -201,7 +201,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
                         style={b.hl
                           ? { background: 'rgba(201,148,58,0.1)', border: '1px solid rgba(201,148,58,0.3)' }
                           : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div className="text-xs mb-1 font-mono" style={{ color: '#2D3748' }}>{b.l}</div>
+                        <div className="text-xs mb-1 font-mono" style={{ color: '#6B7B8D' }}>{b.l}</div>
                         <div className="font-bold font-mono" style={{ color: b.hl ? '#C9943A' : 'white' }}>{b.v}</div>
                       </div>
                     ))}
@@ -225,7 +225,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
 
               {/* Mock score bar */}
               <div className="flex items-center gap-4 text-xs font-mono">
-                <span style={{ color: '#4A5568' }}>Decision Score</span>
+                <span style={{ color: '#7C8A99' }}>Decision Score</span>
                 <div className="flex-1 h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.05)' }}>
                   <div className="h-full rounded-full" style={{ width: '76%', background: 'linear-gradient(90deg,#C9943A,#10B981)' }} />
                 </div>
@@ -254,7 +254,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
         <div className="text-center mb-8">
           <div className="text-xs font-mono tracking-widest mb-3" style={{ color: '#C9943A' }}>منصّات ترقّب</div>
           <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">ثلاث منصّات · محرّك قرار واحد</h2>
-          <p className="text-sm max-w-xl mx-auto" style={{ color: '#4A5568' }}>
+          <p className="text-sm max-w-xl mx-auto" style={{ color: '#7C8A99' }}>
             نفس الجودة التي بُنيت لـSPX — توصية أولاً، خطة مكتوبة، وسجل صادق — تمتدّ للأسهم والصناديق
           </p>
         </div>
@@ -278,15 +278,15 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
                     </span>
                   ) : (
                     <span className="text-xs font-mono px-2 py-0.5 rounded-full"
-                      style={{ background: 'rgba(255,255,255,0.04)', color: '#4A5568', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      style={{ background: 'rgba(255,255,255,0.04)', color: '#7C8A99', border: '1px solid rgba(255,255,255,0.08)' }}>
                       قريباً
                     </span>
                   )}
                 </div>
                 <div className="text-lg font-bold text-white mb-2 leading-tight">{p.label}</div>
-                <div className="text-sm leading-relaxed flex-1" style={{ color: '#4A5568' }}>{p.tagline}</div>
+                <div className="text-sm leading-relaxed flex-1" style={{ color: '#7C8A99' }}>{p.tagline}</div>
                 <div className="mt-4 text-sm font-bold flex items-center gap-1"
-                  style={{ color: available ? p.color : '#3A4A5C' }}>
+                  style={{ color: available ? p.color : '#6B7B8D' }}>
                   {available ? 'ادخل المنصة ←' : 'قيد التطوير'}
                 </div>
               </div>
@@ -300,7 +300,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
 
       {/* ── Market News Status ── */}
       <section className="max-w-4xl mx-auto px-6 pb-8">
-        <div className="text-xs font-mono mb-2 text-center" style={{ color: '#2D3748' }}>
+        <div className="text-xs font-mono mb-2 text-center" style={{ color: '#6B7B8D' }}>
           حالة السوق الآن
         </div>
         <HomepageNewsBar />
@@ -317,7 +317,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
           ].map(s => (
             <div key={s.l}>
               <div className="text-3xl font-bold font-mono mb-1" style={{ color: '#C9943A' }}>{s.v}</div>
-              <div className="text-xs font-mono" style={{ color: '#2D3748' }}>{s.l}</div>
+              <div className="text-xs font-mono" style={{ color: '#6B7B8D' }}>{s.l}</div>
             </div>
           ))}
         </div>
@@ -399,7 +399,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
               }}>
               <div className="text-2xl mb-4" style={{ color: f.color }}>{f.icon}</div>
               <div className="text-base font-bold text-white mb-2 leading-tight">{f.title}</div>
-              <div className="text-sm leading-relaxed" style={{ color: '#4A5568' }}>{f.desc}</div>
+              <div className="text-sm leading-relaxed" style={{ color: '#7C8A99' }}>{f.desc}</div>
             </div>
           ))}
         </div>
@@ -440,7 +440,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
                   {s.step}
                 </div>
                 <div className="text-base font-bold text-white mb-2">{s.title}</div>
-                <div className="text-sm leading-relaxed" style={{ color: '#4A5568' }}>{s.desc}</div>
+                <div className="text-sm leading-relaxed" style={{ color: '#7C8A99' }}>{s.desc}</div>
               </div>
             ))}
           </div>
@@ -452,7 +452,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
         <div className="text-center mb-14">
           <div className="text-xs font-mono tracking-widest mb-3" style={{ color: '#C9943A' }}>الباقات</div>
           <h2 className="text-3xl font-bold text-white mb-3">اختر ما يناسبك</h2>
-          <p className="text-sm" style={{ color: '#4A5568' }}>كل الأرقام حقيقية · كل الإشارات موثّقة · لا وعود فارغة</p>
+          <p className="text-sm" style={{ color: '#7C8A99' }}>كل الأرقام حقيقية · كل الإشارات موثّقة · لا وعود فارغة</p>
           <p className="text-sm mt-2 font-bold" style={{ color: '#26D07C' }}>
             🎁 كل حساب جديد يبدأ بتجربة 7 أيام كاملة الميزات — وكل صديق تدعوه يهديك أسبوعاً إضافياً
           </p>
@@ -462,7 +462,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
           {[
             {
               key: 'radar', label: 'رادار', price: 'مجاني', period: '',
-              color: '#4A5568',
+              color: '#7C8A99',
               desc: 'ابدأ رحلتك — الأساسيات كاملة',
               features: ['خطة اليوم الصباحية', 'الداشبورد وتحليل العقد', 'المحفظة التجريبية 10,000$', 'مساعد الخروج ودفتر الصفقات'],
             },
@@ -500,9 +500,9 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
                 <div className="text-xs font-mono mb-1" style={{ color: tier.color }}>{tier.label}</div>
                 <div className="flex items-baseline gap-1 mb-2">
                   <span className="text-2xl font-bold font-mono text-white">{tier.price}</span>
-                  {tier.period && <span className="text-xs" style={{ color: '#4A5568' }}>{tier.period}</span>}
+                  {tier.period && <span className="text-xs" style={{ color: '#7C8A99' }}>{tier.period}</span>}
                 </div>
-                <p className="text-xs leading-relaxed" style={{ color: '#4A5568' }}>{tier.desc}</p>
+                <p className="text-xs leading-relaxed" style={{ color: '#7C8A99' }}>{tier.desc}</p>
               </div>
               <ul className="space-y-2 flex-1 mb-5">
                 {tier.features.map(f => (
@@ -520,7 +520,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
                 style={{
                   background: tier.key === 'radar' ? 'rgba(255,255,255,0.04)' : `${tier.color}18`,
                   border: `1px solid ${tier.color}30`,
-                  color: tier.key === 'radar' ? '#4A5568' : tier.color,
+                  color: tier.key === 'radar' ? '#7C8A99' : tier.color,
                 }}>
                 {tier.key === 'radar' ? 'ابدأ مجاناً' : 'اشترك الآن'}
               </Link>
@@ -538,7 +538,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
         <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4 leading-tight">
           جرّبها بنفسك — والسجل العام حَكَمنا
         </h2>
-        <p className="text-base mb-10 max-w-md mx-auto" style={{ color: '#4A5568' }}>
+        <p className="text-base mb-10 max-w-md mx-auto" style={{ color: '#7C8A99' }}>
           لا نطلب ثقتك، نطلب أسبوعاً واحداً: افتح خطة اليوم كل صباح، تابع التوصيات
           بالمحفظة التجريبية، وقارن بنفسك مع السجل العام المفتوح
         </p>
@@ -558,15 +558,15 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
           <div className="flex items-center gap-2">
             <Image src="/logo.png" alt="ترقّب" width={24} height={24} className="w-6 h-6 object-contain" />
             <span className="text-sm font-bold text-white">ترقّب</span>
-            <span className="text-xs font-mono" style={{ color: '#1A2A3A' }}>TARAQOB PRO</span>
+            <span className="text-xs font-mono" style={{ color: '#55657A' }}>TARAQOB PRO</span>
           </div>
           <div className="flex items-center gap-6">
-            <Link href="/track"        className="text-xs" style={{ color: '#2D3748' }}>السجل العام</Link>
-            <Link href="/how-it-works" className="text-xs" style={{ color: '#2D3748' }}>كيف يعمل</Link>
-            <Link href="/compliance"   className="text-xs" style={{ color: '#2D3748' }}>الإفصاح والمخاطر</Link>
-            <Link href="/login"        className="text-xs" style={{ color: '#2D3748' }}>تسجيل الدخول</Link>
+            <Link href="/track"        className="text-xs" style={{ color: '#6B7B8D' }}>السجل العام</Link>
+            <Link href="/how-it-works" className="text-xs" style={{ color: '#6B7B8D' }}>كيف يعمل</Link>
+            <Link href="/compliance"   className="text-xs" style={{ color: '#6B7B8D' }}>الإفصاح والمخاطر</Link>
+            <Link href="/login"        className="text-xs" style={{ color: '#6B7B8D' }}>تسجيل الدخول</Link>
           </div>
-          <div className="text-xs font-mono" style={{ color: '#1A2A3A' }}>
+          <div className="text-xs font-mono" style={{ color: '#55657A' }}>
             بيانات السوق قد تكون مؤخرة أو تقديرية · ليست توصيات استثمارية
           </div>
         </div>

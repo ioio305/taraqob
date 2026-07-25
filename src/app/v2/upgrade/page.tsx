@@ -120,7 +120,7 @@ export default function UpgradePage() {
           ترقية الباقة
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold text-white mb-3">افتح الوصول الكامل</h1>
-        <p className="text-sm max-w-md mx-auto leading-relaxed" style={{ color: '#4A5568' }}>
+        <p className="text-sm max-w-md mx-auto leading-relaxed" style={{ color: '#7C8A99' }}>
           كل الأرقام حقيقية، كل الإشارات موثّقة. اختر الباقة التي تناسب مستوى تداولك.
         </p>
       </div>
@@ -147,7 +147,7 @@ export default function UpgradePage() {
               style={{
                 background: billing === x.b ? 'rgba(38,208,124,0.15)' : 'transparent',
                 border: billing === x.b ? '1px solid rgba(38,208,124,0.4)' : '1px solid transparent',
-                color: billing === x.b ? '#26D07C' : '#4A5568',
+                color: billing === x.b ? '#26D07C' : '#7C8A99',
               }}>
               {x.label}
             </button>
@@ -175,18 +175,18 @@ export default function UpgradePage() {
               {billing === 'monthly' ? (
                 <div className="flex items-baseline gap-1">
                   <span className="text-2xl font-bold font-mono" style={{ color: 'white' }}>${tier.monthly}</span>
-                  <span className="text-xs" style={{ color: '#4A5568' }}>/شهر</span>
+                  <span className="text-xs" style={{ color: '#7C8A99' }}>/شهر</span>
                 </div>
               ) : (
                 <div className="flex items-baseline gap-2 flex-wrap">
                   <span className="text-2xl font-bold font-mono" style={{ color: 'white' }}>
                     ${Math.round(tier.monthly * (1 - YEARLY_DISCOUNT))}
                   </span>
-                  <span className="text-xs" style={{ color: '#4A5568' }}>/شهر · يُدفع سنوياً</span>
-                  <span className="text-xs font-mono line-through" style={{ color: '#3A4A5C' }}>${tier.monthly}</span>
+                  <span className="text-xs" style={{ color: '#7C8A99' }}>/شهر · يُدفع سنوياً</span>
+                  <span className="text-xs font-mono line-through" style={{ color: '#6B7B8D' }}>${tier.monthly}</span>
                 </div>
               )}
-              <p className="text-xs mt-2 leading-relaxed" style={{ color: '#4A5568' }}>{tier.desc}</p>
+              <p className="text-xs mt-2 leading-relaxed" style={{ color: '#7C8A99' }}>{tier.desc}</p>
             </div>
 
             <ul className="space-y-2 flex-1 mb-5">
@@ -216,10 +216,10 @@ export default function UpgradePage() {
       {/* Current plan reminder */}
       <div className="rounded-xl p-4 text-center"
         style={{ background: 'rgba(13,27,42,0.5)', border: '1px solid rgba(255,255,255,0.04)' }}>
-        <p className="text-xs" style={{ color: '#2D3748' }}>
-          أنت حالياً على باقة <span style={{ color: '#4A5568' }}>رادار</span> — الباقة المجانية تتضمن الداشبورد وتحليل العقود
+        <p className="text-xs" style={{ color: '#6B7B8D' }}>
+          أنت حالياً على باقة <span style={{ color: '#7C8A99' }}>رادار</span> — الباقة المجانية تتضمن الداشبورد وتحليل العقود
         </p>
-        <Link href="/v2" className="inline-block mt-2 text-xs" style={{ color: '#1A2A3A' }}>
+        <Link href="/v2" className="inline-block mt-2 text-xs" style={{ color: '#55657A' }}>
           العودة للداشبورد ←
         </Link>
       </div>

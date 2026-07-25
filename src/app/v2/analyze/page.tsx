@@ -203,7 +203,7 @@ function ScoreGauge({ score, color }: { score: number; color: string }) {
         <div className="text-3xl font-bold font-mono leading-none" style={{ color }}>
           {score}
         </div>
-        <div className="text-xs font-mono" style={{ color: '#4A5568' }}>/100</div>
+        <div className="text-xs font-mono" style={{ color: '#7C8A99' }}>/100</div>
       </div>
     </div>
   )
@@ -221,7 +221,7 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-xs font-mono tracking-widest mb-4" style={{ color: '#2D3748' }}>
+    <div className="text-xs font-mono tracking-widest mb-4" style={{ color: '#6B7B8D' }}>
       {children}
     </div>
   )
@@ -230,7 +230,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
-      <div className="text-xs mb-1 font-mono" style={{ color: '#2D3748' }}>{label}</div>
+      <div className="text-xs mb-1 font-mono" style={{ color: '#6B7B8D' }}>{label}</div>
       <div className="text-sm font-semibold font-mono" style={{ color: color ?? 'white' }}>{value}</div>
     </div>
   )
@@ -488,7 +488,7 @@ function AnalyzeContent() {
           </div>
         )}
         <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
-          <p className="text-xs font-mono" style={{ color: '#2D3748' }}>
+          <p className="text-xs font-mono" style={{ color: '#6B7B8D' }}>
             لا يفترض الموقع الاتجاه تلقائيًا. الرمز الكامل يحدد الاتجاه بنفسه.
           </p>
           <div className="flex items-center gap-3">
@@ -500,7 +500,7 @@ function AnalyzeContent() {
                 style={{
                   background: liveMode ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.04)',
                   border:     liveMode ? '1px solid rgba(16,185,129,0.4)' : '1px solid rgba(255,255,255,0.08)',
-                  color:      liveMode ? '#10B981' : '#4A5568',
+                  color:      liveMode ? '#10B981' : '#7C8A99',
                 }}>
                 <span className={liveMode ? 'animate-pulse' : ''}>◉</span>
                 تحديث أسعار السوق
@@ -513,7 +513,7 @@ function AnalyzeContent() {
                 🔒 الخطة مثبّتة
               </span>
             )}
-            <Link href="/v2" className="text-xs shrink-0" style={{ color: '#4A5568' }}>
+            <Link href="/v2" className="text-xs shrink-0" style={{ color: '#7C8A99' }}>
               ← الداشبورد
             </Link>
           </div>
@@ -544,7 +544,7 @@ function AnalyzeContent() {
               <div className="text-base font-medium" style={{ color: '#C9943A' }}>
                 جاري تشغيل المحركات السبعة...
               </div>
-              <div className="text-xs font-mono" style={{ color: '#2D3748' }}>
+              <div className="text-xs font-mono" style={{ color: '#6B7B8D' }}>
                 جلب SPX · VIX · VWAP · سلسلة العقود · Greeks · حساب القرار
               </div>
             </div>
@@ -670,9 +670,9 @@ function AnalyzeContent() {
               </div>
               <div className="flex items-center gap-3 text-xs font-mono" dir="ltr">
                 <span style={{ color: '#94A3B8' }}>شراء (Ask) <b className="text-white">${n(analysis.ask, 2)}</b></span>
-                <span style={{ color: '#4A5568' }}>·</span>
+                <span style={{ color: '#7C8A99' }}>·</span>
                 <span style={{ color: '#94A3B8' }}>بيع (Bid) <b className="text-white">${n(analysis.bid, 2)}</b></span>
-                <span style={{ color: '#4A5568' }}>·</span>
+                <span style={{ color: '#7C8A99' }}>·</span>
                 <span style={{ color: analysis.spread_pct > 15 ? '#F59E0B' : '#6E7E8F' }}>الفرق {n(analysis.spread_pct, 0)}%</span>
               </div>
             </div>
@@ -681,7 +681,7 @@ function AnalyzeContent() {
             <div className="rounded-2xl px-5 py-3 flex flex-wrap items-center gap-x-5 gap-y-2"
               style={{ background: 'rgba(6,13,20,0.9)', border: '1px solid rgba(255,255,255,0.06)' }}>
               <div>
-                <span className="text-xs font-mono" style={{ color: '#2D3748' }}>SPX </span>
+                <span className="text-xs font-mono" style={{ color: '#6B7B8D' }}>SPX </span>
                 <span className="text-base font-bold font-mono text-white">{n(analysis.spx_price, 2)}</span>
                 <span className="text-sm font-mono mr-2"
                   style={{ color: analysis.spx_change_pct >= 0 ? '#10B981' : '#EF4444' }}>
@@ -689,7 +689,7 @@ function AnalyzeContent() {
                 </span>
               </div>
               <div>
-                <span className="text-xs font-mono" style={{ color: '#2D3748' }}>VIX </span>
+                <span className="text-xs font-mono" style={{ color: '#6B7B8D' }}>VIX </span>
                 <span className="text-sm font-mono"
                   style={{ color: analysis.vix > 25 ? '#EF4444' : analysis.vix > 20 ? '#F59E0B' : '#10B981' }}>
                   {n(analysis.vix, 1)}
@@ -697,7 +697,7 @@ function AnalyzeContent() {
               </div>
               {analysis.vwap && (
                 <div>
-                  <span className="text-xs font-mono" style={{ color: '#2D3748' }}>VWAP </span>
+                  <span className="text-xs font-mono" style={{ color: '#6B7B8D' }}>VWAP </span>
                   <span className="text-sm font-mono" style={{ color: '#60A5FA' }}>{n(analysis.vwap, 1)}</span>
                   <span className="text-xs font-mono mr-1"
                     style={{ color: analysis.spx_vs_vwap === 'above' ? '#10B981' : '#EF4444' }}>
@@ -707,14 +707,14 @@ function AnalyzeContent() {
               )}
               {analysis.or_high && (
                 <div>
-                  <span className="text-xs font-mono" style={{ color: '#2D3748' }}>نطاق أول 30 دقيقة </span>
+                  <span className="text-xs font-mono" style={{ color: '#6B7B8D' }}>نطاق أول 30 دقيقة </span>
                   <span className="text-xs font-mono" style={{ color: '#F59E0B' }}>
                     {n(analysis.or_low, 0)} – {n(analysis.or_high, 0)}
                   </span>
                 </div>
               )}
               <div>
-                <span className="text-xs font-mono" style={{ color: '#2D3748' }}>EM±</span>
+                <span className="text-xs font-mono" style={{ color: '#6B7B8D' }}>EM±</span>
                 <span className="text-sm font-mono" style={{ color: '#A78BFA' }}>
                   {n(analysis.expected_move_live?.points ?? analysis.em_intraday, 1)}
                 </span>
@@ -723,7 +723,7 @@ function AnalyzeContent() {
                 )}
               </div>
               <div className="mr-auto flex items-center gap-2">
-                <span className="text-xs font-mono" style={{ color: '#4A5568' }}>
+                <span className="text-xs font-mono" style={{ color: '#7C8A99' }}>
                   {analysis.dte === 0 ? 'ينتهي اليوم' : `متبقي ${analysis.dte} يوم`}
                   {' · '}{analysis.type === 'call' ? 'صاعد' : 'هابط'}
                   {' · '}سعر التنفيذ {n(analysis.strike, 0)}
@@ -737,7 +737,7 @@ function AnalyzeContent() {
                   </span>
                 )}
                 {!liveMode && (
-                  <span className="text-[10px] font-mono" style={{ color: '#4A5568' }}>
+                  <span className="text-[10px] font-mono" style={{ color: '#7C8A99' }}>
                     آخر قراءة {new Date(analysis.generated_at).toLocaleTimeString('ar-SA', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                   </span>
                 )}
@@ -766,7 +766,7 @@ function AnalyzeContent() {
                   <div className="font-mono text-sm text-white mb-1 break-all leading-snug">
                     {analysis.symbol}
                   </div>
-                  <div className="text-xs font-mono mb-3" style={{ color: '#4A5568' }}>
+                  <div className="text-xs font-mono mb-3" style={{ color: '#7C8A99' }}>
                     انتهاء {analysis.expiration} · {analysis.type === 'call' ? 'اتجاه صاعد' : 'اتجاه هابط'} · سعر التنفيذ {n(analysis.strike, 0)}
                   </div>
 
@@ -932,7 +932,7 @@ function AnalyzeContent() {
               <SectionLabel>تفصيل القرار — 7 محركات</SectionLabel>
               <div className="space-y-4">
                 {scoreEntries.map(([key, s]) => {
-                  const clr     = SCORE_COLORS[key] ?? '#4A5568'
+                  const clr     = SCORE_COLORS[key] ?? '#7C8A99'
                   const pctVal  = Math.round((s.score / s.max) * 100)
                   const remark  = engineRemark(key, s.score, s.max, analysis)
                   return (
@@ -940,10 +940,10 @@ function AnalyzeContent() {
                       <div className="flex justify-between items-center mb-1.5">
                         <div>
                           <span className="text-sm font-medium" style={{ color: '#94A3B8' }}>{s.label}</span>
-                          <span className="text-xs font-mono mr-2" style={{ color: '#2D3748' }}>— {remark}</span>
+                          <span className="text-xs font-mono mr-2" style={{ color: '#6B7B8D' }}>— {remark}</span>
                         </div>
                         <span className="text-sm font-bold font-mono shrink-0" style={{ color: clr }}>
-                          {s.score}<span className="text-xs" style={{ color: '#2D3748' }}>/{s.max}</span>
+                          {s.score}<span className="text-xs" style={{ color: '#6B7B8D' }}>/{s.max}</span>
                         </span>
                       </div>
                       {/* Score bar */}
@@ -953,7 +953,7 @@ function AnalyzeContent() {
                           <div className="h-full rounded-full transition-all duration-700"
                             style={{ width: `${pctVal}%`, background: clr, opacity: 0.85 }} />
                         </div>
-                        <span className="text-xs font-mono w-9 text-left shrink-0" style={{ color: '#4A5568' }}>
+                        <span className="text-xs font-mono w-9 text-left shrink-0" style={{ color: '#7C8A99' }}>
                           {pctVal}%
                         </span>
                       </div>
@@ -973,7 +973,7 @@ function AnalyzeContent() {
                   <div className="font-bold font-mono" style={{ color: '#EF4444' }}>{analysis.em_lower}</div>
                 </div>
                 <div className="text-center flex-1 mx-4">
-                  <div className="text-xs font-mono" style={{ color: '#4A5568' }}>المؤشر الآن · الحركة المتوقعة ±{n(analysis.em_reference, 1)}</div>
+                  <div className="text-xs font-mono" style={{ color: '#7C8A99' }}>المؤشر الآن · الحركة المتوقعة ±{n(analysis.em_reference, 1)}</div>
                   <div className="text-xl font-bold font-mono text-white mt-0.5">{n(analysis.spx_price, 2)}</div>
                   <div className="flex items-center gap-1 mt-1.5 mx-auto" style={{ maxWidth: 160 }}>
                     <div className="flex-1 h-1 rounded-full" style={{ background: 'rgba(239,68,68,0.4)' }} />
@@ -1051,7 +1051,7 @@ function AnalyzeContent() {
                       <tr style={{ background: 'rgba(0,0,0,0.4)' }}>
                         {['Strike', 'Bid', 'Ask', 'Mid', 'Delta', 'Gamma', 'IV', 'Volume'].map(h => (
                           <th key={h} className="text-left py-2.5 px-3 font-semibold"
-                              style={{ color: '#2D3748', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                              style={{ color: '#6B7B8D', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                             {h}
                           </th>
                         ))}
@@ -1096,7 +1096,7 @@ function AnalyzeContent() {
                     </tbody>
                   </table>
                 </div>
-                <div className="mt-2 text-xs font-mono" style={{ color: '#1A2A3A' }}>
+                <div className="mt-2 text-xs font-mono" style={{ color: '#55657A' }}>
                   العقد المحدد مُظلَّل · ٤ سترايكات قبله و٤ بعده · delta 0.22–0.35 مُميَّز بالأخضر
                 </div>
               </Card>
@@ -1104,14 +1104,14 @@ function AnalyzeContent() {
 
             {/* ── Compliance Disclaimer ── */}
             <div className="rounded-2xl px-5 py-4 text-xs leading-relaxed font-mono" dir="rtl"
-              style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)', color: '#2D3748' }}>
-              <div className="font-semibold mb-1" style={{ color: '#4A5568' }}>إخلاء مسؤولية — أداة دعم قرار فقط</div>
+              style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)', color: '#6B7B8D' }}>
+              <div className="font-semibold mb-1" style={{ color: '#7C8A99' }}>إخلاء مسؤولية — أداة دعم قرار فقط</div>
               هذا التحليل للأغراض التعليمية والمعلوماتية حصراً. لا يُعدّ نصيحة استثمارية أو توصية بالشراء أو البيع.
               تداول عقود الخيارات ينطوي على مخاطر عالية وقد يؤدي إلى خسارة رأس المال كاملاً.
               استشر مستشاراً مالياً مرخصاً قبل اتخاذ أي قرار استثماري.
               قد تكون البيانات مؤخرة أو تقديرية (بلا مصدر لحظي مدفوع).
             </div>
-            <div className="text-xs text-center font-mono pb-4" style={{ color: '#1A2A3A' }}>
+            <div className="text-xs text-center font-mono pb-4" style={{ color: '#55657A' }}>
               وقت التحليل: {analysis.analysis_duration_ms}ms · مصدر البيانات: تلقائي (مباشر عند توفّره أو تقديري)
             </div>
           </div>
@@ -1131,8 +1131,8 @@ export default function AnalyzePage() {
           borderBottom: '1px solid rgba(255,255,255,0.04)',
           backdropFilter: 'blur(10px)',
         }}>
-        <Link href="/v2" className="text-sm transition-colors" style={{ color: '#4A5568' }}>→ الداشبورد</Link>
-        <span style={{ color: '#1A2A3A' }}>/</span>
+        <Link href="/v2" className="text-sm transition-colors" style={{ color: '#7C8A99' }}>→ الداشبورد</Link>
+        <span style={{ color: '#55657A' }}>/</span>
         <span className="text-sm font-medium text-white">تحليل العقد</span>
         <span className="mr-auto text-xs font-mono px-2 py-0.5 rounded"
           style={{ background: 'rgba(201,148,58,0.1)', color: '#C9943A', border: '1px solid rgba(201,148,58,0.2)' }}>
@@ -1141,7 +1141,7 @@ export default function AnalyzePage() {
       </header>
       <Suspense fallback={
         <div className="max-w-5xl mx-auto px-4 py-16 text-center">
-          <div className="text-sm font-mono animate-pulse" style={{ color: '#4A5568' }}>جاري التحميل...</div>
+          <div className="text-sm font-mono animate-pulse" style={{ color: '#7C8A99' }}>جاري التحميل...</div>
         </div>
       }>
         <AnalyzeContent />

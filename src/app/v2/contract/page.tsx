@@ -25,7 +25,7 @@ function MeterBar({ value, max, color }: { value: number; max: number; color: st
       <div className="flex-1 rounded-full h-1.5" style={{ background: 'rgba(255,255,255,0.06)' }}>
         <div className="h-1.5 rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: color }} />
       </div>
-      <span className="text-xs tabular-nums w-10 text-left" style={{ color: '#4A5568', fontFamily: '"IBM Plex Mono", monospace' }}>
+      <span className="text-xs tabular-nums w-10 text-left" style={{ color: '#7C8A99', fontFamily: '"IBM Plex Mono", monospace' }}>
         {value}/{max}
       </span>
     </div>
@@ -61,7 +61,7 @@ export default function ContractQualityPage() {
     <div className="p-5 space-y-5" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }} dir="rtl">
       <div>
         <h2 className="text-white font-bold text-lg">Contract Quality</h2>
-        <p className="text-xs mt-0.5" style={{ color: '#4A5568' }}>تقييم جودة العقد — سيولة، Greeks، Spread</p>
+        <p className="text-xs mt-0.5" style={{ color: '#7C8A99' }}>تقييم جودة العقد — سيولة، Greeks، Spread</p>
       </div>
 
       {/* Input */}
@@ -104,7 +104,7 @@ export default function ContractQualityPage() {
               <div>
                 <div className="text-3xl font-bold" style={{ color: grade.color }}>{grade.ar}</div>
                 <div className="text-sm mt-1 text-white font-mono">{analysis.selected_symbol}</div>
-                <div className="text-xs mt-1" style={{ color: '#4A5568' }}>
+                <div className="text-xs mt-1" style={{ color: '#7C8A99' }}>
                   Strike {n(analysis.selected_strike, 0)} · {analysis.selected_expiry} · {analysis.selected_dte} DTE
                 </div>
               </div>
@@ -116,7 +116,7 @@ export default function ContractQualityPage() {
 
           {/* تفاصيل */}
           <div className="rounded-xl p-4 space-y-4" style={{ background: 'rgba(13,27,42,0.6)', border: '1px solid rgba(255,255,255,0.04)' }}>
-            <div className="text-xs font-semibold tracking-widest" style={{ color: '#2D3748', letterSpacing: '0.15em' }}>تفاصيل التقييم</div>
+            <div className="text-xs font-semibold tracking-widest" style={{ color: '#6B7B8D', letterSpacing: '0.15em' }}>تفاصيل التقييم</div>
             {[
               { label: 'Bid / Ask', value: `${n(analysis.bid)} / ${n(analysis.ask)}` },
               { label: 'Spread', value: analysis.spread_percent != null ? n(analysis.spread_percent, 1) + '%' : '—', alert: (analysis.spread_percent ?? 0) > 10 },

@@ -17,7 +17,7 @@ const ENV: Record<string, { ar: string; en: string; color: string; bg: string; d
   bearish:          { ar: 'هابط',        en: 'BEARISH',          color: '#F87171', bg: 'rgba(248,113,113,0.06)', desc: 'الاتجاه العام هابط، توخَّ الحذر.' },
   strongly_bearish: { ar: 'هابط بقوة',  en: 'STRONGLY BEARISH', color: '#EF4444', bg: 'rgba(239,68,68,0.08)',   desc: 'ضغط بيعي حاد، بيئة عالية المخاطر.' },
   high_volatility:  { ar: 'تذبذب عالٍ', en: 'HIGH VOLATILITY',  color: '#FB923C', bg: 'rgba(251,146,60,0.08)',  desc: 'VIX مرتفع، تحركات حادة محتملة في كلا الاتجاهين.' },
-  unclear:          { ar: 'غير واضح',   en: 'UNCLEAR',          color: '#4A5568', bg: 'rgba(74,85,104,0.06)',   desc: 'بيانات غير كافية لتحديد الاتجاه.' },
+  unclear:          { ar: 'غير واضح',   en: 'UNCLEAR',          color: '#7C8A99', bg: 'rgba(74,85,104,0.06)',   desc: 'بيانات غير كافية لتحديد الاتجاه.' },
 }
 
 export default function MarketRegimePage() {
@@ -68,7 +68,7 @@ export default function MarketRegimePage() {
     <div className="p-5 space-y-5" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }} dir="rtl">
       <div>
         <h2 className="text-white font-bold text-lg">Market Regime Analyzer</h2>
-        <p className="text-xs mt-0.5" style={{ color: '#4A5568' }}>تحليل حالة السوق العامة بناءً على البيانات اللحظية</p>
+        <p className="text-xs mt-0.5" style={{ color: '#7C8A99' }}>تحليل حالة السوق العامة بناءً على البيانات اللحظية</p>
       </div>
 
       {/* البطاقة الرئيسية */}
@@ -86,7 +86,7 @@ export default function MarketRegimePage() {
                 <div className="text-3xl font-bold text-white" style={{ fontFamily: '"IBM Plex Mono", monospace' }}>
                   {n(snap?.spx_price)}
                 </div>
-                <div className="text-xs mt-0.5" style={{ color: '#4A5568' }}>SPX الآن</div>
+                <div className="text-xs mt-0.5" style={{ color: '#7C8A99' }}>SPX الآن</div>
               </div>
             </div>
             <p className="text-sm" style={{ color: '#94A3B8' }}>{env.desc}</p>
@@ -101,7 +101,7 @@ export default function MarketRegimePage() {
 
       {/* المؤشرات */}
       <div>
-        <div className="text-xs font-semibold tracking-widest mb-3" style={{ color: '#2D3748', letterSpacing: '0.15em' }}>المؤشرات</div>
+        <div className="text-xs font-semibold tracking-widest mb-3" style={{ color: '#6B7B8D', letterSpacing: '0.15em' }}>المؤشرات</div>
         <div className="space-y-2">
           {indicators.map(ind => (
             <div key={ind.label} className="flex items-center justify-between p-3 rounded-xl"
@@ -121,7 +121,7 @@ export default function MarketRegimePage() {
       </div>
 
       {/* ملاحظة */}
-      <div className="text-xs px-4 py-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.02)', color: '#2D3748', border: '1px solid rgba(255,255,255,0.04)' }}>
+      <div className="text-xs px-4 py-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.02)', color: '#6B7B8D', border: '1px solid rgba(255,255,255,0.04)' }}>
         ⚠ هذا التحليل للمعلومات فقط وليس توصية استثمارية. بيانات السوق قد تكون مؤخرة أو تقديرية.
       </div>
     </div>

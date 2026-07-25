@@ -149,7 +149,7 @@ export default function SignalsPage() {
                         </span>
                         <span className={`text-xs px-2 py-0.5 rounded-full border ${st.cls}`}>{st.ar}</span>
                       </div>
-                      <div className="text-xs mt-1 font-mono cursor-help" style={{ color: '#2D3748' }}
+                      <div className="text-xs mt-1 font-mono cursor-help" style={{ color: '#6B7B8D' }}
                         title="رمز العقد الرسمي في البورصة — تحتاجه فقط عند البحث عن العقد في منصة وسيطك">
                         {s.contract_symbol}
                       </div>

@@ -61,7 +61,7 @@ export function NewsBar({ news, loading, failed }: {
     return (
       <div className="rounded-xl px-4 py-2.5 flex items-center gap-2"
         style={{ background: 'rgba(13,27,42,0.5)', border: '1px solid rgba(255,255,255,0.04)' }}>
-        <span className="text-xs font-mono" style={{ color: '#2D3748' }}>
+        <span className="text-xs font-mono" style={{ color: '#6B7B8D' }}>
           شريط الأخبار — بيانات الأخبار غير متاحة حاليًا
         </span>
       </div>
@@ -89,7 +89,7 @@ export function NewsBar({ news, loading, failed }: {
           شريط الأخبار
         </span>
 
-        <span className="text-xs font-mono" style={{ color: '#2D3748' }}>·</span>
+        <span className="text-xs font-mono" style={{ color: '#6B7B8D' }}>·</span>
 
         {/* Score badge */}
         <span className="text-xs font-mono font-bold shrink-0"
@@ -140,22 +140,22 @@ function EventRow({ ev }: { ev: NewsEvent }) {
       {/* Impact score */}
       <div className="shrink-0 text-center min-w-[36px]">
         <div className="text-sm font-bold font-mono leading-none" style={{ color }}>{ev.impact}%</div>
-        <div className="text-[9px] font-mono mt-0.5" style={{ color: '#2D3748' }}>تأثير</div>
+        <div className="text-[9px] font-mono mt-0.5" style={{ color: '#6B7B8D' }}>تأثير</div>
       </div>
       {/* Info */}
       <div className="min-w-0 flex-1">
         <div className="text-xs text-white leading-tight mb-0.5">{ev.titleAr}</div>
-        <div className="text-[10px] font-mono truncate mb-0.5" style={{ color: '#2D3748' }}>{ev.title}</div>
-        <div className="text-[10px] font-mono" style={{ color: '#4A5568' }}>
+        <div className="text-[10px] font-mono truncate mb-0.5" style={{ color: '#6B7B8D' }}>{ev.title}</div>
+        <div className="text-[10px] font-mono" style={{ color: '#7C8A99' }}>
           {ev.source} · {ev.category} · {timeStr}
           {ev.isUpcoming && <span style={{ color }} className="mr-2">⬆ قادم</span>}
         </div>
-        <div className="text-[10px] mt-0.5" style={{ color: '#2D3748' }}>{ev.reason}</div>
+        <div className="text-[10px] mt-0.5" style={{ color: '#6B7B8D' }}>{ev.reason}</div>
       </div>
       {/* SPX impact */}
       <div className="shrink-0 text-center">
         <div className="text-xs font-mono font-bold" style={{ color }}>{ev.spxImpact}%</div>
-        <div className="text-[9px] font-mono" style={{ color: '#2D3748' }}>SPX</div>
+        <div className="text-[9px] font-mono" style={{ color: '#6B7B8D' }}>SPX</div>
       </div>
     </div>
   )
@@ -178,7 +178,7 @@ export function NewsImpactBadge({ news, compact = false }: {
         style={{ background: `${color}10`, border: `1px solid ${color}25` }}>
         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
         <span className="text-[10px] font-mono font-bold" style={{ color }}>{score}%</span>
-        <span className="text-[10px] font-mono" style={{ color: '#4A5568' }}>{levelAr}</span>
+        <span className="text-[10px] font-mono" style={{ color: '#7C8A99' }}>{levelAr}</span>
       </div>
     )
   }
@@ -187,7 +187,7 @@ export function NewsImpactBadge({ news, compact = false }: {
     <div className="rounded-xl p-3"
       style={{ background: `${color}08`, border: `1px solid ${color}20` }}>
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs font-mono" style={{ color: '#4A5568' }}>تأثير الأخبار</span>
+        <span className="text-xs font-mono" style={{ color: '#7C8A99' }}>تأثير الأخبار</span>
         <div className="flex items-center gap-2">
           <span className="text-sm font-bold font-mono" style={{ color }}>{score}%</span>
           <span className="text-xs px-2 py-0.5 rounded-full font-mono"
@@ -201,7 +201,7 @@ export function NewsImpactBadge({ news, compact = false }: {
         <div className="h-full rounded-full transition-all"
           style={{ width: `${score}%`, background: color }} />
       </div>
-      <div className="text-[11px] leading-relaxed" style={{ color: '#4A5568' }}>{reason}</div>
+      <div className="text-[11px] leading-relaxed" style={{ color: '#7C8A99' }}>{reason}</div>
       {news.decision?.action === 'block' ? (
         <div className="mt-2 text-[11px] leading-relaxed font-mono" style={{ color: '#EF4444' }}>
           التوصيات معلقة مؤقتاً حتى انتهاء نافذة الخطر الإخباري.

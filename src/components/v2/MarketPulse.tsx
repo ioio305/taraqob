@@ -45,7 +45,7 @@ export function MarketPulse() {
   }, [])
 
   if (loading) {
-    return <div className="rounded-2xl p-5 text-center text-sm animate-pulse" style={{ background: 'rgba(13,27,42,0.9)', border: '1px solid rgba(255,255,255,0.06)', color: '#4A5568' }}>جارٍ قياس نبض السوق...</div>
+    return <div className="rounded-2xl p-5 text-center text-sm animate-pulse" style={{ background: 'rgba(13,27,42,0.9)', border: '1px solid rgba(255,255,255,0.06)', color: '#7C8A99' }}>جارٍ قياس نبض السوق...</div>
   }
   if (!d?.gamma && !d?.fearGreed) return null
 
@@ -176,7 +176,7 @@ export function MarketPulse() {
           </div>
         )}
 
-        {g?.dataNoteAr && <div className="text-[10px] font-mono" style={{ color: '#3A4A5A' }}>{g.dataNoteAr}</div>}
+        {g?.dataNoteAr && <div className="text-[10px] font-mono" style={{ color: '#6B7B8D' }}>{g.dataNoteAr}</div>}
       </div>
     </div>
   )

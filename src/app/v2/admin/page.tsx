@@ -14,7 +14,7 @@ type Stats = {
 }
 
 const ROLE_AR: Record<string, string>    = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
-const ROLE_CLR: Record<string, string>   = { admin: '#C9943A', moderator: '#60A5FA', user: '#4A5568' }
+const ROLE_CLR: Record<string, string>   = { admin: '#C9943A', moderator: '#60A5FA', user: '#7C8A99' }
 const STATUS_CLR = { active: '#10B981', inactive: '#EF4444' }
 
 function KPI({ label, value, sub, color = 'white', icon, href }: {
@@ -25,11 +25,11 @@ function KPI({ label, value, sub, color = 'white', icon, href }: {
     <div className="rounded-xl p-5 h-full transition-all"
       style={{ background: 'rgba(13,27,42,0.8)', border: '1px solid rgba(255,255,255,0.06)' }}>
       <div className="flex items-start justify-between mb-4">
-        <span className="text-xs font-mono tracking-wide" style={{ color: '#2D3748' }}>{label}</span>
-        <span className="text-base" style={{ color: '#1A2A3A' }}>{icon}</span>
+        <span className="text-xs font-mono tracking-wide" style={{ color: '#6B7B8D' }}>{label}</span>
+        <span className="text-base" style={{ color: '#55657A' }}>{icon}</span>
       </div>
       <div className="text-4xl font-bold font-mono leading-none" style={{ color }}>{value}</div>
-      {sub && <div className="text-xs font-mono mt-2" style={{ color: '#2D3748' }}>{sub}</div>}
+      {sub && <div className="text-xs font-mono mt-2" style={{ color: '#6B7B8D' }}>{sub}</div>}
     </div>
   )
   return href ? <Link href={href} className="block">{inner}</Link> : <div>{inner}</div>
@@ -62,7 +62,7 @@ export default function AdminDashboard() {
               Admin
             </span>
           </div>
-          <p className="text-xs font-mono" style={{ color: '#2D3748' }}>
+          <p className="text-xs font-mono" style={{ color: '#6B7B8D' }}>
             نظرة شاملة على المنصة — المستخدمون · الإشارات · النشاط
           </p>
         </div>
@@ -83,7 +83,7 @@ export default function AdminDashboard() {
       {loading ? (
         <div className="py-24 text-center">
           <div className="text-xl font-mono animate-pulse" style={{ color: '#C9943A' }}>◈</div>
-          <div className="text-xs font-mono mt-3" style={{ color: '#2D3748' }}>جاري تحميل الإحصائيات...</div>
+          <div className="text-xs font-mono mt-3" style={{ color: '#6B7B8D' }}>جاري تحميل الإحصائيات...</div>
         </div>
       ) : error ? (
         <div className="py-24 text-center">
@@ -100,11 +100,11 @@ export default function AdminDashboard() {
               sub={stats.signals.winRate != null ? `نسبة الفوز ${stats.signals.winRate}%` : 'لا إشارات مغلقة'}
               color="#10B981" />
             <KPI icon="⬡" label="دعوات معلّقة" value={stats.pendingInvites}
-              sub="خلال 7 أيام" color={stats.pendingInvites > 0 ? '#F59E0B' : '#2D3748'}
+              sub="خلال 7 أيام" color={stats.pendingInvites > 0 ? '#F59E0B' : '#6B7B8D'}
               href="/v2/admin/users" />
             <KPI icon="⊘" label="حسابات موقوفة" value={stats.users.inactive}
               sub={stats.users.inactive > 0 ? 'تحتاج مراجعة' : 'لا مشاكل'}
-              color={stats.users.inactive > 0 ? '#EF4444' : '#2D3748'}
+              color={stats.users.inactive > 0 ? '#EF4444' : '#6B7B8D'}
               href="/v2/admin/users" />
           </div>
 
@@ -115,18 +115,18 @@ export default function AdminDashboard() {
             <div className="rounded-xl p-5"
               style={{ background: 'rgba(13,27,42,0.8)', border: '1px solid rgba(255,255,255,0.06)' }}>
               <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-mono tracking-widest" style={{ color: '#2D3748' }}>توزيع الأدوار</span>
-                <span className="text-xs font-mono" style={{ color: '#1A2A3A' }}>{stats.users.total} إجمالي</span>
+                <span className="text-xs font-mono tracking-widest" style={{ color: '#6B7B8D' }}>توزيع الأدوار</span>
+                <span className="text-xs font-mono" style={{ color: '#55657A' }}>{stats.users.total} إجمالي</span>
               </div>
               <div className="space-y-3">
                 {Object.entries(stats.users.byRole).map(([role, count]) => {
                   const pct = stats.users.total > 0 ? Math.round((count / stats.users.total) * 100) : 0
-                  const clr = ROLE_CLR[role] ?? '#4A5568'
+                  const clr = ROLE_CLR[role] ?? '#7C8A99'
                   return (
                     <div key={role}>
                       <div className="flex justify-between items-center mb-1.5">
                         <span className="text-sm font-medium" style={{ color: clr }}>{ROLE_AR[role] ?? role}</span>
-                        <span className="text-xs font-mono" style={{ color: '#2D3748' }}>{count} · {pct}%</span>
+                        <span className="text-xs font-mono" style={{ color: '#6B7B8D' }}>{count} · {pct}%</span>
                       </div>
                       <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
                         <div className="h-full rounded-full transition-all duration-1000"
@@ -141,7 +141,7 @@ export default function AdminDashboard() {
             {/* Signals stats */}
             <div className="rounded-xl p-5"
               style={{ background: 'rgba(13,27,42,0.8)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <div className="text-xs font-mono tracking-widest mb-4" style={{ color: '#2D3748' }}>إحصائيات الإشارات</div>
+              <div className="text-xs font-mono tracking-widest mb-4" style={{ color: '#6B7B8D' }}>إحصائيات الإشارات</div>
               <div className="grid grid-cols-3 gap-2 mb-4">
                 {[
                   { l: 'الإجمالي',  v: stats.signals.total,  c: 'white'    },
@@ -151,14 +151,14 @@ export default function AdminDashboard() {
                   <div key={s.l} className="rounded-lg p-3 text-center"
                     style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
                     <div className="text-2xl font-bold font-mono" style={{ color: s.c }}>{s.v}</div>
-                    <div className="text-xs mt-1 font-mono" style={{ color: '#2D3748' }}>{s.l}</div>
+                    <div className="text-xs mt-1 font-mono" style={{ color: '#6B7B8D' }}>{s.l}</div>
                   </div>
                 ))}
               </div>
               {stats.signals.winRate != null && (
                 <div>
                   <div className="flex justify-between mb-1.5">
-                    <span className="text-xs font-mono" style={{ color: '#2D3748' }}>نسبة الفوز</span>
+                    <span className="text-xs font-mono" style={{ color: '#6B7B8D' }}>نسبة الفوز</span>
                     <span className="text-xs font-mono font-bold" style={{ color: '#10B981' }}>{stats.signals.winRate}%</span>
                   </div>
                   <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
@@ -171,7 +171,7 @@ export default function AdminDashboard() {
             {/* Quick actions */}
             <div className="rounded-xl p-5"
               style={{ background: 'rgba(13,27,42,0.8)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <div className="text-xs font-mono tracking-widest mb-4" style={{ color: '#2D3748' }}>إجراءات سريعة</div>
+              <div className="text-xs font-mono tracking-widest mb-4" style={{ color: '#6B7B8D' }}>إجراءات سريعة</div>
               <div className="space-y-2">
                 {[
                   { href: '/v2/admin/users', icon: '◎', label: 'إدارة المستخدمين',     clr: '#C9943A' },
@@ -184,7 +184,7 @@ export default function AdminDashboard() {
                     style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
                     <span className="text-sm" style={{ color: a.clr }}>{a.icon}</span>
                     <span className="text-sm" style={{ color: '#94A3B8' }}>{a.label}</span>
-                    <span className="mr-auto text-xs" style={{ color: '#1A2A3A' }}>←</span>
+                    <span className="mr-auto text-xs" style={{ color: '#55657A' }}>←</span>
                   </Link>
                 ))}
               </div>
@@ -195,13 +195,13 @@ export default function AdminDashboard() {
           <div className="rounded-xl" style={{ background: 'rgba(13,27,42,0.8)', border: '1px solid rgba(255,255,255,0.06)' }}>
             <div className="flex items-center justify-between px-5 py-4"
               style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-              <span className="text-xs font-mono tracking-widest" style={{ color: '#2D3748' }}>آخر المستخدمين المسجّلين</span>
+              <span className="text-xs font-mono tracking-widest" style={{ color: '#6B7B8D' }}>آخر المستخدمين المسجّلين</span>
               <Link href="/v2/admin/users" className="text-xs font-mono transition-colors"
                 style={{ color: '#C9943A' }}>عرض الكل ←</Link>
             </div>
             <div className="divide-y" style={{ borderColor: 'rgba(255,255,255,0.03)' }}>
               {stats.recentUsers.map(u => {
-                const clr   = ROLE_CLR[u.role] ?? '#4A5568'
+                const clr   = ROLE_CLR[u.role] ?? '#7C8A99'
                 const initials = (u.full_name_ar || u.full_name || u.email).charAt(0).toUpperCase()
                 return (
                   <div key={u.id} className="flex items-center gap-4 px-5 py-3.5 transition-all"
@@ -217,7 +217,7 @@ export default function AdminDashboard() {
                       <div className="text-sm font-semibold text-white truncate">
                         {u.full_name_ar || u.full_name || '—'}
                       </div>
-                      <div className="text-xs font-mono truncate" style={{ color: '#2D3748' }}>{u.email}</div>
+                      <div className="text-xs font-mono truncate" style={{ color: '#6B7B8D' }}>{u.email}</div>
                     </div>
 
                     {/* Role */}
@@ -237,7 +237,7 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Date */}
-                    <span className="text-xs font-mono shrink-0 hidden md:block" style={{ color: '#1A2A3A' }}>
+                    <span className="text-xs font-mono shrink-0 hidden md:block" style={{ color: '#55657A' }}>
                       {new Date(u.created_at).toLocaleDateString('ar-SA')}
                     </span>
                   </div>

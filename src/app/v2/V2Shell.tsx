@@ -11,13 +11,13 @@ import { AssistantWidget } from '@/components/v2/AssistantWidget'
 import { NewsTicker } from '@/components/v2/NewsTicker'
 
 const ROLE_LABEL_MAP: Record<string, string>  = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
-const ROLE_COLOR_MAP: Record<string, string>  = { admin: '#C9943A', moderator: '#60A5FA', user: '#4A5568' }
+const ROLE_COLOR_MAP: Record<string, string>  = { admin: '#C9943A', moderator: '#60A5FA', user: '#7C8A99' }
 const ROLE_ICON_MAP:  Record<string, string>  = { admin: '⊞', moderator: '◎', user: '◈' }
 
 // ── Tier helpers ─────────────────────────────────────────────────
 const TIER_RANK:  Record<string, number> = { radar: 1, signal: 2, edge: 3, alpha: 4 }
 const TIER_LABEL: Record<string, string> = { radar: 'رادار', signal: 'سيجنال', edge: 'إيدج', alpha: 'ألفا' }
-const TIER_COLOR: Record<string, string> = { radar: '#4A5568', signal: '#60A5FA', edge: '#C9943A', alpha: '#A78BFA' }
+const TIER_COLOR: Record<string, string> = { radar: '#7C8A99', signal: '#60A5FA', edge: '#C9943A', alpha: '#A78BFA' }
 
 function tierAllows(userTier: string, required: string): boolean {
   return (TIER_RANK[userTier] ?? 1) >= (TIER_RANK[required] ?? 2)
@@ -87,7 +87,7 @@ function NavLink({ href, label, icon, exact, accent = '#C9943A' }: {
 
 // ── LockedNavLink (tier gate) ──────────────────────────────────
 function LockedNavLink({ label, icon, requiredTier }: { label: string; icon: string; requiredTier: string }) {
-  const tc = TIER_COLOR[requiredTier] ?? '#4A5568'
+  const tc = TIER_COLOR[requiredTier] ?? '#7C8A99'
   return (
     <Link href="/v2/upgrade"
       className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
@@ -172,8 +172,8 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
     ? (effectiveRole === 'admin' || effectiveRole === 'moderator')
     : isMod
 
-  const roleColor = ROLE_COLOR_MAP[effectiveRole] ?? '#4A5568'
-  const tierColor = TIER_COLOR[subscriptionTier]  ?? '#4A5568'
+  const roleColor = ROLE_COLOR_MAP[effectiveRole] ?? '#7C8A99'
+  const tierColor = TIER_COLOR[subscriptionTier]  ?? '#7C8A99'
 
   // ── Fetch notifications ────────────────────────────────────
   const fetchNotifications = useCallback(async () => {
@@ -357,8 +357,8 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
         <div className="px-5 pt-1 pb-3 flex items-center gap-3">
           {NAV_QUIET.map((q, i) => (
             <span key={q.href} className="flex items-center gap-3">
-              {i > 0 && <span style={{ color: '#1A2A3A' }}>·</span>}
-              <Link href={q.href} className="text-xs transition-colors hover:text-white" style={{ color: '#4A5568' }}>
+              {i > 0 && <span style={{ color: '#55657A' }}>·</span>}
+              <Link href={q.href} className="text-xs transition-colors hover:text-white" style={{ color: '#7C8A99' }}>
                 {q.label}
               </Link>
             </span>
@@ -370,7 +370,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
       <div className="px-4 py-3 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
-            style={{ background: `${ROLE_COLOR_MAP[userRole] ?? '#4A5568'}15`, color: ROLE_COLOR_MAP[userRole] ?? '#4A5568', border: `1px solid ${ROLE_COLOR_MAP[userRole] ?? '#4A5568'}30` }}>
+            style={{ background: `${ROLE_COLOR_MAP[userRole] ?? '#7C8A99'}15`, color: ROLE_COLOR_MAP[userRole] ?? '#7C8A99', border: `1px solid ${ROLE_COLOR_MAP[userRole] ?? '#7C8A99'}30` }}>
             {userName.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
@@ -414,7 +414,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
           style={{ background: 'rgba(8,16,26,0.95)', borderBottom: '1px solid rgba(255,255,255,0.04)', backdropFilter: 'blur(10px)' }}>
 
           <button onClick={() => setMobileOpen(true)} className="lg:hidden p-1.5 rounded-lg"
-            style={{ color: '#4A5568' }}>
+            style={{ color: '#7C8A99' }}>
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
             </svg>
@@ -426,7 +426,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
           <div ref={bellRef} className="relative">
             <button onClick={openBell} aria-label="الإشعارات" aria-expanded={bellOpen}
               className="relative w-8 h-8 rounded-lg flex items-center justify-center transition-all"
-              style={{ background: bellOpen ? 'rgba(201,148,58,0.1)' : 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: '#4A5568' }}>
+              style={{ background: bellOpen ? 'rgba(201,148,58,0.1)' : 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: '#7C8A99' }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
                 <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
@@ -452,16 +452,16 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
                         قرأت الكل
                       </button>
                     )}
-                    <span className="text-xs font-mono" style={{ color: '#4A5568' }}>{notifications.length} إشعار</span>
+                    <span className="text-xs font-mono" style={{ color: '#7C8A99' }}>{notifications.length} إشعار</span>
                   </div>
                 </div>
                 {notifications.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-sm" style={{ color: '#2D3748' }}>لا توجد إشعارات</div>
+                  <div className="px-4 py-8 text-center text-sm" style={{ color: '#6B7B8D' }}>لا توجد إشعارات</div>
                 ) : (
                   <div className="max-h-80 overflow-y-auto">
                     {notifications.slice(0, 20).map(n => {
                       const typeColor: Record<string, string> = { alert: '#EF4444', signal: '#10B981', info: '#60A5FA', system: '#C9943A' }
-                      const tc = typeColor[n.type] ?? '#4A5568'
+                      const tc = typeColor[n.type] ?? '#7C8A99'
                       return (
                         <button key={n.id} type="button" onClick={() => void openNotification(n)}
                           className="px-4 py-3 w-full text-right transition-colors hover:bg-white/[0.03]"
@@ -470,14 +470,14 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
                             background: n.is_read ? 'transparent' : 'rgba(201,148,58,0.04)',
                           }}>
                           <div className="flex items-start gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: n.is_read ? '#1A2A3A' : tc }} />
+                            <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: n.is_read ? '#33404D' : tc }} />
                             <div className="min-w-0 flex-1">
                               <div className="text-xs font-semibold text-white mb-0.5">{n.title}</div>
                               {n.body && <div className="text-xs leading-relaxed whitespace-pre-line" style={{ color: '#7C8A99' }}>{n.body}</div>}
                               {n.url && (
                                 <span className="text-xs mt-1 inline-block" style={{ color: tc }}>فتح ←</span>
                               )}
-                              <div className="text-[10px] font-mono mt-1" style={{ color: '#1A2A3A' }}>
+                              <div className="text-[10px] font-mono mt-1" style={{ color: '#55657A' }}>
                                 {notificationTime(n.created_at)} · الرياض
                               </div>
                             </div>
@@ -497,7 +497,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
               style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
               {(['admin', 'moderator', 'user'] as const).map(r => {
                 const active = r === effectiveRole
-                const rc = ROLE_COLOR_MAP[r] ?? '#4A5568'
+                const rc = ROLE_COLOR_MAP[r] ?? '#7C8A99'
                 return (
                   <button key={r} onClick={() => switchPreview(r)}
                     title={`التحويل إلى عرض ${ROLE_LABEL_MAP[r] ?? r}${r === userRole ? ' (دورك الأساسي)' : ''}`}
@@ -506,7 +506,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
                       padding: active ? '4px 12px' : '4px 8px',
                       background: active ? `${rc}1F` : 'transparent',
                       border: active ? `1px solid ${rc}55` : '1px solid transparent',
-                      color: active ? rc : '#3A4A5C',
+                      color: active ? rc : '#6B7B8D',
                       boxShadow: active ? `0 0 12px ${rc}22` : 'none',
                     }}>
                     <span className="text-xs">{ROLE_ICON_MAP[r] ?? '◎'}</span>
@@ -607,7 +607,7 @@ function MobileTab({ href, icon, label, exact }: { href: string; icon: string; l
   const active = exact ? pathname === href : pathname.startsWith(href)
   return (
     <Link href={href} className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl min-w-[52px]"
-      style={{ color: active ? '#C9943A' : '#2D3748', background: active ? 'rgba(201,148,58,0.08)' : 'transparent' }}>
+      style={{ color: active ? '#C9943A' : '#6B7B8D', background: active ? 'rgba(201,148,58,0.08)' : 'transparent' }}>
       <span className="text-base leading-none">{icon}</span>
       <span className="text-[9px] font-medium mt-0.5">{label}</span>
     </Link>
@@ -615,7 +615,7 @@ function MobileTab({ href, icon, label, exact }: { href: string; icon: string; l
 }
 
 function MarketClock() {
-  const [info, setInfo] = useState({ time: '', riyadh: '', status: '', color: '#2D3748' })
+  const [info, setInfo] = useState({ time: '', riyadh: '', status: '', color: '#6B7B8D' })
 
   useEffect(() => {
     function tick() {
@@ -626,11 +626,11 @@ function MarketClock() {
       // توقيت الرياض
       const ry = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Riyadh' }))
       const riyadh = `${String(ry.getHours()).padStart(2,'0')}:${String(ry.getMinutes()).padStart(2,'0')} الرياض`
-      let status = '', color = '#2D3748'
-      if      (day === 0 || day === 6)  { status = 'مغلق';         color = '#2D3748' }
+      let status = '', color = '#6B7B8D'
+      if      (day === 0 || day === 6)  { status = 'مغلق';         color = '#6B7B8D' }
       else if (t >= 570 && t < 960)    { status = 'مفتوح';        color = '#10B981' }
       else if (t >= 540 && t < 570)    { status = 'قبل الافتتاح'; color = '#F59E0B' }
-      else                              { status = 'بعد الإغلاق';  color = '#4A5568' }
+      else                              { status = 'بعد الإغلاق';  color = '#7C8A99' }
       setInfo({ time, riyadh, status, color })
     }
     tick()
@@ -645,7 +645,7 @@ function MarketClock() {
       )}
       <span style={{ color: info.color }}>{info.status}</span>
       <span style={{ fontFamily: '"IBM Plex Mono", monospace', color: '#C9943A' }}>{info.riyadh}</span>
-      <span style={{ color: '#3D5060' }}>·</span>
+      <span style={{ color: '#6B7B8D' }}>·</span>
       <span style={{ fontFamily: '"IBM Plex Mono", monospace', color: '#6E7E8F' }}>{info.time}</span>
     </div>
   )

@@ -28,13 +28,13 @@ export function LiveTeaser() {
         <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: d.marketOpen ? '#10B981' : '#C9943A' }} />
         <span style={{ color: d.marketOpen ? '#10B981' : '#C9943A' }}>{d.marketOpen ? 'السوق مفتوح الآن' : 'السوق مغلق'}</span>
       </span>
-      <span style={{ color: '#2D3748' }}>·</span>
+      <span style={{ color: '#6B7B8D' }}>·</span>
       <span style={{ color: '#8A97A6' }}>SPX <b className="text-white">{d.spx.toLocaleString()}</b> <b style={{ color: up ? '#10B981' : '#EF4444' }}>{up ? '+' : ''}{d.changePct}%</b></span>
-      <span style={{ color: '#2D3748' }}>·</span>
+      <span style={{ color: '#6B7B8D' }}>·</span>
       <span style={{ color: '#8A97A6' }}>VIX <b style={{ color: '#C9943A' }}>{d.vix}</b></span>
       {d.fearGreed && (
         <>
-          <span style={{ color: '#2D3748' }}>·</span>
+          <span style={{ color: '#6B7B8D' }}>·</span>
           <span style={{ color: '#8A97A6' }}>الخوف/الطمع <b style={{ color: '#A78BFA' }}>{d.fearGreed.value}</b> · {d.fearGreed.label}</span>
         </>
       )}

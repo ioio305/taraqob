@@ -318,7 +318,7 @@ function computeKeyLevels(candles: Candle[], tf: string): { price: number; title
   for (let lvl = start; lvl <= last + 120; lvl += 50) {
     if (lvl <= 0) continue
     const major = lvl % 100 === 0
-    out.push({ price: lvl, title: major ? `${lvl}` : '', color: major ? '#C9943A88' : '#3D5060', style: LineStyle.Dotted, kind: 'round' })
+    out.push({ price: lvl, title: major ? `${lvl}` : '', color: major ? '#C9943A88' : '#6B7B8D', style: LineStyle.Dotted, kind: 'round' })
   }
   return out
 }

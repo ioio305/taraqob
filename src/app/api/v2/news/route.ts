@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { evaluateNewsRisk, type NewsRiskDecision } from '@/lib/v2/newsRisk'
 import { getNewsProviderStatus, type NewsProviderStatus } from '@/lib/v2/newsProviders'
+import { translateNewsHeadlines } from '@/lib/v2/newsTranslate'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -464,6 +465,10 @@ export async function getNewsResult(): Promise<NewsResult> {
 // ── Main handler ──────────────────────────────────────────────────────────────
 export async function GET() {
   const result = await getNewsResult()
+
+  // ترجمة العناوين الحقيقية إلى عربية أمينة (لواجهة الشريط والبار فقط — لا يمسّ
+  // مسار التوصيات الذي يستدعي getNewsResult مباشرة، فيبقى سريعاً)
+  result.events = await translateNewsHeadlines(result.events)
 
   return NextResponse.json(result, {
     headers: { 'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=30' },

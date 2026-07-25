@@ -36,7 +36,7 @@ export function NewsTicker() {
   if (loading || failed || events.length === 0) {
     return (
       <div className="w-full overflow-hidden shrink-0" style={{ height: 32, background: 'rgba(8,16,26,0.97)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-        <div className="h-full flex items-center px-4 text-[11px] font-mono" style={{ color: '#3A4A5A' }}>
+        <div className="h-full flex items-center px-4 text-[11px] font-mono" style={{ color: '#6B7B8D' }}>
           <span className="ml-2">📰</span>
           {loading ? 'جارٍ جلب الأخبار…' : 'السوق هادئ — لا أخبار مؤثرة الآن'}
         </div>

@@ -75,21 +75,21 @@ export function PerformanceView() {
     watching:    { ar: 'مراقبة', color: '#60A5FA' },
     closed_win:  { ar: 'ربح',    color: '#10B981' },
     closed_loss: { ar: 'خسارة',  color: '#EF4444' },
-    invalidated: { ar: 'ملغى',   color: '#4A5568' },
+    invalidated: { ar: 'ملغى',   color: '#7C8A99' },
   }
 
   return (
     <div className="p-5 space-y-5" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }} dir="rtl">
       <div>
         <h2 className="text-white font-bold text-lg">الأداء التاريخي</h2>
-        <p className="text-xs mt-0.5" style={{ color: '#4A5568' }}>إحصائيات وأرقام إشارات النظام المطور</p>
+        <p className="text-xs mt-0.5" style={{ color: '#7C8A99' }}>إحصائيات وأرقام إشارات النظام المطور</p>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {stats.map(s => (
           <div key={s.label} className="rounded-xl p-4" style={{ background: 'rgba(13,27,42,0.6)', border: '1px solid rgba(255,255,255,0.04)' }}>
-            <div className="text-xs mb-2" style={{ color: '#4A5568' }}>{s.label}</div>
+            <div className="text-xs mb-2" style={{ color: '#7C8A99' }}>{s.label}</div>
             <div className="text-2xl font-bold" style={{ color: s.color, fontFamily: '"IBM Plex Mono", monospace' }}>
               {loading ? '—' : s.value}
             </div>
@@ -122,7 +122,7 @@ export function PerformanceView() {
       {/* Signal List */}
       <div className="rounded-xl overflow-hidden" style={{ background: 'rgba(13,27,42,0.6)', border: '1px solid rgba(255,255,255,0.04)' }}>
         <div className="px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-          <div className="text-xs font-semibold tracking-widest" style={{ color: '#2D3748' }}>سجل الإشارات</div>
+          <div className="text-xs font-semibold tracking-widest" style={{ color: '#6B7B8D' }}>سجل الإشارات</div>
         </div>
 
         {loading ? (
@@ -131,20 +131,20 @@ export function PerformanceView() {
           </div>
         ) : signals.length === 0 ? (
           <div className="text-center py-12">
-            <div className="text-3xl mb-3" style={{ color: '#1A2A3A' }}>◌</div>
-            <div className="text-sm" style={{ color: '#2D3748' }}>لا توجد إشارات بعد</div>
+            <div className="text-3xl mb-3" style={{ color: '#55657A' }}>◌</div>
+            <div className="text-sm" style={{ color: '#6B7B8D' }}>لا توجد إشارات بعد</div>
             <Link href="/v2/analyze" className="text-xs mt-2 inline-block" style={{ color: '#C9943A' }}>ابدأ تحليلاً ←</Link>
           </div>
         ) : (
           <div>
             {signals.map(s => {
-              const st = ST[s.status] ?? { ar: s.status, color: '#4A5568' }
+              const st = ST[s.status] ?? { ar: s.status, color: '#7C8A99' }
               return (
                 <div key={s.id} className="flex items-center justify-between px-4 py-3"
                   style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
                   <div>
                     <div className="text-sm font-medium text-white" style={{ fontFamily: '"IBM Plex Mono", monospace' }}>{s.contract_symbol}</div>
-                    <div className="text-xs mt-0.5" style={{ color: '#2D3748' }}>
+                    <div className="text-xs mt-0.5" style={{ color: '#6B7B8D' }}>
                       {s.signal_ref} · {new Date(s.created_at).toLocaleDateString('ar-SA')}
                     </div>
                   </div>

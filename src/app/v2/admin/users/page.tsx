@@ -11,11 +11,11 @@ type User = {
 
 const ROLES = ['user', 'moderator', 'admin'] as const
 const ROLE_AR: Record<string, string>    = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
-const ROLE_COLOR: Record<string, string> = { admin: '#C9943A', moderator: '#60A5FA', user: '#4A5568' }
+const ROLE_COLOR: Record<string, string> = { admin: '#C9943A', moderator: '#60A5FA', user: '#7C8A99' }
 
 const TIERS      = ['radar', 'signal', 'edge', 'alpha'] as const
 const TIER_LABEL: Record<string, string> = { radar: 'رادار', signal: 'سيجنال', edge: 'إيدج', alpha: 'ألفا' }
-const TIER_COLOR: Record<string, string> = { radar: '#4A5568', signal: '#60A5FA', edge: '#C9943A', alpha: '#A78BFA' }
+const TIER_COLOR: Record<string, string> = { radar: '#7C8A99', signal: '#60A5FA', edge: '#C9943A', alpha: '#A78BFA' }
 
 // ── Edit Modal ──────────────────────────────────────────────────────────────
 function EditModal({ user, onClose, onSaved }: {
@@ -118,15 +118,15 @@ function EditModal({ user, onClose, onSaved }: {
              style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shrink-0"
-                 style={{ background: `${ROLE_COLOR[user.role] ?? '#4A5568'}18`, color: ROLE_COLOR[user.role] ?? '#4A5568', border: `1px solid ${ROLE_COLOR[user.role] ?? '#4A5568'}28` }}>
+                 style={{ background: `${ROLE_COLOR[user.role] ?? '#7C8A99'}18`, color: ROLE_COLOR[user.role] ?? '#7C8A99', border: `1px solid ${ROLE_COLOR[user.role] ?? '#7C8A99'}28` }}>
               {(user.full_name_ar || user.full_name || user.email).charAt(0).toUpperCase()}
             </div>
             <div>
               <div className="text-sm font-bold text-white">{user.full_name_ar || user.full_name || '—'}</div>
-              <div className="text-xs font-mono" style={{ color: '#2D3748' }}>{user.email}</div>
+              <div className="text-xs font-mono" style={{ color: '#6B7B8D' }}>{user.email}</div>
             </div>
           </div>
-          <button onClick={onClose} className="text-xl leading-none" style={{ color: '#2D3748' }}>✕</button>
+          <button onClick={onClose} className="text-xl leading-none" style={{ color: '#6B7B8D' }}>✕</button>
         </div>
 
         {/* Tabs */}
@@ -135,7 +135,7 @@ function EditModal({ user, onClose, onSaved }: {
             <button key={t.key} onClick={() => { setTab(t.key); setMsg(null); setResetLink(null) }}
                     className="flex-1 py-2.5 text-xs font-mono font-medium transition-all whitespace-nowrap px-2"
                     style={{
-                      color:        tab === t.key ? '#C9943A' : '#2D3748',
+                      color:        tab === t.key ? '#C9943A' : '#6B7B8D',
                       borderBottom: tab === t.key ? '2px solid #C9943A' : '2px solid transparent',
                       background:   tab === t.key ? 'rgba(201,148,58,0.05)' : 'transparent',
                     }}>
@@ -158,7 +158,7 @@ function EditModal({ user, onClose, onSaved }: {
               </Field>
               <Field label="البريد الإلكتروني">
                 <Input value={email} onChange={setEmail} placeholder="email@example.com" type="email" dir="ltr" />
-                <p className="text-xs mt-1 font-mono" style={{ color: '#374151' }}>تغيير البريد يتطلب صلاحية مدير</p>
+                <p className="text-xs mt-1 font-mono" style={{ color: '#6B7B8D' }}>تغيير البريد يتطلب صلاحية مدير</p>
               </Field>
             </>
           )}
@@ -173,7 +173,7 @@ function EditModal({ user, onClose, onSaved }: {
                             className="flex-1 py-2.5 rounded-lg text-xs font-mono font-bold transition-all"
                             style={{
                               background: role === r ? `${ROLE_COLOR[r]}20` : 'rgba(255,255,255,0.03)',
-                              color:      role === r ? ROLE_COLOR[r] : '#2D3748',
+                              color:      role === r ? ROLE_COLOR[r] : '#6B7B8D',
                               border:     `1px solid ${role === r ? ROLE_COLOR[r] + '50' : 'rgba(255,255,255,0.06)'}`,
                             }}>
                       {ROLE_AR[r]}
@@ -208,7 +208,7 @@ function EditModal({ user, onClose, onSaved }: {
                             className="py-3 rounded-xl text-sm font-bold font-mono transition-all"
                             style={{
                               background: tier === t ? `${tc}18` : 'rgba(255,255,255,0.03)',
-                              color:      tier === t ? tc : '#2D3748',
+                              color:      tier === t ? tc : '#6B7B8D',
                               border:     `1px solid ${tier === t ? tc + '50' : 'rgba(255,255,255,0.06)'}`,
                             }}>
                       {TIER_LABEL[t]}
@@ -216,7 +216,7 @@ function EditModal({ user, onClose, onSaved }: {
                   )
                 })}
               </div>
-              <p className="text-xs mt-2 font-mono" style={{ color: '#1A2A3A' }}>
+              <p className="text-xs mt-2 font-mono" style={{ color: '#55657A' }}>
                 الباقة الحالية: {TIER_LABEL[user.subscription_tier ?? 'radar']}
               </p>
             </Field>
@@ -232,7 +232,7 @@ function EditModal({ user, onClose, onSaved }: {
                             className="px-3 py-1.5 rounded-lg text-xs font-mono transition-all"
                             style={{
                               background: notifType === k ? `${color}15` : 'rgba(255,255,255,0.03)',
-                              color:      notifType === k ? color : '#4A5568',
+                              color:      notifType === k ? color : '#7C8A99',
                               border:     `1px solid ${notifType === k ? color + '40' : 'rgba(255,255,255,0.06)'}`,
                             }}>
                       {label}
@@ -265,7 +265,7 @@ function EditModal({ user, onClose, onSaved }: {
                           className="flex-1 py-2.5 text-xs font-mono transition-all"
                           style={{
                             background: pwMode === k ? 'rgba(201,148,58,0.1)' : 'transparent',
-                            color:      pwMode === k ? '#C9943A' : '#4A5568',
+                            color:      pwMode === k ? '#C9943A' : '#7C8A99',
                           }}>
                     {label}
                   </button>
@@ -277,7 +277,7 @@ function EditModal({ user, onClose, onSaved }: {
                   <p className="text-sm" style={{ color: '#64748B' }}>
                     رابط آمن لإعادة تعيين كلمة المرور لـ <span style={{ color: '#C9943A' }}>{user.email}</span>
                   </p>
-                  <p className="text-xs font-mono" style={{ color: '#374151' }}>صالح لمدة ساعة واحدة</p>
+                  <p className="text-xs font-mono" style={{ color: '#6B7B8D' }}>صالح لمدة ساعة واحدة</p>
                   {resetLink && (
                     <div className="rounded-lg p-3 space-y-2" style={{ background: 'rgba(201,148,58,0.06)', border: '1px solid rgba(201,148,58,0.15)' }}>
                       <p className="text-xs font-mono" style={{ color: '#C9943A' }}>انسخ الرابط وأرسله:</p>
@@ -324,7 +324,7 @@ function EditModal({ user, onClose, onSaved }: {
             </button>
             <button onClick={onClose}
                     className="px-5 py-2.5 rounded-xl text-sm font-medium"
-                    style={{ background: 'rgba(255,255,255,0.04)', color: '#4A5568', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    style={{ background: 'rgba(255,255,255,0.04)', color: '#7C8A99', border: '1px solid rgba(255,255,255,0.06)' }}>
               إلغاء
             </button>
           </div>
@@ -337,7 +337,7 @@ function EditModal({ user, onClose, onSaved }: {
 function Field({ label, children, dir }: { label: string; children: React.ReactNode; dir?: string }) {
   return (
     <div dir={dir}>
-      <label className="text-xs font-mono block mb-1.5" style={{ color: '#4A5568' }}>{label}</label>
+      <label className="text-xs font-mono block mb-1.5" style={{ color: '#7C8A99' }}>{label}</label>
       {children}
     </div>
   )
@@ -397,11 +397,11 @@ function BroadcastModal({ users, onClose }: { users: User[]; onClose: () => void
              style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
           <div>
             <div className="text-base font-bold text-white">إشعار جماعي</div>
-            <div className="text-xs font-mono mt-0.5" style={{ color: '#2D3748' }}>
+            <div className="text-xs font-mono mt-0.5" style={{ color: '#6B7B8D' }}>
               سيُرسَل لـ {users.length} مستخدم
             </div>
           </div>
-          {!sending && <button onClick={onClose} className="text-xl" style={{ color: '#2D3748' }}>✕</button>}
+          {!sending && <button onClick={onClose} className="text-xl" style={{ color: '#6B7B8D' }}>✕</button>}
         </div>
 
         <div className="p-5 space-y-4">
@@ -409,23 +409,23 @@ function BroadcastModal({ users, onClose }: { users: User[]; onClose: () => void
             <div className="rounded-xl p-6 text-center space-y-3"
                  style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.15)' }}>
               <div className="text-3xl font-bold font-mono" style={{ color: '#10B981' }}>{result.sent}</div>
-              <div className="text-sm" style={{ color: '#4A5568' }}>
+              <div className="text-sm" style={{ color: '#7C8A99' }}>
                 تم الإرسال بنجاح · {result.failed > 0 && <span style={{ color: '#EF4444' }}>{result.failed} فشل</span>}
               </div>
               <button onClick={onClose} className="text-xs font-mono px-4 py-2 rounded-lg"
-                style={{ background: 'rgba(255,255,255,0.04)', color: '#4A5568' }}>إغلاق</button>
+                style={{ background: 'rgba(255,255,255,0.04)', color: '#7C8A99' }}>إغلاق</button>
             </div>
           ) : (
             <>
               <div>
-                <label className="text-xs font-mono block mb-1.5" style={{ color: '#4A5568' }}>نوع الإشعار</label>
+                <label className="text-xs font-mono block mb-1.5" style={{ color: '#7C8A99' }}>نوع الإشعار</label>
                 <div className="flex gap-2 flex-wrap">
                   {([['info', 'معلومة', '#60A5FA'], ['signal', 'إشارة', '#10B981'], ['alert', 'تنبيه', '#EF4444'], ['system', 'نظام', '#C9943A']] as const).map(([k, label, color]) => (
                     <button key={k} onClick={() => setType(k)}
                             className="px-3 py-1.5 rounded-lg text-xs font-mono transition-all"
                             style={{
                               background: type === k ? `${color}15` : 'rgba(255,255,255,0.03)',
-                              color:      type === k ? color : '#4A5568',
+                              color:      type === k ? color : '#7C8A99',
                               border:     `1px solid ${type === k ? color + '40' : 'rgba(255,255,255,0.06)'}`,
                             }}>
                       {label}
@@ -435,7 +435,7 @@ function BroadcastModal({ users, onClose }: { users: User[]; onClose: () => void
               </div>
 
               <div>
-                <label className="text-xs font-mono block mb-1.5" style={{ color: '#4A5568' }}>العنوان</label>
+                <label className="text-xs font-mono block mb-1.5" style={{ color: '#7C8A99' }}>العنوان</label>
                 <input value={title} onChange={e => setTitle(e.target.value)}
                        placeholder="عنوان الإشعار الجماعي"
                        className="w-full rounded-xl px-3 py-2.5 text-sm text-white outline-none"
@@ -443,7 +443,7 @@ function BroadcastModal({ users, onClose }: { users: User[]; onClose: () => void
               </div>
 
               <div>
-                <label className="text-xs font-mono block mb-1.5" style={{ color: '#4A5568' }}>النص (اختياري)</label>
+                <label className="text-xs font-mono block mb-1.5" style={{ color: '#7C8A99' }}>النص (اختياري)</label>
                 <textarea value={body} onChange={e => setBody(e.target.value)}
                           placeholder="تفاصيل إضافية..." rows={3}
                           className="w-full rounded-xl px-3 py-2.5 text-sm text-white outline-none resize-none"
@@ -451,7 +451,7 @@ function BroadcastModal({ users, onClose }: { users: User[]; onClose: () => void
               </div>
 
               <div>
-                <label className="text-xs font-mono block mb-1.5" style={{ color: '#4A5568' }}>رابط (اختياري)</label>
+                <label className="text-xs font-mono block mb-1.5" style={{ color: '#7C8A99' }}>رابط (اختياري)</label>
                 <input value={url} onChange={e => setUrl(e.target.value)}
                        placeholder="https://..." dir="ltr"
                        className="w-full rounded-xl px-3 py-2.5 text-sm text-white outline-none"
@@ -460,7 +460,7 @@ function BroadcastModal({ users, onClose }: { users: User[]; onClose: () => void
 
               {sending && (
                 <div className="space-y-2">
-                  <div className="flex justify-between text-xs font-mono" style={{ color: '#4A5568' }}>
+                  <div className="flex justify-between text-xs font-mono" style={{ color: '#7C8A99' }}>
                     <span>جاري الإرسال...</span>
                     <span>{progress}%</span>
                   </div>
@@ -478,7 +478,7 @@ function BroadcastModal({ users, onClose }: { users: User[]; onClose: () => void
                 </button>
                 <button onClick={onClose} disabled={sending}
                         className="px-5 py-2.5 rounded-xl text-sm font-medium disabled:opacity-40"
-                        style={{ background: 'rgba(255,255,255,0.04)', color: '#4A5568' }}>
+                        style={{ background: 'rgba(255,255,255,0.04)', color: '#7C8A99' }}>
                   إلغاء
                 </button>
               </div>
@@ -577,7 +577,7 @@ export default function UsersPage() {
             <div className="text-base font-bold text-white mb-5">دعوة مستخدم جديد</div>
             <div className="space-y-4">
               <div>
-                <label className="text-xs font-mono block mb-1.5" style={{ color: '#4A5568' }}>البريد الإلكتروني</label>
+                <label className="text-xs font-mono block mb-1.5" style={{ color: '#7C8A99' }}>البريد الإلكتروني</label>
                 <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
                        onKeyDown={e => e.key === 'Enter' && sendInvite()}
                        placeholder="user@example.com" dir="ltr" type="email"
@@ -585,14 +585,14 @@ export default function UsersPage() {
                        style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }} />
               </div>
               <div>
-                <label className="text-xs font-mono block mb-1.5" style={{ color: '#4A5568' }}>الدور</label>
+                <label className="text-xs font-mono block mb-1.5" style={{ color: '#7C8A99' }}>الدور</label>
                 <div className="flex gap-2">
                   {(['user', 'moderator'] as const).map(r => (
                     <button key={r} onClick={() => setInviteRole(r)}
                             className="flex-1 py-2.5 rounded-xl text-sm font-bold font-mono transition-all"
                             style={{
                               background: inviteRole === r ? `${ROLE_COLOR[r]}20` : 'rgba(255,255,255,0.03)',
-                              color:      inviteRole === r ? ROLE_COLOR[r] : '#2D3748',
+                              color:      inviteRole === r ? ROLE_COLOR[r] : '#6B7B8D',
                               border:     `1px solid ${inviteRole === r ? ROLE_COLOR[r] + '50' : 'rgba(255,255,255,0.06)'}`,
                             }}>
                       {ROLE_AR[r]}
@@ -612,7 +612,7 @@ export default function UsersPage() {
                   </p>
                   {inviteMsg.link && (
                     <div>
-                      <p className="text-xs font-mono mb-1" style={{ color: '#4A5568' }}>رابط الدعوة:</p>
+                      <p className="text-xs font-mono mb-1" style={{ color: '#7C8A99' }}>رابط الدعوة:</p>
                       <div className="flex items-center gap-2">
                         <input readOnly value={inviteMsg.link} dir="ltr"
                                className="flex-1 text-xs font-mono rounded-lg px-2.5 py-1.5 outline-none text-white truncate"
@@ -636,7 +636,7 @@ export default function UsersPage() {
                 </button>
                 <button onClick={() => { setInviteOpen(false); setInviteMsg(null); setInviteEmail('') }}
                         className="px-5 py-2.5 rounded-xl text-sm"
-                        style={{ background: 'rgba(255,255,255,0.04)', color: '#4A5568' }}>
+                        style={{ background: 'rgba(255,255,255,0.04)', color: '#7C8A99' }}>
                   إغلاق
                 </button>
               </div>
@@ -648,11 +648,11 @@ export default function UsersPage() {
       {/* ── Header ── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <Link href="/v2/admin" className="text-sm transition-colors shrink-0" style={{ color: '#2D3748' }}>← الإدارة</Link>
-          <span style={{ color: '#1A2A3A' }}>/</span>
+          <Link href="/v2/admin" className="text-sm transition-colors shrink-0" style={{ color: '#6B7B8D' }}>← الإدارة</Link>
+          <span style={{ color: '#55657A' }}>/</span>
           <h1 className="text-lg font-bold text-white truncate">إدارة المستخدمين</h1>
           <span className="text-xs font-mono px-2 py-0.5 rounded shrink-0"
-                style={{ background: 'rgba(255,255,255,0.04)', color: '#4A5568' }}>
+                style={{ background: 'rgba(255,255,255,0.04)', color: '#7C8A99' }}>
             {total}
           </span>
         </div>
@@ -682,7 +682,7 @@ export default function UsersPage() {
                     className="px-3 py-2 rounded-xl text-xs font-mono transition-all"
                     style={{
                       background: filterRole === v ? 'rgba(201,148,58,0.15)' : 'rgba(255,255,255,0.03)',
-                      color:      filterRole === v ? '#C9943A' : '#4A5568',
+                      color:      filterRole === v ? '#C9943A' : '#7C8A99',
                       border:     filterRole === v ? '1px solid rgba(201,148,58,0.3)' : '1px solid rgba(255,255,255,0.06)',
                     }}>
               {label}
@@ -695,7 +695,7 @@ export default function UsersPage() {
                     className="px-3 py-2 rounded-xl text-xs font-mono transition-all"
                     style={{
                       background: filterStatus === v ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)',
-                      color:      filterStatus === v ? '#E2E8F0' : '#4A5568',
+                      color:      filterStatus === v ? '#E2E8F0' : '#7C8A99',
                       border:     '1px solid rgba(255,255,255,0.06)',
                     }}>
               {label}
@@ -706,9 +706,9 @@ export default function UsersPage() {
 
       {/* ── User List ── */}
       {loading ? (
-        <div className="py-20 text-center font-mono text-sm" style={{ color: '#2D3748' }}>جاري التحميل...</div>
+        <div className="py-20 text-center font-mono text-sm" style={{ color: '#6B7B8D' }}>جاري التحميل...</div>
       ) : users.length === 0 ? (
-        <div className="py-20 text-center font-mono text-sm" style={{ color: '#2D3748' }}>لا يوجد مستخدمون</div>
+        <div className="py-20 text-center font-mono text-sm" style={{ color: '#6B7B8D' }}>لا يوجد مستخدمون</div>
       ) : (
         <>
           {/* Desktop table */}
@@ -719,14 +719,14 @@ export default function UsersPage() {
                 <thead>
                   <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                     {['المستخدم', 'الدور', 'الباقة', 'الحالة', 'التسجيل', 'إجراءات'].map(h => (
-                      <th key={h} className="text-right px-4 py-3 text-xs font-mono font-medium" style={{ color: '#2D3748' }}>{h}</th>
+                      <th key={h} className="text-right px-4 py-3 text-xs font-mono font-medium" style={{ color: '#6B7B8D' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {users.map((u, i) => {
-                    const rc = ROLE_COLOR[u.role]  ?? '#4A5568'
-                    const tc = TIER_COLOR[u.subscription_tier ?? 'radar'] ?? '#4A5568'
+                    const rc = ROLE_COLOR[u.role]  ?? '#7C8A99'
+                    const tc = TIER_COLOR[u.subscription_tier ?? 'radar'] ?? '#7C8A99'
                     return (
                       <tr key={u.id} style={{ borderBottom: i < users.length - 1 ? '1px solid rgba(255,255,255,0.03)' : 'none' }}>
                         <td className="px-4 py-3">
@@ -737,7 +737,7 @@ export default function UsersPage() {
                             </div>
                             <div>
                               <div className="font-medium text-white leading-tight">{u.full_name_ar || u.full_name || '—'}</div>
-                              <div className="text-xs font-mono" style={{ color: '#2D3748' }}>{u.email}</div>
+                              <div className="text-xs font-mono" style={{ color: '#6B7B8D' }}>{u.email}</div>
                             </div>
                           </div>
                         </td>
@@ -763,7 +763,7 @@ export default function UsersPage() {
                             {u.is_active !== false ? '● نشط' : '○ موقوف'}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-xs font-mono" style={{ color: '#2D3748' }}>
+                        <td className="px-4 py-3 text-xs font-mono" style={{ color: '#6B7B8D' }}>
                           {new Date(u.created_at).toLocaleDateString('ar-SA')}
                         </td>
                         <td className="px-4 py-3">
@@ -796,8 +796,8 @@ export default function UsersPage() {
           {/* Mobile cards */}
           <div className="md:hidden space-y-3">
             {users.map(u => {
-              const rc = ROLE_COLOR[u.role]  ?? '#4A5568'
-              const tc = TIER_COLOR[u.subscription_tier ?? 'radar'] ?? '#4A5568'
+              const rc = ROLE_COLOR[u.role]  ?? '#7C8A99'
+              const tc = TIER_COLOR[u.subscription_tier ?? 'radar'] ?? '#7C8A99'
               return (
                 <div key={u.id} className="rounded-xl p-4"
                      style={{ background: 'rgba(13,27,42,0.85)', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -808,7 +808,7 @@ export default function UsersPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold text-white truncate">{u.full_name_ar || u.full_name || '—'}</div>
-                      <div className="text-xs font-mono truncate" style={{ color: '#2D3748' }}>{u.email}</div>
+                      <div className="text-xs font-mono truncate" style={{ color: '#6B7B8D' }}>{u.email}</div>
                     </div>
                     <div className="flex flex-col items-end gap-1 shrink-0">
                       <span className="text-xs font-mono px-2 py-0.5 rounded"
@@ -850,11 +850,11 @@ export default function UsersPage() {
         <div className="flex items-center justify-center gap-2">
           <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
                   className="px-4 py-2 rounded-lg text-sm disabled:opacity-30"
-                  style={{ background: 'rgba(255,255,255,0.04)', color: '#4A5568' }}>→</button>
-          <span className="text-sm font-mono" style={{ color: '#4A5568' }}>{page} / {pages}</span>
+                  style={{ background: 'rgba(255,255,255,0.04)', color: '#7C8A99' }}>→</button>
+          <span className="text-sm font-mono" style={{ color: '#7C8A99' }}>{page} / {pages}</span>
           <button onClick={() => setPage(p => Math.min(pages, p + 1))} disabled={page === pages}
                   className="px-4 py-2 rounded-lg text-sm disabled:opacity-30"
-                  style={{ background: 'rgba(255,255,255,0.04)', color: '#4A5568' }}>←</button>
+                  style={{ background: 'rgba(255,255,255,0.04)', color: '#7C8A99' }}>←</button>
         </div>
       )}
     </div>

@@ -142,10 +142,10 @@ export default function ContractChart(props: {
 
       {/* الشارت / التحميل / التعذّر */}
       {loading && !bars.length
-        ? <div className="text-center py-16 text-sm animate-pulse" style={{ color: '#4A5568' }}>جارٍ جلب سعر العقد...</div>
+        ? <div className="text-center py-16 text-sm animate-pulse" style={{ color: '#7C8A99' }}>جارٍ جلب سعر العقد...</div>
         : err && !bars.length
           ? <div className="text-center py-12 px-4 text-sm" style={{ color: '#6E7E8F' }}>
-              {err}<div className="text-xs mt-1" style={{ color: '#4A5568' }}>السعر الحالي ${mid.toFixed(2)} (×100 = ${Math.round(mid * 100).toLocaleString()})</div>
+              {err}<div className="text-xs mt-1" style={{ color: '#7C8A99' }}>السعر الحالي ${mid.toFixed(2)} (×100 = ${Math.round(mid * 100).toLocaleString()})</div>
             </div>
           : <div ref={wrapRef} className="w-full" />}
 

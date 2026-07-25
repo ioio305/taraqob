@@ -101,7 +101,7 @@ function n(v: number | null | undefined, d = 2) {
   if (v == null || v === 0) return '—'
   return v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })
 }
-function clr(v: number | null | undefined) { return v == null ? '#4A5568' : v >= 0 ? '#10B981' : '#EF4444' }
+function clr(v: number | null | undefined) { return v == null ? '#7C8A99' : v >= 0 ? '#10B981' : '#EF4444' }
 function pct(v: number | null | undefined) { if (v == null) return '—'; return (v >= 0 ? '+' : '') + n(v) + '%' }
 
 function Sk({ w = 'w-24', h = 'h-5', rounded = 'rounded-lg' }: { w?: string; h?: string; rounded?: string }) {
@@ -132,13 +132,13 @@ function UpgradeBanner() {
           <div className="text-sm font-bold text-white">
             تم تفعيل باقة {TIER_LABEL[upgradedTier] ?? upgradedTier} بنجاح
           </div>
-          <div className="text-xs mt-0.5" style={{ color: '#4A5568' }}>
+          <div className="text-xs mt-0.5" style={{ color: '#7C8A99' }}>
             يمكنك الآن الوصول لجميع ميزات باقتك
           </div>
         </div>
       </div>
       <button onClick={() => setShow(false)}
-        className="text-lg leading-none shrink-0" style={{ color: '#2D3748' }}>✕</button>
+        className="text-lg leading-none shrink-0" style={{ color: '#6B7B8D' }}>✕</button>
     </div>
   )
 }
@@ -278,7 +278,7 @@ export default function V2Dashboard() {
   const emUpper  = data?.market?.emUpper
   const emLower  = data?.market?.emLower
   const dir      = data?.direction
-  const dirColor = dir?.color ?? '#4A5568'
+  const dirColor = dir?.color ?? '#7C8A99'
   const noTrade  = !dir?.type
 
   const contracts = data?.contracts ?? []
@@ -353,7 +353,7 @@ export default function V2Dashboard() {
                   className="text-xs px-2.5 py-1 font-bold"
                   style={{
                     background: recMode === x.m ? 'rgba(201,148,58,0.2)' : 'transparent',
-                    color: recMode === x.m ? '#E8D5A3' : '#4A5568',
+                    color: recMode === x.m ? '#E8D5A3' : '#7C8A99',
                   }}
                   title={x.tip}>
                   {x.label}
@@ -371,7 +371,7 @@ export default function V2Dashboard() {
                           strokeDasharray={`${(countdown / REFRESH_SEC) * 100} 100`}
                           strokeLinecap="round" style={{ transition: 'stroke-dasharray 1s linear' }} />
                 </svg>
-                <div className="absolute inset-0 flex items-center justify-center text-xs font-mono" style={{ color: '#4A5568' }}>{countdown}</div>
+                <div className="absolute inset-0 flex items-center justify-center text-xs font-mono" style={{ color: '#7C8A99' }}>{countdown}</div>
               </div>
               <button onClick={load} disabled={loading}
                       className="w-9 h-9 rounded-xl flex items-center justify-center transition-all disabled:opacity-30"
@@ -401,10 +401,10 @@ export default function V2Dashboard() {
           {!loading && data?.marketClosed && contracts.length === 0 && (
             <div className="py-12 text-center">
               <div className="text-4xl mb-3 opacity-15">🌙</div>
-              <div className="text-base font-semibold mb-1" style={{ color: '#4A5568' }}>{data.marketStatus}</div>
-              <div className="text-sm mb-4" style={{ color: '#2D3748' }}>عقود الخيارات غير متاحة خارج جلسة التداول</div>
+              <div className="text-base font-semibold mb-1" style={{ color: '#7C8A99' }}>{data.marketStatus}</div>
+              <div className="text-sm mb-4" style={{ color: '#6B7B8D' }}>عقود الخيارات غير متاحة خارج جلسة التداول</div>
               {(spx?.price ?? 0) > 0 && (
-                <div className="text-xs font-mono" style={{ color: '#374151' }}>
+                <div className="text-xs font-mono" style={{ color: '#6B7B8D' }}>
                   آخر SPX: <span style={{ color: '#C9943A' }}>{n(spx?.price, 0)}</span>
                   {vix > 0 && <> · VIX: <span style={{ color: '#C9943A' }}>{n(vix)}</span></>}
                 </div>
@@ -425,7 +425,7 @@ export default function V2Dashboard() {
 
           {/* ══ بطاقات التوصية ══ */}
           {!loading && contracts.map((c, i) => {
-            const lc     = RANK_COLORS[i] ?? '#4A5568'
+            const lc     = RANK_COLORS[i] ?? '#7C8A99'
             const isCall = c.type === 'call'
 
             // ── Frozen plan + live snapshot ────────────────────────────────
@@ -448,7 +448,7 @@ export default function V2Dashboard() {
               :           { label: 'فعّالة',        color: '#C9943A' }
 
             const livePnL  = strat ? Math.round((liveMid - strat.entryConservative) * 100) : null
-            const pnlColor = livePnL == null ? '#4A5568' : livePnL >= 0 ? '#10B981' : '#EF4444'
+            const pnlColor = livePnL == null ? '#7C8A99' : livePnL >= 0 ? '#10B981' : '#EF4444'
             const lockedTimeStr = plan
               ? new Date(plan.lockedAt).toLocaleTimeString('en-US',
                   { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Riyadh' })
@@ -481,7 +481,7 @@ export default function V2Dashboard() {
                       {isCall ? '▲ CALL' : '▼ PUT'}
                     </span>
                     <span className="text-lg font-bold font-mono text-white leading-none">{c.strike.toLocaleString()}</span>
-                    <span className="text-xs font-mono" style={{ color: '#4A5568' }}>{c.dte} يوم</span>
+                    <span className="text-xs font-mono" style={{ color: '#7C8A99' }}>{c.dte} يوم</span>
                     {c.grade && (
                       <span className="text-xs font-black px-1.5 py-0.5 rounded-md"
                             style={{ background: `${gradeCol}1A`, color: gradeCol, border: `1px solid ${gradeCol}55` }}>
@@ -525,7 +525,7 @@ export default function V2Dashboard() {
                       {isCall ? '▲ شراء CALL' : '▼ شراء PUT'}
                     </span>
                     <span className="text-2xl font-bold font-mono text-white leading-none">{c.strike.toLocaleString()}</span>
-                    <span className="text-xs font-mono" style={{ color: '#4A5568' }}>ينتهي خلال {c.dte} يوم</span>
+                    <span className="text-xs font-mono" style={{ color: '#7C8A99' }}>ينتهي خلال {c.dte} يوم</span>
                     {c.grade && (
                       <span className="text-sm font-black px-2 py-0.5 rounded-lg"
                         title={`اتفاق ${c.edgeCount ?? 0} من 7 أدلة مستقلة`}
@@ -652,11 +652,11 @@ export default function V2Dashboard() {
                          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
                       <div className="flex items-center gap-4 flex-wrap">
                         <div>
-                          <div className="text-xs font-mono" style={{ color: '#4A5568' }}>السعر الحالي</div>
+                          <div className="text-xs font-mono" style={{ color: '#7C8A99' }}>السعر الحالي</div>
                           <div className="text-base font-bold font-mono text-white">${n(liveMid)}</div>
                         </div>
                         <div>
-                          <div className="text-xs font-mono" style={{ color: '#4A5568' }}>ربح / خسارة</div>
+                          <div className="text-xs font-mono" style={{ color: '#7C8A99' }}>ربح / خسارة</div>
                           <div className="text-base font-bold font-mono" style={{ color: pnlColor }}>
                             {livePnL == null ? '—' : (livePnL >= 0 ? '+' : '') + '$' + Math.abs(livePnL)}
                           </div>
@@ -688,9 +688,9 @@ export default function V2Dashboard() {
                       {/* الدخولان */}
                       <div className="grid grid-cols-2 gap-2">
                         <div className="rounded-lg p-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                          <div className="text-xs font-mono mb-1" style={{ color: '#4A5568' }}>دخول محافظ (أضمن)</div>
+                          <div className="text-xs font-mono mb-1" style={{ color: '#7C8A99' }}>دخول محافظ (أضمن)</div>
                           <div className="text-lg font-bold font-mono text-white">${n(strat.entryConservative)}</div>
-                          <div className="text-xs font-mono mt-0.5" style={{ color: '#2D3748' }}>× 100 = <span className="text-white">${strat.entryConservativeTotal}</span></div>
+                          <div className="text-xs font-mono mt-0.5" style={{ color: '#6B7B8D' }}>× 100 = <span className="text-white">${strat.entryConservativeTotal}</span></div>
                         </div>
                         <div className="rounded-lg p-3" style={{ background: 'rgba(201,148,58,0.07)', border: '1px solid rgba(201,148,58,0.22)' }}>
                           <div className="text-xs font-mono mb-1" style={{ color: '#C9943A88' }}>دخول متوازن (الموصى به)</div>
@@ -716,14 +716,14 @@ export default function V2Dashboard() {
                               </span>
                               <div className="flex items-center gap-3 font-mono text-xs text-left">
                                 <span className="font-bold" style={{ color: row.color }}>${n(row.price)}</span>
-                                <span style={{ color: '#4A5568' }}>(×100 = ${row.total})</span>
+                                <span style={{ color: '#7C8A99' }}>(×100 = ${row.total})</span>
                                 <span className="font-semibold" style={{ color: row.profit >= 0 ? '#10B981' : '#EF4444' }}>
                                   {row.profit >= 0 ? '+' : ''}${row.profit}
                                 </span>
                               </div>
                             </div>
                             {row.spx && (
-                              <div className="text-xs font-mono mt-0.5" style={{ color: '#2D3748' }}>
+                              <div className="text-xs font-mono mt-0.5" style={{ color: '#6B7B8D' }}>
                                 مستوى المؤشر المطلوب: <span style={{ color: '#94A3B8' }}>{row.spx.toLocaleString()}</span>
                               </div>
                             )}
@@ -740,15 +740,15 @@ export default function V2Dashboard() {
                           </div>
                           <div className="grid grid-cols-3 gap-2 text-center mb-1.5">
                             <div>
-                              <div className="text-xs" style={{ color: '#4A5568' }}>التكلفة (أقصى خسارة)</div>
+                              <div className="text-xs" style={{ color: '#7C8A99' }}>التكلفة (أقصى خسارة)</div>
                               <div className="text-sm font-black font-mono" style={{ color: '#F0435A' }}>${c.spread.maxLoss}</div>
                             </div>
                             <div>
-                              <div className="text-xs" style={{ color: '#4A5568' }}>أقصى ربح</div>
+                              <div className="text-xs" style={{ color: '#7C8A99' }}>أقصى ربح</div>
                               <div className="text-sm font-black font-mono" style={{ color: '#26D07C' }}>${c.spread.maxProfit}</div>
                             </div>
                             <div>
-                              <div className="text-xs" style={{ color: '#4A5568' }}>التعادل</div>
+                              <div className="text-xs" style={{ color: '#7C8A99' }}>التعادل</div>
                               <div className="text-sm font-black font-mono text-white">{c.spread.breakeven}</div>
                             </div>
                           </div>
@@ -804,12 +804,12 @@ export default function V2Dashboard() {
           <div className="flex items-center gap-2.5">
             <span className="text-sm font-bold" style={{ color: '#94A3B8' }}>المزيد — تفاصيل السوق</span>
             {!loading && spx?.price ? (
-              <span className="text-xs font-mono" style={{ color: '#4A5568' }}>
+              <span className="text-xs font-mono" style={{ color: '#7C8A99' }}>
                 SPX {n(spx.price, 0)} · VIX {n(vix)} · الحركة ±{em ?? '—'}
               </span>
             ) : null}
           </div>
-          <span className="text-sm shrink-0" style={{ color: '#4A5568' }}>{showMore ? '▲' : '▼'}</span>
+          <span className="text-sm shrink-0" style={{ color: '#7C8A99' }}>{showMore ? '▲' : '▼'}</span>
         </button>
 
         {showMore && (
@@ -831,30 +831,30 @@ export default function V2Dashboard() {
             {/* Market metrics: SPX · VIX · EM */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="rounded-2xl p-4 space-y-2" style={{ background: 'rgba(13,27,42,0.88)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <div className="text-xs font-mono tracking-widest" style={{ color: '#2D3748' }}>S&P 500</div>
+                <div className="text-xs font-mono tracking-widest" style={{ color: '#6B7B8D' }}>S&P 500</div>
                 <div className="text-3xl font-bold text-white font-mono leading-none">{n(spx?.price, 0)}</div>
                 <div className="text-sm font-bold font-mono" style={{ color: clr(spx?.changePct) }}>{pct(spx?.changePct)}</div>
                 {spx?.prevClose != null && (
-                  <div className="text-xs font-mono" style={{ color: '#4A5568' }}>إغلاق الأمس {n(spx.prevClose, 0)}</div>
+                  <div className="text-xs font-mono" style={{ color: '#7C8A99' }}>إغلاق الأمس {n(spx.prevClose, 0)}</div>
                 )}
                 {spx?.high != null && spx.high > 0 && (
                   <div className="flex gap-2 text-xs font-mono">
                     <span style={{ color: '#10B981' }}>H {n(spx.high, 0)}</span>
-                    <span style={{ color: '#2D3748' }}>·</span>
+                    <span style={{ color: '#6B7B8D' }}>·</span>
                     <span style={{ color: '#EF4444' }}>L {n(spx.low, 0)}</span>
                   </div>
                 )}
               </div>
 
               <div className="rounded-2xl p-4 space-y-2" style={{ background: 'rgba(13,27,42,0.88)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <div className="text-xs font-mono tracking-widest" style={{ color: '#2D3748' }}>مؤشر الخوف</div>
+                <div className="text-xs font-mono tracking-widest" style={{ color: '#6B7B8D' }}>مؤشر الخوف</div>
                 <div className="flex items-baseline gap-1.5">
                   <div className="text-3xl font-bold font-mono leading-none" style={{ color: vix > 25 ? '#EF4444' : vix > 18 ? '#F59E0B' : '#10B981' }}>{n(vix)}</div>
                   {data?.market?.vix?.estimated && (
                     <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(201,148,58,0.12)', color: '#C9943A', border: '1px solid rgba(201,148,58,0.2)' }}>~تقديري</span>
                   )}
                 </div>
-                <div className="text-xs font-mono" style={{ color: '#4A5568' }}>
+                <div className="text-xs font-mono" style={{ color: '#7C8A99' }}>
                   {vix < 15 ? 'هادئ جداً' : vix < 20 ? 'طبيعي' : vix < 25 ? 'مرتفع' : '⚠ خطر'}
                 </div>
                 <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
@@ -863,12 +863,12 @@ export default function V2Dashboard() {
               </div>
 
               <div className="rounded-2xl p-4 space-y-2" style={{ background: 'rgba(13,27,42,0.88)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <div className="text-xs font-mono tracking-widest" style={{ color: '#2D3748' }}>الحركة المتوقعة</div>
+                <div className="text-xs font-mono tracking-widest" style={{ color: '#6B7B8D' }}>الحركة المتوقعة</div>
                 <div className="text-3xl font-bold font-mono leading-none" style={{ color: '#C9943A' }}>{em ? `±${em}` : '—'}</div>
                 <div className="text-xs font-mono space-y-0.5">
                   {emUpper && <div style={{ color: '#10B981' }}>▲ {n(emUpper, 0)}</div>}
                   {emLower && <div style={{ color: '#EF4444' }}>▼ {n(emLower, 0)}</div>}
-                  {!emUpper && !emLower && <div style={{ color: '#2D3748' }}>—</div>}
+                  {!emUpper && !emLower && <div style={{ color: '#6B7B8D' }}>—</div>}
                 </div>
               </div>
             </div>
@@ -929,7 +929,7 @@ export default function V2Dashboard() {
                   </div>
                   {m.sess?.high == null && m.sess?.low == null ? (
                     <div className="py-4 text-center">
-                      <div className="text-xs font-mono" style={{ color: '#2D3748' }}>لا تتوفر بيانات قبل افتتاح الجلسة</div>
+                      <div className="text-xs font-mono" style={{ color: '#6B7B8D' }}>لا تتوفر بيانات قبل افتتاح الجلسة</div>
                     </div>
                   ) : (
                     <div className="space-y-1.5">
@@ -942,7 +942,7 @@ export default function V2Dashboard() {
                         <span className="font-bold font-mono" style={{ color: '#EF4444' }}>{n(m.sess?.low)}</span>
                       </div>
                       <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
-                        <span className="text-xs font-mono" style={{ color: '#4A5568' }}>{m.closeLabel}</span>
+                        <span className="text-xs font-mono" style={{ color: '#7C8A99' }}>{m.closeLabel}</span>
                         <span className="text-sm font-bold font-mono text-white">{n(m.sess?.close)}</span>
                       </div>
                     </div>
@@ -953,7 +953,7 @@ export default function V2Dashboard() {
 
             {/* Quick Analyze */}
             <div className="rounded-2xl p-5" style={{ background: 'rgba(13,27,42,0.7)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <div className="text-xs font-mono tracking-widest mb-3" style={{ color: '#2D3748' }}>تحليل عقد بستريك محدد</div>
+              <div className="text-xs font-mono tracking-widest mb-3" style={{ color: '#6B7B8D' }}>تحليل عقد بستريك محدد</div>
               <div className="flex gap-1.5 mb-3">
                 {([
                   { v: 'auto', label: 'تلقائي', color: '#C9943A' },
@@ -965,7 +965,7 @@ export default function V2Dashboard() {
                           style={{
                             background: ctype === opt.v ? `${opt.color}20` : 'rgba(255,255,255,0.03)',
                             border:     ctype === opt.v ? `1px solid ${opt.color}50` : '1px solid rgba(255,255,255,0.06)',
-                            color:      ctype === opt.v ? opt.color : '#4A5568',
+                            color:      ctype === opt.v ? opt.color : '#7C8A99',
                           }}>
                     {opt.label}
                   </button>
@@ -990,21 +990,21 @@ export default function V2Dashboard() {
                     <span style={{ color: data?.direction?.color ?? '#C9943A' }}>{data?.direction?.type === 'call' ? '▲' : '▼'}</span>
                     <span className="text-sm font-medium text-white">قائمة العقود المؤهلة (خارج المال)</span>
                   </div>
-                  <span className="text-xs font-mono" style={{ color: '#2D3748' }}>{data?.expiration} · {(data?.shortlist ?? []).length} عقد</span>
+                  <span className="text-xs font-mono" style={{ color: '#6B7B8D' }}>{data?.expiration} · {(data?.shortlist ?? []).length} عقد</span>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs font-mono" style={{ borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: 'rgba(0,0,0,0.3)' }}>
                         {['الستريك', 'شراء', 'بيع', 'المتوسط', 'دلتا', 'التذبذب', 'الحجم', 'خروج (المؤشر)', ''].map(h => (
-                          <th key={h} className="py-2.5 px-3 text-left font-semibold" style={{ color: '#2D3748', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{h}</th>
+                          <th key={h} className="py-2.5 px-3 text-left font-semibold" style={{ color: '#6B7B8D', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {(data?.shortlist ?? []).map((row, idx) => {
                         const isTop = idx < 3
-                        const rankColor = idx === 0 ? '#C9943A' : idx === 1 ? '#34D399' : idx === 2 ? '#60A5FA' : '#4A5568'
+                        const rankColor = idx === 0 ? '#C9943A' : idx === 1 ? '#34D399' : idx === 2 ? '#60A5FA' : '#7C8A99'
                         return (
                           <tr key={row.symbol}
                               style={{
@@ -1032,7 +1032,7 @@ export default function V2Dashboard() {
                     </tbody>
                   </table>
                 </div>
-                <div className="px-5 py-2 text-xs font-mono" style={{ color: '#1A2A3A', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                <div className="px-5 py-2 text-xs font-mono" style={{ color: '#55657A', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
                   ★ أفضل 3 · {recMode === 'safe' ? 'المحافظ: عقود سريعة التفاعل بأهداف قريبة وفرق ضيق جداً' : recMode === 'balanced' ? 'المتوسط: توازن بين سرعة العقد وضيق الفرق' : 'المغامر: عقود رخيصة $0.50–$5'} · سعر الخروج = المؤشر الحالي ∓ 35% من الحركة المتوقعة · عقود خارج المال فقط
                 </div>
               </div>
@@ -1043,8 +1043,8 @@ export default function V2Dashboard() {
 
       {/* ── Compliance Disclaimer ── */}
       <div className="rounded-xl px-4 py-3 text-xs leading-relaxed font-mono" dir="rtl"
-        style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)', color: '#2D3748' }}>
-        <span className="font-semibold" style={{ color: '#4A5568' }}>إخلاء مسؤولية: </span>
+        style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)', color: '#6B7B8D' }}>
+        <span className="font-semibold" style={{ color: '#7C8A99' }}>إخلاء مسؤولية: </span>
         هذه المنصة أداة دعم قرار تعليمية فقط، لا تُعدّ نصيحة استثمارية. تداول الخيارات ينطوي على مخاطر عالية.
         قد تكون البيانات مؤخرة أو تقديرية. استشر مستشاراً مالياً قبل أي قرار.
       </div>

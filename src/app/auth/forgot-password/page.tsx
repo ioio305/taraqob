@@ -48,7 +48,7 @@ export default function ForgotPasswordPage() {
                  style={{ filter: 'drop-shadow(0 0 20px rgba(201,148,58,0.3))' }} />
           </div>
           <h1 className="text-xl font-bold text-white">استعادة كلمة المرور</h1>
-          <p className="text-sm mt-1 font-mono" style={{ color: '#4A5568' }}>
+          <p className="text-sm mt-1 font-mono" style={{ color: '#7C8A99' }}>
             أدخل بريدك وسنرسل لك رابط الاستعادة
           </p>
         </div>
@@ -62,7 +62,7 @@ export default function ForgotPasswordPage() {
             </div>
             <div>
               <div className="font-bold text-white mb-1">تم إرسال الرابط</div>
-              <div className="text-sm font-mono" style={{ color: '#4A5568' }}>
+              <div className="text-sm font-mono" style={{ color: '#7C8A99' }}>
                 تحقق من بريدك الإلكتروني واتبع التعليمات
               </div>
             </div>
@@ -82,7 +82,7 @@ export default function ForgotPasswordPage() {
               </div>
             )}
             <div>
-              <label className="block text-xs font-mono mb-2" style={{ color: '#4A5568' }}>
+              <label className="block text-xs font-mono mb-2" style={{ color: '#7C8A99' }}>
                 البريد الإلكتروني
               </label>
               <input
@@ -102,7 +102,7 @@ export default function ForgotPasswordPage() {
             </button>
             <Link href="/login"
                   className="block text-center text-xs font-mono"
-                  style={{ color: '#2D3748' }}>
+                  style={{ color: '#6B7B8D' }}>
               العودة لتسجيل الدخول
             </Link>
           </div>
