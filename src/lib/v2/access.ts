@@ -2,9 +2,17 @@ import 'server-only'
 
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
-import { getTrialState } from '@/lib/v2/accessRules'
+import { getTrialState, TIER_RANK, type SubscriptionTier } from '@/lib/v2/accessRules'
 
 export { hasMinimumTier } from '@/lib/v2/accessRules'
+
+// ── رؤية «3 منصات»: اشتراك منفصل لكل منصة، حساب واحد ──────────────────────────
+export type Platform = 'spx' | 'stocks' | 'funds'
+export type PlatformTiers = Record<Platform, SubscriptionTier>
+
+function normalizeTier(v: unknown): SubscriptionTier {
+  return typeof v === 'string' && v in TIER_RANK ? (v as SubscriptionTier) : 'radar'
+}
 
 // يمنع تكرار طلب المستخدم وملفه في الصفحات المتداخلة خلال الطلب نفسه.
 export const getV2Viewer = cache(async () => {
@@ -23,11 +31,33 @@ export const getV2Viewer = cache(async () => {
   const secondaryRoles = Array.isArray((profile.preferences as any)?.secondary_roles)
     ? (profile.preferences as any).secondary_roles as string[]
     : []
-  const trial = getTrialState(
-    profile.subscription_tier,
-    user.created_at,
-    profile.referral_days ?? (user.user_metadata as any)?.referral_days,
-  )
+
+  // ── اشتراكات المنصات (المرحلة 1) ──────────────────────────────────────────
+  // تراجع آمن: لو لم يُطبَّق ملف الترحيل بعد (الجدول غير موجود) نعود للباقة القديمة.
+  // service !== 'canceled' فقط. spx يعود للباقة القديمة كي لا يفقد أي مشترك وصوله.
+  const subMap = new Map<string, string>()
+  try {
+    const { data: subs, error } = await supabase
+      .from('platform_subscriptions')
+      .select('platform, tier, status')
+      .eq('user_id', user.id)
+    if (!error && Array.isArray(subs)) {
+      for (const s of subs) if (s.status !== 'canceled') subMap.set(s.platform, s.tier)
+    }
+  } catch { /* الجدول غير موجود بعد → تراجع كامل للباقة القديمة */ }
+
+  const referralDays = profile.referral_days ?? (user.user_metadata as any)?.referral_days
+
+  // SPX: صف المنصة إن وُجد، وإلا الباقة القديمة (grandfather) — مع منطق التجربة 7 أيام
+  const spxStored = subMap.get('spx') ?? profile.subscription_tier
+  const spxTrial  = getTrialState(spxStored, user.created_at, referralDays)
+
+  // الشركات/الصناديق: صف المنصة، وإلا radar (مجاني افتراضاً في مرحلة الإطلاق)
+  const platformTiers: PlatformTiers = {
+    spx:    normalizeTier(spxTrial.effectiveTier),
+    stocks: normalizeTier(subMap.get('stocks')),
+    funds:  normalizeTier(subMap.get('funds')),
+  }
 
   return {
     user,
@@ -35,6 +65,18 @@ export const getV2Viewer = cache(async () => {
     displayName: profile.full_name_ar || profile.full_name || user.email || '',
     secondaryRoles,
     isStaff: profile.role === 'admin' || profile.role === 'moderator',
-    ...trial,
+    // اشتراك كل منصة على حدة
+    platformTiers,
+    // توافق خلفي: القيم القديمة = منصة SPX (لا تكسر أي مستدعٍ حالي)
+    effectiveTier: platformTiers.spx,
+    trialDaysLeft: spxTrial.trialDaysLeft,
   }
 })
+
+// مساعد: باقة منصة محددة من الـviewer (للاستخدام في بوابات كل منصة لاحقاً)
+export function platformTierOf(
+  viewer: { platformTiers?: PlatformTiers } | null | undefined,
+  platform: Platform,
+): SubscriptionTier {
+  return viewer?.platformTiers?.[platform] ?? 'radar'
+}
