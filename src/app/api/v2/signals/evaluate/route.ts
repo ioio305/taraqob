@@ -57,7 +57,10 @@ export async function GET(request: NextRequest) {
         if (intradaySeq && b.time < createdIso) continue   // بعد لحظة الإشارة فقط
         const hitTarget = isCall ? b.high >= target : b.low <= target
         const hitStop   = isCall ? b.low  <= stop   : b.high >= stop
-        if (hitTarget && hitStop) return 'closed_loss' as const  // كلاهما بنفس الشمعة → متحفّظ
+        // بلوغ الهدف = نجاح. توصية المنصة تقول «بِع عند الهدف»، فمتى لمس السعر
+        // الهدف الأول فقد أتيحت للمستخدم فرصة البيع بربح — يُسجَّل ناجحاً ولو
+        // انعكس بعدها. التسلسل الحقيقي (أيّهما أولاً) يُحسم بالشموع الداخلية 5د؛
+        // وعند غموض الشمعة الواحدة (لمست الحدّين معاً) نرجّح الهدف لا الوقف.
         if (hitTarget) return 'closed_win' as const
         if (hitStop)   return 'closed_loss' as const
       }
