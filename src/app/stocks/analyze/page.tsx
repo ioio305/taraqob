@@ -2,6 +2,9 @@
 
 import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import StockChart, { type StockChartData } from '@/components/v2/StockChart'
+
+type NewsItem = { id: string; title: string; titleAr: string; source: string; publishedAt: string; url: string | null; sentiment: string | null; sentimentAr: string | null }
 
 // ══════════════════════════════════════════════════════════════════════════
 // تحليل سهم — داخل منصة الشركات بالكامل (لا علاقة بالمؤشر SPX)
@@ -64,6 +67,8 @@ function AnalyzeInner() {
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
   const [input, setInput] = useState('')
+  const [chart, setChart] = useState<StockChartData | null>(null)
+  const [news, setNews] = useState<NewsItem[] | null>(null)
 
   useEffect(() => {
     try {
@@ -83,6 +88,17 @@ function AnalyzeInner() {
   }, [symbol, mode])
 
   useEffect(() => { load() }, [load])
+
+  // أخبار السهم (مستقلة عن التوصية)
+  useEffect(() => {
+    let alive = true
+    setNews(null)
+    fetch(`/api/v2/stocks/news?symbol=${encodeURIComponent(symbol)}`)
+      .then(r => r.json())
+      .then(j => { if (alive) setNews(Array.isArray(j.items) ? j.items : []) })
+      .catch(() => { if (alive) setNews([]) })
+    return () => { alive = false }
+  }, [symbol])
 
   function go(sym: string) {
     const s = sym.trim().toUpperCase()
@@ -182,6 +198,13 @@ function AnalyzeInner() {
               </div>
             )}
           </div>
+
+          {/* الشارت + التحليل الفني */}
+          <StockChart symbol={data.symbol} onData={setChart} />
+          {chart?.analysis && <TechnicalRead analysis={chart.analysis} />}
+
+          {/* أخبار السهم */}
+          <StockNews items={news} symbol={data.symbol} />
 
           {/* بوابة الأرباح */}
           {data.eventRisk?.active && (
@@ -315,6 +338,126 @@ function ContractCard({ c, primary }: { c: Contract; primary: boolean }) {
           <div className="flex items-start gap-1.5">
             <span className="shrink-0 mt-0.5 text-xs" style={{ color: '#F59E0B' }}>↑</span>
             <div className="text-xs leading-snug" style={{ color: '#64748B' }}>{strat.postT1Action}</div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── التحليل الفني (من analyzeMarket على شموع السهم) ───────────────────────────
+function toneColor(t: string) { return t === 'up' ? '#26D07C' : t === 'down' ? '#F0435A' : '#94A3B8' }
+function TechnicalRead({ analysis }: { analysis: StockChartData['analysis'] }) {
+  const s = analysis.summary
+  const biasColor = s.bias === 'صاعد' ? '#26D07C' : s.bias === 'هابط' ? '#F0435A' : '#F59E0B'
+  return (
+    <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(13,27,42,0.82)', border: '1px solid rgba(255,255,255,0.06)' }}>
+      <div className="px-5 py-3 flex items-center justify-between gap-2 flex-wrap" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+        <span className="text-sm font-bold" style={{ color: ACCENT }}>🔬 قراءة التحليل الفني</span>
+        <span className="text-xs font-bold px-2.5 py-1 rounded-lg" style={{ background: `${biasColor}18`, color: biasColor, border: `1px solid ${biasColor}45` }}>
+          الميل العام: {s.bias} · قوة {s.score}/100
+        </span>
+      </div>
+      <div className="p-4 space-y-3">
+        <div className="text-sm leading-relaxed" style={{ color: '#CBD5E1' }}>{s.decisionText}</div>
+
+        {/* القراءات المستقلة */}
+        <div className="grid grid-cols-3 gap-2">
+          {analysis.readings.map(r => (
+            <div key={r.label} className="rounded-lg p-2.5 text-center" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="text-xs" style={{ color: '#5E6E7F' }}>{r.label}</div>
+              <div className="text-sm font-bold mt-0.5" style={{ color: toneColor(r.tone) }}>{r.verdict}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* الحجة الصاعدة مقابل الهابطة */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="rounded-lg p-3" style={{ background: 'rgba(38,208,124,0.06)', border: '1px solid rgba(38,208,124,0.2)' }}>
+            <div className="text-xs font-bold mb-1.5" style={{ color: '#26D07C' }}>▲ مع الصعود</div>
+            {analysis.bullCase.length ? (
+              <ul className="space-y-1">{analysis.bullCase.map((b, i) => <li key={i} className="text-xs leading-snug" style={{ color: '#A7D8BE' }}>• {b}</li>)}</ul>
+            ) : <div className="text-xs" style={{ color: '#4A5568' }}>لا أدلة صعود واضحة</div>}
+          </div>
+          <div className="rounded-lg p-3" style={{ background: 'rgba(240,67,90,0.06)', border: '1px solid rgba(240,67,90,0.2)' }}>
+            <div className="text-xs font-bold mb-1.5" style={{ color: '#F0435A' }}>▼ مع الهبوط</div>
+            {analysis.bearCase.length ? (
+              <ul className="space-y-1">{analysis.bearCase.map((b, i) => <li key={i} className="text-xs leading-snug" style={{ color: '#E4A7B2' }}>• {b}</li>)}</ul>
+            ) : <div className="text-xs" style={{ color: '#4A5568' }}>لا أدلة هبوط واضحة</div>}
+          </div>
+        </div>
+
+        {/* تفصيل المؤشرات */}
+        <div className="space-y-1.5">
+          {[
+            { label: 'الاتجاه', text: analysis.trend.decision },
+            { label: 'الزخم', text: analysis.momentum.decision },
+            { label: 'التذبذب', text: analysis.volatility.decision },
+          ].map(row => (
+            <div key={row.label} className="flex items-start gap-2 text-xs">
+              <span className="shrink-0 font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(96,165,250,0.1)', color: ACCENT, minWidth: 52, textAlign: 'center' }}>{row.label}</span>
+              <span style={{ color: '#94A3B8' }}>{row.text}</span>
+            </div>
+          ))}
+        </div>
+
+        {analysis.sr?.summary && (
+          <div className="text-xs rounded-lg px-3 py-2" style={{ background: 'rgba(255,255,255,0.03)', color: '#94A3B8', border: '1px solid rgba(255,255,255,0.06)' }}>
+            📊 {analysis.sr.summary}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── أخبار السهم ───────────────────────────────────────────────────────────────
+function timeAgoAr(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const m = Math.round(diff / 60000)
+  if (m < 60) return `قبل ${m} دقيقة`
+  const h = Math.round(m / 60)
+  if (h < 24) return `قبل ${h} ساعة`
+  return `قبل ${Math.round(h / 24)} يوم`
+}
+function sentimentStyle(s: string | null) {
+  if (s === 'positive') return { color: '#26D07C', bg: 'rgba(38,208,124,0.12)' }
+  if (s === 'negative') return { color: '#F0435A', bg: 'rgba(240,67,90,0.12)' }
+  return { color: '#94A3B8', bg: 'rgba(255,255,255,0.05)' }
+}
+function StockNews({ items, symbol }: { items: NewsItem[] | null; symbol: string }) {
+  return (
+    <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(13,27,42,0.82)', border: '1px solid rgba(255,255,255,0.06)' }}>
+      <div className="px-5 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+        <span className="text-sm font-bold" style={{ color: ACCENT }}>📰 أخبار {symbol}</span>
+      </div>
+      <div className="p-3">
+        {items === null && <div className="py-6 text-center text-sm" style={{ color: '#5E6E7F' }}>جاري تحميل الأخبار…</div>}
+        {items && items.length === 0 && (
+          <div className="py-6 text-center text-sm" style={{ color: '#5E6E7F' }}>لا أخبار حديثة متاحة لهذا السهم الآن.</div>
+        )}
+        {items && items.length > 0 && (
+          <div className="space-y-1.5">
+            {items.map(it => {
+              const ss = sentimentStyle(it.sentiment)
+              const body = (
+                <div className="rounded-lg px-3 py-2.5 transition-all" style={{ background: 'rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-sm leading-snug" style={{ color: '#CBD5E1' }}>{it.titleAr || it.title}</div>
+                    {it.sentimentAr && (
+                      <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: ss.bg, color: ss.color }}>{it.sentimentAr}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 text-[10px]" style={{ color: '#5E6E7F' }}>
+                    <span>{it.source}</span><span>·</span><span>{timeAgoAr(it.publishedAt)}</span>
+                    {it.url && <span style={{ color: ACCENT }}>↗ المصدر</span>}
+                  </div>
+                </div>
+              )
+              return it.url
+                ? <a key={it.id} href={it.url} target="_blank" rel="noopener noreferrer" className="block">{body}</a>
+                : <div key={it.id}>{body}</div>
+            })}
           </div>
         )}
       </div>

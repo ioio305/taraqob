@@ -93,6 +93,37 @@ export async function getStockChain(symbol: string, expiration: string): Promise
   } catch { return [] }
 }
 
+// ── شموع داخل اليوم للسهم (للشارت والتحليل الفني) ─────────────────────────────
+// Yahoo أولاً (بسيط وموثوق للأسهم)، ثم Tradier timesales احتياطاً.
+const YF_INTRADAY: Record<string, { interval: string; range: string }> = {
+  '5min':  { interval: '5m',  range: '5d'  },
+  '15min': { interval: '15m', range: '1mo' },
+  '1h':    { interval: '60m', range: '3mo' },
+}
+export async function getStockIntradayBars(symbol: string, tf = '15min'): Promise<MdBar[]> {
+  const sym = symbol.toUpperCase()
+  const cfg = YF_INTRADAY[tf] ?? YF_INTRADAY['15min']
+  try {
+    const res = await fetch(
+      `${YF}/${encodeURIComponent(sym)}?interval=${cfg.interval}&range=${cfg.range}`,
+      { headers: UA, cache: 'no-store' },
+    )
+    if (!res.ok) return []
+    const json = await res.json()
+    const r = json?.chart?.result?.[0]
+    if (!r?.timestamp?.length) return []
+    const q = r.indicators?.quote?.[0] ?? {}
+    const ts: number[] = r.timestamp
+    const out: MdBar[] = []
+    for (let i = 0; i < ts.length; i++) {
+      const o = q.open?.[i], h = q.high?.[i], l = q.low?.[i], c = q.close?.[i]
+      if (o == null || h == null || l == null || c == null || isNaN(c)) continue
+      out.push({ time: new Date(ts[i] * 1000).toISOString(), open: o, high: h, low: l, close: c, volume: q.volume?.[i] ?? 0 })
+    }
+    return out
+  } catch { return [] }
+}
+
 // ── شموع يومية للسهم (لحساب الاتجاه/الزخم) ────────────────────────────────────
 export async function getStockDailyBars(symbol: string, days = 60): Promise<MdBar[]> {
   const sym = symbol.toUpperCase()
