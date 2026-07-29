@@ -178,7 +178,6 @@ export default function StocksScanner() {
         <div className="px-5 py-4 flex items-center justify-between gap-3 border-b border-white/5">
           <div>
             <div className="text-[11px] font-bold tracking-widest" style={{ color: ACCENT }}>توصية الشركات الآن</div>
-            <div className="text-xs mt-1 text-slate-500">القرار أولاً، والتفاصيل بعده</div>
           </div>
           <span className="rounded-full px-3 py-1 text-[11px] font-bold bg-blue-400/10 text-blue-300 border border-blue-400/20">
             باقتك: {tier === 'radar' ? 'رادار' : tier === 'signal' ? 'سيجنال' : tier === 'edge' ? 'إيدج' : 'ألفا'}
@@ -225,14 +224,19 @@ export default function StocksScanner() {
               </div>
             </div>
 
-            <div className="mt-4 rounded-xl p-3 text-sm leading-6 bg-amber-400/[.06] border border-amber-400/15 text-slate-300">
-              <span className="font-bold text-amber-400">لماذا هي الأولى؟ </span>
-              ربح مستهدف ${topOpportunity.best.ranking.expectedProfit}،
-              عائد متوقع {topOpportunity.best.ranking.expectedReturnPct}%،
-              وعائد مقابل المخاطرة {topOpportunity.best.ranking.riskReward}.
-              <span className="block mt-1 text-xs text-slate-500">
-                {topOpportunity.best.ranking.reasons.join(' · ')}
-              </span>
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <div className="rounded-xl p-3 bg-amber-400/[.06] border border-amber-400/15">
+                <div className="text-[10px] text-slate-500">الربح</div>
+                <div className="font-black text-amber-300">${topOpportunity.best.ranking.expectedProfit}</div>
+              </div>
+              <div className="rounded-xl p-3 bg-amber-400/[.06] border border-amber-400/15">
+                <div className="text-[10px] text-slate-500">العائد</div>
+                <div className="font-black text-amber-300">{topOpportunity.best.ranking.expectedReturnPct}%</div>
+              </div>
+              <div className="rounded-xl p-3 bg-amber-400/[.06] border border-amber-400/15">
+                <div className="text-[10px] text-slate-500">العائد/المخاطرة</div>
+                <div className="font-black text-amber-300">{topOpportunity.best.ranking.riskReward}</div>
+              </div>
             </div>
 
             <div className="mt-4 flex gap-2 flex-wrap">
@@ -529,10 +533,10 @@ function StockDetail({ detail }: { detail: DetailData }) {
 
       {/* لماذا */}
       <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}>
-        <div className="text-xs font-bold mb-1.5" style={{ color: ACCENT }}>لماذا هذه الفرصة؟</div>
+        <div className="text-xs font-bold mb-1.5" style={{ color: ACCENT }}>القرار</div>
         <div className="text-sm leading-relaxed" style={{ color: '#CBD5E1' }}>{c.focus?.primaryReason || c.reason}</div>
         {c.focus?.nextStep && (
-          <div className="text-xs mt-1.5 font-semibold" style={{ color: '#BFDBFE' }}>← الخطوة التالية: {c.focus.nextStep}</div>
+          <div className="text-xs mt-1.5 font-semibold" style={{ color: '#BFDBFE' }}>{c.focus.nextStep}</div>
         )}
         {okEdges.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-2.5">

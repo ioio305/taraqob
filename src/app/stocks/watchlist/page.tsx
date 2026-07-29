@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { BellRing, Plus, Star, Trash2 } from 'lucide-react'
+import { Plus, Star, Trash2 } from 'lucide-react'
 import { useStockRadar } from '@/components/v2/StockRadarBoard'
 
 const STORAGE_KEY = 'taraqob_stocks_watchlist_v1'
@@ -47,7 +47,6 @@ export default function StocksWatchlistPage() {
             </div>
             <div>
               <h1 className="text-2xl font-black text-white">قائمة المراقبة</h1>
-              <p className="text-xs mt-1 text-slate-500">شركاتك المهمة مع تغير السعر والزخم والمستويات</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -90,10 +89,6 @@ export default function StocksWatchlistPage() {
         ) : null)}
       </section>
 
-      <div className="rounded-xl p-3 flex items-start gap-2 text-xs leading-6 text-slate-500 bg-white/[.02] border border-white/[.05]">
-        <BellRing size={15} className="mt-1 shrink-0 text-blue-400" />
-        ستُربط التنبيهات لاحقاً بتغير حالة الشركة من مراقبة إلى فرصة مؤكدة، وليس بمجرد حركة السعر.
-      </div>
     </div>
   )
 }

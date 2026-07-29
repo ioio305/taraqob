@@ -44,7 +44,6 @@ export default function RecommendationTrackingPage() {
             </div>
             <div>
               <h1 className="text-2xl font-black text-white">متابعة التوصيات</h1>
-              <p className="text-xs mt-1 text-slate-500">من الرصد إلى التأكيد أو الإلغاء مع بقاء السبب واضحاً</p>
             </div>
           </div>
           <button onClick={load} disabled={loading} aria-label="تحديث" className="w-10 h-10 rounded-xl flex items-center justify-center bg-white/[.03] border border-white/[.07] text-slate-400">

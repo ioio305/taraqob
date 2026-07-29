@@ -150,9 +150,6 @@ export default function StocksDecisionRoom() {
                 <ShieldCheck size={15} /> حصري لباقات ألفا
               </div>
               <h1 className="mt-3 text-3xl md:text-5xl font-black text-white">غرفة قرار الشركات</h1>
-              <p className="mt-3 text-sm leading-7 max-w-2xl text-slate-400">
-                كل الأدلة في مسار واحد: من اكتشاف الحركة حتى متابعة القرار وقياس نتيجته.
-              </p>
             </div>
             <button onClick={load} disabled={loading}
                     className="rounded-xl px-4 py-2.5 flex items-center gap-2 text-xs font-bold text-violet-200 bg-violet-400/10 border border-violet-400/25 disabled:opacity-40">
@@ -271,8 +268,7 @@ export default function StocksDecisionRoom() {
 
         <section className="rounded-2xl p-5 flex items-center justify-between gap-4 flex-wrap bg-violet-400/[.045] border border-violet-400/15">
           <div>
-            <div className="text-sm font-black text-white">الخطوة التالية</div>
-            <div className="text-xs mt-1 text-slate-500">
+            <div className="text-sm font-black text-white">
               {primary ? `افتح تحليل ${primary.symbol} لمراجعة مستويات التأكيد والإلغاء والعقد.` : 'انتقل للراصد وانتظر ظهور فرصة صالحة.'}
             </div>
           </div>
@@ -284,7 +280,7 @@ export default function StocksDecisionRoom() {
 
         <div className="flex items-center gap-2 text-[11px] text-slate-600">
           <CircleAlert size={13} />
-          الغرفة لا تحول الرصد إلى تنفيذ قبل اكتمال المعايرة التاريخية.
+          القرار لا يعني التنفيذ.
           {updatedAt ? ` آخر تحديث ${updatedAt.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}.` : ''}
         </div>
       </div>

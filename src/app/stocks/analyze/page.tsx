@@ -284,9 +284,9 @@ function ContractCard({ c, primary }: { c: Contract; primary: boolean }) {
       <div className="p-4 space-y-3">
         {/* لماذا */}
         <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}>
-          <div className="text-xs font-bold mb-1.5" style={{ color: ACCENT }}>لماذا هذه الفرصة؟</div>
+          <div className="text-xs font-bold mb-1.5" style={{ color: ACCENT }}>القرار</div>
           <div className="text-sm leading-relaxed" style={{ color: '#CBD5E1' }}>{c.focus?.primaryReason || c.reason}</div>
-          {c.focus?.nextStep && <div className="text-xs mt-1.5 font-semibold" style={{ color: '#BFDBFE' }}>← الخطوة التالية: {c.focus.nextStep}</div>}
+          {c.focus?.nextStep && <div className="text-xs mt-1.5 font-semibold" style={{ color: '#BFDBFE' }}>{c.focus.nextStep}</div>}
           {okEdges.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-2.5">
               {okEdges.map(e => (

@@ -195,24 +195,26 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
         <div className="px-3 pt-1 pb-2">
           <div className="space-y-2 mt-1">
             <div>
-              <SectionTitle>ابدأ من هنا</SectionTitle>
-              <div className="space-y-0.5">{NAV_DECISION.map(renderNav)}</div>
+              <SectionTitle>الرئيسية</SectionTitle>
+              <div className="space-y-0.5">
+                {NAV_ALPHA.slice(0, 1).map(renderNav)}
+                {NAV_DECISION.map(renderNav)}
+              </div>
             </div>
             <div>
-              <SectionTitle>التحليل والمراقبة</SectionTitle>
-              <div className="space-y-0.5">{NAV_ANALYSIS.map(renderNav)}</div>
+              <SectionTitle>الأدوات</SectionTitle>
+              <div className="space-y-0.5">
+                {NAV_ANALYSIS.map(renderNav)}
+                {NAV_EVENTS.map(renderNav)}
+                {NAV_PREMIUM.slice(0, 1).map(renderNav)}
+              </div>
             </div>
             <div>
-              <SectionTitle>الأخبار والأحداث</SectionTitle>
-              <div className="space-y-0.5">{NAV_EVENTS.map(renderNav)}</div>
-            </div>
-            <div>
-              <SectionTitle>تحليل متقدم</SectionTitle>
-              <div className="space-y-0.5">{NAV_PREMIUM.map(renderNav)}</div>
-            </div>
-            <div>
-              <SectionTitle>الاحتراف</SectionTitle>
-              <div className="space-y-0.5">{NAV_ALPHA.map(renderNav)}</div>
+              <SectionTitle>المتابعة</SectionTitle>
+              <div className="space-y-0.5">
+                {NAV_PREMIUM.slice(1).map(renderNav)}
+                {NAV_ALPHA.slice(1).map(renderNav)}
+              </div>
             </div>
           </div>
         </div>
@@ -266,7 +268,14 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
 
           <MarketClock accent={ACCENT} />
 
-          <div className="hidden md:flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            <Link href="/stocks/decision-room"
+                  className="flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-black text-slate-950 shadow-lg shadow-violet-500/20"
+                  style={{ background: '#C4B5FD', border: '1px solid #DDD6FE' }}>
+              <span className="text-base leading-none">✦</span>
+              <span>غرفة القرار</span>
+            </Link>
+            <div className="hidden md:flex items-center gap-2">
             <Link href="/platforms" className="rounded-lg px-3 py-1.5 text-xs font-bold"
                   style={{ color: '#93C5FD', background: 'rgba(96,165,250,.07)', border: '1px solid rgba(96,165,250,.16)' }}>
               منصة الشركات
@@ -275,6 +284,7 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
                   style={{ color: TIER_COLOR[tier] ?? '#7C8A99', background: `${TIER_COLOR[tier] ?? '#7C8A99'}10`, border: `1px solid ${TIER_COLOR[tier] ?? '#7C8A99'}24` }}>
               {isStaff ? 'كامل' : TIER_LABEL[tier] ?? tier}
             </span>
+            </div>
           </div>
 
           <button onClick={logout} disabled={loggingOut} aria-label="تسجيل الخروج" title={`خروج ${userName}`}
@@ -291,8 +301,8 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
         {/* تنقّل سفلي (جوال) */}
         <nav className="lg:hidden shrink-0 flex items-center justify-around px-1 py-2"
              style={{ background: '#08101A', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          <MobileTab href="/stocks/decision-room" icon="✦" label="غرفة القرار" exact={false} />
           {NAV_DECISION.map(item => <MobileTab key={item.href} {...item} />)}
-          <MobileTab href="/v2" icon="📈" label="المؤشر" exact={false} />
         </nav>
       </div>
     </div>

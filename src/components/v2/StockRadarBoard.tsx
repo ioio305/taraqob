@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Activity, ArrowDown, ArrowUp, Crosshair, RefreshCw, RadioTower } from 'lucide-react'
+import { ArrowDown, ArrowUp, Crosshair, RefreshCw, RadioTower } from 'lucide-react'
 
 export type RadarRow = {
   symbol: string; name: string; price: number; changePct: number; volumeRatio: number
@@ -57,9 +57,6 @@ export function StockRadarBoard({ mode }: { mode: 'monitor' | 'prices' }) {
             </div>
             <div>
               <h1 className="text-xl md:text-2xl font-black text-white">{priceMode ? 'رادار الأسعار' : 'راصد الشركات'}</h1>
-              <p className="text-xs md:text-sm mt-1 text-slate-500">
-                {priceMode ? 'اختراقات وكسر مستويات وفجوات وزخم سعري' : 'الحركة غير المعتادة والسيولة والزخم قبل أن تصبح واضحة للجميع'}
-              </p>
             </div>
           </div>
           <button onClick={load} disabled={loading} aria-label="تحديث"
@@ -116,10 +113,6 @@ export function StockRadarBoard({ mode }: { mode: 'monitor' | 'prices' }) {
         })}
       </section>
 
-      <div className="rounded-xl p-3 flex gap-2 text-xs leading-6 text-slate-500 bg-white/[.02] border border-white/[.05]">
-        <Activity size={15} className="shrink-0 mt-1 text-blue-400" />
-        الرصد لا يعني الدخول. تنتقل الفرصة إلى توصية فقط بعد فحص العقد والمخاطر والأخبار وجودة البيانات.
-      </div>
     </div>
   )
 }
