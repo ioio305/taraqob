@@ -11,6 +11,7 @@ export type StocksFeature =
   | 'earnings'
   | 'flow'
   | 'performance'
+  | 'decision_room'
 
 export const STOCKS_FEATURE_TIER: Record<StocksFeature, SubscriptionTier> = {
   daily_recommendation: 'radar',
@@ -23,6 +24,7 @@ export const STOCKS_FEATURE_TIER: Record<StocksFeature, SubscriptionTier> = {
   earnings: 'signal',
   flow: 'edge',
   performance: 'alpha',
+  decision_room: 'alpha',
 }
 
 export function stocksFeatureForPath(pathname: string): StocksFeature | null {
@@ -35,6 +37,7 @@ export function stocksFeatureForPath(pathname: string): StocksFeature | null {
   if (pathname.startsWith('/stocks/earnings') || pathname.startsWith('/api/v2/stocks/earnings')) return 'earnings'
   if (pathname.startsWith('/stocks/flow') || pathname.startsWith('/api/v2/stocks/flow')) return 'flow'
   if (pathname.startsWith('/stocks/performance')) return 'performance'
+  if (pathname.startsWith('/stocks/decision-room')) return 'decision_room'
   if (pathname.startsWith('/api/v2/stocks/radar')) return 'company_monitor'
   if (pathname === '/stocks' || pathname.startsWith('/api/v2/stocks/scan')) return 'daily_recommendation'
   return null

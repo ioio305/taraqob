@@ -50,6 +50,7 @@ const NAV_PREMIUM: NavItem[] = [
   { href: '/stocks/tracking', label: 'متابعة التوصيات', icon: '↝', exact: false, requiredTier: 'edge' },
 ]
 const NAV_ALPHA: NavItem[] = [
+  { href: '/stocks/decision-room', label: 'غرفة القرار', icon: '✦', exact: false, requiredTier: 'alpha' },
   { href: '/stocks/performance', label: 'سجل الأداء', icon: '◈', exact: false, requiredTier: 'alpha' },
 ]
 
