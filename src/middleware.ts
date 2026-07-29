@@ -2,6 +2,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { isAllowedMutationOrigin, isBodyTooLarge } from '@/lib/security/requestRules'
+import { STOCKS_FEATURE_TIER, stocksFeatureForPath, tierAllowsStocksFeature } from '@/lib/v2/stocksTierAccess'
 
 type CookieToSet = { name: string; value: string; options: CookieOptions }
 
@@ -140,7 +141,7 @@ export async function middleware(request: NextRequest) {
   if (requestedPlatform && !isStaff) {
     const { data: subscription, error: subscriptionError } = await supabase
       .from('platform_subscriptions')
-      .select('platform, current_period_end')
+      .select('platform, tier, current_period_end')
       .eq('user_id', user.id)
       .eq('platform', requestedPlatform)
       .eq('status', 'active')
@@ -164,6 +165,25 @@ export async function middleware(request: NextRequest) {
       url.pathname = '/platforms'
       url.search = ''
       url.searchParams.set('locked', requestedPlatform)
+      return NextResponse.redirect(url)
+    }
+
+    const stocksFeature = requestedPlatform === 'stocks'
+      ? stocksFeatureForPath(pathname)
+      : null
+    if (stocksFeature && subscriptionActive && !tierAllowsStocksFeature(subscription?.tier ?? 'radar', stocksFeature)) {
+      const requiredTier = STOCKS_FEATURE_TIER[stocksFeature]
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json(
+          { error: 'tier_upgrade_required', platform: 'stocks', requiredTier },
+          { status: 403 },
+        )
+      }
+      const url = request.nextUrl.clone()
+      url.pathname = '/v2/upgrade'
+      url.search = ''
+      url.searchParams.set('platform', 'stocks')
+      url.searchParams.set('tier', requiredTier)
       return NextResponse.redirect(url)
     }
   }

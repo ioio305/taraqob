@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
+import { StocksTierProvider } from './StocksTierContext'
 
 // ══════════════════════════════════════════════════════════════════════════
 // قوقعة منصة الشركات — مستقلة تماماً عن منصة المؤشر (SPX)
@@ -26,10 +27,10 @@ function tierAllows(userTier: string, required: string): boolean {
 
 type NavItem = { href: string; label: string; icon: string; exact: boolean; requiredTier: string }
 
-// قرار اليوم — للجميع (مجاني)
+// التوصية أولاً، ثم الأدلة والتحليل بحسب الباقة.
 const NAV_DECISION: NavItem[] = [
-  { href: '/stocks',         label: 'الماسح',    icon: '📡', exact: true,  requiredTier: 'radar' },
-  { href: '/stocks/analyze', label: 'تحليل سهم', icon: '⬡',  exact: false, requiredTier: 'radar' },
+  { href: '/stocks',         label: 'توصية اليوم', icon: '◎', exact: true,  requiredTier: 'radar' },
+  { href: '/stocks/analyze', label: 'تحليل سهم',   icon: '⬡', exact: false, requiredTier: 'signal' },
 ]
 // أخبار وأحداث — للمشترك (سيجنال)
 const NAV_EVENTS: NavItem[] = [
@@ -39,6 +40,9 @@ const NAV_EVENTS: NavItem[] = [
 // مميّز — لإيدج فما فوق
 const NAV_PREMIUM: NavItem[] = [
   { href: '/stocks/flow', label: 'رادار التدفقات', icon: '🛰', exact: false, requiredTier: 'edge' },
+]
+const NAV_ALPHA: NavItem[] = [
+  { href: '/stocks/performance', label: 'سجل الأداء', icon: '◈', exact: false, requiredTier: 'alpha' },
 ]
 
 const PLATFORMS = [
@@ -107,7 +111,7 @@ function NavLink({ href, label, icon, exact, onClick }: { href: string; label: s
 function LockedNavLink({ label, icon, requiredTier }: { label: string; icon: string; requiredTier: string }) {
   const tc = TIER_COLOR[requiredTier] ?? '#7C8A99'
   return (
-    <Link href="/v2/upgrade" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm" style={{ borderRight: '2px solid transparent' }}>
+    <Link href={`/v2/upgrade?platform=stocks&tier=${requiredTier}`} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm" style={{ borderRight: '2px solid transparent' }}>
       <span className="w-4 text-center text-sm shrink-0" style={{ color: '#5E6E7F' }}>{icon}</span>
       <span className="font-medium" style={{ color: '#6E7E8F' }}>{label}</span>
       <span className="mr-auto text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0" style={{ background: `${tc}15`, color: tc, border: `1px solid ${tc}25` }}>
@@ -182,7 +186,7 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
         <div className="px-3 pt-1 pb-2">
           <div className="space-y-2 mt-1">
             <div>
-              <SectionTitle>قرار اليوم</SectionTitle>
+              <SectionTitle>ابدأ من هنا</SectionTitle>
               <div className="space-y-0.5">{NAV_DECISION.map(renderNav)}</div>
             </div>
             <div>
@@ -192,6 +196,10 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
             <div>
               <SectionTitle>تحليل متقدم</SectionTitle>
               <div className="space-y-0.5">{NAV_PREMIUM.map(renderNav)}</div>
+            </div>
+            <div>
+              <SectionTitle>الاحتراف</SectionTitle>
+              <div className="space-y-0.5">{NAV_ALPHA.map(renderNav)}</div>
             </div>
           </div>
         </div>
@@ -219,6 +227,7 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
   )
 
   return (
+    <StocksTierProvider tier={tier} isStaff={isStaff}>
     <div className="flex h-screen overflow-hidden" style={{ background: '#0A1420' }} dir="rtl">
       {/* Sidebar سطح المكتب */}
       <aside className="hidden lg:block w-60 shrink-0 h-full">{Sidebar}</aside>
@@ -253,5 +262,6 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
         </nav>
       </div>
     </div>
+    </StocksTierProvider>
   )
 }

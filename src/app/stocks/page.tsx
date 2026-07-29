@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
+import { useStocksTier } from './StocksTierContext'
 
 // ── أنواع الماسح ──────────────────────────────────────────────────────────────
 type Best = {
@@ -87,6 +88,7 @@ function gradeColor(g?: string) {
 }
 
 export default function StocksScanner() {
+  const { tier, isStaff } = useStocksTier()
   const [data, setData] = useState<ScanData | null>(null)
   const [loading, setLoading] = useState(true)
   const [countdown, setCd] = useState(REFRESH_SEC)
@@ -146,6 +148,8 @@ export default function StocksScanner() {
   }
 
   const results = data?.results ?? []
+  const topOpportunity = results.find(row => row.best && row.dataQuality?.status !== 'blocked') ?? null
+  const tierRank = isStaff ? 99 : (({ radar: 1, signal: 2, edge: 3, alpha: 4 } as Record<string, number>)[tier] ?? 1)
 
   return (
     <div className="min-h-full p-4 pb-10 space-y-4 max-w-4xl mx-auto"
@@ -163,6 +167,112 @@ export default function StocksScanner() {
         </div>
       </div>
 
+      {/* القرار أولاً: هذه أول معلومة يبحث عنها المتداول عند الدخول. */}
+      <section className="rounded-3xl overflow-hidden"
+               style={{ background: 'radial-gradient(circle at 10% 0%, rgba(96,165,250,.17), transparent 40%), #0D1B2A', border: `1px solid ${ACCENT}45` }}>
+        <div className="px-5 py-4 flex items-center justify-between gap-3 border-b border-white/5">
+          <div>
+            <div className="text-[11px] font-bold tracking-widest" style={{ color: ACCENT }}>توصية الشركات الآن</div>
+            <div className="text-xs mt-1 text-slate-500">القرار أولاً، والتفاصيل بعده</div>
+          </div>
+          <span className="rounded-full px-3 py-1 text-[11px] font-bold bg-blue-400/10 text-blue-300 border border-blue-400/20">
+            باقتك: {tier === 'radar' ? 'رادار' : tier === 'signal' ? 'سيجنال' : tier === 'edge' ? 'إيدج' : 'ألفا'}
+          </span>
+        </div>
+
+        {loading && !data ? (
+          <div className="h-40 animate-pulse bg-white/[.025]" />
+        ) : topOpportunity?.best ? (
+          <div className="p-5 md:p-7">
+            <div className="flex items-start justify-between gap-5 flex-wrap">
+              <div>
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl md:text-4xl font-black font-mono text-white">{topOpportunity.symbol}</span>
+                  <span className="rounded-lg px-2.5 py-1 text-xs font-black"
+                        style={{ color: topOpportunity.direction.color, background: `${topOpportunity.direction.color}16`, border: `1px solid ${topOpportunity.direction.color}35` }}>
+                    {topOpportunity.direction.type === 'call' ? 'CALL صاعد' : 'PUT هابط'}
+                  </span>
+                </div>
+                <div className="text-sm mt-2 text-slate-400">{topOpportunity.name} · السعر ${n(topOpportunity.price)}</div>
+              </div>
+              <div className="text-left">
+                <div className="text-xs text-slate-500">القرار الحالي</div>
+                <div className="text-lg font-black mt-1" style={{ color: '#F59E0B' }}>راقب — لا تدخل بعد</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-5">
+              <div className="rounded-xl p-3 bg-black/20 border border-white/5">
+                <div className="text-[11px] text-slate-500">العقد المرشح</div>
+                <div className="mt-1 font-bold font-mono text-white">{topOpportunity.best.type.toUpperCase()} {topOpportunity.best.strike}</div>
+              </div>
+              <div className="rounded-xl p-3 bg-black/20 border border-white/5">
+                <div className="text-[11px] text-slate-500">الانتهاء</div>
+                <div className="mt-1 font-bold font-mono text-white">{topOpportunity.best.expiration}</div>
+              </div>
+              <div className="rounded-xl p-3 bg-black/20 border border-white/5">
+                <div className="text-[11px] text-slate-500">سعر تقريبي</div>
+                <div className="mt-1 font-bold font-mono text-white">${n(topOpportunity.best.mid)}</div>
+              </div>
+              <div className="rounded-xl p-3 bg-black/20 border border-white/5">
+                <div className="text-[11px] text-slate-500">جودة الفرصة</div>
+                <div className="mt-1 font-black" style={{ color: gradeColor(topOpportunity.best.grade) }}>{topOpportunity.best.grade}</div>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl p-3 text-sm leading-6 bg-amber-400/[.06] border border-amber-400/15 text-slate-300">
+              <span className="font-bold text-amber-400">لماذا؟ </span>
+              {topOpportunity.best.reason}
+            </div>
+
+            <div className="mt-4 flex gap-2 flex-wrap">
+              <button onClick={() => openDetail(topOpportunity.symbol)}
+                      className="rounded-xl px-4 py-2.5 text-sm font-black text-slate-950"
+                      style={{ background: ACCENT }}>
+                عرض خطة التوصية
+              </button>
+              {tierRank >= 2 ? (
+                <Link href={`/stocks/analyze?symbol=${encodeURIComponent(topOpportunity.symbol)}`}
+                      className="rounded-xl px-4 py-2.5 text-sm font-bold text-blue-200 bg-blue-400/10 border border-blue-400/25">
+                  فتح التحليل الكامل
+                </Link>
+              ) : (
+                <Link href="/v2/upgrade?platform=stocks&tier=signal"
+                      className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-400 bg-white/[.03] border border-white/10">
+                  🔒 التحليل الكامل — سيجنال
+                </Link>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="p-8 text-center">
+            <div className="text-xl font-black text-white">لا توجد توصية صالحة الآن</div>
+            <div className="text-sm mt-2 text-slate-500">الحفاظ على السيولة قرار تداول أيضاً.</div>
+          </div>
+        )}
+      </section>
+
+      {/* إظهار قيمة الباقات الأعلى بدون إخفاء وجود الأقسام. */}
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        {[
+          { rank: 1, name: 'التوصية اليومية', tier: 'رادار', key: 'radar', href: '/stocks' },
+          { rank: 2, name: 'التحليل والأخبار', tier: 'سيجنال', key: 'signal', href: '/stocks/analyze' },
+          { rank: 3, name: 'التدفقات المتقدمة', tier: 'إيدج', key: 'edge', href: '/stocks/flow' },
+          { rank: 4, name: 'سجل الأداء الكامل', tier: 'ألفا', key: 'alpha', href: '/stocks/performance' },
+        ].map(feature => {
+          const open = tierRank >= feature.rank
+          return (
+            <Link key={feature.name}
+                  href={open ? feature.href : `/v2/upgrade?platform=stocks&tier=${feature.key}`}
+                  className="rounded-xl p-3 border transition-colors"
+                  style={{ background: open ? 'rgba(96,165,250,.07)' : 'rgba(255,255,255,.02)', borderColor: open ? 'rgba(96,165,250,.2)' : 'rgba(255,255,255,.06)' }}>
+              <div className="text-xs font-bold" style={{ color: open ? '#BFDBFE' : '#64748B' }}>{open ? '✓ متاح' : `🔒 ${feature.tier}`}</div>
+              <div className="text-xs mt-1 text-slate-400">{feature.name}</div>
+            </Link>
+          )
+        })}
+      </section>
+
       {/* ═══ الماسح — الشاشة الكبرى ═══ */}
       <section className="rounded-2xl overflow-hidden"
                style={{ background: 'rgba(13,27,42,0.82)', border: `1px solid ${ACCENT}25` }}>
@@ -173,7 +283,7 @@ export default function StocksScanner() {
           <div className="flex items-center gap-2.5">
             <span className="text-lg">🏢</span>
             <div>
-              <div className="text-base font-bold text-white leading-tight">أفضل فرص الأسهم اليوم</div>
+              <div className="text-base font-bold text-white leading-tight">الفرص البديلة</div>
               <div className="text-xs mt-0.5" style={{ color: '#5E6E7F' }}>
                 {loading ? 'جاري فحص الأسهم…'
                   : data?.withOpportunity ? `${data.withOpportunity} سهم عليه فرصة تستحق المراقبة`
