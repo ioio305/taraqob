@@ -196,10 +196,7 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
           <div className="space-y-2 mt-1">
             <div>
               <SectionTitle>الرئيسية</SectionTitle>
-              <div className="space-y-0.5">
-                {NAV_ALPHA.slice(0, 1).map(renderNav)}
-                {NAV_DECISION.map(renderNav)}
-              </div>
+              <div className="space-y-0.5">{NAV_DECISION.map(renderNav)}</div>
             </div>
             <div>
               <SectionTitle>الأدوات</SectionTitle>
@@ -211,10 +208,11 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
             </div>
             <div>
               <SectionTitle>المتابعة</SectionTitle>
-              <div className="space-y-0.5">
-                {NAV_PREMIUM.slice(1).map(renderNav)}
-                {NAV_ALPHA.slice(1).map(renderNav)}
-              </div>
+              <div className="space-y-0.5">{NAV_PREMIUM.slice(1).map(renderNav)}</div>
+            </div>
+            <div>
+              <SectionTitle>الاحتراف</SectionTitle>
+              <div className="space-y-0.5">{NAV_ALPHA.map(renderNav)}</div>
             </div>
           </div>
         </div>
@@ -276,7 +274,7 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
               <span>غرفة القرار</span>
             </Link>
             <div className="hidden md:flex items-center gap-2">
-            <Link href="/platforms" className="rounded-lg px-3 py-1.5 text-xs font-bold"
+            <Link href="/stocks" className="rounded-lg px-3 py-1.5 text-xs font-bold"
                   style={{ color: '#93C5FD', background: 'rgba(96,165,250,.07)', border: '1px solid rgba(96,165,250,.16)' }}>
               منصة الشركات
             </Link>
@@ -301,8 +299,8 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
         {/* تنقّل سفلي (جوال) */}
         <nav className="lg:hidden shrink-0 flex items-center justify-around px-1 py-2"
              style={{ background: '#08101A', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-          <MobileTab href="/stocks/decision-room" icon="✦" label="غرفة القرار" exact={false} />
           {NAV_DECISION.map(item => <MobileTab key={item.href} {...item} />)}
+          <MobileTab href="/stocks/decision-room" icon="✦" label="غرفة القرار" exact={false} />
         </nav>
       </div>
     </div>
