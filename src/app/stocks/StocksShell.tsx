@@ -91,7 +91,7 @@ function PlatformSwitcher({ access }: { access: PlatformAccess }) {
             </div>
           )
           if (soon) return <div key={p.label} title="قريباً">{inner}</div>
-          return <Link key={p.label} href={allowed ? p.href : `/v2/upgrade?platform=${key}`}>{inner}</Link>
+          return <Link key={p.label} prefetch={false} href={allowed ? p.href : `/v2/upgrade?platform=${key}`}>{inner}</Link>
         })}
       </div>
     </div>

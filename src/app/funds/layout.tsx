@@ -11,7 +11,7 @@ export const metadata = {
 // والمصادقة — نواة واحدة وواجهة واحدة (رؤية 3 منصات). محوّل المنصات في رأس القوقعة.
 export default async function FundsLayout({ children }: { children: ReactNode }) {
   const viewer = await getV2Viewer()
-  if (!viewer) redirect('/login')
+  if (!viewer) redirect('/login?next=/funds')
   if (!viewer.profile || viewer.profile.is_active === false) redirect('/login?error=inactive')
   if (!viewer.platformAccess.funds) redirect('/platforms?locked=funds')
 

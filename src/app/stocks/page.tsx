@@ -138,6 +138,12 @@ export default function StocksScanner() {
     setSelected(symbol)
     setDetail(null)
     setDetailLoading(true)
+    window.setTimeout(() => {
+      document.getElementById(`stock-detail-${symbol}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+    }, 50)
     try {
       const res = await fetch(`/api/v2/recommend?asset=stocks&symbol=${symbol}&mode=${mode}`)
       const json = await res.json()
@@ -360,7 +366,7 @@ export default function StocksScanner() {
             const dirType = r.direction.type
 
             return (
-              <div key={r.symbol} className="rounded-xl overflow-hidden"
+              <div key={r.symbol} id={`stock-detail-${r.symbol}`} className="rounded-xl overflow-hidden scroll-mt-24"
                    style={{ border: `1px solid ${isSel ? ACCENT : 'rgba(255,255,255,0.06)'}`, background: 'rgba(0,0,0,0.15)' }}>
                 <button onClick={() => openDetail(r.symbol)}
                         className="w-full px-4 py-3 flex items-center justify-between gap-3 flex-wrap text-right transition-all">

@@ -87,7 +87,7 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     url.search = ''
-    if (pathname !== '/v2') url.searchParams.set('next', `${pathname}${request.nextUrl.search}`)
+    url.searchParams.set('next', `${pathname}${request.nextUrl.search}`)
     return NextResponse.redirect(url)
   }
 

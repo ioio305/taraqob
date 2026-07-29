@@ -178,6 +178,7 @@ export default async function PlatformsPage({
                 </ul>
 
                 <Link href={allowed ? route : `/v2/upgrade?platform=${key}`}
+                  prefetch={false}
                   aria-label={allowed ? `دخول منصة ${name}` : `اشترك لفتح منصة ${name}`}
                   className="relative z-10 mt-7 flex items-center justify-between rounded-xl px-4 py-3 text-sm font-black"
                   style={{
