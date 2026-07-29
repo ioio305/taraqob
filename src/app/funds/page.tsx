@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
+import { FundBrief } from './FundBrief'
 
 // ── أنواع الماسح ──────────────────────────────────────────────────────────────
 type Best = {
@@ -177,7 +178,9 @@ export default function FundsScanner() {
         )}
       </section>
 
-      <div className="order-2 rounded-xl px-4 py-3 flex items-center gap-3"
+      {topOpportunity ? <div className="order-2"><FundBrief symbol={topOpportunity.symbol} /></div> : null}
+
+      <div className="order-3 rounded-xl px-4 py-3 flex items-center gap-3"
            style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.35)' }}>
         <span className="text-xl">🧪</span>
         <div>
@@ -186,12 +189,12 @@ export default function FundsScanner() {
       </div>
 
       {/* ═══ دوران القطاعات — أداة إضافية ═══ */}
-      <div id="rotation" className="order-4 scroll-mt-24">
+      <div id="rotation" className="order-5 scroll-mt-24">
         <SectorRotation rotation={rotation} loading={loading && !data} />
       </div>
 
       {/* ═══ الماسح — الشاشة الكبرى ═══ */}
-      <section className="order-3 rounded-2xl overflow-hidden"
+      <section className="order-4 rounded-2xl overflow-hidden"
                style={{ background: 'rgba(13,27,42,0.82)', border: `1px solid ${ACCENT}25` }}>
 
         {/* رأس القسم */}

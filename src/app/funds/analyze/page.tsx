@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Search } from 'lucide-react'
+import { FundBrief } from '../FundBrief'
 
 type Detail = {
   success: boolean
@@ -46,6 +47,7 @@ export default function FundAnalyzePage() {
       </section>
       {loading ? <div className="h-56 animate-pulse rounded-2xl bg-white/[.03]" /> : null}
       {!loading && data ? (
+        <>
         <section className="rounded-3xl border border-white/[.06] bg-[#0B1B15] p-5 md:p-7">
           {data.success && contract ? (
             <>
@@ -72,6 +74,8 @@ export default function FundAnalyzePage() {
             </>
           ) : <div className="py-10 text-center text-slate-500">{data.error ?? 'لا توجد فرصة صالحة'}</div>}
         </section>
+        {data.success ? <FundBrief symbol={data.symbol} /> : null}
+        </>
       ) : null}
     </div>
   )
