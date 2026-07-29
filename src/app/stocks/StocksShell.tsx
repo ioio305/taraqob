@@ -7,6 +7,8 @@ import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
 import { StocksTierProvider } from './StocksTierContext'
+import { MarketClock } from '@/components/v2/MarketClock'
+import { NewsTicker } from '@/components/v2/NewsTicker'
 
 // ══════════════════════════════════════════════════════════════════════════
 // قوقعة منصة الشركات — مستقلة تماماً عن منصة المؤشر (SPX)
@@ -240,17 +242,38 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
         </div>
       )}
 
-      <div className="flex-1 flex flex-col min-w-0 h-full">
-        {/* شريط علوي (جوال) */}
-        <header className="lg:hidden shrink-0 flex items-center justify-between px-4 py-3"
-                style={{ background: '#08101A', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-          <button onClick={() => setMobileOpen(true)} className="text-xl" style={{ color: '#8A97A6' }} aria-label="القائمة">☰</button>
-          <div className="flex items-center gap-2">
-            <span className="text-base">🏢</span>
-            <span className="text-sm font-bold text-white">منصة الشركات</span>
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+        {/* رأس موحّد بمستوى منصة SPX */}
+        <header className="relative z-30 shrink-0 flex items-center justify-between px-4 h-12 gap-3"
+                style={{ background: 'rgba(8,16,26,0.96)', borderBottom: '1px solid rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)' }}>
+          <button onClick={() => setMobileOpen(true)}
+                  className="lg:hidden w-8 h-8 rounded-lg flex items-center justify-center"
+                  style={{ color: '#8A97A6', background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.06)' }}
+                  aria-label="القائمة">
+            ☰
+          </button>
+
+          <MarketClock accent={ACCENT} />
+
+          <div className="hidden md:flex items-center gap-2">
+            <Link href="/platforms" className="rounded-lg px-3 py-1.5 text-xs font-bold"
+                  style={{ color: '#93C5FD', background: 'rgba(96,165,250,.07)', border: '1px solid rgba(96,165,250,.16)' }}>
+              منصة الشركات
+            </Link>
+            <span className="rounded-lg px-2.5 py-1.5 text-[11px] font-mono"
+                  style={{ color: TIER_COLOR[tier] ?? '#7C8A99', background: `${TIER_COLOR[tier] ?? '#7C8A99'}10`, border: `1px solid ${TIER_COLOR[tier] ?? '#7C8A99'}24` }}>
+              {isStaff ? 'كامل' : TIER_LABEL[tier] ?? tier}
+            </span>
           </div>
-          <div className="w-6" />
+
+          <button onClick={logout} disabled={loggingOut} aria-label="تسجيل الخروج" title={`خروج ${userName}`}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center disabled:opacity-40"
+                  style={{ color: '#8B9BAD', background: 'rgba(239,68,68,.06)', border: '1px solid rgba(239,68,68,.15)' }}>
+            {loggingOut ? '…' : '↪'}
+          </button>
         </header>
+
+        <NewsTicker />
 
         <main className="flex-1 min-h-0 overflow-y-auto">{children}</main>
 

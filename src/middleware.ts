@@ -87,7 +87,7 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     url.search = ''
-    if (pathname !== '/v2') url.searchParams.set('next', pathname)
+    if (pathname !== '/v2') url.searchParams.set('next', `${pathname}${request.nextUrl.search}`)
     return NextResponse.redirect(url)
   }
 
@@ -139,6 +139,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (requestedPlatform && !isStaff) {
+    const billingEnforced = process.env.PLATFORM_BILLING_ENFORCED === 'true'
     const { data: subscription, error: subscriptionError } = await supabase
       .from('platform_subscriptions')
       .select('platform, tier, current_period_end')
@@ -152,7 +153,7 @@ export async function middleware(request: NextRequest) {
       && (Boolean(subscriptionError) || profile.subscription_tier !== 'radar')
     const periodEnd = subscription?.current_period_end ? Date.parse(subscription.current_period_end) : NaN
     const subscriptionActive = Boolean(subscription) && (!Number.isFinite(periodEnd) || periodEnd > Date.now())
-    const allowed = subscriptionActive || legacySpx
+    const allowed = !billingEnforced || subscriptionActive || legacySpx
 
     if (!allowed) {
       if (pathname.startsWith('/api/')) {
@@ -171,7 +172,10 @@ export async function middleware(request: NextRequest) {
     const stocksFeature = requestedPlatform === 'stocks'
       ? stocksFeatureForPath(pathname)
       : null
-    if (stocksFeature && subscriptionActive && !tierAllowsStocksFeature(subscription?.tier ?? 'radar', stocksFeature)) {
+    const effectiveStocksTier = subscriptionActive
+      ? subscription?.tier ?? 'radar'
+      : profile.subscription_tier ?? 'radar'
+    if (stocksFeature && !tierAllowsStocksFeature(effectiveStocksTier, stocksFeature)) {
       const requiredTier = STOCKS_FEATURE_TIER[stocksFeature]
       if (pathname.startsWith('/api/')) {
         return NextResponse.json(

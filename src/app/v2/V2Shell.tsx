@@ -9,6 +9,7 @@ import { AlertsWatcher } from '@/components/v2/AlertsWatcher'
 import { BeginnerHelpers } from '@/components/v2/BeginnerGuide'
 import { AssistantWidget } from '@/components/v2/AssistantWidget'
 import { NewsTicker } from '@/components/v2/NewsTicker'
+import { MarketClock } from '@/components/v2/MarketClock'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
 
 const ROLE_LABEL_MAP: Record<string, string>  = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
@@ -663,39 +664,3 @@ function MobileTab({ href, icon, label, exact }: { href: string; icon: string; l
   )
 }
 
-function MarketClock() {
-  const [info, setInfo] = useState({ time: '', riyadh: '', status: '', color: '#6B7B8D' })
-
-  useEffect(() => {
-    function tick() {
-      const ny  = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
-      const h = ny.getHours(), m = ny.getMinutes(), day = ny.getDay()
-      const t = h * 60 + m
-      const time = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')} نيويورك`
-      // توقيت الرياض
-      const ry = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Riyadh' }))
-      const riyadh = `${String(ry.getHours()).padStart(2,'0')}:${String(ry.getMinutes()).padStart(2,'0')} الرياض`
-      let status = '', color = '#6B7B8D'
-      if      (day === 0 || day === 6)  { status = 'مغلق';         color = '#6B7B8D' }
-      else if (t >= 570 && t < 960)    { status = 'مفتوح';        color = '#10B981' }
-      else if (t >= 540 && t < 570)    { status = 'قبل الافتتاح'; color = '#F59E0B' }
-      else                              { status = 'بعد الإغلاق';  color = '#7C8A99' }
-      setInfo({ time, riyadh, status, color })
-    }
-    tick()
-    const id = setInterval(tick, 30000)
-    return () => clearInterval(id)
-  }, [])
-
-  return (
-    <div className="flex items-center gap-2 text-xs flex-1 flex-wrap">
-      {info.status === 'مفتوح' && (
-        <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: info.color }} />
-      )}
-      <span style={{ color: info.color }}>{info.status}</span>
-      <span style={{ fontFamily: '"IBM Plex Mono", monospace', color: '#C9943A' }}>{info.riyadh}</span>
-      <span style={{ color: '#6B7B8D' }}>·</span>
-      <span style={{ fontFamily: '"IBM Plex Mono", monospace', color: '#6E7E8F' }}>{info.time}</span>
-    </div>
-  )
-}

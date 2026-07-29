@@ -63,31 +63,14 @@ export default function LoginForm() {
       return
     }
 
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('role, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || profile.is_active === false) {
-      await supabase.auth.signOut()
-      setError('هذا الحساب معطّل. تواصل مع المسؤول.')
-      setLoading(false)
-      return
-    }
-
-    // جاء من زر «اشترك الآن» بباقة محددة؟ → مباشرة لصفحة الاشتراكات بعد الدخول
-    if (searchParams.get('plan')) {
-      window.location.href = '/v2/upgrade'
-      return
-    }
     // كان قاصداً صفحة محددة قبل أن يوقفه تسجيل الدخول؟ → نعيده إليها
     const next = searchParams.get('next')
     if (next && next.startsWith('/') && !next.startsWith('//')) {
       window.location.href = next
       return
     }
-    // بعد الدخول يبدأ الجميع من بوابة المنصات؛ الأدمن يملك وصولاً كاملاً منها.
+    // التحقق النهائي من حالة الحساب والصلاحيات يتم في الخادم؛ لا نسجل خروج
+    // المستخدم بسبب تعثر مؤقت في قراءة ملفه من المتصفح.
     window.location.href = '/platforms'
   }
 
@@ -183,7 +166,7 @@ export default function LoginForm() {
 
           <div className="pt-3 text-center" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
             <span className="text-xs" style={{ color: '#5E6E7F' }}>ليس لديك حساب؟ </span>
-            <Link href={`/register${searchParams.get('plan') ? `?plan=${searchParams.get('plan')}` : ''}${searchParams.get('ref') ? `${searchParams.get('plan') ? '&' : '?'}ref=${searchParams.get('ref')}` : ''}`}
+            <Link href={`/register${searchParams.get('ref') ? `?ref=${searchParams.get('ref')}` : ''}`}
                   className="text-xs font-bold" style={{ color: '#C9943A' }}>
               أنشئه مجاناً — تجربة 7 أيام كاملة
             </Link>

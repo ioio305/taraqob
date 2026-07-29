@@ -67,6 +67,7 @@ export const getV2Viewer = cache(async () => {
   } catch { /* الجدول غير موجود بعد → تراجع كامل للباقة القديمة */ }
 
   const referralDays = profile.referral_days ?? (user.user_metadata as any)?.referral_days
+  const billingEnforced = process.env.PLATFORM_BILLING_ENFORCED === 'true'
 
   // SPX: صف المنصة إن وُجد، وإلا الباقة القديمة (grandfather) — مع منطق التجربة 7 أيام
   const spxStored = subMap.get('spx') ?? profile.subscription_tier
@@ -75,15 +76,17 @@ export const getV2Viewer = cache(async () => {
   // الشركات/الصناديق: صف المنصة، وإلا radar (مجاني افتراضاً في مرحلة الإطلاق)
   const platformTiers: PlatformTiers = {
     spx:    normalizeTier(spxTrial.effectiveTier),
-    stocks: normalizeTier(subMap.get('stocks')),
-    funds:  normalizeTier(subMap.get('funds')),
+    stocks: normalizeTier(subMap.get('stocks') ?? (!billingEnforced ? profile.subscription_tier : null)),
+    funds:  normalizeTier(subMap.get('funds') ?? (!billingEnforced ? profile.subscription_tier : null)),
   }
   const isStaff = profile.role === 'admin' || profile.role === 'moderator'
-  const platformAccess: PlatformAccess = derivePlatformAccess(subscriptionRows, {
-    isStaff,
-    // تراجع آمن قبل تطبيق جدول المنصات، أو للمشتركين القدامى في SPX.
-    legacySpx: !platformTableAvailable || Boolean(subMap.get('spx')) || profile.subscription_tier !== 'radar',
-  })
+  const platformAccess: PlatformAccess = billingEnforced
+    ? derivePlatformAccess(subscriptionRows, {
+        isStaff,
+        // تراجع آمن قبل تطبيق جدول المنصات، أو للمشتركين القدامى في SPX.
+        legacySpx: !platformTableAvailable || Boolean(subMap.get('spx')) || profile.subscription_tier !== 'radar',
+      })
+    : { spx: true, stocks: true, funds: true }
 
   return {
     user,

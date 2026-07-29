@@ -66,8 +66,7 @@ function RegisterContent() {
       return
     }
 
-    const plan = searchParams.get('plan')
-    window.location.href = `/login?registered=1${plan ? `&plan=${plan}` : ''}`
+    window.location.href = '/login?registered=1'
   }
 
   async function resendVerification() {
