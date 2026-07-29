@@ -119,6 +119,20 @@ const STAGES = ['السوق', 'الاتجاه', 'التأكيد', 'العقد', 
 const number = (value: number | null | undefined, digits = 2) =>
   value == null ? '—' : value.toLocaleString('en-US', { maximumFractionDigits: digits })
 
+function isUsMarketOpenNow() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date())
+  const value = (type: string) => parts.find(part => part.type === type)?.value ?? ''
+  const weekday = value('weekday')
+  const minutes = (Number(value('hour')) % 24) * 60 + Number(value('minute'))
+  return !['Sat', 'Sun'].includes(weekday) && minutes >= 570 && minutes < 960
+}
+
 export default function SpxDecisionRoomPage() {
   const [loading, setLoading] = useState(true)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
@@ -166,9 +180,11 @@ export default function SpxDecisionRoomPage() {
       ? (flow?.callShare ?? 50) <= 45
       : false
   const sessionClosed = Boolean(
-    recommendation?.watchMode
+    !isUsMarketOpenNow()
+    || recommendation?.watchMode
     || recommendation?.marketClosed
-    || recommendation?.timing?.label?.includes('مغلق'),
+    || recommendation?.timing?.label?.includes('مغلق')
+    || recommendation?.timing?.label?.includes('بعد الإغلاق')
   )
 
   const checks = useMemo(() => [
