@@ -234,6 +234,11 @@ export async function GET(request: NextRequest) {
     const dir          = adapter.getDirection('SPX', spxSnap)
     const contractType = (forceType ?? dir.type) as 'call' | 'put' | null
     const mktStatus    = isMarketOpen()
+    // بعد إغلاق يوم التداول (16:00 نيويورك فأكثر) يكون انتهاء اليوم نفسه (0DTE)
+    // منتهياً فعلاً وأسعاره آخر أسعار قبل الإغلاق — نتخطّاه في قائمة الاستعداد
+    // (اتساقاً مع صفحة التحليل). قبل الافتتاح يبقى صالحاً لجلسة اليوم فلا نتخطّاه.
+    const nyNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
+    const afterClose = nyNow.getDay() >= 1 && nyNow.getDay() <= 5 && (nyNow.getHours() * 60 + nyNow.getMinutes()) >= 960
 
     // ملاحظة: حتى عند إغلاق السوق نحسب أفضل المرشّحات كـ«قائمة استعداد»
     // (بأسعار CBOE الحقيقية) بدل إرجاع قائمة فارغة.
@@ -279,7 +284,8 @@ export async function GET(request: NextRequest) {
           const eDate = new Date(e + 'T12:00:00Z')
           const tDate = new Date(todayStr + 'T12:00:00Z')
           const dte   = Math.round((eDate.getTime() - tDate.getTime()) / 86400000)
-          return dte >= dteRange.min && dte <= dteRange.max
+          // بعد الإغلاق: تخطَّ انتهاء اليوم المنتهي (dte 0) وابدأ من انتهاء لاحق
+          return dte >= dteRange.min && dte <= dteRange.max && (dte >= 1 || !afterClose)
         })
         if (!exp) continue
 
