@@ -9,6 +9,11 @@ type Best = {
   strike: number; type: string; expiration: string; dte: number
   bid: number; ask: number; mid: number; delta: number | null
   score: number; status: string; grade: string; reason: string; probItmPct: number
+  ranking: {
+    score: number; expectedProfit: number; expectedReturnPct: number
+    riskReward: number; spreadPct: number; relativeStrengthPct: number
+    reasons: string[]
+  }
 }
 type ScanRow = {
   symbol: string; name: string; price: number | null; changePct: number | null; source: string | null
@@ -215,14 +220,19 @@ export default function StocksScanner() {
                 <div className="mt-1 font-bold font-mono text-white">${n(topOpportunity.best.mid)}</div>
               </div>
               <div className="rounded-xl p-3 bg-black/20 border border-white/5">
-                <div className="text-[11px] text-slate-500">جودة الفرصة</div>
-                <div className="mt-1 font-black" style={{ color: gradeColor(topOpportunity.best.grade) }}>{topOpportunity.best.grade}</div>
+                <div className="text-[11px] text-slate-500">قوة الفرصة</div>
+                <div className="mt-1 font-black" style={{ color: gradeColor(topOpportunity.best.grade) }}>{topOpportunity.best.ranking.score}/100</div>
               </div>
             </div>
 
             <div className="mt-4 rounded-xl p-3 text-sm leading-6 bg-amber-400/[.06] border border-amber-400/15 text-slate-300">
-              <span className="font-bold text-amber-400">لماذا؟ </span>
-              {topOpportunity.best.reason}
+              <span className="font-bold text-amber-400">لماذا هي الأولى؟ </span>
+              ربح مستهدف ${topOpportunity.best.ranking.expectedProfit}،
+              عائد متوقع {topOpportunity.best.ranking.expectedReturnPct}%،
+              وعائد مقابل المخاطرة {topOpportunity.best.ranking.riskReward}.
+              <span className="block mt-1 text-xs text-slate-500">
+                {topOpportunity.best.ranking.reasons.join(' · ')}
+              </span>
             </div>
 
             <div className="mt-4 flex gap-2 flex-wrap">

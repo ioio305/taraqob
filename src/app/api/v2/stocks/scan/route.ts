@@ -6,6 +6,7 @@ import { getStockQuote, getStockDailyBars } from '@/lib/v2/stockData'
 import { recommendForStock, NOT_CALIBRATED_NOTE } from '@/lib/v2/stocksRecommend'
 import { evaluateSessionQuality } from '@/lib/v2/sessionQuality'
 import type { RecMode } from '@/lib/v2/recommendCore'
+import { rankStockOpportunity, type StockOpportunityRanking } from '@/lib/v2/stocksOpportunityRank'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,6 +41,7 @@ interface ScanRow {
     strike: number; type: string; expiration: string; dte: number
     bid: number; ask: number; mid: number; delta: number | null
     score: number; status: string; grade: string; reason: string; probItmPct: number
+    ranking: StockOpportunityRanking
   } | null
   watchMode: boolean
   dataQuality: {
@@ -62,7 +64,10 @@ export async function GET(request: NextRequest) {
   const sessionQuality = evaluateSessionQuality()
 
   try {
-    const universe = await stocksAdapter.getUniverse()
+    const [universe, marketQuote] = await Promise.all([
+      stocksAdapter.getUniverse(),
+      getStockQuote('SPY').catch(() => null),
+    ])
 
     const rows = await mapLimit(universe, 4, async (u): Promise<ScanRow> => {
       try {
@@ -97,6 +102,21 @@ export async function GET(request: NextRequest) {
             strike: b.strike, type: b.type, expiration: b.expiration, dte: b.dte,
             bid: b.bid, ask: b.ask, mid: b.mid, delta: b.delta,
             score: b.score, status: b.status, grade: b.grade, reason: b.reason, probItmPct: b.probItmPct,
+            ranking: rankStockOpportunity({
+              contractScore: b.score,
+              bid: b.bid,
+              ask: b.ask,
+              mid: b.mid,
+              probItmPct: b.probItmPct,
+              entryTotal: b.strategy?.entryBalancedTotal,
+              targetProfit: b.strategy?.t1Profit,
+              stopLoss: b.strategy?.stopLoss,
+              stockChangePct: quote.changePct,
+              marketChangePct: marketQuote?.changePct,
+              direction: b.type,
+              eventActive: Boolean(rec.eventRisk?.active),
+              dataQuality: rec.dataQuality?.status,
+            }),
           } : null,
           watchMode: rec.watchMode,
           dataQuality: rec.dataQuality ? {
@@ -116,10 +136,10 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // ── الترتيب: الفرص ذات العقد أولاً (بالدرجة)، ثم البقية ──
+    // ── الترتيب: أفضل فرصة ربحية قابلة للتنفيذ، لا أعلى درجة عقد منفردة ──
     const ranked = [...rows].sort((a, b) => {
-      const sa = a.best?.score ?? -1
-      const sb = b.best?.score ?? -1
+      const sa = a.best?.ranking.score ?? -1
+      const sb = b.best?.ranking.score ?? -1
       return sb - sa
     })
 

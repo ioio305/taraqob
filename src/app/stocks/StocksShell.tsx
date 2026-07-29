@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
 import { StocksTierProvider } from './StocksTierContext'
 import { MarketClock } from '@/components/v2/MarketClock'
-import { NewsTicker } from '@/components/v2/NewsTicker'
+import { StocksDecisionTicker } from '@/components/v2/StocksDecisionTicker'
 
 // ══════════════════════════════════════════════════════════════════════════
 // قوقعة منصة الشركات — مستقلة تماماً عن منصة المؤشر (SPX)
@@ -273,7 +273,7 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
           </button>
         </header>
 
-        <NewsTicker />
+        <StocksDecisionTicker />
 
         <main className="flex-1 min-h-0 overflow-y-auto">{children}</main>
 
