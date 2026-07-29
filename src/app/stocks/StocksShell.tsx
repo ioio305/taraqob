@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import type { PlatformAccess } from '@/lib/v2/accessRules'
 
 // ══════════════════════════════════════════════════════════════════════════
 // قوقعة منصة الشركات — مستقلة تماماً عن منصة المؤشر (SPX)
@@ -15,9 +16,29 @@ import { createClient } from '@/lib/supabase/client'
 
 const ACCENT = '#60A5FA'   // هوية منصة الشركات
 
-const STOCKS_NAV = [
-  { href: '/stocks',         label: 'الماسح',      icon: '📡', exact: true  },
-  { href: '/stocks/analyze', label: 'تحليل سهم',   icon: '⬡',  exact: false },
+// ── الباقات: radar (مجاني) < signal < edge < alpha ────────────────────────────
+const TIER_RANK: Record<string, number> = { radar: 1, signal: 2, edge: 3, alpha: 4 }
+const TIER_LABEL: Record<string, string> = { radar: 'رادار', signal: 'سيجنال', edge: 'إيدج', alpha: 'ألفا' }
+const TIER_COLOR: Record<string, string> = { radar: '#7C8A99', signal: '#60A5FA', edge: '#C9943A', alpha: '#A78BFA' }
+function tierAllows(userTier: string, required: string): boolean {
+  return (TIER_RANK[userTier] ?? 1) >= (TIER_RANK[required] ?? 1)
+}
+
+type NavItem = { href: string; label: string; icon: string; exact: boolean; requiredTier: string }
+
+// قرار اليوم — للجميع (مجاني)
+const NAV_DECISION: NavItem[] = [
+  { href: '/stocks',         label: 'الماسح',    icon: '📡', exact: true,  requiredTier: 'radar' },
+  { href: '/stocks/analyze', label: 'تحليل سهم', icon: '⬡',  exact: false, requiredTier: 'radar' },
+]
+// أخبار وأحداث — للمشترك (سيجنال)
+const NAV_EVENTS: NavItem[] = [
+  { href: '/stocks/news',     label: 'أخبار الشركات', icon: '📰', exact: false, requiredTier: 'signal' },
+  { href: '/stocks/earnings', label: 'تقويم الأرباح', icon: '📅', exact: false, requiredTier: 'signal' },
+]
+// مميّز — لإيدج فما فوق
+const NAV_PREMIUM: NavItem[] = [
+  { href: '/stocks/flow', label: 'رادار التدفقات', icon: '🛰', exact: false, requiredTier: 'edge' },
 ]
 
 const PLATFORMS = [
@@ -30,7 +51,7 @@ function isActive(pathname: string, href: string, exact: boolean) {
   return exact ? pathname === href : pathname.startsWith(href)
 }
 
-function PlatformSwitcher() {
+function PlatformSwitcher({ access }: { access: PlatformAccess }) {
   const pathname = usePathname()
   return (
     <div className="px-3 pt-3 pb-1">
@@ -39,6 +60,8 @@ function PlatformSwitcher() {
       </div>
       <div className="grid grid-cols-3 gap-1.5">
         {PLATFORMS.map(p => {
+          const key = p.match === '/v2' ? 'spx' : p.match === '/stocks' ? 'stocks' : 'funds'
+          const allowed = access[key]
           const active = p.status === 'available' && pathname.startsWith(p.match)
           const soon = p.status === 'soon'
           const inner = (
@@ -46,15 +69,16 @@ function PlatformSwitcher() {
                  style={{
                    background: active ? `${p.color}18` : 'rgba(255,255,255,0.02)',
                    border: `1px solid ${active ? `${p.color}55` : 'rgba(255,255,255,0.05)'}`,
-                   opacity: soon ? 0.45 : 1,
+                   opacity: soon || !allowed ? 0.42 : 1,
                  }}>
               <span className="text-base leading-none">{p.icon}</span>
               <span className="text-[11px] font-bold" style={{ color: active ? p.color : '#8A97A6' }}>{p.label}</span>
-              {soon && <span className="text-[9px] font-mono" style={{ color: '#55657A' }}>قريباً</span>}
+              {soon ? <span className="text-[9px] font-mono" style={{ color: '#55657A' }}>قريباً</span>
+                : !allowed ? <span className="text-[9px] font-mono" style={{ color: '#7C8A99' }}>مقفلة</span> : null}
             </div>
           )
           if (soon) return <div key={p.label} title="قريباً">{inner}</div>
-          return <Link key={p.label} href={p.href}>{inner}</Link>
+          return <Link key={p.label} href={allowed ? p.href : `/v2/upgrade?platform=${key}`}>{inner}</Link>
         })}
       </div>
     </div>
@@ -79,6 +103,28 @@ function NavLink({ href, label, icon, exact, onClick }: { href: string; label: s
   )
 }
 
+// عنصر تنقّل مقفل — أعلى من باقة المستخدم (يوجّه لصفحة الترقية)
+function LockedNavLink({ label, icon, requiredTier }: { label: string; icon: string; requiredTier: string }) {
+  const tc = TIER_COLOR[requiredTier] ?? '#7C8A99'
+  return (
+    <Link href="/v2/upgrade" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm" style={{ borderRight: '2px solid transparent' }}>
+      <span className="w-4 text-center text-sm shrink-0" style={{ color: '#5E6E7F' }}>{icon}</span>
+      <span className="font-medium" style={{ color: '#6E7E8F' }}>{label}</span>
+      <span className="mr-auto text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0" style={{ background: `${tc}15`, color: tc, border: `1px solid ${tc}25` }}>
+        {TIER_LABEL[requiredTier]}
+      </span>
+    </Link>
+  )
+}
+
+function SectionTitle({ children }: { children: string }) {
+  return (
+    <div className="px-2 pb-1 pt-1 text-[11px] font-mono font-semibold tracking-widest" style={{ color: '#5E6E7F', letterSpacing: '0.16em' }}>
+      {children}
+    </div>
+  )
+}
+
 function MobileTab({ href, icon, label, exact }: { href: string; icon: string; label: string; exact: boolean }) {
   const pathname = usePathname()
   const active = isActive(pathname, href, exact)
@@ -91,13 +137,27 @@ function MobileTab({ href, icon, label, exact }: { href: string; icon: string; l
   )
 }
 
-export default function StocksShell({ children, userName }: { children: ReactNode; userName: string }) {
+export default function StocksShell({ children, userName, tier = 'radar', isStaff = false, platformAccess }: {
+  children: ReactNode
+  userName: string
+  tier?: string
+  isStaff?: boolean
+  platformAccess: PlatformAccess
+}) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
 
   async function logout() {
     setLoggingOut(true)
     try { await createClient().auth.signOut() } finally { window.location.href = '/' }
+  }
+
+  // الموظّفون يرون كل الأقسام؛ غيرهم حسب باقة الشركات.
+  function renderNav(item: NavItem) {
+    if (!isStaff && !tierAllows(tier, item.requiredTier)) {
+      return <LockedNavLink key={item.href} label={item.label} icon={item.icon} requiredTier={item.requiredTier} />
+    }
+    return <NavLink key={item.href} href={item.href} label={item.label} icon={item.icon} exact={item.exact} onClick={() => setMobileOpen(false)} />
   }
 
   const Sidebar = (
@@ -115,16 +175,24 @@ export default function StocksShell({ children, userName }: { children: ReactNod
 
       <div className="flex-1 min-h-0 overflow-y-auto">
         {/* محوّل المنصّات */}
-        <PlatformSwitcher />
+        <PlatformSwitcher access={platformAccess} />
         <div className="mx-4 my-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }} />
 
         {/* تنقّل الشركات فقط */}
         <div className="px-3 pt-1 pb-2">
-          <div className="px-2 pb-1 pt-1 text-[11px] font-mono font-semibold tracking-widest" style={{ color: '#5E6E7F', letterSpacing: '0.16em' }}>
-            الشركات
-          </div>
-          <div className="space-y-0.5 mt-1">
-            {STOCKS_NAV.map(item => <NavLink key={item.href} {...item} onClick={() => setMobileOpen(false)} />)}
+          <div className="space-y-2 mt-1">
+            <div>
+              <SectionTitle>قرار اليوم</SectionTitle>
+              <div className="space-y-0.5">{NAV_DECISION.map(renderNav)}</div>
+            </div>
+            <div>
+              <SectionTitle>الأخبار والأحداث</SectionTitle>
+              <div className="space-y-0.5">{NAV_EVENTS.map(renderNav)}</div>
+            </div>
+            <div>
+              <SectionTitle>تحليل متقدم</SectionTitle>
+              <div className="space-y-0.5">{NAV_PREMIUM.map(renderNav)}</div>
+            </div>
           </div>
         </div>
 
@@ -180,7 +248,7 @@ export default function StocksShell({ children, userName }: { children: ReactNod
         {/* تنقّل سفلي (جوال) */}
         <nav className="lg:hidden shrink-0 flex items-center justify-around px-1 py-2"
              style={{ background: '#08101A', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-          {STOCKS_NAV.map(item => <MobileTab key={item.href} {...item} />)}
+          {NAV_DECISION.map(item => <MobileTab key={item.href} {...item} />)}
           <MobileTab href="/v2" icon="📈" label="المؤشر" exact={false} />
         </nav>
       </div>

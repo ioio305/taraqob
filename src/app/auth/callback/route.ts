@@ -15,26 +15,9 @@ export async function GET(request: NextRequest) {
       const { data: { user } } = await supabase.auth.getUser()
 
       if (user) {
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single()
-
-        const role = profile?.role
         let redirect = next
 
-        if (next === '/') {
-          switch (role) {
-            case 'admin':
-            case 'moderator':
-              redirect = '/v2/admin'
-              break
-            default:
-              redirect = '/v2'   // الرئيسية: الداشبورد (التوصية أولاً)
-              break
-          }
-        }
+        if (next === '/') redirect = '/platforms'
 
         return NextResponse.redirect(`${origin}${redirect}`)
       }

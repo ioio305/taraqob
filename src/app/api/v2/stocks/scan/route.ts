@@ -42,6 +42,12 @@ interface ScanRow {
     score: number; status: string; grade: string; reason: string; probItmPct: number
   } | null
   watchMode: boolean
+  dataQuality: {
+    status: 'ready' | 'watch' | 'blocked'
+    label: string
+    issues: string[]
+    asOf: string | null
+  } | null
   error?: string
 }
 
@@ -69,10 +75,13 @@ export async function GET(request: NextRequest) {
             symbol: u.symbol, name: u.name, price: null, changePct: null, source: null,
             volMeasure: null, direction: { type: null, label: '—', color: '#4A5568' },
             eventRisk: null, best: null, watchMode: false, error: 'تعذر جلب السعر',
+            dataQuality: null,
           }
         }
         const rec = await recommendForStock(u.symbol, { mode, full: false, prefetched: { quote, bars } })
-        const b = rec.contracts[0] ?? null
+        const b = rec.direction.type && rec.dataQuality?.status !== 'blocked'
+          ? rec.contracts.find(contract => contract.type === rec.direction.type) ?? null
+          : null
         return {
           symbol: u.symbol,
           name: u.name,
@@ -90,12 +99,19 @@ export async function GET(request: NextRequest) {
             score: b.score, status: b.status, grade: b.grade, reason: b.reason, probItmPct: b.probItmPct,
           } : null,
           watchMode: rec.watchMode,
+          dataQuality: rec.dataQuality ? {
+            status: rec.dataQuality.status,
+            label: rec.dataQuality.label,
+            issues: rec.dataQuality.issues,
+            asOf: rec.dataQuality.asOf,
+          } : null,
         }
       } catch (err: any) {
         return {
           symbol: u.symbol, name: u.name, price: null, changePct: null, source: null,
           volMeasure: null, direction: { type: null, label: '—', color: '#4A5568' },
           eventRisk: null, best: null, watchMode: false, error: err?.message ?? 'خطأ',
+          dataQuality: null,
         }
       }
     })

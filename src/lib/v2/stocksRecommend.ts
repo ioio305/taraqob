@@ -16,6 +16,12 @@ import { evaluateSessionQuality } from './sessionQuality'
 import { crashGuard } from './marketAnalysis'
 import { computeStraddleMove } from './optionsExpectedMove'
 import type { EventRisk } from './adapters/types'
+import {
+  evaluateStockDataQuality,
+  isStockExpirationTradable,
+  reconcileStockDirection,
+  type StockDataQuality,
+} from './stocksDecisionQuality'
 
 export const NOT_CALIBRATED_NOTE =
   'منصة الشركات ما زالت تحت المعايرة — لا نُظهر توصية «اشترِ» بعد. هذه أفضل الفرص للمراقبة والتعلّم حتى نتأكد من ربحيتها على بيانات تاريخية.'
@@ -41,6 +47,7 @@ export interface StockRecResult {
   expirations: string[]
   mode: RecMode
   notCalibratedNote: string
+  dataQuality: StockDataQuality | null
 }
 
 // نطاق بحث الستريكات: ±20% حول السعر (mandatoryFilter يفرض «خارج المال» فعلياً)
@@ -83,6 +90,7 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
     calibration: { validated: STOCKS_CALIBRATION.validated, note: STOCKS_CALIBRATION.note },
     watchMode: false, contracts: [], expiration: '', expirations: [], mode,
     notCalibratedNote: NOT_CALIBRATED_NOTE,
+    dataQuality: null,
   })
 
   // 1) سعر + شموع (مرّة واحدة — تُستخدم للتذبذب وحارس الانهيار)
@@ -101,10 +109,14 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
     stocksAdapter.getExpirations(sym).catch(() => [] as string[]),
   ])
   const sessionQuality = evaluateSessionQuality()
-  const dir = options.forceType
+  const rawDir = options.forceType
     ? { type: options.forceType, label: options.forceType === 'call' ? '▲ شراء CALL' : '▼ شراء PUT', color: options.forceType === 'call' ? '#10B981' : '#EF4444', reason: 'اخترت الاتجاه يدوياً' }
     : stockDirection(quote.changePct)
+  const dir = options.forceType
+    ? { ...rawDir, intradayType: rawDir.type, dailyType: null, aligned: true }
+    : reconcileStockDirection(rawDir, bars)
   const contractType = (options.forceType ?? dir.type) as 'call' | 'put' | null
+  const dataQuality = evaluateStockDataQuality(quote, bars)
 
   // بوابة الأرباح: تأكيد المعرفة
   const eventRisk = eventRiskRaw
@@ -114,14 +126,26 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
     success: true, symbol: sym, name: uniName,
     direction: dir, eventRisk, earningsKnown, sessionQuality,
     calibration: { validated: STOCKS_CALIBRATION.validated, note: STOCKS_CALIBRATION.note },
-    expirations: expirations.slice(0, 8), mode, notCalibratedNote: NOT_CALIBRATED_NOTE,
+    expirations: expirations.filter(exp => isStockExpirationTradable(exp)).slice(0, 8),
+    mode, notCalibratedNote: NOT_CALIBRATED_NOTE, dataQuality,
   }
 
   if (!expirations.length) {
     return { ...base, market: marketPayload(quote, rv, null), watchMode: false, contracts: [], expiration: '' }
   }
+  if (dataQuality.status === 'blocked') {
+    return {
+      ...base,
+      market: marketPayload(quote, rv, null),
+      watchMode: true,
+      contracts: [],
+      expiration: '',
+      error: dataQuality.issues.join(' — '),
+    }
+  }
 
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+  const tradableExpirations = expirations.filter(exp => isStockExpirationTradable(exp))
   const dteRanges = options.full
     ? [{ min: 0, max: 2 }, { min: 2, max: 9 }, { min: 9, max: 21 }]
     : [{ min: 2, max: 9 }, { min: 0, max: 2 }, { min: 9, max: 21 }]
@@ -136,7 +160,7 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
   const typesToFetch: Array<'call' | 'put'> = contractType ? [contractType] : ['call', 'put']
 
   for (const range of dteRanges) {
-    const exp = expirations.find(e => {
+    const exp = tradableExpirations.find(e => {
       const dte = Math.round((new Date(e + 'T12:00:00Z').getTime() - new Date(todayStr + 'T12:00:00Z').getTime()) / 86400000)
       return dte >= range.min && dte <= range.max
     })
@@ -171,6 +195,7 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
       price, emUpper: emUpper ?? Math.round(price + price * 0.03), emLower: emLower ?? Math.round(price - price * 0.03),
       changePct: quote.changePct, ivPct, recMode: mode, chain,
       guard, sessionQuality, eventRisk, contractType, watchMode,
+      dataQuality,
     })
     contracts = enrichContracts(top, ctx)
     usedExp = exp
@@ -192,12 +217,15 @@ function buildStockContext(a: {
   recMode: RecMode; chain: any[]; guard: { active: boolean; reasons: string[] }
   sessionQuality: ReturnType<typeof evaluateSessionQuality>; eventRisk: EventRisk | null
   contractType: 'call' | 'put' | null; watchMode: boolean
+  dataQuality: StockDataQuality
 }): EnrichContext {
   const sessionBlocked = a.sessionQuality.action === 'block'
   const earningsBlocked = !!a.eventRisk?.active
-  const blocked = sessionBlocked || earningsBlocked
+  const dataBlocked = a.dataQuality.status === 'blocked'
+  const blocked = sessionBlocked || earningsBlocked || dataBlocked
   const blockedReason = earningsBlocked
     ? `${a.eventRisk!.when}: ${a.eventRisk!.nameAr} — ${a.eventRisk!.advice}`
+    : dataBlocked ? a.dataQuality.issues.join(' — ')
     : sessionBlocked ? a.sessionQuality.reason : ''
   // للسهم: التذبذب المتطرف = IV مرتفع جداً (حدث/مضاربة)؛ الهادئ = IV معتدل
   const volExtreme = a.ivPct >= 80

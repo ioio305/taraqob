@@ -13,11 +13,12 @@ export default async function FundsLayout({ children }: { children: ReactNode })
   const viewer = await getV2Viewer()
   if (!viewer) redirect('/login')
   if (!viewer.profile || viewer.profile.is_active === false) redirect('/login?error=inactive')
+  if (!viewer.platformAccess.funds) redirect('/platforms?locked=funds')
 
   return (
     <V2Shell userName={viewer.displayName} userRole={viewer.profile.role}
-             userSecondaryRoles={viewer.secondaryRoles} subscriptionTier={viewer.effectiveTier}
-             trialDaysLeft={viewer.trialDaysLeft}>
+             userSecondaryRoles={viewer.secondaryRoles} subscriptionTier={viewer.platformTiers.funds}
+             trialDaysLeft={null} platformAccess={viewer.platformAccess}>
       {children}
     </V2Shell>
   )

@@ -87,12 +87,8 @@ export default function LoginForm() {
       window.location.href = next
       return
     }
-    // توجيه حسب الدور — نظام V2 فقط
-    if (['admin', 'moderator'].includes(profile.role)) {
-      window.location.href = '/v2/admin'
-    } else {
-      window.location.href = '/v2'
-    }
+    // بعد الدخول يبدأ الجميع من بوابة المنصات؛ الأدمن يملك وصولاً كاملاً منها.
+    window.location.href = '/platforms'
   }
 
   return (
@@ -119,7 +115,7 @@ export default function LoginForm() {
           </div>
           <h1 className="text-2xl font-bold text-white tracking-wider">ترقّب</h1>
           <p className="text-sm mt-1 font-mono" style={{ color: '#8A97A6' }}>
-            منصة قرار عقود SPX — بصدق مثبت
+            حساب واحد · منصات مستقلة · اختر اشتراكك
           </p>
         </div>
 

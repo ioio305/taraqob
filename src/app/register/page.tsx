@@ -9,6 +9,9 @@ import { createClient } from '@/lib/supabase/client'
 
 function RegisterContent() {
   const searchParams = useSearchParams()
+  const requestedPlatform = ['spx', 'stocks', 'funds'].includes(searchParams.get('platform') ?? '')
+    ? searchParams.get('platform')
+    : 'spx'
   const [name, setName]         = useState('')
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
@@ -35,7 +38,7 @@ function RegisterContent() {
       email: email.trim(),
       password,
       options: {
-        data: { full_name: name.trim() },
+        data: { full_name: name.trim(), selected_platform: requestedPlatform },
         // رابط التفعيل في البريد يهبط على مسار الاستقبال الذي يسجّل الدخول تلقائياً
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
@@ -126,7 +129,7 @@ function RegisterContent() {
           </div>
           <h1 className="text-2xl font-bold text-white tracking-wider">أهلاً بك في ترقّب</h1>
           <p className="text-sm mt-2 font-bold" style={{ color: '#26D07C' }}>
-            🎁 تجربتك تبدأ الآن: 7 أيام كاملة الميزات — مجاناً
+            ابدأ بمنصة {requestedPlatform === 'stocks' ? 'الشركات' : requestedPlatform === 'funds' ? 'الصناديق' : 'SPX'} — ويمكنك إضافة غيرها لاحقاً
           </p>
         </div>
 

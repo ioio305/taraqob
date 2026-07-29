@@ -19,6 +19,36 @@ const PRICE_IDS: Record<'monthly' | 'yearly', Record<string, string | undefined>
   },
 }
 
+const VALID_PLATFORMS = ['spx', 'stocks', 'funds'] as const
+type Platform = typeof VALID_PLATFORMS[number]
+
+function selectedPlatforms(value: unknown): Platform[] {
+  if (!Array.isArray(value)) return ['spx']
+  return [...new Set(value)]
+    .filter((platform): platform is Platform =>
+      typeof platform === 'string' && VALID_PLATFORMS.includes(platform as Platform),
+    )
+    .sort()
+}
+
+function scopedPriceId(
+  billing: 'monthly' | 'yearly',
+  tier: string,
+  platforms: Platform[],
+): string | undefined {
+  const billingSuffix = billing === 'yearly' ? '_YEARLY' : ''
+  if (platforms.length === 3) {
+    return process.env[`STRIPE_ALL_${tier.toUpperCase()}${billingSuffix}_PRICE_ID`]
+  }
+  if (platforms.length === 2) {
+    return process.env[`STRIPE_DUO_${tier.toUpperCase()}${billingSuffix}_PRICE_ID`]
+  }
+  const platform = platforms[0]
+  const scoped = process.env[`STRIPE_${platform.toUpperCase()}_${tier.toUpperCase()}${billingSuffix}_PRICE_ID`]
+  // توافق خلفي مع أسعار SPX الحالية.
+  return scoped ?? (platform === 'spx' ? PRICE_IDS[billing][tier] : undefined)
+}
+
 export async function POST(request: NextRequest) {
   const stripeKey = process.env.STRIPE_SECRET_KEY
   if (!stripeKey) {
@@ -41,13 +71,15 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { tier } = body
   const billing: 'monthly' | 'yearly' = body.billing === 'yearly' ? 'yearly' : 'monthly'
+  const platforms = selectedPlatforms(body.platforms)
+  if (!platforms.length) {
+    return NextResponse.json({ error: 'اختر منصة واحدة على الأقل' }, { status: 400 })
+  }
 
-  const priceId = PRICE_IDS[billing][tier]
+  const priceId = scopedPriceId(billing, tier, platforms)
   if (!priceId) {
     return NextResponse.json({
-      error: billing === 'yearly' && PRICE_IDS.monthly[tier]
-        ? 'الخطة السنوية قيد التفعيل — اختر الشهري حالياً'
-        : 'باقة غير صحيحة',
+      error: 'سعر هذه التوليفة قيد التفعيل — اختر توليفة أخرى أو تواصل معنا',
     }, { status: 400 })
   }
 
@@ -59,11 +91,11 @@ export async function POST(request: NextRequest) {
     payment_method_types: ['card'],
     line_items: [{ price: priceId, quantity: 1 }],
     customer_email: profile?.email ?? user.email ?? undefined,
-    metadata: { user_id: user.id, tier, billing },
-    success_url: `${appUrl}/v2?upgraded=${tier}`,
+    metadata: { user_id: user.id, tier, billing, platforms: platforms.join(',') },
+    success_url: `${appUrl}/platforms?upgraded=${tier}`,
     cancel_url:  `${appUrl}/v2/upgrade`,
     subscription_data: {
-      metadata: { user_id: user.id, tier, billing },
+      metadata: { user_id: user.id, tier, billing, platforms: platforms.join(',') },
     },
   })
 

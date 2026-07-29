@@ -7,6 +7,15 @@ export const dynamic = 'force-dynamic'
 
 const VALID_TIERS = ['signal', 'edge', 'alpha'] as const
 type Tier = typeof VALID_TIERS[number]
+const VALID_PLATFORMS = ['spx', 'stocks', 'funds'] as const
+type Platform = typeof VALID_PLATFORMS[number]
+
+function parsePlatforms(value: string | null | undefined): Platform[] {
+  const parsed = (value ?? 'spx').split(',').filter((platform): platform is Platform =>
+    VALID_PLATFORMS.includes(platform as Platform),
+  )
+  return [...new Set(parsed)]
+}
 
 export async function POST(request: NextRequest) {
   const stripeKey    = process.env.STRIPE_SECRET_KEY
@@ -41,39 +50,59 @@ export async function POST(request: NextRequest) {
     const session = event.data.object as Stripe.Checkout.Session
     const userId  = session.metadata?.user_id
     const tier    = session.metadata?.tier as Tier | undefined
+    const platforms = parsePlatforms(session.metadata?.platforms)
 
-    if (!userId || !tier || !VALID_TIERS.includes(tier)) {
+    if (!userId || !tier || !VALID_TIERS.includes(tier) || !platforms.length) {
       return NextResponse.json({ error: 'Missing metadata' }, { status: 400 })
     }
 
     const { error } = await serviceClient
-      .from('user_profiles')
-      .update({ subscription_tier: tier })
-      .eq('id', userId)
+      .from('platform_subscriptions')
+      .upsert(
+        platforms.map(platform => ({
+          user_id: userId,
+          platform,
+          tier,
+          status: 'active',
+          updated_at: new Date().toISOString(),
+        })),
+        { onConflict: 'user_id,platform' },
+      )
 
     if (error) {
-      console.error('Failed to update subscription_tier:', error.message)
+      console.error('Failed to update platform subscriptions:', error.message)
       return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    // إبقاء حقل SPX القديم متزامناً حتى اكتمال انتقال جميع الخدمات.
+    if (platforms.includes('spx')) {
+      await serviceClient.from('user_profiles').update({ subscription_tier: tier }).eq('id', userId)
     }
 
     await serviceClient.from('notifications').insert({
       user_id: userId,
       type:    'system',
       title:   `تم تفعيل باقة ${tier === 'signal' ? 'سيجنال' : tier === 'edge' ? 'إيدج' : 'ألفا'} ✓`,
-      body:    'يمكنك الآن الوصول لجميع ميزات باقتك. مرحباً بك!',
-      url:     '/v2',
+      body:    `تم فتح ${platforms.length === 3 ? 'المنصات الثلاث' : platforms.length === 2 ? 'منصتين' : 'منصتك المختارة'}. مرحباً بك!`,
+      url:     '/platforms',
     })
   }
 
   if (event.type === 'customer.subscription.deleted') {
     const sub    = event.data.object as Stripe.Subscription
     const userId = sub.metadata?.user_id
+    const platforms = parsePlatforms(sub.metadata?.platforms)
 
     if (userId) {
       await serviceClient
-        .from('user_profiles')
-        .update({ subscription_tier: 'radar' })
-        .eq('id', userId)
+        .from('platform_subscriptions')
+        .update({ status: 'canceled', updated_at: new Date().toISOString() })
+        .eq('user_id', userId)
+        .in('platform', platforms)
+
+      if (platforms.includes('spx')) {
+        await serviceClient.from('user_profiles').update({ subscription_tier: 'radar' }).eq('id', userId)
+      }
 
       await serviceClient.from('notifications').insert({
         user_id: userId,

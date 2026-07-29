@@ -12,6 +12,7 @@ export interface StockNewsItem {
   url: string | null
   sentiment: 'positive' | 'negative' | 'neutral' | null
   sentimentReason?: string | null
+  tickers?: string[]                             // الرموز المذكورة (للـ feed العام)
 }
 
 const TTL = 10 * 60_000
@@ -52,5 +53,39 @@ export async function getStockNews(symbol: string, limit = 8): Promise<StockNews
     return items
   } catch {
     return cached?.items ?? []
+  }
+}
+
+// ── أخبار السوق العامة (feed) — نداء واحد، مع الرموز والمشاعر ──────────────────
+let _feedCache: { at: number; items: StockNewsItem[] } | null = null
+export async function getMarketStockNews(limit = 24): Promise<StockNewsItem[]> {
+  if (_feedCache && Date.now() - _feedCache.at < TTL) return _feedCache.items
+  const key = process.env.POLYGON_API_KEY
+  if (!key) return []
+  try {
+    const url = `https://api.polygon.io/v2/reference/news?order=desc&limit=${limit}&sort=published_utc&apiKey=${key}`
+    const res = await fetch(url, { cache: 'no-store' })
+    if (!res.ok) return _feedCache?.items ?? []
+    const json = await res.json()
+    const rows: any[] = Array.isArray(json?.results) ? json.results : []
+    const items: StockNewsItem[] = rows.map((r, i) => {
+      const tickers: string[] = Array.isArray(r?.tickers) ? r.tickers.slice(0, 4) : []
+      const insight = Array.isArray(r?.insights) ? r.insights[0] : null
+      const s = insight?.sentiment
+      const sentiment = s === 'positive' || s === 'negative' || s === 'neutral' ? s : null
+      return {
+        id: String(r?.id ?? `feed-${i}`),
+        title: String(r?.title ?? '').trim(),
+        source: String(r?.publisher?.name ?? 'Polygon'),
+        publishedAt: String(r?.published_utc ?? new Date().toISOString()),
+        url: typeof r?.article_url === 'string' && r.article_url.startsWith('http') ? r.article_url : null,
+        sentiment,
+        tickers,
+      }
+    }).filter(x => x.title)
+    _feedCache = { at: Date.now(), items }
+    return items
+  } catch {
+    return _feedCache?.items ?? []
   }
 }

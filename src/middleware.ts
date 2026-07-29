@@ -92,7 +92,7 @@ export async function middleware(request: NextRequest) {
 
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('role, is_active')
+    .select('role, is_active, subscription_tier')
     .eq('id', user.id)
     .single()
 
@@ -105,12 +105,65 @@ export async function middleware(request: NextRequest) {
   }
 
   const role = profile.role
+  const isStaff = ['admin', 'moderator'].includes(role)
 
   // ── /v2/admin — أدمن ومشرف فقط ──────────────────────────────
   if (pathname.startsWith('/v2/admin')) {
-    if (!['admin', 'moderator'].includes(role)) {
+    if (!isStaff) {
       const url = request.nextUrl.clone()
       url.pathname = '/v2'
+      return NextResponse.redirect(url)
+    }
+  }
+
+  // ── بوابات المنصات المستقلة ─────────────────────────────────
+  // صفحات وأهم APIs كل منصة تحتاج اشتراكاً خاصاً. امتلاك منصتين يعني وجود
+  // صفين نشطين؛ الباقة الشاملة تعني الصفوف الثلاثة.
+  let requestedPlatform: 'spx' | 'stocks' | 'funds' | null = null
+  if (pathname.startsWith('/stocks') || pathname.startsWith('/api/v2/stocks')) {
+    requestedPlatform = 'stocks'
+  } else if (pathname.startsWith('/funds') || pathname.startsWith('/api/v2/funds')) {
+    requestedPlatform = 'funds'
+  } else if (
+    pathname.startsWith('/v2')
+    && !pathname.startsWith('/v2/admin')
+    && !pathname.startsWith('/v2/upgrade')
+  ) {
+    requestedPlatform = 'spx'
+  } else if (pathname === '/api/v2/recommend') {
+    const asset = request.nextUrl.searchParams.get('asset')
+    requestedPlatform = asset === 'stocks' ? 'stocks' : asset === 'funds' ? 'funds' : 'spx'
+  } else if (['/api/v2/analyze', '/api/v2/chart', '/api/v2/console', '/api/v2/gameplan'].includes(pathname)) {
+    requestedPlatform = 'spx'
+  }
+
+  if (requestedPlatform && !isStaff) {
+    const { data: subscription, error: subscriptionError } = await supabase
+      .from('platform_subscriptions')
+      .select('platform, current_period_end')
+      .eq('user_id', user.id)
+      .eq('platform', requestedPlatform)
+      .eq('status', 'active')
+      .maybeSingle()
+
+    // SPX يحتفظ بالتوافق مع المشتركين القدامى عند غياب جدول المنصات.
+    const legacySpx = requestedPlatform === 'spx'
+      && (Boolean(subscriptionError) || profile.subscription_tier !== 'radar')
+    const periodEnd = subscription?.current_period_end ? Date.parse(subscription.current_period_end) : NaN
+    const subscriptionActive = Boolean(subscription) && (!Number.isFinite(periodEnd) || periodEnd > Date.now())
+    const allowed = subscriptionActive || legacySpx
+
+    if (!allowed) {
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json(
+          { error: 'platform_subscription_required', platform: requestedPlatform },
+          { status: 403 },
+        )
+      }
+      const url = request.nextUrl.clone()
+      url.pathname = '/platforms'
+      url.search = ''
+      url.searchParams.set('locked', requestedPlatform)
       return NextResponse.redirect(url)
     }
   }

@@ -21,8 +21,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
       .eq('id', user.id)
       .single()
     if (!profile || profile.is_active === false) redirect('/login?error=inactive')
-    if (['admin', 'moderator'].includes(profile.role)) redirect('/v2/admin')
-    redirect('/v2')
+    redirect('/platforms')
   }
 
   return (
@@ -70,10 +69,10 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
             style={{ color: '#7C8A99' }}>
             الإفصاح
           </Link>
-          <Link href={user ? '/v2' : '/login'}
+          <Link href={user ? '/platforms' : '/login'}
             className="px-5 py-2 rounded-lg text-sm font-bold transition-all"
             style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
-            {user ? '◈ منصتي' : 'تسجيل الدخول'}
+            {user ? 'منصّاتي' : 'تسجيل الدخول'}
           </Link>
         </nav>
       </header>
@@ -96,7 +95,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
         <div><LiveTeaser /></div>
 
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
-          تداول
+          قرارات أوضح في
           {' '}
           <span style={{
             background: 'linear-gradient(135deg,#C9943A,#F0C060,#C9943A)',
@@ -104,27 +103,25 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
             WebkitTextFillColor: 'transparent',
             backgroundSize: '200% 100%',
           }}>
-            SPX Options
+            سوقك الذي تختاره
           </span>
-          {' '}
-          كالمحترفين
         </h1>
 
         <p className="text-lg sm:text-xl mb-4 max-w-2xl mx-auto leading-relaxed"
           style={{ color: '#64748B' }}>
-          المنصة الوحيدة التي تتخذ موقفاً وتتحمّله: خطة مكتوبة كل صباح، توصيات بثلاث فئات
-          لكل مستوى، حماية آلية من أيام الانهيارات — وكل إشارة قوية تُسجَّل في سجل عام لا يُمكن تجميله
+          ثلاث منصات مستقلة لا تجبرك على دفع قيمة أدوات لا تستخدمها:
+          خيارات SPX، عقود الشركات، وصناديق السوق والقطاعات.
         </p>
         <p className="text-sm mb-10 max-w-xl mx-auto" style={{ color: '#6B7B8D' }}>
-          بصدق كامل: نسبة الربح المثبتة على 8 سنوات لم يرها النظام هي 51% بأفضلية +0.25 —
-          أفضلية حقيقية إحصائياً، وليست وعداً بالثراء. من يعدك بأكثر فاسأله عن سجله العام.
+          اختر منصة واحدة، اجمع أي منصتين، أو افتح الباقة الشاملة مع ذكاء الربط بين السوق والقطاع والشركة.
+          لكل منصة قرارها وأدواتها واشتراكها الخاص.
         </p>
 
         <div className="flex flex-wrap items-center justify-center gap-4 mb-20">
-          <Link href={user ? '/v2' : '/register'}
+          <Link href={user ? '/platforms' : '/register'}
             className="flex items-center gap-2 px-8 py-4 rounded-xl text-base font-bold transition-all"
             style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
-            {user ? '◈ ادخل منصتك ←' : '🎁 جرّب 7 أيام مجاناً — كل الميزات'}
+            {user ? 'افتح بوابة منصّاتك ←' : 'ابدأ واختر منصتك ←'}
           </Link>
           <Link href="/track"
             className="flex items-center gap-2 px-8 py-4 rounded-xl text-base font-medium transition-all"
@@ -253,9 +250,9 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
       <section className="max-w-5xl mx-auto px-6 pb-4">
         <div className="text-center mb-8">
           <div className="text-xs font-mono tracking-widest mb-3" style={{ color: '#C9943A' }}>منصّات ترقّب</div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">ثلاث منصّات · محرّك قرار واحد</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">ثلاث منصّات مستقلة · حساب واحد</h2>
           <p className="text-sm max-w-xl mx-auto" style={{ color: '#7C8A99' }}>
-            نفس الجودة التي بُنيت لـSPX — توصية أولاً، خطة مكتوبة، وسجل صادق — تمتدّ للأسهم والصناديق
+            اشترك فيما تحتاجه فقط، واجمع أي منصتين، أو اختر الشامل للوصول إلى السوق كاملًا.
           </p>
         </div>
 
@@ -292,7 +289,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
               </div>
             )
             return available
-              ? <Link key={p.key} href={user ? p.route : '/register'}>{card}</Link>
+              ? <Link key={p.key} href={user ? '/platforms' : `/register?platform=${p.key}`}>{card}</Link>
               : <div key={p.key}>{card}</div>
           })}
         </div>
@@ -451,11 +448,63 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
       <section id="plans" className="max-w-5xl mx-auto px-6 py-24">
         <div className="text-center mb-14">
           <div className="text-xs font-mono tracking-widest mb-3" style={{ color: '#C9943A' }}>الباقات</div>
-          <h2 className="text-3xl font-bold text-white mb-3">اختر ما يناسبك</h2>
-          <p className="text-sm" style={{ color: '#7C8A99' }}>كل الأرقام حقيقية · كل الإشارات موثّقة · لا وعود فارغة</p>
+          <h2 className="text-3xl font-bold text-white mb-3">اشتراكك على مقاس تداولك</h2>
+          <p className="text-sm" style={{ color: '#7C8A99' }}>
+            أولاً اختر عدد المنصات، ثم اختر مستوى الأدوات داخلها.
+          </p>
           <p className="text-sm mt-2 font-bold" style={{ color: '#26D07C' }}>
             🎁 كل حساب جديد يبدأ بتجربة 7 أيام كاملة الميزات — وكل صديق تدعوه يهديك أسبوعاً إضافياً
           </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+          {[
+            {
+              key: 'single',
+              title: 'منصة واحدة',
+              color: '#60A5FA',
+              desc: 'اختر SPX أو الشركات أو الصناديق. منتج مستقل بكامل هويته وأدواته.',
+              note: 'الأكثر وضوحاً للبداية',
+              href: '/register',
+            },
+            {
+              key: 'duo',
+              title: 'أي منصتين',
+              color: '#C9943A',
+              desc: 'اجمع أي منصتين دون دفع قيمة الثالثة: SPX + شركات، أو أي توليفة تختارها.',
+              note: 'أفضل مرونة',
+              href: '/register?plan=duo',
+            },
+            {
+              key: 'all',
+              title: 'ترقّب الشامل',
+              color: '#A78BFA',
+              desc: 'المنصات الثلاث مع بوابة موحدة وذكاء الربط بين السوق والقطاع والشركة.',
+              note: 'أعلى اشتراك',
+              href: '/register?plan=all',
+            },
+          ].map(scope => (
+            <div key={scope.key} className="rounded-2xl p-6"
+              style={{
+                background: `linear-gradient(150deg, ${scope.color}0D, rgba(13,27,42,.9) 55%)`,
+                border: `1px solid ${scope.color}35`,
+              }}>
+              <div className="text-[10px] font-mono mb-3 tracking-widest" style={{ color: scope.color }}>{scope.note}</div>
+              <h3 className="text-xl font-black text-white mb-3">{scope.title}</h3>
+              <p className="text-sm leading-7 min-h-[84px]" style={{ color: '#7C8A99' }}>{scope.desc}</p>
+              <Link href={user ? `/v2/upgrade?bundle=${scope.key}` : scope.href}
+                className="mt-5 flex items-center justify-between rounded-xl px-4 py-3 text-sm font-bold"
+                style={{ color: scope.color, background: `${scope.color}10`, border: `1px solid ${scope.color}30` }}>
+                <span>اختر هذه الباقة</span>
+                <span>←</span>
+              </Link>
+            </div>
+          ))}
+        </div>
+
+        <div className="text-center mb-7">
+          <div className="text-sm font-bold text-white">ثم اختر مستوى الأدوات داخل منصتك</div>
+          <div className="text-xs mt-1" style={{ color: '#6B7B8D' }}>رادار · سيجنال · إيدج · VIP</div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -542,7 +591,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
           لا نطلب ثقتك، نطلب أسبوعاً واحداً: افتح خطة اليوم كل صباح، تابع التوصيات
           بالمحفظة التجريبية، وقارن بنفسك مع السجل العام المفتوح
         </p>
-        <Link href={user ? '/v2' : '/register'}
+        <Link href={user ? '/platforms' : '/register'}
           className="inline-flex items-center gap-2 px-10 py-4 rounded-xl text-base font-bold transition-all"
           style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
           {user ? 'العودة إلى منصتك ←' : 'ابدأ تجربتك المجانية ←'}

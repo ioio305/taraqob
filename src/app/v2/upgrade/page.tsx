@@ -2,6 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
+
+const PLATFORM_OPTIONS = [
+  { key: 'spx', label: 'خيارات SPX', color: '#C9943A' },
+  { key: 'stocks', label: 'الشركات', color: '#60A5FA' },
+  { key: 'funds', label: 'الصناديق', color: '#26D07C' },
+] as const
 
 // ── بطاقة الإحالة: كل صديق يشترك من رابطك = أسبوع مجاني لك ──────────────────
 function ReferralCard() {
@@ -85,16 +92,33 @@ const TIERS = [
 const YEARLY_DISCOUNT = 0.30   // خصم الاشتراك السنوي
 
 export default function UpgradePage() {
+  const searchParams = useSearchParams()
+  const requestedPlatform = searchParams.get('platform')
   const [loading, setLoading] = useState<string | null>(null)
   const [error,   setError]   = useState<string | null>(null)
   const [billing, setBilling] = useState<'monthly' | 'yearly'>('monthly')
+  const [platforms, setPlatforms] = useState<string[]>(() =>
+    PLATFORM_OPTIONS.some(item => item.key === requestedPlatform)
+      ? [requestedPlatform!]
+      : searchParams.get('bundle') === 'all'
+        ? PLATFORM_OPTIONS.map(item => item.key)
+        : ['spx'],
+  )
+
+  function togglePlatform(platform: string) {
+    setPlatforms(current =>
+      current.includes(platform)
+        ? current.length === 1 ? current : current.filter(item => item !== platform)
+        : [...current, platform],
+    )
+  }
 
   async function checkout(tier: string) {
     setLoading(tier); setError(null)
     try {
       const res  = await fetch('/api/v2/stripe/checkout', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier, billing }),
+        body: JSON.stringify({ tier, billing, platforms }),
       })
       const data = await res.json()
       if (data.url) {
@@ -121,7 +145,7 @@ export default function UpgradePage() {
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold text-white mb-3">افتح الوصول الكامل</h1>
         <p className="text-sm max-w-md mx-auto leading-relaxed" style={{ color: '#7C8A99' }}>
-          كل الأرقام حقيقية، كل الإشارات موثّقة. اختر الباقة التي تناسب مستوى تداولك.
+          اختر منصة واحدة، أي منصتين، أو المنصات الثلاث ضمن الاشتراك الشامل.
         </p>
       </div>
 
@@ -133,6 +157,48 @@ export default function UpgradePage() {
           {error}
         </div>
       )}
+
+      <div className="mb-8 rounded-2xl p-5"
+        style={{ background: 'rgba(13,27,42,.72)', border: '1px solid rgba(255,255,255,.07)' }}>
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+          <div>
+            <div className="text-sm font-bold text-white">1. اختر منصاتك</div>
+            <div className="text-xs mt-1" style={{ color: '#6F7E8E' }}>
+              المحدد الآن: {platforms.length === 3 ? 'الشامل' : platforms.length === 2 ? 'منصتان' : 'منصة واحدة'}
+            </div>
+          </div>
+          <button onClick={() => setPlatforms(PLATFORM_OPTIONS.map(item => item.key))}
+            className="text-xs px-3 py-2 rounded-lg"
+            style={{ color: '#CFC4FF', background: 'rgba(167,139,250,.1)', border: '1px solid rgba(167,139,250,.28)' }}>
+            اختر الشامل
+          </button>
+        </div>
+        <div className="grid sm:grid-cols-3 gap-3">
+          {PLATFORM_OPTIONS.map(platform => {
+            const selected = platforms.includes(platform.key)
+            return (
+              <button key={platform.key} onClick={() => togglePlatform(platform.key)}
+                className="rounded-xl p-4 text-right transition-all"
+                style={{
+                  color: selected ? '#fff' : '#738192',
+                  background: selected ? `${platform.color}10` : 'rgba(255,255,255,.02)',
+                  border: `1px solid ${selected ? `${platform.color}55` : 'rgba(255,255,255,.06)'}`,
+                }}>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold">{platform.label}</span>
+                  <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs"
+                    style={{ background: selected ? platform.color : 'rgba(255,255,255,.06)', color: selected ? '#071018' : '#637080' }}>
+                    {selected ? '✓' : ''}
+                  </span>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+        <p className="text-[11px] mt-4" style={{ color: '#687687' }}>
+          يمكنك اختيار SPX والشركات فقط، أو الشركات والصناديق فقط، أو أي توليفة أخرى. الشامل يفتح ذكاء الربط بين المنصات.
+        </p>
+      </div>
 
       {/* مبدّل الفوترة: شهري / سنوي بخصم 30% */}
       <div className="flex justify-center mb-8">
@@ -155,6 +221,7 @@ export default function UpgradePage() {
         </div>
       </div>
 
+      <div className="text-sm font-bold text-white mb-4">2. اختر مستوى الأدوات داخل منصاتك</div>
       {/* Tier cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         {TIERS.map(tier => (
@@ -174,13 +241,13 @@ export default function UpgradePage() {
               <div className="text-xs font-mono mb-1" style={{ color: tier.color }}>{tier.label}</div>
               {billing === 'monthly' ? (
                 <div className="flex items-baseline gap-1">
-                  <span className="text-2xl font-bold font-mono" style={{ color: 'white' }}>${tier.monthly}</span>
+                  <span className="text-2xl font-bold font-mono" style={{ color: 'white' }}>من ${tier.monthly}$</span>
                   <span className="text-xs" style={{ color: '#7C8A99' }}>/شهر</span>
                 </div>
               ) : (
                 <div className="flex items-baseline gap-2 flex-wrap">
                   <span className="text-2xl font-bold font-mono" style={{ color: 'white' }}>
-                    ${Math.round(tier.monthly * (1 - YEARLY_DISCOUNT))}
+                    من ${Math.round(tier.monthly * (1 - YEARLY_DISCOUNT))}
                   </span>
                   <span className="text-xs" style={{ color: '#7C8A99' }}>/شهر · يُدفع سنوياً</span>
                   <span className="text-xs font-mono line-through" style={{ color: '#6B7B8D' }}>${tier.monthly}</span>
@@ -217,10 +284,10 @@ export default function UpgradePage() {
       <div className="rounded-xl p-4 text-center"
         style={{ background: 'rgba(13,27,42,0.5)', border: '1px solid rgba(255,255,255,0.04)' }}>
         <p className="text-xs" style={{ color: '#6B7B8D' }}>
-          أنت حالياً على باقة <span style={{ color: '#7C8A99' }}>رادار</span> — الباقة المجانية تتضمن الداشبورد وتحليل العقود
+          السعر النهائي يعتمد على عدد المنصات ومستوى الأدوات، ويظهر بوضوح قبل تأكيد الدفع.
         </p>
-        <Link href="/v2" className="inline-block mt-2 text-xs" style={{ color: '#55657A' }}>
-          العودة للداشبورد ←
+        <Link href="/platforms" className="inline-block mt-2 text-xs" style={{ color: '#55657A' }}>
+          العودة إلى منصّاتي ←
         </Link>
       </div>
     </div>

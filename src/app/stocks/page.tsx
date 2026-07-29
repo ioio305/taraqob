@@ -16,6 +16,12 @@ type ScanRow = {
   eventRisk: { active: boolean; nameAr: string; when: string; impact: string } | null
   best: Best | null
   watchMode: boolean
+  dataQuality: {
+    status: 'ready' | 'watch' | 'blocked'
+    label: string
+    issues: string[]
+    asOf: string | null
+  } | null
   error?: string
 }
 type ScanData = {
@@ -52,6 +58,13 @@ type DetailData = {
   contracts: DetailContract[]
   expiration: string
   watchMode: boolean
+  dataQuality: {
+    status: 'ready' | 'watch' | 'blocked'
+    label: string
+    issues: string[]
+    source: string
+    asOf: string | null
+  } | null
 }
 
 const ACCENT = '#60A5FA'   // لون هوية منصة الشركات
@@ -245,6 +258,16 @@ export default function StocksScanner() {
                             {isCall ? '▲ صعود' : '▼ هبوط'}
                           </span>
                         )}
+                        {r.dataQuality && r.dataQuality.status !== 'ready' && (
+                          <span className="text-xs font-bold px-1.5 py-0.5 rounded"
+                                title={r.dataQuality.issues.join(' — ')}
+                                style={{
+                                  background: r.dataQuality.status === 'blocked' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)',
+                                  color: r.dataQuality.status === 'blocked' ? '#F87171' : '#F59E0B',
+                                }}>
+                            {r.dataQuality.label}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -310,7 +333,21 @@ export default function StocksScanner() {
 // ── بطاقة تفصيل السهم (أفضل عقد + الخطة + لماذا) ──────────────────────────────
 function StockDetail({ detail }: { detail: DetailData }) {
   const c = detail.contracts[0]
-  if (!c) return null
+  if (!c) {
+    if (!detail.dataQuality || detail.dataQuality.status === 'ready') return null
+    return (
+      <div className="rounded-lg px-3 py-2.5 mt-2"
+           style={{
+             background: detail.dataQuality.status === 'blocked' ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)',
+             border: `1px solid ${detail.dataQuality.status === 'blocked' ? 'rgba(239,68,68,0.35)' : 'rgba(245,158,11,0.35)'}`,
+           }}>
+        <div className="text-xs font-bold" style={{ color: detail.dataQuality.status === 'blocked' ? '#F87171' : '#F59E0B' }}>
+          {detail.dataQuality.label}
+        </div>
+        <div className="text-xs mt-1" style={{ color: '#94A3B8' }}>{detail.dataQuality.issues.join(' — ')}</div>
+      </div>
+    )
+  }
   const isCall = c.type === 'call'
   const sm = statusMeta(c.status)
   const strat = c.strategy
@@ -318,6 +355,20 @@ function StockDetail({ detail }: { detail: DetailData }) {
 
   return (
     <div className="space-y-3 mt-2">
+      {detail.dataQuality && detail.dataQuality.status !== 'ready' && (
+        <div className="rounded-lg px-3 py-2.5"
+             style={{
+               background: detail.dataQuality.status === 'blocked' ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)',
+               border: `1px solid ${detail.dataQuality.status === 'blocked' ? 'rgba(239,68,68,0.35)' : 'rgba(245,158,11,0.35)'}`,
+             }}>
+          <div className="text-xs font-bold" style={{ color: detail.dataQuality.status === 'blocked' ? '#F87171' : '#F59E0B' }}>
+            {detail.dataQuality.label}
+          </div>
+          <div className="text-xs mt-1" style={{ color: '#94A3B8' }}>
+            {detail.dataQuality.issues.join(' — ')}
+          </div>
+        </div>
+      )}
       {/* تحذير الأرباح */}
       {detail.eventRisk?.active && (
         <div className="rounded-lg px-3 py-2.5 flex items-start gap-2"

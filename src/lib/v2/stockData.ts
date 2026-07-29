@@ -20,6 +20,19 @@ export interface StockQuote {
   low: number
   volume: number
   source: 'tradier' | 'yahoo'
+  asOf: string | null
+}
+
+function quoteTimestamp(value: unknown): string | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const milliseconds = value > 10_000_000_000 ? value : value * 1000
+    return new Date(milliseconds).toISOString()
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const milliseconds = Date.parse(value)
+    return Number.isFinite(milliseconds) ? new Date(milliseconds).toISOString() : null
+  }
+  return null
 }
 
 // ── سعر السهم ─────────────────────────────────────────────────────────────────
@@ -40,6 +53,7 @@ export async function getStockQuote(symbol: string): Promise<StockQuote | null> 
           low: q.low ?? 0,
           volume: q.volume ?? 0,
           source: 'tradier',
+          asOf: quoteTimestamp(q.trade_date ?? q.last_volume_time),
         }
       }
     } catch { /* اسقط إلى Yahoo */ }
@@ -62,6 +76,7 @@ export async function getStockQuote(symbol: string): Promise<StockQuote | null> 
       low: meta.regularMarketDayLow ?? 0,
       volume: meta.regularMarketVolume ?? 0,
       source: 'yahoo',
+      asOf: quoteTimestamp(meta.regularMarketTime),
     }
   } catch { return null }
 }

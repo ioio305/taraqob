@@ -9,6 +9,7 @@ import { AlertsWatcher } from '@/components/v2/AlertsWatcher'
 import { BeginnerHelpers } from '@/components/v2/BeginnerGuide'
 import { AssistantWidget } from '@/components/v2/AssistantWidget'
 import { NewsTicker } from '@/components/v2/NewsTicker'
+import type { PlatformAccess } from '@/lib/v2/accessRules'
 
 const ROLE_LABEL_MAP: Record<string, string>  = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
 const ROLE_COLOR_MAP: Record<string, string>  = { admin: '#C9943A', moderator: '#60A5FA', user: '#7C8A99' }
@@ -122,13 +123,15 @@ const PLATFORM_LINKS: PlatformLink[] = [
   { href: '/funds',  match: '/funds',  label: 'الصناديق',   icon: '🧺', color: '#26D07C', status: 'available' },
 ]
 
-function PlatformSwitcher() {
+function PlatformSwitcher({ access }: { access: PlatformAccess }) {
   const pathname = usePathname()
   return (
     <div className="px-3 pt-3 pb-1">
       <SectionTitle>منصّات ترقّب</SectionTitle>
       <div className="grid grid-cols-3 gap-1.5 mt-1">
         {PLATFORM_LINKS.map(p => {
+          const key = p.match === '/v2' ? 'spx' : p.match.slice(1) as keyof PlatformAccess
+          const allowed = access[key]
           const active = p.status === 'available' && (p.match === '/v2' ? pathname === '/v2' || pathname.startsWith('/v2/') : pathname.startsWith(p.match))
           const soon = p.status === 'soon'
           const inner = (
@@ -136,15 +139,16 @@ function PlatformSwitcher() {
                  style={{
                    background: active ? `${p.color}18` : 'rgba(255,255,255,0.02)',
                    border: `1px solid ${active ? `${p.color}55` : 'rgba(255,255,255,0.05)'}`,
-                   opacity: soon ? 0.45 : 1,
+                   opacity: soon || !allowed ? 0.42 : 1,
                  }}>
               <span className="text-base leading-none">{p.icon}</span>
               <span className="text-[11px] font-bold" style={{ color: active ? p.color : '#8A97A6' }}>{p.label}</span>
-              {soon && <span className="text-[9px] font-mono" style={{ color: '#55657A' }}>قريباً</span>}
+              {soon ? <span className="text-[9px] font-mono" style={{ color: '#55657A' }}>قريباً</span>
+                : !allowed ? <span className="text-[9px] font-mono" style={{ color: '#7C8A99' }}>مقفلة</span> : null}
             </div>
           )
           if (soon) return <div key={p.label} title="قريباً">{inner}</div>
-          return <Link key={p.label} href={p.href}>{inner}</Link>
+          return <Link key={p.label} href={allowed ? p.href : `/v2/upgrade?platform=${key}`}>{inner}</Link>
         })}
       </div>
     </div>
@@ -171,10 +175,11 @@ function notificationTime(value: string): string {
 }
 
 // ── Main Shell ─────────────────────────────────────────────────
-export default function V2Shell({ children, userName, userRole, userSecondaryRoles = [], subscriptionTier = 'radar', trialDaysLeft = null }: {
+export default function V2Shell({ children, userName, userRole, userSecondaryRoles = [], subscriptionTier = 'radar', trialDaysLeft = null, platformAccess }: {
   children: ReactNode; userName: string; userRole: string
   userSecondaryRoles?: string[]; subscriptionTier?: string
   trialDaysLeft?: number | null
+  platformAccess: PlatformAccess
 }) {
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -349,7 +354,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
       {/* ── منطقة الأقسام: قابلة للتمرير — ذيل السايدبار (الخروج) مثبت دائماً ── */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         {/* محوّل المنصّات — المؤشر · الشركات · الصناديق */}
-        <PlatformSwitcher />
+        <PlatformSwitcher access={platformAccess} />
         <div className="mx-4 my-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }} />
 
         {showAdminNav && (

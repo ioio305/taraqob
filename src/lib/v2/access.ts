@@ -2,7 +2,13 @@ import 'server-only'
 
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
-import { getTrialState, TIER_RANK, type SubscriptionTier } from '@/lib/v2/accessRules'
+import {
+  derivePlatformAccess,
+  getTrialState,
+  TIER_RANK,
+  type PlatformAccess,
+  type SubscriptionTier,
+} from '@/lib/v2/accessRules'
 
 export { hasMinimumTier } from '@/lib/v2/accessRules'
 
@@ -36,13 +42,27 @@ export const getV2Viewer = cache(async () => {
   // تراجع آمن: لو لم يُطبَّق ملف الترحيل بعد (الجدول غير موجود) نعود للباقة القديمة.
   // service !== 'canceled' فقط. spx يعود للباقة القديمة كي لا يفقد أي مشترك وصوله.
   const subMap = new Map<string, string>()
+  let subscriptionRows: Array<{
+    platform: unknown
+    tier: unknown
+    status: unknown
+    current_period_end?: unknown
+  }> | null = null
+  let platformTableAvailable = false
   try {
     const { data: subs, error } = await supabase
       .from('platform_subscriptions')
-      .select('platform, tier, status')
+      .select('platform, tier, status, current_period_end')
       .eq('user_id', user.id)
     if (!error && Array.isArray(subs)) {
-      for (const s of subs) if (s.status !== 'canceled') subMap.set(s.platform, s.tier)
+      platformTableAvailable = true
+      subscriptionRows = subs
+      for (const s of subs) {
+        const end = s.current_period_end ? Date.parse(s.current_period_end) : NaN
+        if (s.status === 'active' && (!Number.isFinite(end) || end > Date.now())) {
+          subMap.set(s.platform, s.tier)
+        }
+      }
     }
   } catch { /* الجدول غير موجود بعد → تراجع كامل للباقة القديمة */ }
 
@@ -58,15 +78,22 @@ export const getV2Viewer = cache(async () => {
     stocks: normalizeTier(subMap.get('stocks')),
     funds:  normalizeTier(subMap.get('funds')),
   }
+  const isStaff = profile.role === 'admin' || profile.role === 'moderator'
+  const platformAccess: PlatformAccess = derivePlatformAccess(subscriptionRows, {
+    isStaff,
+    // تراجع آمن قبل تطبيق جدول المنصات، أو للمشتركين القدامى في SPX.
+    legacySpx: !platformTableAvailable || Boolean(subMap.get('spx')) || profile.subscription_tier !== 'radar',
+  })
 
   return {
     user,
     profile,
     displayName: profile.full_name_ar || profile.full_name || user.email || '',
     secondaryRoles,
-    isStaff: profile.role === 'admin' || profile.role === 'moderator',
+    isStaff,
     // اشتراك كل منصة على حدة
     platformTiers,
+    platformAccess,
     // توافق خلفي: القيم القديمة = منصة SPX (لا تكسر أي مستدعٍ حالي)
     effectiveTier: platformTiers.spx,
     trialDaysLeft: spxTrial.trialDaysLeft,
