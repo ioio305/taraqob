@@ -88,7 +88,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
             color: '#C9943A',
           }}>
           <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#C9943A' }} />
-          أسعار فورية · مُختبَر على 8 سنوات · سجل عام مفتوح للجميع
+          بيانات فعلية · سجل عام مفتوح · لا تنفيذ بلا تحقق
         </div>
 
         {/* شريط حيّ — إثبات أن المنصة تعمل بأسعار فعلية الآن */}
@@ -107,14 +107,10 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
           </span>
         </h1>
 
-        <p className="text-lg sm:text-xl mb-4 max-w-2xl mx-auto leading-relaxed"
+        <p className="text-lg sm:text-xl mb-10 max-w-2xl mx-auto leading-relaxed"
           style={{ color: '#64748B' }}>
-          ثلاث منصات مستقلة لا تجبرك على دفع قيمة أدوات لا تستخدمها:
-          خيارات SPX، عقود الشركات، وصناديق السوق والقطاعات.
-        </p>
-        <p className="text-sm mb-10 max-w-xl mx-auto" style={{ color: '#6B7B8D' }}>
-          اختر منصة واحدة، اجمع أي منصتين، أو افتح الباقة الشاملة مع ذكاء الربط بين السوق والقطاع والشركة.
-          لكل منصة قرارها وأدواتها واشتراكها الخاص.
+          توصية واضحة أولاً، ثم التحليل وخطة الدخول والهدف والوقف.
+          اختر منصة SPX أو الشركات أو الصناديق، وادفع فقط مقابل ما تستخدمه.
         </p>
 
         <div className="flex flex-wrap items-center justify-center gap-4 mb-20">
@@ -271,7 +267,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
                   {available ? (
                     <span className="text-xs font-mono px-2 py-0.5 rounded-full font-bold"
                       style={{ background: `${p.color}18`, color: p.color, border: `1px solid ${p.color}40` }}>
-                      متاحة الآن
+                      {p.key === 'spx' ? 'موثّقة ومُعايرة' : 'متاحة للمراقبة'}
                     </span>
                   ) : (
                     <span className="text-xs font-mono px-2 py-0.5 rounded-full"
@@ -307,10 +303,10 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
       <section style={{ borderTop: '1px solid rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(13,27,42,0.5)' }}>
         <div className="max-w-4xl mx-auto px-6 py-10 grid grid-cols-2 sm:grid-cols-4 gap-8 text-center">
           {[
-            { v: '51%',  l: 'نسبة ربح مثبتة خارج العينة' },
-            { v: '8',    l: 'سنوات اختبار لم يرها النظام' },
-            { v: '100%', l: 'من التوصيات لها وقف وهدف' },
-            { v: '7',    l: 'أيام تجربة كاملة مجاناً' },
+            { v: '3',    l: 'منصات مستقلة بحساب واحد' },
+            { v: '1',    l: 'توصية رئيسية واضحة' },
+            { v: '100%', l: 'من الخطط لها هدف ووقف' },
+            { v: '7',    l: 'أيام تجربة كاملة' },
           ].map(s => (
             <div key={s.l}>
               <div className="text-3xl font-bold font-mono mb-1" style={{ color: '#C9943A' }}>{s.v}</div>
@@ -327,7 +323,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
             الميزات الأساسية
           </div>
           <h2 className="text-3xl font-bold text-white">
-            كل ما يحتاجه المحترف في مكان واحد
+            من التوصية إلى إدارة الصفقة
           </h2>
         </div>
 
@@ -335,58 +331,33 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
           {[
             {
               icon: '📋', color: '#C9943A',
-              title: 'خطة اليوم — موقف واحد واضح',
-              desc: 'كل صباح قبل الجرس: الانحياز، منطقة الدخول، الأهداف والوقف، وما يلغي الخطة — مكتوبة بالعربي، لا لوحة أرقام تُفسّرها بنفسك',
+              title: 'التوصية أولاً',
+              desc: 'افتح المنصة فترى القرار الأقوى مباشرة، دون البحث بين عشرات الشاشات.',
             },
             {
               icon: '🛡️', color: '#10B981',
-              title: 'حارس الانهيارات — حماية مثبتة',
-              desc: 'في الأيام العنيفة (مثل انهيار كورونا) يمنع النظام أي توصية دخول تلقائياً — لأن الاختبار أثبت أنها أيام تخسر حتى مع أفضل الإشارات',
+              title: 'بوابات حماية',
+              desc: 'السوق المغلق والبيانات الضعيفة والأخبار والأرباح القريبة تمنع التوصية من التحول إلى دخول.',
             },
             {
               icon: '🟢', color: '#60A5FA',
-              title: 'ثلاث فئات لكل مستوى',
-              desc: 'المحافظ (احتمال أعلى وهدوء) · المتوسط (التوازن المثبت) · المغامر (عقود رخيصة) — مع احتمال رياضي حقيقي لا تسويقي على كل عقد',
+              title: 'خطة قابلة للتنفيذ',
+              desc: 'العقد والدخول والهدف والوقف وحجم المخاطرة في عرض واحد واضح.',
             },
             {
               icon: '📜', color: '#26D07C',
-              title: 'سجل عام لا يمكن تجميله',
-              desc: 'كل إشارة قوية تُسجَّل آلياً وتُقيَّم آلياً على أسعار السوق — وتُعرض للعالم بلا تسجيل دخول. نربح ونخسر أمامك',
+              title: 'سجل عام شفاف',
+              desc: 'راجع نتائج الإشارات المفتوحة والمغلقة دون تسجيل، واحكم بالأرقام.',
             },
             {
               icon: '📡', color: '#A78BFA',
-              title: 'رادار الأموال الذكية',
-              desc: 'يكشف الستريكات التي تتدفق عليها ملايين المؤسسات اليوم (حجم يفوق المراكز القائمة أضعافاً) — ميزة كانت حكراً على منصات المئات شهرياً',
-            },
-            {
-              icon: '🧲', color: '#F59E0B',
-              title: 'خريطة أموال صنّاع السوق',
-              desc: 'جدران الجاما ونقطة الانقلاب: أين يرتد السعر وأين يتسارع — مدمجة في القرار والخطة والشارت، وتحذّرك إن كان هدفك خلف جدار',
-            },
-            {
-              icon: '🫀', color: '#EF4444',
-              title: 'لوحة نبض السوق المؤسسية',
-              desc: 'الخوف/الطمع · نسبة Put/Call · Max Pain · خريطة جاما حرارية لتمركز صانعي السوق حول السعر — بصمة كانت حكراً على منصات المؤسسات',
-            },
-            {
-              icon: '📈', color: '#26D07C',
-              title: 'شارت سعر العقد نفسه',
-              desc: 'ليس شارت المؤشر — بل رحلة سعر عقدك أنت لحظة بلحظة (البريميوم) مع خطوط الدخول والهدف والوقف بالدولار. ترى ربحك وخسارتك على سعر عقدك مباشرة',
-            },
-            {
-              icon: '🚪', color: '#EF4444',
-              title: 'مساعد الخروج — ضد الطمع',
-              desc: 'سجّل صفقتك ويراقبها كل دقيقة ونصف: «اخرج الآن» أو «بِع النصف وأمّن ربحك» — ويناديك بإشعار دون أن تفتح المنصة',
-            },
-            {
-              icon: '📔', color: '#60A5FA',
-              title: 'مدرب شخصي يقرأ صفقاتك',
-              desc: 'دفتر سحابي يتبعك على أجهزتك + مدرب يصارحك: أسوأ ساعاتك، تداولك الانتقامي، وأين تنزف — بأرقامك أنت لا بالعموميات',
+              title: 'رصد متكامل',
+              desc: 'السوق والقطاع والسهم والعقد تُقرأ معًا قبل ترتيب الفرص.',
             },
             {
               icon: '🎮', color: '#C9943A',
-              title: 'محفظة تجريبية بأسعار حقيقية',
-              desc: '10,000$ وهمية تتداول بها بأسعار السوق الفعلية — اقتنع بالنتائج بنفسك قبل أن تخاطر بريال واحد',
+              title: 'تجربة قبل المخاطرة',
+              desc: 'اختبر الخطة بالمحفظة التجريبية وسجل الصفقات قبل استخدام مال حقيقي.',
             },
           ].map(f => (
             <div key={f.title} className="rounded-2xl p-6 transition-all group"
@@ -414,20 +385,20 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
             {[
               {
                 step: '01',
-                title: 'جلب البيانات الحية',
-                desc: 'SPX · VIX · VWAP · Opening Range · سلسلة العقود · Greeks — مصادر بيانات متعددة مع بديل تلقائي',
+                title: 'نرصد السوق',
+                desc: 'نجمع السعر والاتجاه والتذبذب والأحداث وجودة العقود.',
                 color: '#C9943A',
               },
               {
                 step: '02',
-                title: '7 محركات تعمل معاً',
-                desc: 'كل محرك يحلل جانباً مختلفاً ويعطي درجة · المجموع يُكوّن Decision Score من 100',
+                title: 'نستبعد الضعيف',
+                desc: 'تُرفض البيانات المتأخرة والعقود الرديئة والفرص عالية المخاطرة.',
                 color: '#60A5FA',
               },
               {
                 step: '03',
-                title: 'قرار واضح + أهداف',
-                desc: 'نفّذ / مشروط / مراقبة / رُفض — مع أسعار دخول واضحة وأهداف SPX محددة',
+                title: 'نعرض القرار',
+                desc: 'توصية واحدة مع العقد والدخول والهدف والوقف وسبب القرار.',
                 color: '#10B981',
               },
             ].map(s => (
@@ -450,7 +421,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
           <div className="text-xs font-mono tracking-widest mb-3" style={{ color: '#C9943A' }}>الباقات</div>
           <h2 className="text-3xl font-bold text-white mb-3">اشتراكك على مقاس تداولك</h2>
           <p className="text-sm" style={{ color: '#7C8A99' }}>
-            أولاً اختر عدد المنصات، ثم اختر مستوى الأدوات داخلها.
+            خطوتان فقط: اختر منصاتك، ثم اختر مستوى الأدوات.
           </p>
           <p className="text-sm mt-2 font-bold" style={{ color: '#26D07C' }}>
             🎁 كل حساب جديد يبدأ بتجربة 7 أيام كاملة الميزات — وكل صديق تدعوه يهديك أسبوعاً إضافياً
@@ -464,6 +435,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
               title: 'منصة واحدة',
               color: '#60A5FA',
               desc: 'اختر SPX أو الشركات أو الصناديق. منتج مستقل بكامل هويته وأدواته.',
+              priceNote: 'سعر المستوى المختار',
               note: 'الأكثر وضوحاً للبداية',
               href: '/register',
             },
@@ -472,6 +444,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
               title: 'أي منصتين',
               color: '#C9943A',
               desc: 'اجمع أي منصتين دون دفع قيمة الثالثة: SPX + شركات، أو أي توليفة تختارها.',
+              priceNote: 'سعر خاص يظهر قبل الإتمام',
               note: 'أفضل مرونة',
               href: '/register?plan=duo',
             },
@@ -480,6 +453,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
               title: 'ترقّب الشامل',
               color: '#A78BFA',
               desc: 'المنصات الثلاث مع بوابة موحدة وذكاء الربط بين السوق والقطاع والشركة.',
+              priceNote: 'أفضل قيمة للمنصات الثلاث',
               note: 'أعلى اشتراك',
               href: '/register?plan=all',
             },
@@ -492,6 +466,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
               <div className="text-[10px] font-mono mb-3 tracking-widest" style={{ color: scope.color }}>{scope.note}</div>
               <h3 className="text-xl font-black text-white mb-3">{scope.title}</h3>
               <p className="text-sm leading-7 min-h-[84px]" style={{ color: '#7C8A99' }}>{scope.desc}</p>
+              <div className="mt-2 text-xs font-bold" style={{ color: scope.color }}>{scope.priceNote}</div>
               <Link href={user ? `/v2/upgrade?bundle=${scope.key}` : scope.href}
                 className="mt-5 flex items-center justify-between rounded-xl px-4 py-3 text-sm font-bold"
                 style={{ color: scope.color, background: `${scope.color}10`, border: `1px solid ${scope.color}30` }}>
@@ -504,7 +479,8 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
 
         <div className="text-center mb-7">
           <div className="text-sm font-bold text-white">ثم اختر مستوى الأدوات داخل منصتك</div>
-          <div className="text-xs mt-1" style={{ color: '#6B7B8D' }}>رادار · سيجنال · إيدج · VIP</div>
+          <div className="text-xs mt-1" style={{ color: '#6B7B8D' }}>رادار · سيجنال · إيدج · ألفا</div>
+          <div className="mt-2 text-[11px]" style={{ color: '#55657A' }}>الأسعار أدناه لمستوى الأدوات داخل منصة واحدة، والسعر النهائي يظهر قبل الإتمام.</div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -528,7 +504,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
               features: ['الشارت المتقدم بكل الطبقات', 'نسخ السبريدات محددة المخاطرة', 'وصول مبكر للميزات الجديدة', 'كل ميزات سيجنال'],
             },
             {
-              key: 'alpha', label: 'VIP', price: '$199', period: '/شهر',
+              key: 'alpha', label: 'ألفا', price: '$199', period: '/شهر',
               color: '#A78BFA', badge: 'مقاعد محدودة',
               desc: 'المنصة تعمل لأجلك — لا العكس',
               features: ['الفرص القوية تصلك أولاً فور ولادتها', 'تقرير المدرب الشخصي أسبوعياً', 'خطة اليوم تصلك صباحاً', 'صوتك مسموع في الميزات القادمة'],
@@ -571,7 +547,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
                   border: `1px solid ${tier.color}30`,
                   color: tier.key === 'radar' ? '#7C8A99' : tier.color,
                 }}>
-                {tier.key === 'radar' ? 'ابدأ مجاناً' : 'اشترك الآن'}
+                {tier.key === 'radar' ? 'ابدأ مجاناً' : 'اختر وجرّب'}
               </Link>
             </div>
           ))}
@@ -588,8 +564,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
           جرّبها بنفسك — والسجل العام حَكَمنا
         </h2>
         <p className="text-base mb-10 max-w-md mx-auto" style={{ color: '#7C8A99' }}>
-          لا نطلب ثقتك، نطلب أسبوعاً واحداً: افتح خطة اليوم كل صباح، تابع التوصيات
-          بالمحفظة التجريبية، وقارن بنفسك مع السجل العام المفتوح
+          اختر منصتك، تابع التوصية بالمحفظة التجريبية، وقارن النتيجة بالسجل العام.
         </p>
         <Link href={user ? '/platforms' : '/register'}
           className="inline-flex items-center gap-2 px-10 py-4 rounded-xl text-base font-bold transition-all"

@@ -4,20 +4,20 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: {
-    default: 'ترقّب — منصة دعم القرار لعقود SPX Options',
+    default: 'ترقّب — قرارات تداول أوضح',
     template: '%s | ترقّب',
   },
-  description: 'منصة دعم قرار لعقود SPX Options، ترصد حركة السوق، تقرأ المؤشرات، وتصدر إشارات موثقة عند اكتمال شروط الدخول والخروج والمخاطرة.',
-  keywords: ['SPX Options', 'دعم القرار', 'تحليل فني', 'إشارات موثقة', 'عقود الخيارات'],
+  description: 'منصات مستقلة لخيارات SPX والشركات والصناديق، تجمع التوصية والتحليل وخطة الدخول والهدف والوقف في مكان واحد.',
+  keywords: ['SPX Options', 'خيارات الأسهم', 'خيارات الصناديق', 'دعم القرار', 'عقود الخيارات'],
   authors: [{ name: 'ترقّب' }],
-  robots: 'noindex, nofollow', // Beta — not indexed
+  robots: 'index, follow',
   icons: {
     icon: '/logo.png',
     apple: '/logo.png',
   },
   openGraph: {
     title: 'ترقّب — منصة دعم القرار',
-    description: 'إشارات موثقة لعقود المؤشرات',
+    description: 'توصية وتحليل وخطة تداول لخيارات SPX والشركات والصناديق.',
     type: 'website',
     locale: 'ar_SA',
   },
