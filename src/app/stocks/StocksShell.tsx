@@ -54,10 +54,17 @@ const NAV_ALPHA: NavItem[] = [
   { href: '/stocks/performance', label: 'سجل الأداء', icon: '◈', exact: false, requiredTier: 'alpha' },
 ]
 
-const PLATFORMS = [
+const PLATFORMS: Array<{
+  href: string
+  label: string
+  icon: string
+  color: string
+  match: string
+  status: 'available' | 'soon'
+}> = [
   { href: '/v2',     label: 'المؤشر SPX', icon: '📈', color: '#C9943A', match: '/v2',     status: 'available' as const },
   { href: '/stocks', label: 'الشركات',    icon: '🏢', color: ACCENT,    match: '/stocks', status: 'available' as const },
-  { href: '#',       label: 'الصناديق',   icon: '🧺', color: '#26D07C', match: '__soon',  status: 'soon' as const },
+  { href: '/funds',  label: 'الصناديق',   icon: '🧺', color: '#26D07C', match: '/funds',   status: 'available' as const },
 ]
 
 function isActive(pathname: string, href: string, exact: boolean) {
