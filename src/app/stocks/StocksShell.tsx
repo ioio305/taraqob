@@ -32,16 +32,22 @@ type NavItem = { href: string; label: string; icon: string; exact: boolean; requ
 // التوصية أولاً، ثم الأدلة والتحليل بحسب الباقة.
 const NAV_DECISION: NavItem[] = [
   { href: '/stocks',         label: 'توصية اليوم', icon: '◎', exact: true,  requiredTier: 'radar' },
+  { href: '/stocks/monitor', label: 'راصد الشركات', icon: '◉', exact: false, requiredTier: 'radar' },
+]
+const NAV_ANALYSIS: NavItem[] = [
+  { href: '/stocks/price-radar', label: 'رادار الأسعار', icon: '⌁', exact: false, requiredTier: 'signal' },
   { href: '/stocks/analyze', label: 'تحليل سهم',   icon: '⬡', exact: false, requiredTier: 'signal' },
+  { href: '/stocks/watchlist', label: 'قائمة المراقبة', icon: '◇', exact: false, requiredTier: 'signal' },
 ]
 // أخبار وأحداث — للمشترك (سيجنال)
 const NAV_EVENTS: NavItem[] = [
-  { href: '/stocks/news',     label: 'أخبار الشركات', icon: '📰', exact: false, requiredTier: 'signal' },
-  { href: '/stocks/earnings', label: 'تقويم الأرباح', icon: '📅', exact: false, requiredTier: 'signal' },
+  { href: '/stocks/news',     label: 'الأخبار العربية', icon: '≡', exact: false, requiredTier: 'signal' },
+  { href: '/stocks/earnings', label: 'تقويم الأرباح', icon: '◷', exact: false, requiredTier: 'signal' },
 ]
 // مميّز — لإيدج فما فوق
 const NAV_PREMIUM: NavItem[] = [
   { href: '/stocks/flow', label: 'رادار التدفقات', icon: '🛰', exact: false, requiredTier: 'edge' },
+  { href: '/stocks/tracking', label: 'متابعة التوصيات', icon: '↝', exact: false, requiredTier: 'edge' },
 ]
 const NAV_ALPHA: NavItem[] = [
   { href: '/stocks/performance', label: 'سجل الأداء', icon: '◈', exact: false, requiredTier: 'alpha' },
@@ -190,6 +196,10 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
             <div>
               <SectionTitle>ابدأ من هنا</SectionTitle>
               <div className="space-y-0.5">{NAV_DECISION.map(renderNav)}</div>
+            </div>
+            <div>
+              <SectionTitle>التحليل والمراقبة</SectionTitle>
+              <div className="space-y-0.5">{NAV_ANALYSIS.map(renderNav)}</div>
             </div>
             <div>
               <SectionTitle>الأخبار والأحداث</SectionTitle>

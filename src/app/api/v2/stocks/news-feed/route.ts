@@ -44,7 +44,10 @@ export async function GET() {
         importance,
         importanceAr: importance >= 75 ? 'تأثير مرتفع' : importance >= 55 ? 'تأثير متوسط' : 'للمتابعة',
       }
-    }).sort((a, b) => b.importance - a.importance).slice(0, 18)
+    })
+      .filter(item => /[\u0600-\u06FF]/.test(item.titleAr))
+      .sort((a, b) => b.importance - a.importance)
+      .slice(0, 18)
 
     return NextResponse.json(
       { success: true, count: items.length, items },

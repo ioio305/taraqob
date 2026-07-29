@@ -5,7 +5,11 @@ import { useEffect, useState, useCallback } from 'react'
 const ACCENT = '#60A5FA'
 const UNIVERSE = ['AAPL', 'NVDA', 'TSLA', 'MSFT', 'AMZN', 'META', 'GOOGL', 'AMD', 'NFLX', 'AVGO', 'COIN', 'PLTR']
 
-type Item = { id: string; title: string; titleAr: string; source: string; publishedAt: string; url: string | null; sentiment: string | null; sentimentAr: string | null; tickers: string[] }
+type Item = {
+  id: string; title: string; titleAr: string; source: string; publishedAt: string
+  url: string | null; sentiment: string | null; sentimentAr: string | null
+  tickers: string[]; importance: number; importanceAr: string
+}
 
 function timeAgoAr(iso: string): string {
   const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
@@ -42,8 +46,8 @@ export default function StockNewsFeed() {
         <div className="flex items-center gap-2">
           <span className="text-lg">📰</span>
           <div>
-            <div className="text-base font-bold text-white">أخبار الشركات</div>
-            <div className="text-xs mt-0.5" style={{ color: '#5E6E7F' }}>أحدث أخبار السوق والأسهم — بالعربية، مع تحليل المشاعر</div>
+            <div className="text-base font-bold text-white">الأخبار العربية المؤثرة</div>
+            <div className="text-xs mt-0.5" style={{ color: '#5E6E7F' }}>لا تظهر الأخبار الإنجليزية؛ تُرتب الأخبار العربية حسب أثرها على الشركات المتابعة</div>
           </div>
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -71,8 +75,11 @@ export default function StockNewsFeed() {
             const body = (
               <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(13,27,42,0.7)', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <div className="flex items-start justify-between gap-3">
-                  <div className="text-sm leading-relaxed" style={{ color: '#E2E8F0' }}>{it.titleAr || it.title}</div>
-                  {it.sentimentAr && <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded" style={{ background: ss.bg, color: ss.color }}>{it.sentimentAr}</span>}
+                  <div className="text-sm leading-relaxed" style={{ color: '#E2E8F0' }}>{it.titleAr}</div>
+                  <div className="flex gap-1.5 shrink-0">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-400/10 text-blue-300">{it.importanceAr}</span>
+                    {it.sentimentAr && <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ background: ss.bg, color: ss.color }}>{it.sentimentAr}</span>}
+                  </div>
                 </div>
                 <div className="flex items-center flex-wrap gap-2 mt-2 text-[11px]" style={{ color: '#5E6E7F' }}>
                   <span>{it.source}</span><span>·</span><span>{timeAgoAr(it.publishedAt)}</span>

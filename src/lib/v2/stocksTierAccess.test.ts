@@ -19,5 +19,7 @@ describe('stocks tier access', () => {
     expect(stocksFeatureForPath('/stocks/analyze')).toBe('stock_analysis')
     expect(stocksFeatureForPath('/api/v2/stocks/flow')).toBe('flow')
     expect(stocksFeatureForPath('/stocks/performance')).toBe('performance')
+    expect(stocksFeatureForPath('/stocks/price-radar')).toBe('price_radar')
+    expect(stocksFeatureForPath('/stocks/tracking')).toBe('recommendation_tracking')
   })
 })
