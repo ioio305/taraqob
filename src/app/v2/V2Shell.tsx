@@ -51,6 +51,7 @@ const NAV_TOOLS = [
 
 // مميّز — حصري لإيدج/VIP
 const NAV_PREMIUM = [
+  { href: '/v2/decision-room', label: 'غرفة القرار', icon: '✦', exact: false, requiredTier: 'alpha' },
   { href: '/v2/chart', label: 'الشارت المتقدم', icon: '📈', exact: false, requiredTier: 'edge' },
 ]
 
@@ -471,6 +472,16 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
           </button>
 
           <MarketClock />
+
+          {!showAdminNav && (
+            <Link
+              href={isStaff || tierAllows(subscriptionTier, 'alpha') ? '/v2/decision-room' : '/v2/upgrade?tier=alpha'}
+              className="flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-black shadow-lg"
+              style={{ color: '#08101A', background: '#E8C66A', border: '1px solid #F4D98C', boxShadow: '0 8px 24px rgba(201,148,58,.18)' }}>
+              <span className="text-base leading-none">✦</span>
+              <span>غرفة القرار</span>
+            </Link>
+          )}
 
           {/* ── Notification bell ── */}
           <div ref={bellRef} className="relative">
