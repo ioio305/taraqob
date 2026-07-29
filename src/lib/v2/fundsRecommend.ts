@@ -13,13 +13,15 @@ import {
   type RecMode, type EnrichContext,
 } from './recommendCore'
 import { getStockQuote, getStockDailyBars } from './stockData'
-import { fundsAdapter, fundDirection, fundBySymbol } from './adapters/fundsAdapter'
+import { fundsAdapter, fundDirectionFromBars, fundBySymbol } from './adapters/fundsAdapter'
 import { FUNDS_CALIBRATION } from './adapters/registry'
 import { getEtfGammaExposure, hasEtfGamma } from './fundsGamma'
 import { evaluateSessionQuality } from './sessionQuality'
 import { crashGuard } from './marketAnalysis'
 import { computeStraddleMove } from './optionsExpectedMove'
 import type { GammaExposure } from './gammaExposure'
+import type { NewsRiskDecision } from './newsRisk'
+import { getNewsResult } from '@/app/api/v2/news/route'
 
 export const NOT_CALIBRATED_NOTE =
   'منصة الصناديق ما زالت تحت المعايرة — لا نُظهر توصية «اشترِ» بعد. هذه أفضل الفرص للمراقبة والتعلّم حتى نتأكد من ربحيتها على بيانات تاريخية (نعايِر على SPY أولاً).'
@@ -45,6 +47,7 @@ export interface FundRecResult {
     emUpper: number | null; emLower: number | null; source: string
   } | null
   direction: { type: 'call' | 'put' | null; label: string; color: string; reason: string }
+  signalStrength: number
   gamma: FundGamma | null
   sessionQuality: ReturnType<typeof evaluateSessionQuality>
   calibration: { validated: boolean; note: string }
@@ -90,6 +93,7 @@ export interface RecommendFundOptions {
   full?: boolean
   // بيانات مُمرّرة مسبقاً (لتفادي إعادة الجلب في الماسح)
   prefetched?: { quote: Awaited<ReturnType<typeof getStockQuote>>; bars: Awaited<ReturnType<typeof getStockDailyBars>> }
+  newsDecision?: NewsRiskDecision | null
 }
 
 export async function recommendForFund(symbol: string, options: RecommendFundOptions = {}): Promise<FundRecResult> {
@@ -99,7 +103,7 @@ export async function recommendForFund(symbol: string, options: RecommendFundOpt
 
   const empty = (error: string): FundRecResult => ({
     success: false, error, symbol: sym, name: uniName, market: null,
-    direction: { type: null, label: '—', color: '#4A5568', reason: error },
+    direction: { type: null, label: '—', color: '#4A5568', reason: error }, signalStrength: 0,
     gamma: null, sessionQuality: evaluateSessionQuality(),
     calibration: { validated: FUNDS_CALIBRATION.validated, note: FUNDS_CALIBRATION.note },
     watchMode: false, contracts: [], expiration: '', expirations: [], mode,
@@ -117,19 +121,24 @@ export async function recommendForFund(symbol: string, options: RecommendFundOpt
   const rv = closes.length >= 10 ? realizedVol(closes) : null
 
   // 2) انتهاءات + جاما (SPY/QQQ فقط) بالتوازي
-  const [expirations, gammaEx] = await Promise.all([
+  const [expirations, gammaEx, fetchedNews] = await Promise.all([
     fundsAdapter.getExpirations(sym).catch(() => [] as string[]),
     hasEtfGamma(sym) ? getEtfGammaExposure(sym).catch(() => null) : Promise.resolve(null),
+    options.newsDecision !== undefined
+      ? Promise.resolve(options.newsDecision)
+      : getNewsResult().then(result => result.decision).catch(() => null),
   ])
   const sessionQuality = evaluateSessionQuality()
+  const measuredDirection = fundDirectionFromBars(quote.changePct, bars)
   const dir = options.forceType
     ? { type: options.forceType, label: options.forceType === 'call' ? '▲ شراء CALL' : '▼ شراء PUT', color: options.forceType === 'call' ? '#10B981' : '#EF4444', reason: 'اخترت الاتجاه يدوياً' }
-    : fundDirection(quote.changePct)
+    : measuredDirection
+  const signalStrength = options.forceType ? 100 : measuredDirection.strength
   const contractType = (options.forceType ?? dir.type) as 'call' | 'put' | null
 
   const base: Omit<FundRecResult, 'contracts' | 'expiration' | 'market' | 'watchMode'> = {
     success: true, symbol: sym, name: uniName,
-    direction: dir, gamma: summarizeGamma(gammaEx), sessionQuality,
+    direction: dir, signalStrength, gamma: summarizeGamma(gammaEx), sessionQuality,
     calibration: { validated: FUNDS_CALIBRATION.validated, note: FUNDS_CALIBRATION.note },
     expirations: expirations.slice(0, 8), mode, notCalibratedNote: NOT_CALIBRATED_NOTE,
   }
@@ -185,7 +194,7 @@ export async function recommendForFund(symbol: string, options: RecommendFundOpt
     const ctx = buildFundContext({
       price, emUpper: emUpper ?? Math.round(price + price * 0.03), emLower: emLower ?? Math.round(price - price * 0.03),
       changePct: quote.changePct, ivPct, recMode: mode, chain,
-      guard, sessionQuality, gammaEx, contractType, watchMode,
+      guard, sessionQuality, gammaEx, contractType, watchMode, newsRisk: fetchedNews,
     })
     contracts = enrichContracts(top, ctx)
     usedExp = exp
@@ -206,11 +215,12 @@ function buildFundContext(a: {
   price: number; emUpper: number; emLower: number; changePct: number; ivPct: number
   recMode: RecMode; chain: any[]; guard: { active: boolean; reasons: string[] }
   sessionQuality: ReturnType<typeof evaluateSessionQuality>; gammaEx: GammaExposure | null
-  contractType: 'call' | 'put' | null; watchMode: boolean
+  contractType: 'call' | 'put' | null; watchMode: boolean; newsRisk: NewsRiskDecision | null
 }): EnrichContext {
   const sessionBlocked = a.sessionQuality.action === 'block'
-  const blocked = sessionBlocked
-  const blockedReason = sessionBlocked ? a.sessionQuality.reason : ''
+  const newsBlocked = a.newsRisk?.action === 'block'
+  const blocked = sessionBlocked || newsBlocked
+  const blockedReason = sessionBlocked ? a.sessionQuality.reason : newsBlocked ? a.newsRisk?.reason ?? 'خبر اقتصادي مؤثر' : ''
   // للصندوق: التذبذب المتطرف = IV مرتفع جداً؛ الهادئ = IV معتدل (الصناديق أهدأ من السهم)
   const volExtreme = a.ivPct >= 60
   return {
@@ -237,7 +247,7 @@ function buildFundContext(a: {
     minNetRR: FUNDS_CALIBRATION.minNetRR,
     validated: FUNDS_CALIBRATION.validated,
     notCalibratedReason: NOT_CALIBRATED_NOTE,
-    newsRisk: null,
+    newsRisk: a.newsRisk,
     marketReaction: null,
     session: a.sessionQuality,
   }

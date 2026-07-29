@@ -91,6 +91,31 @@ export function fundDirection(changePct: number): AdapterDirection {
   return { type: null, label: '↔ حركة ضعيفة — انتظر', color: '#F59E0B', reason: 'الصندوق يتحرك بلا اتجاه واضح اليوم — انتظر' }
 }
 
+// الاتجاه الاحترافي: لا يعتمد على شمعة اليوم وحدها، بل يطلب اتفاق اليوم مع
+// زخم أسبوع وشهر. هذا يقلل مطاردة حركة عابرة في صندوق واحد.
+export function fundDirectionFromBars(
+  changePct: number,
+  bars: Array<{ close: number }>,
+): AdapterDirection & { strength: number } {
+  const closes = bars.map(b => b.close).filter(v => Number.isFinite(v) && v > 0)
+  if (closes.length < 21) return { ...fundDirection(changePct), strength: Math.min(100, Math.round(Math.abs(changePct) * 35)) }
+
+  const last = closes[closes.length - 1]
+  const ret5 = ((last / closes[closes.length - 6]) - 1) * 100
+  const ret20 = ((last / closes[closes.length - 21]) - 1) * 100
+  const upVotes = Number(changePct >= 0.35) + Number(ret5 >= 0.8) + Number(ret20 >= 1.5)
+  const downVotes = Number(changePct <= -0.35) + Number(ret5 <= -0.8) + Number(ret20 <= -1.5)
+  const strength = Math.min(100, Math.round(Math.abs(changePct) * 22 + Math.abs(ret5) * 8 + Math.abs(ret20) * 3))
+
+  if (upVotes >= 2 && downVotes === 0) {
+    return { type: 'call', label: '▲ اتجاه صاعد مؤكد', color: '#10B981', reason: `اليوم ${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}% · أسبوع ${ret5 >= 0 ? '+' : ''}${ret5.toFixed(2)}% · شهر ${ret20 >= 0 ? '+' : ''}${ret20.toFixed(2)}%`, strength }
+  }
+  if (downVotes >= 2 && upVotes === 0) {
+    return { type: 'put', label: '▼ اتجاه هابط مؤكد', color: '#EF4444', reason: `اليوم ${changePct.toFixed(2)}% · أسبوع ${ret5.toFixed(2)}% · شهر ${ret20.toFixed(2)}%`, strength }
+  }
+  return { type: null, label: '↔ الاتجاهات غير متفقة — انتظر', color: '#F59E0B', reason: `اليوم ${changePct.toFixed(2)}% · أسبوع ${ret5.toFixed(2)}% · شهر ${ret20.toFixed(2)}%`, strength }
+}
+
 export const fundsAdapter: AssetAdapter = {
   meta: META,
   calibration: FUNDS_CALIBRATION,

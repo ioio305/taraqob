@@ -6,6 +6,7 @@ import { getStockQuote, getStockDailyBars } from '@/lib/v2/stockData'
 import { recommendForFund, NOT_CALIBRATED_NOTE } from '@/lib/v2/fundsRecommend'
 import { evaluateSessionQuality } from '@/lib/v2/sessionQuality'
 import type { RecMode } from '@/lib/v2/recommendCore'
+import { getNewsResult } from '@/app/api/v2/news/route'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,6 +46,7 @@ interface ScanRow {
     score: number; status: string; grade: string; reason: string; probItmPct: number
   } | null
   watchMode: boolean
+  signalStrength: number
   error?: string
 }
 
@@ -60,6 +62,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const universe = FUNDS_UNIVERSE
+    const newsDecision = await getNewsResult().then(result => result.decision).catch(() => null)
 
     const rows = await mapLimit(universe, 4, async (u: FundItem): Promise<ScanRow> => {
       try {
@@ -72,10 +75,10 @@ export async function GET(request: NextRequest) {
             symbol: u.symbol, name: u.name, nameAr: u.nameAr, kind: u.kind,
             price: null, changePct: null, source: null,
             volMeasure: null, direction: { type: null, label: '—', color: '#4A5568' },
-            gamma: null, best: null, watchMode: false, error: 'تعذر جلب السعر',
+            gamma: null, best: null, watchMode: false, signalStrength: 0, error: 'تعذر جلب السعر',
           }
         }
-        const rec = await recommendForFund(u.symbol, { mode, full: false, prefetched: { quote, bars } })
+        const rec = await recommendForFund(u.symbol, { mode, full: false, prefetched: { quote, bars }, newsDecision })
         const b = rec.contracts[0] ?? null
         return {
           symbol: u.symbol,
@@ -94,21 +97,22 @@ export async function GET(request: NextRequest) {
             score: b.score, status: b.status, grade: b.grade, reason: b.reason, probItmPct: b.probItmPct,
           } : null,
           watchMode: rec.watchMode,
+          signalStrength: rec.signalStrength,
         }
       } catch (err: any) {
         return {
           symbol: u.symbol, name: u.name, nameAr: u.nameAr, kind: u.kind,
           price: null, changePct: null, source: null,
           volMeasure: null, direction: { type: null, label: '—', color: '#4A5568' },
-          gamma: null, best: null, watchMode: false, error: err?.message ?? 'خطأ',
+          gamma: null, best: null, watchMode: false, signalStrength: 0, error: err?.message ?? 'خطأ',
         }
       }
     })
 
     // ── الترتيب: الفرص ذات العقد أولاً (بالدرجة)، ثم البقية ──
     const ranked = [...rows].sort((a, b) => {
-      const sa = a.best?.score ?? -1
-      const sb = b.best?.score ?? -1
+      const sa = (a.best?.score ?? -1) + a.signalStrength * 0.12
+      const sb = (b.best?.score ?? -1) + b.signalStrength * 0.12
       return sb - sa
     })
 
