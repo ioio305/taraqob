@@ -165,12 +165,17 @@ export default function SpxDecisionRoomPage() {
     : direction === 'put'
       ? (flow?.callShare ?? 50) <= 45
       : false
+  const sessionClosed = Boolean(
+    recommendation?.watchMode
+    || recommendation?.marketClosed
+    || recommendation?.timing?.label?.includes('مغلق'),
+  )
 
   const checks = useMemo(() => [
     {
       label: 'الجلسة',
-      ok: !recommendation?.watchMode && !recommendation?.marketClosed,
-      value: recommendation?.marketStatus ?? 'جاهزة',
+      ok: !sessionClosed,
+      value: sessionClosed ? recommendation?.timing?.label ?? recommendation?.marketStatus ?? 'السوق مغلق' : recommendation?.marketStatus ?? 'جاهزة',
     },
     {
       label: 'ردة السوق',
@@ -192,12 +197,11 @@ export default function SpxDecisionRoomPage() {
       ok: contract?.status === 'execute' || contract?.focus?.action === 'enter',
       value: contract?.focus?.label ?? (contract ? 'قيد المراقبة' : 'غير متاح'),
     },
-  ], [recommendation, news, flowSupports, contract])
+  ], [recommendation, news, flowSupports, contract, sessionClosed])
 
   const passed = checks.filter(check => check.ok).length
   const hardBlock = Boolean(
-    recommendation?.watchMode
-    || recommendation?.marketClosed
+    sessionClosed
     || recommendation?.marketReaction?.action === 'block'
     || recommendation?.newsRisk?.action === 'block'
     || news?.level === 'danger'
