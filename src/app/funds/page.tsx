@@ -140,28 +140,58 @@ export default function FundsScanner() {
 
   const results = data?.results ?? []
   const rotation = data?.rotation ?? []
+  const topOpportunity = results.find(row => row.best && !row.watchMode) ?? results.find(row => row.best) ?? results[0]
 
   return (
-    <div className="min-h-full p-4 pb-10 space-y-4 max-w-4xl mx-auto"
+    <div className="min-h-full p-4 pb-10 flex flex-col gap-4 max-w-4xl mx-auto"
          style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }} dir="rtl">
 
-      {/* ── لافتة «تحت المعايرة» — لا نُظهر «اشترِ» بعد ── */}
-      <div className="rounded-xl px-4 py-3 flex items-start gap-3"
+      <section className="order-1 rounded-3xl p-5 md:p-7"
+               style={{ background: 'linear-gradient(135deg,rgba(38,208,124,.13),rgba(11,27,21,.96))', border: `1px solid ${ACCENT}45` }}>
+        <div className="text-xs font-bold" style={{ color: ACCENT }}>توصية الصناديق الآن</div>
+        {loading && !data ? (
+          <div className="mt-4 h-20 animate-pulse rounded-2xl bg-white/[.04]" />
+        ) : topOpportunity ? (
+          <div className="mt-3 flex items-end justify-between gap-4 flex-wrap">
+            <div>
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-4xl font-black text-white">{topOpportunity.symbol}</span>
+                <span className="text-sm text-slate-400">{topOpportunity.nameAr}</span>
+              </div>
+              <div className="mt-3 flex items-center gap-2 flex-wrap">
+                <span className="rounded-lg px-3 py-1.5 text-sm font-black"
+                      style={{ color: topOpportunity.best?.status === 'execute' && !topOpportunity.watchMode ? '#10B981' : '#F59E0B', background: 'rgba(0,0,0,.22)' }}>
+                  {topOpportunity.best?.status === 'execute' && !topOpportunity.watchMode ? 'جاهزة' : 'راقب — لا تدخل بعد'}
+                </span>
+                <span className="text-sm font-bold" style={{ color: topOpportunity.direction.color }}>{topOpportunity.direction.label}</span>
+                {topOpportunity.best ? <span className="font-mono text-xs text-slate-400">{topOpportunity.best.type.toUpperCase()} {n(topOpportunity.best.strike, 0)} · قوة {topOpportunity.best.score}</span> : null}
+              </div>
+            </div>
+            <Link href={`/funds/analyze?symbol=${topOpportunity.symbol}`}
+                  className="rounded-xl bg-emerald-300 px-5 py-3 text-sm font-black text-emerald-950">
+              عرض الخطة
+            </Link>
+          </div>
+        ) : (
+          <div className="mt-3 text-sm text-slate-400">لا توجد فرصة صالحة الآن</div>
+        )}
+      </section>
+
+      <div className="order-2 rounded-xl px-4 py-3 flex items-center gap-3"
            style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.35)' }}>
         <span className="text-xl">🧪</span>
         <div>
           <div className="text-sm font-bold" style={{ color: '#F59E0B' }}>منصة الصناديق تحت المعايرة — «راقب» فقط</div>
-          <div className="text-xs mt-0.5 leading-relaxed" style={{ color: '#94A3B8' }}>
-            {data?.notCalibratedNote ?? 'لا نُظهر توصية «اشترِ» للصناديق حتى نتأكد من ربحيتها على بيانات تاريخية. هذه أفضل الفرص للمراقبة والتعلّم.'}
-          </div>
         </div>
       </div>
 
       {/* ═══ دوران القطاعات — أداة إضافية ═══ */}
-      <SectorRotation rotation={rotation} loading={loading && !data} />
+      <div id="rotation" className="order-4 scroll-mt-24">
+        <SectorRotation rotation={rotation} loading={loading && !data} />
+      </div>
 
       {/* ═══ الماسح — الشاشة الكبرى ═══ */}
-      <section className="rounded-2xl overflow-hidden"
+      <section className="order-3 rounded-2xl overflow-hidden"
                style={{ background: 'rgba(13,27,42,0.82)', border: `1px solid ${ACCENT}25` }}>
 
         {/* رأس القسم */}
@@ -170,7 +200,7 @@ export default function FundsScanner() {
           <div className="flex items-center gap-2.5">
             <span className="text-lg">🧺</span>
             <div>
-              <div className="text-base font-bold text-white leading-tight">أفضل فرص الصناديق اليوم</div>
+              <div className="text-base font-bold text-white leading-tight">الفرص البديلة</div>
               <div className="text-xs mt-0.5" style={{ color: '#5E6E7F' }}>
                 {loading ? 'جاري فحص الصناديق…'
                   : data?.withOpportunity ? `${data.withOpportunity} صندوق عليه فرصة تستحق المراقبة`
@@ -320,12 +350,6 @@ export default function FundsScanner() {
         </div>
       </section>
 
-      {/* رابط العودة للمؤشر */}
-      <div className="text-center">
-        <Link href="/v2" className="text-xs font-semibold" style={{ color: '#5E6E7F' }}>
-          ← العودة لمنصة المؤشر SPX
-        </Link>
-      </div>
     </div>
   )
 }
@@ -444,10 +468,10 @@ function FundDetail({ detail }: { detail: DetailData }) {
 
       {/* لماذا */}
       <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}>
-        <div className="text-xs font-bold mb-1.5" style={{ color: ACCENT }}>لماذا هذه الفرصة؟</div>
+        <div className="text-xs font-bold mb-1.5" style={{ color: ACCENT }}>القرار</div>
         <div className="text-sm leading-relaxed" style={{ color: '#CBD5E1' }}>{c.focus?.primaryReason || c.reason}</div>
         {c.focus?.nextStep && (
-          <div className="text-xs mt-1.5 font-semibold" style={{ color: '#86EFAC' }}>← الخطوة التالية: {c.focus.nextStep}</div>
+          <div className="text-xs mt-1.5 font-semibold" style={{ color: '#86EFAC' }}>{c.focus.nextStep}</div>
         )}
         {okEdges.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-2.5">
