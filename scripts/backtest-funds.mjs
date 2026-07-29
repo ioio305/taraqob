@@ -1,6 +1,9 @@
 import { writeFile } from 'node:fs/promises'
 
-const SYMBOLS = ['SPY', 'QQQ', 'IWM', 'DIA', 'XLF', 'XLE', 'XLK', 'XLV', 'XLI', 'XLY', 'XLP', 'XLU', 'XLB', 'XLRE', 'XLC']
+const PLATFORM = process.argv[2] === 'stocks' ? 'stocks' : 'funds'
+const SYMBOLS = PLATFORM === 'stocks'
+  ? ['AAPL', 'NVDA', 'TSLA', 'MSFT', 'AMZN', 'META', 'GOOGL', 'AMD', 'NFLX', 'AVGO', 'COIN', 'PLTR']
+  : ['SPY', 'QQQ', 'IWM', 'DIA', 'XLF', 'XLE', 'XLK', 'XLV', 'XLI', 'XLY', 'XLP', 'XLU', 'XLB', 'XLRE', 'XLC']
 const FROM = Math.floor(Date.parse('2018-01-01T00:00:00Z') / 1000)
 const TO = Math.floor(Date.now() / 1000)
 const SPLIT = '2023-01-01'
@@ -50,8 +53,9 @@ function momentumSignal(bars, index) {
   const ret20 = (close / bars[index - 20].close - 1) * 100
   const up = Number(daily >= 0.35) + Number(ret5 >= 0.8) + Number(ret20 >= 1.5)
   const down = Number(daily <= -0.35) + Number(ret5 <= -0.8) + Number(ret20 <= -1.5)
-  if (up >= 2 && down === 0) return 1
-  if (down >= 2 && up === 0) return -1
+  const strength = Math.abs(daily) * 2 + Math.abs(ret5) + Math.abs(ret20) * 0.35
+  if (up >= 2 && down === 0) return { side: 1, strength }
+  if (down >= 2 && up === 0) return { side: -1, strength }
   return null
 }
 
@@ -61,8 +65,9 @@ function pullbackSignal(bars, index) {
   const ret3 = (close / bars[index - 3].close - 1) * 100
   const ma20 = average(bars, index, 20)
   const ma50 = average(bars, index, 50)
-  if (ma20 > ma50 && close > ma50 && ret3 <= -0.8 && ret3 >= -4) return 1
-  if (ma20 < ma50 && close < ma50 && ret3 >= 0.8 && ret3 <= 4) return -1
+  const strength = Math.abs((ma20 - ma50) / ma50 * 100) + Math.abs(ret3)
+  if (ma20 > ma50 && close > ma50 && ret3 <= -0.8 && ret3 >= -4) return { side: 1, strength }
+  if (ma20 < ma50 && close < ma50 && ret3 >= 0.8 && ret3 <= 4) return { side: -1, strength }
   return null
 }
 
@@ -71,8 +76,11 @@ function breakoutSignal(bars, index) {
   const previous = bars.slice(index - 20, index)
   const ma20 = average(bars, index, 20)
   const ma50 = average(bars, index, 50)
-  if (ma20 > ma50 && bars[index].close > Math.max(...previous.map(x => x.high))) return 1
-  if (ma20 < ma50 && bars[index].close < Math.min(...previous.map(x => x.low))) return -1
+  const unit = atr(bars, index) || 1
+  const high = Math.max(...previous.map(x => x.high))
+  const low = Math.min(...previous.map(x => x.low))
+  if (ma20 > ma50 && bars[index].close > high) return { side: 1, strength: (bars[index].close - high) / unit + (ma20 - ma50) / unit }
+  if (ma20 < ma50 && bars[index].close < low) return { side: -1, strength: (low - bars[index].close) / unit + (ma50 - ma20) / unit }
   return null
 }
 
@@ -81,17 +89,18 @@ function trendSignal(bars, index) {
   const ma20 = average(bars, index, 20)
   const ma50 = average(bars, index, 50)
   const ret5 = (bars[index].close / bars[index - 5].close - 1) * 100
-  if (ma20 > ma50 && ret5 >= 1.2) return 1
-  if (ma20 < ma50 && ret5 <= -1.2) return -1
+  if (ma20 > ma50 && ret5 >= 1.2) return { side: 1, strength: ret5 + (ma20 - ma50) / ma50 * 100 }
+  if (ma20 < ma50 && ret5 <= -1.2) return { side: -1, strength: Math.abs(ret5) + (ma50 - ma20) / ma50 * 100 }
   return null
 }
 
 function simulate(symbol, bars, candidate) {
   const trades = []
   for (let i = 55; i < bars.length - candidate.hold - 1; i++) {
-    const side = candidate.signal(bars, i)
+    const signal = candidate.signal(bars, i)
     const unit = atr(bars, i)
-    if (!side || !unit || unit <= 0) continue
+    if (!signal || !unit || unit <= 0) continue
+    const side = signal.side
     const entry = bars[i + 1].open
     const stop = entry - side * unit * candidate.stop
     const target = entry + side * unit * candidate.target
@@ -105,7 +114,7 @@ function simulate(symbol, bars, candidate) {
     }
     const rawR = side * (exit - entry) / unit
     const costR = entry * COST / unit
-    trades.push({ symbol, date: bars[i + 1].date, side, r: rawR - costR, outcome })
+    trades.push({ symbol, date: bars[i + 1].date, side, strength: signal.strength, r: rawR - costR, outcome })
     i += candidate.hold - 1 // صفقة واحدة فقط لكل صندوق في الوقت نفسه
   }
   return trades
@@ -135,18 +144,23 @@ function fmt(value, digits = 2) { return Number(value).toFixed(digits) }
 
 const datasets = new Map()
 for (const symbol of SYMBOLS) datasets.set(symbol, await barsFor(symbol))
+function selectDailyBest(trades) {
+  const best = new Map()
+  for (const trade of trades) {
+    const current = best.get(trade.date)
+    if (!current || trade.strength > current.strength) best.set(trade.date, trade)
+  }
+  return [...best.values()]
+}
 const candidateResults = CANDIDATES.map(candidate => {
-  const trades = SYMBOLS.flatMap(symbol => simulate(symbol, datasets.get(symbol), candidate))
+  const trades = selectDailyBest(SYMBOLS.flatMap(symbol => simulate(symbol, datasets.get(symbol), candidate)))
   return { candidate, trades, training: metrics(trades.filter(t => t.date < SPLIT)) }
 })
 candidateResults.sort((a, b) => b.training.expectancy - a.training.expectancy)
 const selected = candidateResults[0]
-const eligibleSymbols = SYMBOLS.filter(symbol => {
-  const result = metrics(selected.trades.filter(t => t.symbol === symbol && t.date < SPLIT))
-  return result.trades >= 25 && result.expectancy >= 0.10 && result.profitFactor >= 1.15
-})
-const all = selected.trades.filter(trade => eligibleSymbols.includes(trade.symbol))
-const perSymbol = eligibleSymbols.map(symbol => ({ symbol, ...metrics(all.filter(t => t.symbol === symbol && t.date >= SPLIT)) }))
+const eligibleSymbols = SYMBOLS
+const all = selected.trades
+const perSymbol = SYMBOLS.map(symbol => ({ symbol, ...metrics(all.filter(t => t.symbol === symbol && t.date >= SPLIT)) })).filter(row => row.trades > 0)
 
 const training = metrics(all.filter(t => t.date < SPLIT))
 const validation = metrics(all.filter(t => t.date >= SPLIT))
@@ -154,7 +168,8 @@ const pass = validation.trades >= 150 && validation.expectancy >= 0.12 && valida
   validation.maxDrawdown <= 15 && training.expectancy > 0 && perSymbol.filter(x => x.expectancy > 0).length >= Math.ceil(eligibleSymbols.length * 0.7)
 
 const table = perSymbol.map(row => `| ${row.symbol} | ${row.trades} | ${fmt(row.winRate, 1)}% | ${fmt(row.expectancy)}R | ${fmt(row.profitFactor)} | ${fmt(row.maxDrawdown)}R |`).join('\n')
-const report = `# تقرير اختبار توصيات الصناديق
+const platformLabel = PLATFORM === 'stocks' ? 'الشركات' : 'الصناديق'
+const report = `# تقرير اختبار توصيات ${platformLabel}
 
 تاريخ التشغيل: ${new Date().toISOString()}
 
@@ -190,5 +205,5 @@ ${table}
 هذا الاختبار يقيس صحة **اتجاه الصندوق** بأسعاره التاريخية. لا يثبت ربح عقد الخيار نفسه لأن بيانات أسعار الخيارات التاريخية الدقيقة غير متاحة في مصادر المشروع الحالية. لذلك لا يفعّل توصية «نفّذ» تلقائيًا.
 `
 
-await writeFile(new URL('../docs/funds-backtest-report.md', import.meta.url), report, 'utf8')
+await writeFile(new URL(`../docs/${PLATFORM}-backtest-report.md`, import.meta.url), report, 'utf8')
 console.log(JSON.stringify({ pass, selected: selected.candidate.name, eligibleSymbols, training, validation, positiveSymbols: perSymbol.filter(x => x.expectancy > 0).length }, null, 2))

@@ -9,7 +9,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "backtest:funds": "node scripts/backtest-funds.mjs",
+    "backtest:funds": "node scripts/backtest-funds.mjs funds",
+    "backtest:stocks": "node scripts/backtest-funds.mjs stocks",
     "guard:core": "node scripts/verify-protected-files.mjs",
     "verify": "npm run guard:core && npm run typecheck && npm run lint && npm run test && npm run build"
   },
