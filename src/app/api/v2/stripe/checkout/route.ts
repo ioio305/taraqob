@@ -71,7 +71,12 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { tier } = body
   const billing: 'monthly' | 'yearly' = body.billing === 'yearly' ? 'yearly' : 'monthly'
-  const platforms = selectedPlatforms(body.platforms)
+  let platforms = selectedPlatforms(body.platforms)
+  if (tier === 'signal') platforms = platforms.slice(0, 1)
+  if (tier === 'edge' && platforms.length !== 2) {
+    return NextResponse.json({ error: 'باقة إيدج تشمل منصتين بالضبط' }, { status: 400 })
+  }
+  if (tier === 'alpha') platforms = [...VALID_PLATFORMS]
   if (!platforms.length) {
     return NextResponse.json({ error: 'اختر منصة واحدة على الأقل' }, { status: 400 })
   }

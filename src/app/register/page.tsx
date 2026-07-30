@@ -6,12 +6,24 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
+import { normalizeBundlePlatforms, subscriptionBundle, type SubscriptionBundleKey } from '@/lib/v2/subscriptionBundles'
+import type { PlatformKey } from '@/lib/v2/accessRules'
+
+const PLATFORMS = [
+  { key: 'spx', label: 'SPX', color: '#C9943A' },
+  { key: 'stocks', label: 'الشركات', color: '#60A5FA' },
+  { key: 'funds', label: 'الصناديق', color: '#26D07C' },
+] as const
 
 function RegisterContent() {
   const searchParams = useSearchParams()
   const requestedPlatform = ['spx', 'stocks', 'funds'].includes(searchParams.get('platform') ?? '')
     ? searchParams.get('platform')
     : 'spx'
+  const bundle = subscriptionBundle(searchParams.get('plan'))
+  const [selectedPlatforms, setSelectedPlatforms] = useState(() =>
+    normalizeBundlePlatforms(bundle.key, [requestedPlatform ?? 'spx']),
+  )
   const [name, setName]         = useState('')
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
@@ -38,7 +50,12 @@ function RegisterContent() {
       email: email.trim(),
       password,
       options: {
-        data: { full_name: name.trim(), selected_platform: requestedPlatform },
+        data: {
+          full_name: name.trim(),
+          selected_platform: selectedPlatforms[0],
+          selected_platforms: selectedPlatforms,
+          subscription_bundle: bundle.key,
+        },
         // رابط التفعيل في البريد يهبط على مسار الاستقبال الذي يسجّل الدخول تلقائياً
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
@@ -67,6 +84,15 @@ function RegisterContent() {
     }
 
     window.location.href = '/login?registered=1'
+  }
+
+  function togglePlatform(platform: PlatformKey) {
+    if (bundle.key === 'radar' || bundle.key === 'alpha') return
+    setSelectedPlatforms(current => {
+      if (bundle.key === 'signal') return [platform]
+      if (current.includes(platform)) return current
+      return normalizeBundlePlatforms(bundle.key as SubscriptionBundleKey, [current[1], platform])
+    })
   }
 
   async function resendVerification() {
@@ -128,8 +154,26 @@ function RegisterContent() {
           </div>
           <h1 className="text-2xl font-bold text-white tracking-wider">أهلاً بك في ترقّب</h1>
           <p className="text-sm mt-2 font-bold" style={{ color: '#26D07C' }}>
-            ابدأ بمنصة {requestedPlatform === 'stocks' ? 'الشركات' : requestedPlatform === 'funds' ? 'الصناديق' : 'SPX'} — ويمكنك إضافة غيرها لاحقاً
+            باقة {bundle.label} · {bundle.platformCount === 3 ? 'المنصات الثلاث' : bundle.platformCount === 2 ? 'اختر منصتين' : 'اختر منصة واحدة'}
           </p>
+        </div>
+
+        <div className="mb-4 grid grid-cols-3 gap-2">
+          {PLATFORMS.map(platform => {
+            const selected = selectedPlatforms.includes(platform.key)
+            return (
+              <button key={platform.key} type="button" onClick={() => togglePlatform(platform.key)}
+                className="rounded-xl px-2 py-3 text-xs font-bold"
+                style={{
+                  color: selected ? platform.color : '#64748B',
+                  background: selected ? `${platform.color}12` : 'rgba(255,255,255,.02)',
+                  border: `1px solid ${selected ? `${platform.color}50` : 'rgba(255,255,255,.06)'}`,
+                  opacity: bundle.key === 'radar' || bundle.key === 'alpha' ? .85 : 1,
+                }}>
+                {selected ? '✓ ' : ''}{platform.label}
+              </button>
+            )
+          })}
         </div>
 
         <form onSubmit={handleRegister} className="rounded-2xl p-6 space-y-4"

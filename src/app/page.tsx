@@ -7,6 +7,7 @@ import { LiveTeaser } from '@/components/LiveTeaser'
 import { AssistantWidget } from '@/components/v2/AssistantWidget'
 import { NewsletterBox } from '@/components/NewsletterBox'
 import { PLATFORMS } from '@/lib/v2/adapters/registry'
+import { SUBSCRIPTION_BUNDLES } from '@/lib/v2/subscriptionBundles'
 
 export default async function RootPage({ searchParams }: { searchParams?: Promise<{ preview?: string }> }) {
   const query = await searchParams
@@ -415,143 +416,50 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
         </div>
       </section>
 
-      {/* ── Plans ── */}
+      {/* ── الباقات الواضحة ── */}
       <section id="plans" className="max-w-5xl mx-auto px-6 py-24">
         <div className="text-center mb-14">
           <div className="text-xs font-mono tracking-widest mb-3" style={{ color: '#C9943A' }}>الباقات</div>
           <h2 className="text-3xl font-bold text-white mb-3">اشتراكك على مقاس تداولك</h2>
-          <p className="text-sm" style={{ color: '#7C8A99' }}>
-            خطوتان فقط: اختر منصاتك، ثم اختر مستوى الأدوات.
-          </p>
+          <p className="text-sm" style={{ color: '#7C8A99' }}>أربع باقات مباشرة. اختر ما يناسب تداولك.</p>
           <p className="text-sm mt-2 font-bold" style={{ color: '#26D07C' }}>
             🎁 كل حساب جديد يبدأ بتجربة 7 أيام كاملة الميزات — وكل صديق تدعوه يهديك أسبوعاً إضافياً
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
-          {[
-            {
-              key: 'single',
-              title: 'منصة واحدة',
-              color: '#60A5FA',
-              desc: 'اختر SPX أو الشركات أو الصناديق. منتج مستقل بكامل هويته وأدواته.',
-              priceNote: 'سعر المستوى المختار',
-              note: 'الأكثر وضوحاً للبداية',
-              href: '/register',
-            },
-            {
-              key: 'duo',
-              title: 'أي منصتين',
-              color: '#C9943A',
-              desc: 'اجمع أي منصتين دون دفع قيمة الثالثة: SPX + شركات، أو أي توليفة تختارها.',
-              priceNote: 'سعر خاص يظهر قبل الإتمام',
-              note: 'أفضل مرونة',
-              href: '/register?plan=duo',
-            },
-            {
-              key: 'all',
-              title: 'ترقّب الشامل',
-              color: '#A78BFA',
-              desc: 'المنصات الثلاث مع بوابة موحدة وذكاء الربط بين السوق والقطاع والشركة.',
-              priceNote: 'أفضل قيمة للمنصات الثلاث',
-              note: 'أعلى اشتراك',
-              href: '/register?plan=all',
-            },
-          ].map(scope => (
-            <div key={scope.key} className="rounded-2xl p-6"
-              style={{
-                background: `linear-gradient(150deg, ${scope.color}0D, rgba(13,27,42,.9) 55%)`,
-                border: `1px solid ${scope.color}35`,
-              }}>
-              <div className="text-[10px] font-mono mb-3 tracking-widest" style={{ color: scope.color }}>{scope.note}</div>
-              <h3 className="text-xl font-black text-white mb-3">{scope.title}</h3>
-              <p className="text-sm leading-7 min-h-[84px]" style={{ color: '#7C8A99' }}>{scope.desc}</p>
-              <div className="mt-2 text-xs font-bold" style={{ color: scope.color }}>{scope.priceNote}</div>
-              <Link href={user ? `/v2/upgrade?bundle=${scope.key}` : scope.href}
-                className="mt-5 flex items-center justify-between rounded-xl px-4 py-3 text-sm font-bold"
-                style={{ color: scope.color, background: `${scope.color}10`, border: `1px solid ${scope.color}30` }}>
-                <span>اختر هذه الباقة</span>
-                <span>←</span>
-              </Link>
-            </div>
-          ))}
-        </div>
-
-        <div className="text-center mb-7">
-          <div className="text-sm font-bold text-white">ثم اختر مستوى الأدوات داخل منصتك</div>
-          <div className="text-xs mt-1" style={{ color: '#6B7B8D' }}>رادار · سيجنال · إيدج · ألفا</div>
-          <div className="mt-2 text-[11px]" style={{ color: '#55657A' }}>الأسعار أدناه لمستوى الأدوات داخل منصة واحدة، والسعر النهائي يظهر قبل الإتمام.</div>
-        </div>
-
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            {
-              key: 'radar', label: 'رادار', price: 'مجاني', period: '',
-              color: '#7C8A99',
-              desc: 'ابدأ رحلتك — الأساسيات كاملة',
-              features: ['خطة اليوم الصباحية', 'الداشبورد وتحليل العقد', 'المحفظة التجريبية 10,000$', 'مساعد الخروج ودفتر الصفقات'],
-            },
-            {
-              key: 'signal', label: 'سيجنال', price: '$29', period: '/شهر',
-              color: '#60A5FA',
-              desc: 'للجاد — الإشارات والرادار',
-              features: ['الإشارات الموثّقة بدخول وخروج', 'رادار الأموال الذكية', 'مرصد العقود المتقدم', 'كل ميزات رادار'],
-            },
-            {
-              key: 'edge', label: 'إيدج', price: '$79', period: '/شهر',
-              color: '#C9943A', badge: 'الأكثر شعبية',
-              desc: 'للمحترف — العدة الكاملة',
-              features: ['الشارت المتقدم بكل الطبقات', 'نسخ السبريدات محددة المخاطرة', 'وصول مبكر للميزات الجديدة', 'كل ميزات سيجنال'],
-            },
-            {
-              key: 'alpha', label: 'ألفا', price: '$199', period: '/شهر',
-              color: '#A78BFA', badge: 'مقاعد محدودة',
-              desc: 'المنصة تعمل لأجلك — لا العكس',
-              features: ['الفرص القوية تصلك أولاً فور ولادتها', 'تقرير المدرب الشخصي أسبوعياً', 'خطة اليوم تصلك صباحاً', 'صوتك مسموع في الميزات القادمة'],
-            },
-          ].map(tier => (
-            <div key={tier.key} className="rounded-2xl p-5 flex flex-col relative"
+          {SUBSCRIPTION_BUNDLES.map(bundle => (
+            <div key={bundle.key} className="rounded-2xl p-5 flex flex-col relative"
               style={{
-                background: `linear-gradient(160deg, ${tier.color}06 0%, rgba(13,27,42,0.9) 100%)`,
-                border: `1px solid ${tier.color}25`,
+                background: `linear-gradient(150deg, ${bundle.color}0D, rgba(13,27,42,.9) 55%)`,
+                border: `1px solid ${bundle.color}35`,
               }}>
-              {(tier as any).badge && (
+              {bundle.badge && (
                 <div className="absolute -top-3 right-4 text-[10px] font-mono px-2.5 py-1 rounded-full font-bold"
-                  style={{ background: tier.color, color: '#060D14' }}>
-                  {(tier as any).badge}
+                  style={{ background: bundle.color, color: '#060D14' }}>
+                  {bundle.badge}
                 </div>
               )}
-              <div className="mb-4">
-                <div className="text-xs font-mono mb-1" style={{ color: tier.color }}>{tier.label}</div>
-                <div className="flex items-baseline gap-1 mb-2">
-                  <span className="text-2xl font-bold font-mono text-white">{tier.price}</span>
-                  {tier.period && <span className="text-xs" style={{ color: '#7C8A99' }}>{tier.period}</span>}
-                </div>
-                <p className="text-xs leading-relaxed" style={{ color: '#7C8A99' }}>{tier.desc}</p>
-              </div>
-              <ul className="space-y-2 flex-1 mb-5">
-                {tier.features.map(f => (
-                  <li key={f} className="flex items-start gap-2 text-xs">
-                    <span className="mt-0.5 shrink-0" style={{ color: tier.color }}>✓</span>
-                    <span style={{ color: '#64748B' }}>{f}</span>
+              <div className="text-xs font-mono mb-2" style={{ color: bundle.color }}>{bundle.label}</div>
+              <h3 className="text-xl font-black text-white">{bundle.platformCount === 3 ? 'المنصات الثلاث' : bundle.platformCount === 2 ? 'أي منصتين' : 'منصة واحدة'}</h3>
+              <p className="mt-2 min-h-[58px] text-xs leading-6" style={{ color: '#7C8A99' }}>{bundle.description}</p>
+              <ul className="mt-4 space-y-2 flex-1 mb-5">
+                {bundle.features.map(feature => (
+                  <li key={feature} className="flex items-start gap-2 text-xs">
+                    <span className="mt-0.5 shrink-0" style={{ color: bundle.color }}>✓</span>
+                    <span style={{ color: '#64748B' }}>{feature}</span>
                   </li>
                 ))}
               </ul>
-              <Link
-                href={user
-                  ? (tier.key === 'radar' ? '/v2' : '/v2/upgrade')
-                  : (tier.key === 'radar' ? '/register' : `/register?plan=${tier.key}`)}
-                className="block text-center py-2.5 rounded-xl text-sm font-bold transition-all"
-                style={{
-                  background: tier.key === 'radar' ? 'rgba(255,255,255,0.04)' : `${tier.color}18`,
-                  border: `1px solid ${tier.color}30`,
-                  color: tier.key === 'radar' ? '#7C8A99' : tier.color,
-                }}>
-                {tier.key === 'radar' ? 'ابدأ مجاناً' : 'اختر وجرّب'}
+              <Link href={user ? `/v2/upgrade?plan=${bundle.key}` : `/register?plan=${bundle.key}`}
+                className="block text-center py-2.5 rounded-xl text-sm font-bold"
+                style={{ background: `${bundle.color}14`, border: `1px solid ${bundle.color}30`, color: bundle.color }}>
+                {bundle.key === 'radar' ? 'ابدأ مجانًا' : 'اختر الباقة'}
               </Link>
             </div>
           ))}
         </div>
+        <div className="mt-5 text-center text-xs" style={{ color: '#55657A' }}>الدفع مؤجل حاليًا. ستظهر الأسعار بالريال شاملة الضريبة قبل تفعيل الفوترة.</div>
       </section>
 
       {/* ── CTA ── */}
