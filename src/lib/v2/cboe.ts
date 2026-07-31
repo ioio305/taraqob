@@ -19,7 +19,7 @@ export interface CboeData {
 let cache: CboeData | null = null
 
 export async function getCboeData(): Promise<CboeData | null> {
-  if (cache && Date.now() - cache.fetchedAt < 60_000) return cache
+  if (cache && Date.now() - cache.fetchedAt < 15_000) return cache
   try {
     const res = await fetch(CBOE_URL, { headers: { Accept: 'application/json' }, cache: 'no-store' })
     if (!res.ok) return null

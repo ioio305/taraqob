@@ -27,7 +27,7 @@ export default function RadarPage() {
       .then(d => d.success ? setData(d) : setErr(d.error ?? 'تعذر التحميل'))
       .catch(() => setErr('فشل الاتصال'))
     load()
-    const t = setInterval(load, 120_000)   // كل دقيقتين — تحديث صامت
+    const t = setInterval(load, 30_000)    // كل ٣٠ ثانية — تحديث صامت
     return () => clearInterval(t)
   }, [])
 
@@ -74,7 +74,7 @@ export default function RadarPage() {
             </div>
             {data.anomalies.length === 0 && (
               <div className="py-10 text-center text-sm text-gray-600">
-                لا بصمات غير طبيعية الآن — الرادار يفحص كل دقيقتين تلقائياً
+                لا بصمات غير طبيعية الآن — الرادار يفحص كل ٣٠ ثانية تلقائيًا
               </div>
             )}
             {data.anomalies.map((a, i) => (
