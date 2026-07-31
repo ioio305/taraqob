@@ -844,7 +844,13 @@ export default function ChartPage() {
         time: toTime(c.time, intraday), open: c.open, high: c.high, low: c.low, close: c.close,
       })))
 
-      const decSignals = data.analysis.sr.signals.filter(s => decCandles.some(c => c.time === s.time))
+      // توافق إلزامي مع اتجاه الخطة: في يوم صاعد لا تظهر إلا علامات CALL،
+      // وفي يوم هابط علامات PUT فقط — علامة تعارض نقطة الدخول تُربك القرار.
+      // في اليوم المحايد (يوم نطاق) تبقى الجهتان لأن التداول على الحدين.
+      const biasDir = data.analysis.summary.bias
+      const decSignals = data.analysis.sr.signals.filter(s =>
+        decCandles.some(c => c.time === s.time) &&
+        (biasDir === 'محايد' || (biasDir === 'صاعد' ? s.type === 'call' : s.type === 'put')))
       if (decSignals.length > 0) {
         createSeriesMarkers(cSeries, decSignals.map(s => ({
           time: toTime(s.time, intraday),
