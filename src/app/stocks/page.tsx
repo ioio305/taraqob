@@ -28,10 +28,13 @@ type ScanRow = {
     issues: string[]
     asOf: string | null
   } | null
+  dayPlan?: {
+    targetPrice: number; stopPrice: number; targetPct: number; stopPct: number
+  } | null
   error?: string
 }
 type ScanData = {
-  success: boolean; error?: string; asOf?: string; mode?: string
+  success: boolean; error?: string; asOf?: string; mode?: string; tradeStyle?: 'day' | 'swing'
   calibration?: { validated: boolean; note: string }
   notCalibratedNote?: string
   sessionQuality?: { label: string; reason: string; phase: string }
@@ -218,6 +221,16 @@ export default function StocksScanner() {
         })}
       </div>
 
+      {tradeStyle === 'day' && (
+        <div className="rounded-xl px-4 py-2.5 flex items-center gap-2"
+             style={{ background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.4)' }}>
+          <span>⚡</span>
+          <span className="text-xs font-bold" style={{ color: '#F59E0B' }}>
+            وضع المضاربة اليومية مُفعّل — العقود المعروضة الآن بأقرب انتهاء، وكل صفقة تُغلق اليوم قبل الإغلاق بنصف ساعة
+          </span>
+        </div>
+      )}
+
       {/* القرار أولاً: هذه أول معلومة يبحث عنها المتداول عند الدخول. */}
       <section className="rounded-3xl overflow-hidden"
                style={{ background: 'radial-gradient(circle at 10% 0%, rgba(96,165,250,.17), transparent 40%), #0D1B2A', border: `1px solid ${ACCENT}45` }}>
@@ -269,6 +282,19 @@ export default function StocksScanner() {
                 <div className="mt-1 font-black" style={{ color: gradeColor(topOpportunity.best.grade) }}>{topOpportunity.best.ranking.score}/100</div>
               </div>
             </div>
+
+            {topOpportunity.dayPlan && (
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                <div className="rounded-xl p-3" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)' }}>
+                  <div className="text-[10px] text-slate-500">🎯 هدف اليوم</div>
+                  <div className="font-black font-mono text-white">${topOpportunity.dayPlan.targetPrice} <span className="text-xs" style={{ color: '#10B981' }}>(+{topOpportunity.dayPlan.targetPct}%)</span></div>
+                </div>
+                <div className="rounded-xl p-3" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)' }}>
+                  <div className="text-[10px] text-slate-500">🛑 وقف اليوم</div>
+                  <div className="font-black font-mono text-white">${topOpportunity.dayPlan.stopPrice} <span className="text-xs" style={{ color: '#EF4444' }}>(-{topOpportunity.dayPlan.stopPct}%)</span></div>
+                </div>
+              </div>
+            )}
 
             <div className="mt-4 grid grid-cols-3 gap-2">
               <div className="rounded-xl p-3 bg-amber-400/[.06] border border-amber-400/15">

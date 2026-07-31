@@ -50,6 +50,7 @@ interface ScanRow {
     issues: string[]
     asOf: string | null
   } | null
+  dayPlan?: import('@/lib/v2/dayTrading').DayPlan | null
   error?: string
 }
 
@@ -120,6 +121,7 @@ export async function GET(request: NextRequest) {
             }),
           } : null,
           watchMode: rec.watchMode,
+          dayPlan: rec.dayPlan ?? null,
           dataQuality: rec.dataQuality ? {
             status: rec.dataQuality.status,
             label: rec.dataQuality.label,
@@ -151,6 +153,7 @@ export async function GET(request: NextRequest) {
       success: true,
       asOf: new Date().toISOString(),
       mode,
+      tradeStyle: tradeStyle === 'day' ? 'day' : 'swing',
       calibration: { validated: STOCKS_CALIBRATION.validated, note: STOCKS_CALIBRATION.note },
       notCalibratedNote: NOT_CALIBRATED_NOTE,
       sessionQuality,
