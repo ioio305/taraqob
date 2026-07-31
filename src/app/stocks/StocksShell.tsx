@@ -281,10 +281,6 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
               <span>غرفة القرار</span>
             </Link>
             <div className="hidden md:flex items-center gap-2">
-            <Link href="/stocks" className="rounded-lg px-3 py-1.5 text-xs font-bold"
-                  style={{ color: '#93C5FD', background: 'rgba(96,165,250,.07)', border: '1px solid rgba(96,165,250,.16)' }}>
-              منصة الشركات
-            </Link>
             <span className="rounded-lg px-2.5 py-1.5 text-[11px] font-mono"
                   style={{ color: TIER_COLOR[tier] ?? '#7C8A99', background: `${TIER_COLOR[tier] ?? '#7C8A99'}10`, border: `1px solid ${TIER_COLOR[tier] ?? '#7C8A99'}24` }}>
               {isStaff ? 'كامل' : TIER_LABEL[tier] ?? tier}
