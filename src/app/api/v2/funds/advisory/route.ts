@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { fundsTodayAdvisory } from '@/lib/v2/fundsAdvisory'
 
-export const dynamic = 'force-dynamic'
+// الإشارات يومية — تخزين مؤقت 5 دقائق يكفي ويسرّع الصفحة الرئيسية
+export const revalidate = 300
 
 // توصية اليوم للصناديق — مخرجات المحرك متعدد الطبقات المختبَر تاريخيًا
 export async function GET() {

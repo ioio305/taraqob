@@ -118,6 +118,51 @@ function OpportunityCard({ c, onAdd }: { c: Card; onAdd: (c: Card) => void }) {
   )
 }
 
+function HeroCard({ c, onAdd }: { c: Card; onAdd: (c: Card) => void }) {
+  const p = c.verdict.plan!
+  const tm = tierMeta(c.verdict.tier)
+  return (
+    <div className="rounded-3xl border-2 p-6" style={{ borderColor: tm.color, background: `linear-gradient(135deg, ${tm.color}14, rgba(255,255,255,.02) 55%)` }}>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-bold" style={{ color: tm.color }}>⭐ توصية اليوم الأولى</div>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <span className="text-2xl font-black text-white">{c.nameAr}</span>
+            <span className="rounded-md px-2 py-0.5 text-xs font-bold text-slate-400" style={{ background: 'rgba(255,255,255,.06)' }}>{c.symbol}</span>
+            <span className="rounded-full px-2.5 py-1 text-xs font-bold" style={{ color: tm.color, background: `${tm.color}1e` }}>{tm.label}</span>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="rounded-xl px-3 py-2 text-center" style={{ background: 'rgba(255,255,255,.05)' }}>
+              <div className="text-sm font-black text-white">{n(p.entryLow)} — {n(p.entryHigh)}</div>
+              <div className="mt-0.5 text-[10px] text-slate-400">منطقة الدخول</div>
+            </div>
+            <div className="rounded-xl px-3 py-2 text-center" style={{ background: 'rgba(239,68,68,.10)' }}>
+              <div className="text-sm font-black text-red-300">{n(p.stop)}</div>
+              <div className="mt-0.5 text-[10px] text-red-400/70">وقف الخسارة</div>
+            </div>
+            <div className="rounded-xl px-3 py-2 text-center" style={{ background: 'rgba(16,185,129,.10)' }}>
+              <div className="text-sm font-black text-emerald-300">{n(p.t1)}</div>
+              <div className="mt-0.5 text-[10px] text-emerald-400/70">الهدف الأول</div>
+            </div>
+            <div className="rounded-xl px-3 py-2 text-center" style={{ background: 'rgba(16,185,129,.10)' }}>
+              <div className="text-sm font-black text-emerald-300">{n(p.t2)}</div>
+              <div className="mt-0.5 text-[10px] text-emerald-400/70">الهدف الثاني</div>
+            </div>
+          </div>
+          <div className="mt-3 text-xs leading-6 text-slate-300">{p.reasonAr} · {p.horizonAr}</div>
+          <div className="text-[11px] text-slate-500">شرط الإلغاء: {p.cancelAr}</div>
+          <button onClick={() => onAdd(c)}
+            className="mt-3 rounded-xl px-5 py-2 text-sm font-black text-emerald-950"
+            style={{ background: ACCENT }}>
+            ＋ أضِفها للمحفظة التجريبية
+          </button>
+        </div>
+        <ScoreRing score={c.verdict.score} color={tm.color} />
+      </div>
+    </div>
+  )
+}
+
 export default function FundsToday() {
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
@@ -146,7 +191,12 @@ export default function FundsToday() {
   }, [load])
 
   if (loading && !data) {
-    return <div className="flex h-64 items-center justify-center text-sm text-slate-500">يحلّل السوق…</div>
+    return (
+      <div className="flex h-64 flex-col items-center justify-center gap-2">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" />
+        <div className="text-sm text-slate-400">يفحص 13 صندوقًا عبر 6 استراتيجيات…</div>
+      </div>
+    )
   }
   if (!data?.success) {
     return <div className="flex h-64 items-center justify-center text-sm text-slate-500">{data?.error ?? 'تعذر التحميل'}</div>
@@ -178,8 +228,11 @@ export default function FundsToday() {
         </div>
       ) : null}
 
-      {/* الفرص */}
-      {opps.map(c => <OpportunityCard key={c.symbol} c={c} onAdd={addToPaper} />)}
+      {/* التوصية الأولى — بطل الصفحة */}
+      {opps.length ? <HeroCard c={opps[0]} onAdd={addToPaper} /> : null}
+
+      {/* بقية الفرص */}
+      {opps.slice(1).map(c => <OpportunityCard key={c.symbol} c={c} onAdd={addToPaper} />)}
 
       {data.noOpportunity ? (
         <div className="rounded-2xl border border-white/10 p-8 text-center" style={{ background: 'rgba(255,255,255,.02)' }}>

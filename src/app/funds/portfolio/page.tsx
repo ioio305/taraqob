@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { loadPaper, savePaper, updatePaper, closePaper, removePaper, type PaperPosition } from '../paperStore'
+import { loadPaper, syncPaperCloud, updatePaper, closePaper, removePaper, type PaperPosition } from '../paperStore'
 
 // ── المحفظة التجريبية — تتدرب بأموال افتراضية قبل الحقيقية ───────────────────
 type Prices = Record<string, { price: number; changePct: number | null }>
@@ -29,6 +29,7 @@ export default function FundsPaper() {
 
   useEffect(() => {
     setPositions(loadPaper())
+    syncPaperCloud().then(setPositions).catch(() => {}) // سحابة إن توفرت
     setReady(true)
     refreshPrices()
     const t = setInterval(refreshPrices, 120_000)
