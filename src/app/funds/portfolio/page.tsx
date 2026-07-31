@@ -76,6 +76,13 @@ export default function FundsPaper() {
           const pnl = px != null ? (px - p.entry) * p.units : null
           const hitStop = px != null && px <= p.stop
           const hitT1 = px != null && px >= p.t1
+          // مساعد الخروج — قرار واضح لكل موقف
+          const advice = px == null ? null
+            : px <= p.stop ? { text: '⛔ أغلق فورًا — لامس وقف الخسارة. الوقف لا يُفاوض', color: '#EF4444' }
+            : px >= p.t2 ? { text: '🏁 تحقق الهدف الثاني — أغلق الصفقة أو تتبّع بوقف تحت آخر قاع', color: '#10B981' }
+            : px >= p.t1 ? { text: '✂ تحقق الهدف الأول — بِع النصف وانقل الوقف لسعر دخولك', color: '#26D07C' }
+            : px > p.entry ? { text: '✓ رابحة ولم تبلغ الهدف — استمر، وقفك مكانه', color: '#60A5FA' }
+            : { text: '◌ ضمن الخطة — لا شيء يُفعل الآن', color: '#8A97A6' }
           return (
             <div key={p.id} className="rounded-xl border px-4 py-3"
               style={{ borderColor: hitStop ? 'rgba(239,68,68,.4)' : hitT1 ? 'rgba(16,185,129,.4)' : 'rgba(255,255,255,.08)', background: 'rgba(255,255,255,.02)' }}>
@@ -83,8 +90,7 @@ export default function FundsPaper() {
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-white">{p.nameAr}</span>
                   <span className="text-[10px] text-slate-500">{p.symbol}</span>
-                  {hitStop ? <span className="rounded-full bg-red-400/10 px-2 py-0.5 text-[10px] font-bold text-red-300">لامس الوقف — أغلق</span> : null}
-                  {hitT1 ? <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] font-bold text-emerald-300">تجاوز الهدف الأول</span> : null}
+                  {hitStop || hitT1 ? null : null}
                 </div>
                 {pnl != null ? (
                   <span className="text-sm font-black" style={{ color: pnl >= 0 ? '#10B981' : '#EF4444' }}>
@@ -92,6 +98,11 @@ export default function FundsPaper() {
                   </span>
                 ) : null}
               </div>
+              {advice ? (
+                <div className="mt-2 rounded-lg px-3 py-1.5 text-[11px] font-bold" style={{ color: advice.color, background: `${advice.color}14` }}>
+                  {advice.text}
+                </div>
+              ) : null}
               <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-500">
                 <span>دخول {n(p.entry)}</span>
                 <span>وقف <span className="text-red-400">{n(p.stop)}</span></span>

@@ -20,6 +20,8 @@ const NAV_MAIN: NavItem[] = [
   { href: '/funds', label: 'توصية اليوم', icon: '◎', exact: true, tier: 'radar' },
 ]
 const NAV_TOOLS: NavItem[] = [
+  { href: '/funds/chart', label: 'الشارت الذكي', icon: '📈', exact: false, tier: 'radar' },
+  { href: '/funds/radar', label: 'رادار الأموال', icon: '📡', exact: false, tier: 'radar' },
   { href: '/funds/portfolio', label: 'المحفظة التجريبية', icon: '▤', exact: false, tier: 'radar' },
   { href: '/funds/sizing', label: 'حاسبة المخاطرة', icon: '∑', exact: false, tier: 'radar' },
   { href: '/funds/ledger', label: 'سجل الأداء', icon: '≣', exact: false, tier: 'radar' },
