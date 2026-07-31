@@ -36,12 +36,14 @@ export function MarketPulse() {
 
   useEffect(() => {
     let alive = true
-    fetch('/api/v2/market-pulse')
+    const load = () => fetch('/api/v2/market-pulse')
       .then(r => r.json())
       .then(x => { if (alive) setD(x) })
       .catch(() => {})
       .finally(() => { if (alive) setLoading(false) })
-    return () => { alive = false }
+    load()
+    const t = setInterval(load, 60_000)   // تحديث صامت كل دقيقة
+    return () => { alive = false; clearInterval(t) }
   }, [])
 
   if (loading) {

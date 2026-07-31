@@ -2,6 +2,7 @@
 
 // ── رادار الأموال الذكية — أين تبني المؤسسات مراكزها في SPX؟ ────────────────
 import { useState, useEffect } from 'react'
+import { MarketPulse } from '@/components/v2/MarketPulse'
 
 interface Anomaly {
   expiry: string; type: 'call' | 'put'; strike: number
@@ -40,6 +41,9 @@ export default function RadarPage() {
           حين يتدفق على ستريك حجمٌ يفوق مراكزه القائمة أضعافاً — أحدهم كبير يعرف شيئاً أو يراهن بقوة. الرادار يلتقط هذه البصمات من بيانات البورصة الحقيقية.
         </p>
       </div>
+
+      {/* 🫀 نبض السوق — انتقل من الشارت الذكي إلى بيته الطبيعي هنا */}
+      <MarketPulse />
 
       {err && <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-xl p-4 text-sm">{err}</div>}
       {!data && !err && <div className="h-40 rounded-2xl animate-pulse" style={{ background: 'rgba(255,255,255,0.03)' }} />}

@@ -12,7 +12,6 @@ import {
 import type { AnalysisResult } from '@/lib/v2/marketAnalysis'
 import type { GammaExposure } from '@/lib/v2/gammaExposure'
 import { computeConfluence } from '@/lib/v2/confluence'
-import { MarketPulse } from '@/components/v2/MarketPulse'
 import { ShareCard } from '@/components/v2/ShareCard'
 import { CountUp } from '@/components/v2/CountUp'
 
@@ -376,9 +375,6 @@ export default function SmartChartPage() {
           </button>
         </div>
       </div>
-
-      {/* ── نبض السوق: خوف/طمع + Put/Call + Max Pain + خريطة الجاما ── */}
-      <MarketPulse />
 
       <p className="text-xs text-center font-mono pb-2" style={{ color: '#6B7B8D' }}>
         أداة دعم قرار تعليمية — ليست توصية استثمارية. البيانات قد تكون مؤخرة أو تقديرية.
