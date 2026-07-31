@@ -69,9 +69,10 @@ export default function LoginForm() {
       window.location.href = next
       return
     }
+    // الدخول يذهب مباشرةً إلى منصة مراقبة التوصيات (SPX) لا إلى منتقي المنصات.
     // التحقق النهائي من حالة الحساب والصلاحيات يتم في الخادم؛ لا نسجل خروج
     // المستخدم بسبب تعثر مؤقت في قراءة ملفه من المتصفح.
-    window.location.href = '/platforms'
+    window.location.href = '/v2'
   }
 
   return (

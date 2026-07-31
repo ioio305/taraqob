@@ -22,7 +22,9 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
       .eq('id', user.id)
       .single()
     if (!profile || profile.is_active === false) redirect('/login?error=inactive')
-    redirect('/platforms')
+    // الدخول يذهب مباشرةً إلى منصة مراقبة التوصيات (SPX) لا إلى منتقي المنصات —
+    // منتقي المنصات «منصّاتي» يبقى متاحاً كرابط اختياري في الهيدر/محوّل المنصات.
+    redirect('/v2')
   }
 
   return (

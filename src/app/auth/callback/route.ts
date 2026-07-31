@@ -20,7 +20,8 @@ export async function GET(request: NextRequest) {
       if (user) {
         let redirect = next
 
-        if (next === '/') redirect = '/platforms'
+        // الدخول يذهب مباشرةً إلى منصة مراقبة التوصيات (SPX) لا إلى منتقي المنصات.
+        if (next === '/') redirect = '/v2'
 
         return NextResponse.redirect(`${origin}${redirect}`)
       }
