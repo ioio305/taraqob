@@ -103,6 +103,16 @@ export async function GET() {
         ? `يوم نطاق — السوق محايد ومكبوح: تداول حدود النطاق (كول قرب دعم ${nearSupport}، بوت قرب مقاومة ${nearResist})، ولا تطارد المنتصف.`
         : `يوم انتظار الكسر — محايد بجاما سالبة: السوق يجهز حركة. لا تدخل داخل النطاق؛ انتظر كسر ${nearResist} أو ${nearSupport} ثم اتبع الكسر.`
       entryZone = `الحدان: ${Math.round(nearSupport)} (دعم) / ${Math.round(nearResist)} (مقاومة)`
+      // يوم نطاق: الهدف هو الجدار المقابل فقط — لا أهداف بعيدة
+      target1 = nearResist
+      target2 = null
+    }
+
+    // قص عام: لا يتجاوز أي هدف مدى اليوم الواقعي (1.5 × مدى الحركة)
+    if (target1 != null) target1 = Math.max(Math.round(spot - maxDist), Math.min(Math.round(spot + maxDist), target1))
+    if (target2 != null) target2 = Math.max(Math.round(spot - maxDist), Math.min(Math.round(spot + maxDist), target2))
+    if (target1 != null && target2 != null && Math.abs(target2 - spot) < Math.abs(target1 - spot)) {
+      const t = target1; target1 = target2; target2 = t
     }
 
     const econ = econWarning()
