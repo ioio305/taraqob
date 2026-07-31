@@ -121,7 +121,7 @@ export function MarketPulse() {
         {/* خريطة الجاما الحرارية */}
         {near.length > 3 && (
           <div>
-            <div className="text-[11px] mb-1.5 font-bold" style={{ color: '#8A97A6' }}>خريطة الجاما — تمركز صانعي السوق حول السعر</div>
+            <div className="text-[11px] mb-1.5 font-bold" style={{ color: '#8A97A6' }}>خريطة الجاما — المراكز المفتوحة المتراكمة (وليست تداول اليوم)</div>
             <div className="space-y-0.5">
               {near.map(p => {
                 const pos = p.gex >= 0
@@ -144,6 +144,20 @@ export function MarketPulse() {
               <span><b style={{ color: '#26D07C' }}>▮</b> جاما موجبة (دعم/تثبيت)</span>
               <span><b style={{ color: '#F0435A' }}>▮</b> جاما سالبة (تسارع)</span>
             </div>
+            {(() => {
+              const gammaPeak = near.length ? near.reduce((m, x) => Math.abs(x.gex) > Math.abs(m.gex) ? x : m, near[0]).strike : null
+              const hotStrike = (d.unusual?.length ?? 0) > 0 ? d.unusual!.reduce((m, x) => x.volume > m.volume ? x : m, d.unusual![0]).strike : null
+              if (gammaPeak == null || hotStrike == null) return null
+              const diff = Math.round(hotStrike - gammaPeak)
+              const gap = Math.abs(diff)
+              return (
+                <div className="mt-2 rounded-lg px-3 py-2 text-[11px] leading-5" style={{ background: 'rgba(201,148,58,0.06)', border: '1px solid rgba(201,148,58,0.2)', color: '#B8C4D4' }}>
+                  {gap < 5
+                    ? <>✅ تداول اليوم والمراكز المفتوحة يتركزان معًا عند <b style={{ color: '#E8D5A3' }}>{Math.round(gammaPeak)}</b> — توافق كامل: هذا هو محور السوق الحقيقي اليوم.</>
+                    : <>↔ مال اليوم يتداول عند <b style={{ color: '#E8D5A3' }}>{Math.round(hotStrike)}</b> بينما المراكز المفتوحة تتركز عند <b style={{ color: '#E8D5A3' }}>{Math.round(gammaPeak)}</b> — لا خطأ في الرقمين: الأول «أين دار المال اليوم» والثاني «أين تتراكم المراكز القائمة». {diff > 0 ? 'المشترون يختبرون منطقة فوق التمركز — اختراقها يفتح طريقًا جديدًا.' : 'التداول يدور تحت جدار التمركز — الجدار يجذب السعر نحوه ما دام قائمًا.'}</>}
+                </div>
+              )
+            })()}
           </div>
         )}
 
