@@ -110,7 +110,8 @@ export default function SmartChartPage() {
   }, [tf, fetchData])
 
   const intraday = !['1d', '1w', '1M'].includes(tf)
-  const candles = data?.candles ?? []
+  // مرجع ثابت مربوط بـ data — كي لا تُعاد حسابات useMemo/useEffect كل رسم
+  const candles = useMemo(() => data?.candles ?? [], [data])
   const conf = useMemo(
     () => (candles.length ? computeConfluence(candles, data!.analysis.sr.zones) : new Map()),
     [candles, data],
