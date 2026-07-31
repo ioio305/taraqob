@@ -13,7 +13,7 @@ describe('النظام البطل لمنصة الشركات', () => {
   })
 
   it('يستبعد META صراحة بسبب واضح', () => {
-    expect(CHAMPION_EXCLUDED.META).toContain('استُبعدت')
+    expect(CHAMPION_EXCLUDED.META).toContain('خارج التغطية')
     expect(championExclusionFor('meta')).toBe(CHAMPION_EXCLUDED.META)
   })
 

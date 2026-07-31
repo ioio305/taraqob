@@ -41,7 +41,21 @@ type Flow = {
 }
 
 type Earnings = { symbol: string; date: string | null; inDays: number | null; imminent: boolean; when: string | null }
-type News = { id: string; titleAr: string; source: string; tickers: string[]; importanceAr: string; url: string | null }
+type News = {
+  id: string; titleAr: string; source: string; tickers: string[]
+  importance?: number; importanceAr: string
+  sentiment?: 'positive' | 'negative' | 'neutral' | null; sentimentAr?: string | null
+  url: string | null
+}
+
+// اتجاه الرصد الفني (لحسم التعارض مع اتجاه العقد): اختراق=صاعد · كسر=هابط · زخم=حسب إشارته
+function radarDirection(r: RadarRow | null): 'call' | 'put' | null {
+  if (!r) return null
+  if (r.signal === 'breakout') return 'call'
+  if (r.signal === 'breakdown') return 'put'
+  if (r.signal === 'momentum') return (r.momentum5 ?? 0) >= 0 ? 'call' : 'put'
+  return null // watch — لا يؤكّد ولا يعارض
+}
 
 const STAGES = [
   { label: 'الرصد', Icon: Activity },
@@ -98,13 +112,34 @@ export default function StocksDecisionRoom() {
   const earning = earnings.find(item => item.symbol === symbol) ?? null
   const relatedNews = news.filter(item => item.tickers?.includes(symbol)).slice(0, 3)
 
+  // ── حسم الاتجاه: هل يتفق الرصد الفني مع اتجاه العقد أم يعارضه؟ ──
+  const dir = primary?.direction.type ?? null
+  const radarDir = radarDirection(radar)
+  const radarConflict = Boolean(dir && radarDir && radarDir !== dir)
+  const radarConfirms = Boolean(dir && radarDir && radarDir === dir)
+  // خبر سلبي مؤثر يعارض الاتجاه (سلبي لعقد صاعد · إيجابي لعقد هابط)
+  const adverseNews = relatedNews.find(n =>
+    (n.importance ?? 0) >= 55
+    && ((dir === 'call' && n.sentiment === 'negative') || (dir === 'put' && n.sentiment === 'positive')),
+  ) ?? null
+  // حالة البيانات (لا تدهور صامت): حيّة · متأخرة/ناقصة · محجوبة + حارس السعر الصفري
+  const dataStatus = primary?.dataQuality?.status ?? null
+  const dataMeta = dataStatus === 'ready'
+    ? { label: 'بيانات حيّة', color: '#34D399' }
+    : dataStatus === 'watch'
+      ? { label: 'بيانات ناقصة', color: '#FBBF24' }
+      : dataStatus === 'blocked'
+        ? { label: 'بيانات محجوبة', color: '#F87171' }
+        : { label: 'لا بيانات', color: '#64748B' }
+  const priceValid = primary?.price != null && primary.price > 0
+
   const checks = useMemo(() => {
     if (!primary) return []
     return [
       {
         label: 'جودة البيانات',
-        ok: primary.dataQuality?.status === 'ready',
-        detail: primary.dataQuality?.label ?? 'غير متاحة',
+        ok: primary.dataQuality?.status === 'ready' && priceValid,
+        detail: !priceValid ? 'سعر غير مكتمل — لا يُعتمد' : primary.dataQuality?.label ?? 'غير متاحة',
       },
       {
         label: 'مخاطر الأرباح',
@@ -112,32 +147,40 @@ export default function StocksDecisionRoom() {
         detail: earning?.imminent ? `أرباح خلال ${earning.inDays} أيام` : 'لا حدث قريب يمنع القرار',
       },
       {
-        label: 'تأكيد السعر',
-        ok: radar?.signal === 'breakout' || radar?.signal === 'breakdown' || radar?.signal === 'momentum',
-        detail: radar?.signalAr ?? 'بانتظار الرصد السعري',
+        label: 'توافق الاتجاه الفني',
+        ok: radarConfirms,
+        detail: radarConflict
+          ? `الرصد الفني يعارض العقد: ${radar?.signalAr ?? ''}`
+          : radarConfirms
+            ? `الرصد يؤكّد الاتجاه: ${radar?.signalAr ?? ''}`
+            : radar?.signalAr ?? 'بانتظار تأكيد سعري واضح',
       },
       {
         label: 'تأكيد التدفقات',
         ok: Boolean(supportingFlow),
-        detail: supportingFlow ? `${supportingFlow.type.toUpperCase()} بقيمة $${supportingFlow.moneyM}M` : 'لا تدفق مؤكد مع الاتجاه',
+        detail: supportingFlow ? `تدفق ${supportingFlow.type === 'call' ? 'صاعد' : 'هابط'} بقيمة $${supportingFlow.moneyM}M` : 'لا تدفق مؤكد مع الاتجاه',
       },
       {
         label: 'الخبر المؤثر',
-        ok: relatedNews.length > 0,
-        detail: relatedNews.length ? `${relatedNews.length} أخبار عربية مرتبطة` : 'لا خبر مباشر جديد',
+        ok: !adverseNews,
+        detail: adverseNews
+          ? `خبر ${adverseNews.sentimentAr ?? 'سلبي'} مؤثر يعارض: ${adverseNews.titleAr.slice(0, 46)}`
+          : relatedNews.length ? 'أخبار مرتبطة بلا معارضة للاتجاه' : 'لا خبر مباشر يعارض',
       },
     ]
-  }, [primary, earning, radar, supportingFlow, relatedNews.length])
+  }, [primary, earning, radar, supportingFlow, relatedNews, priceValid, radarConfirms, radarConflict, adverseNews])
 
   const passed = checks.filter(check => check.ok).length
-  const blocked = Boolean(primary?.eventRisk?.active || primary?.dataQuality?.status === 'blocked' || earning?.imminent)
+  const blocked = Boolean(primary?.eventRisk?.active || primary?.dataQuality?.status === 'blocked' || earning?.imminent || !priceValid)
   const roomState = !primary
     ? { label: 'لا توجد فرصة صالحة', color: '#64748B', instruction: 'ابقَ نقداً حتى تظهر فرصة تستحق المخاطرة.' }
     : blocked
-      ? { label: 'ممنوعة مؤقتاً', color: '#F87171', instruction: 'لا تدخل. راقب زوال سبب المنع أولاً.' }
-      : passed >= 4
-        ? { label: 'قريبة من التأكيد', color: '#34D399', instruction: 'راقب شرط الدخول؛ لا تنفذ قبل التأكيد النهائي.' }
-        : { label: 'تحت المراقبة', color: '#FBBF24', instruction: 'الأدلة غير مكتملة. انتظر ولا تطارد السعر.' }
+      ? { label: 'ممنوعة مؤقتاً', color: '#F87171', instruction: !priceValid ? 'بيانات السعر ناقصة — لا يُبنى قرار عليها.' : 'لا تدخل. راقب زوال سبب المنع أولاً.' }
+      : radarConflict
+        ? { label: 'تعارض الاتجاه', color: '#FB923C', instruction: 'الرصد الفني يعارض اتجاه العقد — لا تدخل حتى يتفق الاتجاهان.' }
+        : passed >= 4
+          ? { label: 'قريبة من التأكيد', color: '#34D399', instruction: 'راقب شرط الدخول؛ لا تنفذ قبل التأكيد النهائي.' }
+          : { label: 'تحت المراقبة', color: '#FBBF24', instruction: 'الأدلة غير مكتملة. انتظر ولا تطارد السعر.' }
 
   return (
     <div className="min-h-full pb-14" dir="rtl">
@@ -182,14 +225,20 @@ export default function StocksDecisionRoom() {
                 <div className="text-[11px] font-bold text-slate-500">القرار الحالي</div>
                 {primary?.best ? (
                   <>
-                    <div className="flex items-center gap-3 mt-2">
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
                       <span className="text-4xl font-black font-mono text-white">{primary.symbol}</span>
                       <span className="rounded-lg px-2.5 py-1 text-xs font-black"
                             style={{ color: primary.direction.color, background: `${primary.direction.color}15`, border: `1px solid ${primary.direction.color}35` }}>
-                        {primary.best.type.toUpperCase()} {primary.best.strike}
+                        عقد {primary.best.type === 'call' ? 'صاعد ▲' : 'هابط ▼'} · هدف {primary.best.strike}
+                      </span>
+                      <span className="rounded-lg px-2 py-1 text-[10px] font-black"
+                            style={{ color: dataMeta.color, background: `${dataMeta.color}15`, border: `1px solid ${dataMeta.color}35` }}>
+                        {dataMeta.label}
                       </span>
                     </div>
-                    <div className="text-sm mt-2 text-slate-500">{primary.name} · ${primary.price?.toFixed(2)}</div>
+                    <div className="text-sm mt-2 text-slate-500">
+                      {primary.name} · {priceValid ? `$${primary.price!.toFixed(2)}` : 'سعر غير مكتمل'}
+                    </div>
                   </>
                 ) : <div className="text-2xl font-black text-white mt-2">لا توصية الآن</div>}
               </div>
@@ -211,6 +260,13 @@ export default function StocksDecisionRoom() {
                      style={{ color: roomState.color, background: `${roomState.color}0C`, border: `1px solid ${roomState.color}22` }}>
                   {roomState.instruction}
                 </div>
+                {radarConflict ? (
+                  <div className="mt-3 rounded-xl p-3 flex items-start gap-2 text-xs font-bold"
+                       style={{ color: '#FDBA74', background: 'rgba(251,146,60,.1)', border: '1px solid rgba(251,146,60,.3)' }}>
+                    <CircleAlert size={15} className="mt-0.5 shrink-0" />
+                    <span>تعارض في الاتجاه: العقد {primary.best.type === 'call' ? 'صاعد' : 'هابط'} لكن الرصد الفني يشير إلى «{radar?.signalAr}». لا تدخل حتى يتفق المؤشران.</span>
+                  </div>
+                ) : null}
               </>
             ) : null}
           </div>

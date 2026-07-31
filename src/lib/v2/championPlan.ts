@@ -37,7 +37,7 @@ export const CHAMPION_PLAN: Record<string, ChampionEntry> = {
 
 // شركات استُبعدت: لم تثبت ربحيتها في التدريب — لا توصية عليها إطلاقًا
 export const CHAMPION_EXCLUDED: Record<string, string> = {
-  META: 'استُبعدت من النظام البطل — لم تثبت ربحية ثابتة في الاختبار التاريخي، المراقبة فقط',
+  META: 'راقب فقط — خارج التغطية حاليًا',
 }
 
 export const CHAMPION_STATS = {

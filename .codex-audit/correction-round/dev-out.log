@@ -1,0 +1,14 @@
+
+> taraqob@0.1.0 dev
+> next dev -p 3100
+
+   ▲ Next.js 15.5.18
+   - Local:        http://localhost:3100
+   - Network:      http://192.168.1.142:3100
+   - Environments: .env.local
+   - Experiments (use with caution):
+     · serverActions
+
+ ✓ Starting...
+ ✓ Ready in 2.9s
+[?25h

@@ -188,7 +188,7 @@ export default function StocksScanner() {
            style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.35)' }}>
         <span className="text-xl">🧪</span>
         <div>
-          <div className="text-sm font-bold" style={{ color: '#F59E0B' }}>منصة الشركات تحت المعايرة — «راقب» فقط</div>
+          <div className="text-sm font-bold" style={{ color: '#F59E0B' }}>راقب — لا تدخل بعد</div>
           <div className="text-xs mt-0.5 leading-relaxed" style={{ color: '#94A3B8' }}>
             {data?.notCalibratedNote ?? 'لا نُظهر توصية «اشترِ» للأسهم حتى نتأكد من ربحيتها على بيانات تاريخية. هذه أفضل الفرص للمراقبة والتعلّم.'}
           </div>
@@ -198,8 +198,8 @@ export default function StocksScanner() {
       {/* ── اختيار نمط التداول: مضاربة يومية أم صفقات أيام ── */}
       <div className="grid grid-cols-2 gap-3">
         {([
-          { key: 'day' as const, icon: '⚡', title: 'مضاربة يومية', desc: 'تدخل وتخرج في نفس اليوم · هدف قريب · خروج إجباري قبل الإغلاق' },
-          { key: 'swing' as const, icon: '📅', title: 'صفقات الأيام', desc: 'تمنح الصفقة حتى 10 أيام حتى الهدف أو الحد · النظام البطل المعتمد' },
+          { key: 'day' as const, icon: '⚡', title: 'مضاربة يومية', desc: 'دخول وخروج في نفس اليوم' },
+          { key: 'swing' as const, icon: '📅', title: 'صفقات الأيام', desc: 'صفقة تمتد لأيام حتى الهدف أو الحد' },
         ]).map(opt => {
           const active = tradeStyle === opt.key
           return (
@@ -220,16 +220,6 @@ export default function StocksScanner() {
           )
         })}
       </div>
-
-      {tradeStyle === 'day' && (
-        <div className="rounded-xl px-4 py-2.5 flex items-center gap-2"
-             style={{ background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.4)' }}>
-          <span>⚡</span>
-          <span className="text-xs font-bold" style={{ color: '#F59E0B' }}>
-            وضع المضاربة اليومية مُفعّل — العقود المعروضة الآن بأقرب انتهاء، وكل صفقة تُغلق اليوم قبل الإغلاق بنصف ساعة
-          </span>
-        </div>
-      )}
 
       {/* القرار أولاً: هذه أول معلومة يبحث عنها المتداول عند الدخول. */}
       <section className="rounded-3xl overflow-hidden"
@@ -568,10 +558,8 @@ function StockDetail({ detail }: { detail: DetailData }) {
               <div className="text-sm font-black font-mono text-white">${detail.dayPlan.stopPrice} <span style={{ color: '#EF4444' }}>(-{detail.dayPlan.stopPct}%)</span></div>
             </div>
           </div>
-          <div className="text-[11px] mt-2 space-y-1 leading-relaxed" style={{ color: '#94A3B8' }}>
-            <div>⏰ {detail.dayPlan.entryWindowAr}</div>
-            <div>🚪 {detail.dayPlan.forcedExitAr}</div>
-            {detail.dayPlan.notesAr.map((note, i) => <div key={i}>• {note}</div>)}
+          <div className="text-[11px] mt-2 font-bold" style={{ color: '#94A3B8' }}>
+            ⏰ دخول 09:45 · 🚪 خروج إجباري 15:30
           </div>
         </div>
       )}

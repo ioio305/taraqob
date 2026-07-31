@@ -22,11 +22,13 @@ import {
   reconcileStockDirection,
   type StockDataQuality,
 } from './stocksDecisionQuality'
-import { championEntryFor, championExclusionFor, CHAMPION_NOTE } from './championPlan'
+import { championEntryFor, championExclusionFor } from './championPlan'
 import { buildDayPlan, normalizeTradeStyle, type TradeStyle, type DayPlan } from './dayTrading'
+import { judgeVeto } from './vetoJudge'
+import { getStockNews } from './stockNews'
 
 export const NOT_CALIBRATED_NOTE =
-  `منصة الشركات تعمل بالنظام البطل المُعتمد (وصفة لكل شركة + فلاتر السوق). ${CHAMPION_NOTE}`
+  'راقب فقط — لا توصية «اشترِ» بعد.'
 
 export interface StockRecResult {
   success: boolean
@@ -122,9 +124,10 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
   const rv = closes.length >= 10 ? realizedVol(closes) : null
 
   // 2) اتجاه السهم + بوابة الأرباح + جودة الجلسة (بالتوازي)
-  const [eventRiskRaw, expirations] = await Promise.all([
+  const [eventRiskRaw, expirations, stockNews] = await Promise.all([
     stocksAdapter.getEventRisk(sym).catch(() => null),
     stocksAdapter.getExpirations(sym).catch(() => [] as string[]),
+    getStockNews(sym, 6).catch(() => []),
   ])
   const sessionQuality = evaluateSessionQuality()
   const rawDir = options.forceType
@@ -168,11 +171,26 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
     }
   }
 
+  const verdict = judgeVeto({
+    eventRisk, news: stockNews,
+    directionType: (options.forceType ?? dir.type) as 'call' | 'put' | null,
+  })
+  if (verdict.veto) {
+    return {
+      ...base,
+      market: marketPayload(quote, rv, null),
+      watchMode: true,
+      contracts: [],
+      expiration: '',
+      error: verdict.reasonAr ?? undefined,
+    }
+  }
+
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
   const tradableExpirations = expirations.filter(exp => isStockExpirationTradable(exp))
   const dteRanges = (options.full || tradeStyle === 'day')
     ? [{ min: 0, max: 2 }, { min: 2, max: 9 }, { min: 9, max: 21 }]
-    : [{ min: 2, max: 9 }, { min: 0, max: 2 }, { min: 9, max: 21 }]
+    : [{ min: 5, max: 12 }, { min: 9, max: 21 }, { min: 2, max: 5 }]
 
   let contracts: any[] = []
   let usedExp = ''

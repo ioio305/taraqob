@@ -24,7 +24,7 @@ import type { NewsRiskDecision } from './newsRisk'
 import { getNewsResult } from '@/app/api/v2/news/route'
 
 export const NOT_CALIBRATED_NOTE =
-  'منصة الصناديق متوقفة مؤقتًا بقرار خبير: 8 تجارب تاريخية (2018 → الآن) أثبتت أن الطرق الحالية خاسرة على الصناديق بكل الوصفات. المحتوى للتعلم والمراقبة فقط حتى ترقية مصادر البيانات وإعادة المعايرة.'
+  'متوقفة مؤقتًا — المحتوى للتعلّم والمراقبة فقط.'
 
 // ملخّص جاما مبسّط للعرض (SPY/QQQ فقط)
 export interface FundGamma {
