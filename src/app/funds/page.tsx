@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { addPaper } from './paperStore'
 
 // ── توصية اليوم — صيغة موحدة لكل فرصة (مستند التصور المعتمد) ─────────────────
 type Plan = {
@@ -67,7 +68,7 @@ function Row({ label, value, color }: { label: string; value: string; color?: st
   )
 }
 
-function OpportunityCard({ c }: { c: Card }) {
+function OpportunityCard({ c, onAdd }: { c: Card; onAdd: (c: Card) => void }) {
   const p = c.verdict.plan!
   const tm = tierMeta(c.verdict.tier)
   const riskColor = p.riskLevel === 'منخفض' ? '#10B981' : p.riskLevel === 'متوسط' ? '#F59E0B' : '#EF4444'
@@ -85,7 +86,13 @@ function OpportunityCard({ c }: { c: Card }) {
             <span className="text-slate-500">{n(c.price)} {c.changePct != null ? `(${c.changePct >= 0 ? '+' : ''}${n(c.changePct)}%)` : ''}</span>
           </div>
         </div>
-        <ScoreRing score={c.verdict.score} color={tm.color} />
+        <div className="flex flex-col items-center gap-2">
+          <ScoreRing score={c.verdict.score} color={tm.color} />
+          <button onClick={() => onAdd(c)}
+            className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-[10px] font-bold text-emerald-200">
+            ＋ المحفظة التجريبية
+          </button>
+        </div>
       </div>
 
       <div className="mt-4 grid gap-1.5 sm:grid-cols-2">
@@ -114,6 +121,15 @@ function OpportunityCard({ c }: { c: Card }) {
 export default function FundsToday() {
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
+  const [added, setAdded] = useState('')
+
+  function addToPaper(c: Card) {
+    const p = c.verdict.plan
+    if (!p) return
+    addPaper({ symbol: c.symbol, nameAr: c.nameAr, units: 0, entry: p.entryHigh, stop: p.stop, t1: p.t1, t2: p.t2 })
+    setAdded(c.symbol)
+    setTimeout(() => setAdded(''), 2500)
+  }
 
   const load = useCallback(async () => {
     try {
@@ -150,6 +166,12 @@ export default function FundsToday() {
         </div>
       </div>
 
+      {added ? (
+        <div className="rounded-xl border border-emerald-400/25 px-4 py-2.5 text-xs text-emerald-200" style={{ background: 'rgba(38,208,124,.07)' }}>
+          ✓ أُضيفت إلى المحفظة التجريبية — حدّد عدد الوحدات من صفحة المحفظة
+        </div>
+      ) : null}
+
       {data.econNote ? (
         <div className="rounded-xl border border-amber-400/25 px-4 py-2.5 text-xs text-amber-200" style={{ background: 'rgba(245,158,11,.07)' }}>
           ⏰ {data.econNote}
@@ -157,7 +179,7 @@ export default function FundsToday() {
       ) : null}
 
       {/* الفرص */}
-      {opps.map(c => <OpportunityCard key={c.symbol} c={c} />)}
+      {opps.map(c => <OpportunityCard key={c.symbol} c={c} onAdd={addToPaper} />)}
 
       {data.noOpportunity ? (
         <div className="rounded-2xl border border-white/10 p-8 text-center" style={{ background: 'rgba(255,255,255,.02)' }}>

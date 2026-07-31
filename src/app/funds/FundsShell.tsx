@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { MarketClock } from '@/components/v2/MarketClock'
+import { FundsWatcher } from '@/components/v2/FundsWatcher'
 import { NewsTicker } from '@/components/v2/NewsTicker'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
 
@@ -19,6 +20,9 @@ const NAV_MAIN: NavItem[] = [
   { href: '/funds', label: 'توصية اليوم', icon: '◎', exact: true, tier: 'radar' },
 ]
 const NAV_TOOLS: NavItem[] = [
+  { href: '/funds/portfolio', label: 'المحفظة التجريبية', icon: '▤', exact: false, tier: 'radar' },
+  { href: '/funds/sizing', label: 'حاسبة المخاطرة', icon: '∑', exact: false, tier: 'radar' },
+  { href: '/funds/ledger', label: 'سجل الأداء', icon: '≣', exact: false, tier: 'radar' },
   { href: '/funds/rotation', label: 'دوران القطاعات', icon: '↻', exact: false, tier: 'radar' },
   { href: '/funds/analyze', label: 'تحليل صندوق', icon: '◇', exact: false, tier: 'signal' },
 ]
@@ -134,6 +138,7 @@ export default function FundsShell({ children, userName, tier, isStaff, platform
           <button onClick={logout} disabled={loggingOut} className="h-8 w-8 rounded-lg border border-red-400/15 bg-red-400/5 text-red-300" aria-label="تسجيل الخروج">↪</button>
         </header>
         <NewsTicker />
+        <FundsWatcher />
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
         <nav className="flex shrink-0 items-center justify-around border-t border-white/5 bg-[#07130F] px-2 py-2 lg:hidden">
           {NAV_MAIN.map(item => (
