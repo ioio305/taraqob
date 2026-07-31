@@ -56,6 +56,7 @@ interface ScanRow {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const rawMode = searchParams.get('mode')
+  const tradeStyle = searchParams.get('style')
   const mode: RecMode =
     rawMode === 'safe' ? 'safe'
     : (rawMode === 'bold' || rawMode === 'cheap') ? 'bold'
@@ -83,7 +84,7 @@ export async function GET(request: NextRequest) {
             dataQuality: null,
           }
         }
-        const rec = await recommendForStock(u.symbol, { mode, full: false, prefetched: { quote, bars } })
+        const rec = await recommendForStock(u.symbol, { mode, full: false, tradeStyle, prefetched: { quote, bars } })
         const b = rec.direction.type && rec.dataQuality?.status !== 'blocked'
           ? rec.contracts.find(contract => contract.type === rec.direction.type) ?? null
           : null

@@ -71,6 +71,12 @@ type DetailData = {
     source: string
     asOf: string | null
   } | null
+  tradeStyle?: 'day' | 'swing'
+  dayPlan?: {
+    entryWindowAr: string; forcedExitAr: string
+    targetPrice: number; stopPrice: number; targetPct: number; stopPct: number
+    notesAr: string[]
+  } | null
 }
 
 const ACCENT = '#60A5FA'   // لون هوية منصة الشركات
@@ -98,6 +104,7 @@ export default function StocksScanner() {
   const [loading, setLoading] = useState(true)
   const [countdown, setCd] = useState(REFRESH_SEC)
   const [mode, setMode] = useState<'safe' | 'balanced' | 'bold'>('balanced')
+  const [tradeStyle, setTradeStyle] = useState<'day' | 'swing'>('swing')
   const [selected, setSelected] = useState<string | null>(null)
   const [detail, setDetail] = useState<DetailData | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -108,18 +115,19 @@ export default function StocksScanner() {
       const saved = localStorage.getItem('taraqob_rec_mode')
       if (saved === 'safe') setMode('safe')
       else if (saved === 'bold' || saved === 'cheap') setMode('bold')
+      if (localStorage.getItem('taraqob_trade_style') === 'day') setTradeStyle('day')
     } catch { /* تجاهل */ }
   }, [])
 
   const load = useCallback(async () => {
     setCd(REFRESH_SEC)
     try {
-      const res = await fetch(`/api/v2/stocks/scan?mode=${mode}`)
+      const res = await fetch(`/api/v2/stocks/scan?mode=${mode}&style=${tradeStyle}`)
       const json = await res.json()
       setData(json)
     } catch { /* أبقِ القديم */ }
     setLoading(false)
-  }, [mode])
+  }, [mode, tradeStyle])
 
   useEffect(() => {
     load()
@@ -145,16 +153,22 @@ export default function StocksScanner() {
       })
     }, 50)
     try {
-      const res = await fetch(`/api/v2/recommend?asset=stocks&symbol=${symbol}&mode=${mode}`)
+      const res = await fetch(`/api/v2/recommend?asset=stocks&symbol=${symbol}&mode=${mode}&style=${tradeStyle}`)
       const json = await res.json()
       setDetail(json)
     } catch { /* تجاهل */ }
     setDetailLoading(false)
-  }, [selected, mode])
+  }, [selected, mode, tradeStyle])
 
   function switchMode(m: 'safe' | 'balanced' | 'bold') {
     setMode(m)
     try { localStorage.setItem('taraqob_rec_mode', m) } catch { /* تجاهل */ }
+    setSelected(null); setDetail(null)
+  }
+
+  function switchStyle(s: 'day' | 'swing') {
+    setTradeStyle(s)
+    try { localStorage.setItem('taraqob_trade_style', s) } catch { /* تجاهل */ }
     setSelected(null); setDetail(null)
   }
 
@@ -176,6 +190,32 @@ export default function StocksScanner() {
             {data?.notCalibratedNote ?? 'لا نُظهر توصية «اشترِ» للأسهم حتى نتأكد من ربحيتها على بيانات تاريخية. هذه أفضل الفرص للمراقبة والتعلّم.'}
           </div>
         </div>
+      </div>
+
+      {/* ── اختيار نمط التداول: مضاربة يومية أم صفقات أيام ── */}
+      <div className="grid grid-cols-2 gap-3">
+        {([
+          { key: 'day' as const, icon: '⚡', title: 'مضاربة يومية', desc: 'تدخل وتخرج في نفس اليوم · هدف قريب · خروج إجباري قبل الإغلاق' },
+          { key: 'swing' as const, icon: '📅', title: 'صفقات الأيام', desc: 'تمنح الصفقة حتى 10 أيام حتى الهدف أو الحد · النظام البطل المعتمد' },
+        ]).map(opt => {
+          const active = tradeStyle === opt.key
+          return (
+            <button key={opt.key} onClick={() => switchStyle(opt.key)}
+                    className="rounded-2xl px-4 py-3 text-right transition-all"
+                    style={{
+                      background: active ? 'rgba(96,165,250,0.12)' : 'rgba(255,255,255,0.02)',
+                      border: `1.5px solid ${active ? ACCENT : 'rgba(255,255,255,0.08)'}`,
+                      boxShadow: active ? `0 0 0 1px ${ACCENT}30` : 'none',
+                    }}>
+              <div className="flex items-center gap-2">
+                <span className="text-xl">{opt.icon}</span>
+                <span className="text-sm font-black" style={{ color: active ? '#FFF' : '#CBD5E1' }}>{opt.title}</span>
+                {active && <span className="mr-auto text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: ACCENT, color: '#0D1B2A' }}>مُختار</span>}
+              </div>
+              <div className="text-[11px] mt-1.5 leading-relaxed" style={{ color: '#94A3B8' }}>{opt.desc}</div>
+            </button>
+          )
+        })}
       </div>
 
       {/* القرار أولاً: هذه أول معلومة يبحث عنها المتداول عند الدخول. */}
@@ -485,6 +525,30 @@ function StockDetail({ detail }: { detail: DetailData }) {
 
   return (
     <div className="space-y-3 mt-2">
+      {detail.tradeStyle === 'day' && detail.dayPlan && (
+        <div className="rounded-xl px-4 py-3"
+             style={{ background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.35)' }}>
+          <div className="flex items-center gap-2">
+            <span className="text-base">⚡</span>
+            <span className="text-sm font-black" style={{ color: '#F59E0B' }}>خطة المضاربة اليومية — تُغلق اليوم مهما كان</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <div className="rounded-lg px-3 py-2" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)' }}>
+              <div className="text-[10px]" style={{ color: '#94A3B8' }}>🎯 هدف الربح</div>
+              <div className="text-sm font-black font-mono text-white">${detail.dayPlan.targetPrice} <span style={{ color: '#10B981' }}>(+{detail.dayPlan.targetPct}%)</span></div>
+            </div>
+            <div className="rounded-lg px-3 py-2" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
+              <div className="text-[10px]" style={{ color: '#94A3B8' }}>🛑 حد الخسارة</div>
+              <div className="text-sm font-black font-mono text-white">${detail.dayPlan.stopPrice} <span style={{ color: '#EF4444' }}>(-{detail.dayPlan.stopPct}%)</span></div>
+            </div>
+          </div>
+          <div className="text-[11px] mt-2 space-y-1 leading-relaxed" style={{ color: '#94A3B8' }}>
+            <div>⏰ {detail.dayPlan.entryWindowAr}</div>
+            <div>🚪 {detail.dayPlan.forcedExitAr}</div>
+            {detail.dayPlan.notesAr.map((note, i) => <div key={i}>• {note}</div>)}
+          </div>
+        </div>
+      )}
       {detail.dataQuality && detail.dataQuality.status !== 'ready' && (
         <div className="rounded-lg px-3 py-2.5"
              style={{

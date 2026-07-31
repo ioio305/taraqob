@@ -23,6 +23,7 @@ import {
   type StockDataQuality,
 } from './stocksDecisionQuality'
 import { championEntryFor, championExclusionFor, CHAMPION_NOTE } from './championPlan'
+import { buildDayPlan, normalizeTradeStyle, type TradeStyle, type DayPlan } from './dayTrading'
 
 export const NOT_CALIBRATED_NOTE =
   `منصة الشركات تعمل بالنظام البطل المُعتمد (وصفة لكل شركة + فلاتر السوق). ${CHAMPION_NOTE}`
@@ -50,6 +51,8 @@ export interface StockRecResult {
   notCalibratedNote: string
   dataQuality: StockDataQuality | null
   champion: { method: string; methodAr: string } | null
+  tradeStyle: TradeStyle
+  dayPlan: DayPlan | null
 }
 
 // نطاق بحث الستريكات: ±20% حول السعر (mandatoryFilter يفرض «خارج المال» فعلياً)
@@ -78,11 +81,14 @@ export interface RecommendStockOptions {
   full?: boolean
   // بيانات مُمرّرة مسبقاً (لتفادي إعادة الجلب في الماسح)
   prefetched?: { quote: Awaited<ReturnType<typeof getStockQuote>>; bars: Awaited<ReturnType<typeof getStockDailyBars>> }
+  // ⚡ مضاربة يومية (نفس اليوم) أم 📅 صفقات أيام (الافتراضي)
+  tradeStyle?: string | null
 }
 
 export async function recommendForStock(symbol: string, options: RecommendStockOptions = {}): Promise<StockRecResult> {
   const sym = symbol.toUpperCase()
   const mode: RecMode = options.mode ?? 'balanced'
+  const tradeStyle = normalizeTradeStyle(options.tradeStyle)
   const uniName = (await stocksAdapter.getUniverse()).find(u => u.symbol === sym)?.name ?? sym
   const champion = championEntryFor(sym)
   const championExclusion = championExclusionFor(sym)
@@ -96,6 +102,7 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
     notCalibratedNote: NOT_CALIBRATED_NOTE,
     dataQuality: null,
     champion: null,
+    tradeStyle, dayPlan: null,
   })
 
   // بوابة النظام البطل: الشركات المستبعدة تاريخيًا — مراقبة فقط، بلا عقود
@@ -133,6 +140,10 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
   const eventRisk = eventRiskRaw
   const earningsKnown = eventRiskRaw != null
 
+  const dayPlan = tradeStyle === 'day'
+    ? buildDayPlan(price, rv, (options.forceType ?? dir.type) as 'call' | 'put' | null)
+    : null
+
   const base: Omit<StockRecResult, 'contracts' | 'expiration' | 'market' | 'watchMode'> = {
     success: true, symbol: sym, name: uniName,
     direction: dir, eventRisk, earningsKnown, sessionQuality,
@@ -140,6 +151,7 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
     expirations: expirations.filter(exp => isStockExpirationTradable(exp)).slice(0, 8),
     mode, notCalibratedNote: NOT_CALIBRATED_NOTE, dataQuality,
     champion,
+    tradeStyle, dayPlan,
   }
 
   if (!expirations.length) {
@@ -158,7 +170,7 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
 
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
   const tradableExpirations = expirations.filter(exp => isStockExpirationTradable(exp))
-  const dteRanges = options.full
+  const dteRanges = (options.full || tradeStyle === 'day')
     ? [{ min: 0, max: 2 }, { min: 2, max: 9 }, { min: 9, max: 21 }]
     : [{ min: 2, max: 9 }, { min: 0, max: 2 }, { min: 9, max: 21 }]
 

@@ -171,7 +171,7 @@ export async function GET(request: NextRequest) {
   if (asset === 'stocks') {
     const symbol = (searchParams.get('symbol') ?? 'AAPL').toUpperCase()
     try {
-      const result = await recommendForStock(symbol, { mode: recMode, forceType, full: true })
+      const result = await recommendForStock(symbol, { mode: recMode, forceType, full: true, tradeStyle: searchParams.get('style') })
       return NextResponse.json(result)
     } catch (err: any) {
       return NextResponse.json({ success: false, error: err.message, contracts: [] }, { status: 200 })
