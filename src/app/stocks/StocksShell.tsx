@@ -32,6 +32,7 @@ type NavItem = { href: string; label: string; icon: string; exact: boolean; requ
 // التوصية أولاً، ثم الأدلة والتحليل بحسب الباقة.
 const NAV_DECISION: NavItem[] = [
   { href: '/stocks',         label: 'توصية اليوم', icon: '◎', exact: true,  requiredTier: 'radar' },
+  { href: '/stocks/chart',   label: 'الشارت الذكي', icon: '📈', exact: false, requiredTier: 'radar' },
   { href: '/stocks/monitor', label: 'راصد الشركات', icon: '◉', exact: false, requiredTier: 'radar' },
 ]
 const NAV_ANALYSIS: NavItem[] = [
