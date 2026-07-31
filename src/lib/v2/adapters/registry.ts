@@ -49,7 +49,7 @@ export const STOCKS_CALIBRATION: CalibrationConfig = {
   watchScore:   74,
   minNetRR:     1.3,
   validated:    false,
-  note:         'لم تُعايَر بعد — يجب إعادة اختبار تاريخي على سلة أسهم قبل إظهار توصيات «نفّذ»',
+  note:         'النظام البطل مُعتمد (وصفة لكل شركة): تحقق 2023→الآن +0.069R بمعامل 1.13 — موجب لكن دون عتبة «نفّذ» (+0.12R)',
 }
 
 export const FUNDS_CALIBRATION: CalibrationConfig = {
@@ -57,7 +57,7 @@ export const FUNDS_CALIBRATION: CalibrationConfig = {
   watchScore:   74,
   minNetRR:     1.3,
   validated:    false,
-  note:         'لم تُعايَر بعد — SPY ≈ SPX÷10 فالانتقال أسرع، لكن يبقى التحقق إلزامياً',
+  note:         'متوقفة مؤقتًا — كل الوصفات خسرت على الصناديق في 8 تجارب تاريخية؛ تُعاد بعد ترقية البيانات',
 }
 
 export function platformByKey(key: string): PlatformMeta | undefined {

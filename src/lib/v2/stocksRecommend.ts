@@ -22,9 +22,10 @@ import {
   reconcileStockDirection,
   type StockDataQuality,
 } from './stocksDecisionQuality'
+import { championEntryFor, championExclusionFor, CHAMPION_NOTE } from './championPlan'
 
 export const NOT_CALIBRATED_NOTE =
-  'منصة الشركات ما زالت تحت المعايرة — لا نُظهر توصية «اشترِ» بعد. هذه أفضل الفرص للمراقبة والتعلّم حتى نتأكد من ربحيتها على بيانات تاريخية.'
+  `منصة الشركات تعمل بالنظام البطل المُعتمد (وصفة لكل شركة + فلاتر السوق). ${CHAMPION_NOTE}`
 
 export interface StockRecResult {
   success: boolean
@@ -48,6 +49,7 @@ export interface StockRecResult {
   mode: RecMode
   notCalibratedNote: string
   dataQuality: StockDataQuality | null
+  champion: { method: string; methodAr: string } | null
 }
 
 // نطاق بحث الستريكات: ±20% حول السعر (mandatoryFilter يفرض «خارج المال» فعلياً)
@@ -82,6 +84,8 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
   const sym = symbol.toUpperCase()
   const mode: RecMode = options.mode ?? 'balanced'
   const uniName = (await stocksAdapter.getUniverse()).find(u => u.symbol === sym)?.name ?? sym
+  const champion = championEntryFor(sym)
+  const championExclusion = championExclusionFor(sym)
 
   const empty = (error: string): StockRecResult => ({
     success: false, error, symbol: sym, name: uniName, market: null,
@@ -91,7 +95,14 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
     watchMode: false, contracts: [], expiration: '', expirations: [], mode,
     notCalibratedNote: NOT_CALIBRATED_NOTE,
     dataQuality: null,
+    champion: null,
   })
+
+  // بوابة النظام البطل: الشركات المستبعدة تاريخيًا — مراقبة فقط، بلا عقود
+  if (championExclusion) {
+    const blocked = empty(championExclusion)
+    return { ...blocked, watchMode: true }
+  }
 
   // 1) سعر + شموع (مرّة واحدة — تُستخدم للتذبذب وحارس الانهيار)
   const [quote, bars] = options.prefetched
@@ -128,6 +139,7 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
     calibration: { validated: STOCKS_CALIBRATION.validated, note: STOCKS_CALIBRATION.note },
     expirations: expirations.filter(exp => isStockExpirationTradable(exp)).slice(0, 8),
     mode, notCalibratedNote: NOT_CALIBRATED_NOTE, dataQuality,
+    champion,
   }
 
   if (!expirations.length) {
