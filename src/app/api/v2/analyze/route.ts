@@ -8,6 +8,7 @@ import { buildTradeFocus } from '@/lib/v2/tradeFocus'
 import { getMarketSnapshot, getIntradayBars, getHistoryBars, getExpirations, getOptionsChain, type MdBar } from '@/lib/v2/marketData'
 import { crashGuard } from '@/lib/v2/marketAnalysis'
 import { computeContractPlanMetrics } from '@/lib/v2/contractAnalysis'
+import { applyStopFloor } from '@/lib/v2/stopFloor'
 import { buildMarketTargetPlan } from '@/lib/v2/marketTargets'
 
 export const dynamic = 'force-dynamic'
@@ -558,7 +559,14 @@ export async function GET(request: NextRequest) {
     const exitT1   = estExit(t1)
     const exitT2   = estExit(t2)
     const exitT3   = estExit(t3)
-    const exitStop = estExit(stopSPX)
+    const exitStopRaw = estExit(stopSPX)
+    // أرضية الوقف: لا خسارة مخططة تتجاوز 30% من سعر الدخول — ونعيد مستوى المؤشر المكافئ
+    const stopFloored = applyStopFloor({
+      entryPx, exitStop: exitStopRaw, stopSpx: stopSPX,
+      mid, delta: delta ?? null, spxPrice,
+    })
+    const exitStop = stopFloored.exitStop
+    const stopSPXFinal = stopFloored.stopSpx
 
     // Hard safety gates for this section. A score can never override an invalid
     // quote, an impossible stop, a weak reward/risk ratio, or estimated prices.
@@ -686,13 +694,13 @@ export async function GET(request: NextRequest) {
         entry_conservative_total: entryConservative ? Math.round(entryConservative * 100) : null,
         entry_balanced:           entryBalanced,
         entry_balanced_total:     Math.round(entryPx * 100),
-        stop_spx: stopSPX,
+        stop_spx: stopSPXFinal,
         target1_spx: t1, target2_spx: t2, target3_spx: t3,
         targets: {
           t1:   { spx: t1,      source: marketPlan.t1.source,   fallback: marketPlan.t1.fallback,   exit_price: exitT1,   exit_total: Math.round(exitT1   * 100), pnl: Math.round((exitT1   - entryPx) * 100) },
           t2:   { spx: t2,      source: marketPlan.t2.source,   fallback: marketPlan.t2.fallback,   exit_price: exitT2,   exit_total: Math.round(exitT2   * 100), pnl: Math.round((exitT2   - entryPx) * 100) },
           t3:   { spx: t3,      source: marketPlan.t3.source,   fallback: marketPlan.t3.fallback,   exit_price: exitT3,   exit_total: Math.round(exitT3   * 100), pnl: Math.round((exitT3   - entryPx) * 100) },
-          stop: { spx: stopSPX, source: marketPlan.stop.source, fallback: marketPlan.stop.fallback, exit_price: exitStop, exit_total: Math.round(exitStop * 100), pnl: Math.round((exitStop - entryPx) * 100) },
+          stop: { spx: stopSPXFinal, source: marketPlan.stop.source, fallback: marketPlan.stop.fallback, exit_price: exitStop, exit_total: Math.round(exitStop * 100), pnl: Math.round((exitStop - entryPx) * 100) },
         },
         target_plan_source_ar: marketPlan.fallbackUsed
           ? 'مستويات السوق أولاً، والحساب الاحتياطي استُخدم فقط لإكمال المستويات الناقصة'
