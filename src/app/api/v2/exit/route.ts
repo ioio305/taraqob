@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
     verdictText = bigWin ? 'اربح الآن — لا تطمع' : 'أدِر الربح بذكاء'
     actionText = bigWin
       ? `رابح ${pnlTotal}$ (${pnlPct.toFixed(0)}%). الطمع يذهب ما جمع — بِع نصف مركزك الآن (تؤمّن ~$${Math.round(pnlTotal / 2)})، وارفع الوقف للتعادل، ودع الباقي يجري${nextWall ? ` نحو ${nextWall}` : ''}.`
-      : `رابح ${pnlTotal}$ (${pnlPct.toFixed(0)}%). ${pnlPct >= 30 ? `ارفع الوقف إلى التعادل ($${entry})` : `راقب الوقف عند $${stopPrice}`}، ودع الربح يجري${nextWall ? ` نحو جدار جاما ${nextWall}` : ''}.`
+      : `رابح ${pnlTotal}$ (${pnlPct.toFixed(0)}%). ${pnlPct >= 30 ? `بِع نصف العقود وارفع الوقف إلى التعادل ($${entry})` : `راقب الوقف عند $${stopPrice}`}، ودع الباقي يجري${nextWall ? ` نحو جدار جاما ${nextWall}` : ''}.`
   } else {
     verdict = 'hold_cautious'
     verdictText = 'احتفظ بحذر — السبب سليم'

@@ -159,7 +159,7 @@ export function computeStrategy(inp: StrategyInput): StrategyResult {
       `خطة سريعة — ${reasons.join(' · ')}`,
       'الأفضل أن تبيع بسرعة ولا تتمسك بالصفقة',
     ]
-    postT1Action = `بعد وصول الهدف الأول، ارفع حدّ الخسارة إلى سعر شرائك ($${entry}) فوراً — بهذا لن تخسر شيئاً`
+    postT1Action = `عند الهدف الأول: بِع نصف العقود واجمع ربحك، وارفع حدّ الخسارة إلى سعر شرائك ($${entry}) — النصف الباقي يكمل بلا مخاطرة`
   } else if (score >= 85) {
     strategy      = 'strong'
     stopPct       = 0.35
@@ -172,7 +172,7 @@ export function computeStrategy(inp: StrategyInput): StrategyResult {
       `خطة قوية — قوة الفرصة ${score} من 100 (ممتازة)`,
       `اتجاه السوق ${momentum} والربح المتوقع أكبر من الخطر بكثير`,
     ]
-    postT1Action = `بعد الهدف الأول، اجعل حدّ الخسارة = سعر شرائك ($${entry}) وواصل نحو الهدف ٢ والهدف ٣`
+    postT1Action = `عند الهدف الأول: بِع نصف العقود واجعل حدّ الخسارة = سعر شرائك ($${entry})، والنصف الباقي يواصل نحو الهدف ٢ — وكلما تقدّم السعر تقدّم الوقف ولا يتراجع`
   } else {
     // balanced: score 74–84 or any non-urgent contract
     strategy      = 'balanced'
@@ -185,7 +185,7 @@ export function computeStrategy(inp: StrategyInput): StrategyResult {
       `خطة متوازنة — قوة الفرصة ${score} من 100`,
       `اتجاه السوق مناسب والمخاطرة مقبولة`,
     ]
-    postT1Action = `بعد الهدف الأول، اجعل حدّ الخسارة = سعر شرائك ($${entry}) واحتفظ بالصفقة حتى الهدف ٢`
+    postT1Action = `عند الهدف الأول: بِع نصف العقود واجعل حدّ الخسارة = سعر شرائك ($${entry})، واحتفظ بالنصف الباقي حتى الهدف ٢`
   }
 
   const strategyReason = strategyReasonParts.join(' — ')

@@ -49,6 +49,7 @@ function buildInds(bars: Bar[]) {
 const LOOKFWD = 10
 const WARMUP = 210
 const COST_R = 0.15   // تكلفة تنفيذ واقعية لكل صفقة (فرق سعر + عمولة + انزلاق)
+const VARIANT = process.env.V || 'base' // base | partial | trail
 
 type Trade = {
   date: string; entryDate: string; bias: string; score: number; regime: string
@@ -87,19 +88,72 @@ async function main() {
     let duration = LOOKFWD
     let mfe = 0, mae = 0
     let exitPrice = bars[Math.min(i + 1 + LOOKFWD, bars.length - 1)].close
-    for (let j = i + 1; j <= Math.min(i + LOOKFWD, bars.length - 1); j++) {
-      const b = bars[j]
-      const fav = long ? (b.high - entry) / riskDist : (entry - b.low) / riskDist
-      const adv = long ? (entry - b.low) / riskDist : (b.high - entry) / riskDist
-      mfe = Math.max(mfe, fav); mae = Math.max(mae, adv)
-      const hitStop = long ? b.low <= stop : b.high >= stop
-      const hitT1 = long ? b.high >= t1 : b.low <= t1
-      if (hitStop) { outcome = 'loss'; duration = j - i; exitPrice = stop; break }
-      if (hitT1) { outcome = 'win'; duration = j - i; exitPrice = t1; break }
+    const t2 = s.t2Level ?? null
+    const t1R = Math.abs(t1 - s.entryLevel) / riskDist
+    const t2R = t2 != null ? Math.abs(t2 - s.entryLevel) / riskDist : null
+    let rGross = 0
+    if (VARIANT === 'base') {
+      for (let j = i + 1; j <= Math.min(i + LOOKFWD, bars.length - 1); j++) {
+        const b = bars[j]
+        const fav = long ? (b.high - entry) / riskDist : (entry - b.low) / riskDist
+        const adv = long ? (entry - b.low) / riskDist : (b.high - entry) / riskDist
+        mfe = Math.max(mfe, fav); mae = Math.max(mae, adv)
+        const hitStop = long ? b.low <= stop : b.high >= stop
+        const hitT1 = long ? b.high >= t1 : b.low <= t1
+        if (hitStop) { outcome = 'loss'; duration = j - i; exitPrice = stop; break }
+        if (hitT1) { outcome = 'win'; duration = j - i; exitPrice = t1; break }
+      }
+      rGross = outcome === 'win' ? t1R
+        : outcome === 'loss' ? -1
+        : (long ? (exitPrice - entry) : (entry - exitPrice)) / riskDist
+    } else {
+      // الخروج الجزئي: بيع النصف عند الهدف الأول ووقف للتعادل
+      // trail: الوقف يتبع آخر قاع/قمة بعد التعادل
+      let halfOut = false
+      let curStop = stop
+      let restR = 0
+      for (let j = i + 1; j <= Math.min(i + LOOKFWD, bars.length - 1); j++) {
+        const b = bars[j]
+        const fav = long ? (b.high - entry) / riskDist : (entry - b.low) / riskDist
+        const adv = long ? (entry - b.low) / riskDist : (b.high - entry) / riskDist
+        mfe = Math.max(mfe, fav); mae = Math.max(mae, adv)
+        const hitStop = long ? b.low <= curStop : b.high >= curStop
+        const hitT1 = long ? b.high >= t1 : b.low <= t1
+        const hitT2 = t2 != null && (long ? b.high >= t2 : b.low <= t2)
+        if (!halfOut) {
+          if (hitStop) { outcome = 'loss'; duration = j - i; rGross = -1; break }
+          if (hitT1) {
+            halfOut = true; duration = j - i
+            curStop = entry   // وقف النصف الباقي = سعر الدخول
+            if (VARIANT === 'trail') {
+              curStop = long ? Math.max(curStop, b.low) : Math.min(curStop, b.high)
+            }
+            if (hitT2) { outcome = 'win'; restR = t2R!; rGross = t1R * 0.5 + t2R! * 0.5; break }
+            continue
+          }
+        } else {
+          if (hitT2) { outcome = 'win'; duration = j - i; restR = t2R!; rGross = t1R * 0.5 + t2R! * 0.5; break }
+          if (hitStop) {
+            outcome = 'win'
+            duration = j - i
+            restR = (long ? (curStop - entry) : (entry - curStop)) / riskDist
+            rGross = t1R * 0.5 + Math.max(0, restR) * 0.5
+            break
+          }
+          if (VARIANT === 'trail') {
+            curStop = long ? Math.max(curStop, b.low) : Math.min(curStop, b.high)
+          }
+        }
+      }
+      if (!halfOut && outcome !== 'loss') {
+        outcome = 'timeout'
+        rGross = (long ? (exitPrice - entry) : (entry - exitPrice)) / riskDist
+      } else if (halfOut && rGross === 0) {
+        outcome = 'win'
+        restR = (long ? (exitPrice - entry) : (entry - exitPrice)) / riskDist
+        rGross = t1R * 0.5 + Math.max(0, restR) * 0.5
+      }
     }
-    const rGross = outcome === 'win' ? Math.abs(t1 - s.entryLevel) / riskDist
-      : outcome === 'loss' ? -1
-      : (long ? (exitPrice - entry) : (entry - exitPrice)) / riskDist
     const rNet = rGross - COST_R
     const ema200v = inds.ema200[i] as number | null
     const atrv = inds.atrArr[i] as number | null

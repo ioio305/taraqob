@@ -912,7 +912,7 @@ function AnalyzeContent() {
 
                   <div className="rounded-xl px-4 py-3 text-xs leading-relaxed"
                        style={{ background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.16)', color: '#94A3B8' }}>
-                    بعد الهدف الأول: ارفع الوقف إلى سعر الدخول. ألغِ الدخول إذا تحرك المؤشر عكس الاتجاه وتجاوز مستوى الوقف قبل تنفيذ الأمر.
+                    بعد الهدف الأول: بِع نصف العقود وارفع الوقف إلى سعر الدخول. ألغِ الدخول إذا تحرك المؤشر عكس الاتجاه وتجاوز مستوى الوقف قبل تنفيذ الأمر.
                     <span className="block mt-1" style={{ color: '#F59E0B' }}>{analysis.target_price_note_ar}</span>
                   </div>
                 </Card>

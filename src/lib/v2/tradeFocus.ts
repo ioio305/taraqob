@@ -47,7 +47,7 @@ export function buildTradeFocus(input: {
       label: 'فرصة جاهزة للشراء',
       confidence: Math.min(100, input.score),
       primaryReason: input.directionLabel ?? 'كل العلامات المهمة تدعم الصفقة.',
-      nextStep: 'اشترِ عند السعر المكتوب فقط. وبعد وصولك للهدف الأول، ارفع حدّ الخسارة إلى سعر شرائك حتى لا تخسر.',
+      nextStep: 'اشترِ عند السعر المكتوب فقط. وعند وصولك للهدف الأول، بِع نصف العقود وارفع حدّ الخسارة إلى سعر شرائك حتى لا تخسر.',
       blockers: [],
     }
   }
