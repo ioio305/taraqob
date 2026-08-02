@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
+import { getSelectedIndex, indexMeta, type IndexId } from '@/lib/v2/indexSelection'
 import {
   Activity,
   ArrowLeft,
@@ -141,30 +142,68 @@ export default function SpxDecisionRoomPage() {
   const [pulse, setPulse] = useState<Pulse | null>(null)
   const [flow, setFlow] = useState<Flow | null>(null)
   const [news, setNews] = useState<News | null>(null)
+  const [idx, setIdx] = useState<IndexId>('SPX')
+
+  useEffect(() => {
+    setIdx(getSelectedIndex())
+    const onIndex = (e: Event) => setIdx(((e as CustomEvent).detail ?? 'SPX') as IndexId)
+    window.addEventListener('taraqob:index', onIndex)
+    return () => window.removeEventListener('taraqob:index', onIndex)
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const responses = await Promise.all([
-        fetch('/api/v2/recommend?mode=balanced'),
-        fetch('/api/v2/gameplan'),
-        fetch('/api/v2/market-pulse'),
-        fetch('/api/v2/radar'),
-        fetch('/api/v2/news'),
-      ])
-      const [recData, planData, pulseData, flowData, newsData] = await Promise.all(
-        responses.map(response => response.json()),
-      )
-      setRecommendation(recData)
-      setPlan(planData)
-      setPulse(pulseData)
-      setFlow(flowData)
-      setNews(newsData)
+      if (idx === 'SPX') {
+        // مسار سباكس الأصلي — لا يتغير إطلاقاً
+        const responses = await Promise.all([
+          fetch('/api/v2/recommend?mode=balanced'),
+          fetch('/api/v2/gameplan'),
+          fetch('/api/v2/market-pulse'),
+          fetch('/api/v2/radar'),
+          fetch('/api/v2/news'),
+        ])
+        const [recData, planData, pulseData, flowData, newsData] = await Promise.all(
+          responses.map(response => response.json()),
+        )
+        setRecommendation(recData)
+        setPlan(planData)
+        setPulse(pulseData)
+        setFlow(flowData)
+        setNews(newsData)
+      } else {
+        // المؤشرات: توصية المؤشر المختار + الأخبار العامة (التدفقات ونبض سباكس خاصة بسباكس)
+        const [recRes, newsRes] = await Promise.all([
+          fetch(`/api/v2/recommend?asset=funds&symbol=${idx}&mode=balanced`),
+          fetch('/api/v2/news'),
+        ])
+        const rec = await recRes.json()
+        const newsData = await newsRes.json()
+        const mapped: Recommendation = {
+          success: Boolean(rec?.success),
+          marketClosed: rec?.sessionQuality?.phase === 'closed',
+          watchMode: Boolean(rec?.watchMode),
+          market: rec?.market ? {
+            spx: { price: rec.market.price, changePct: rec.market.changePct, high: rec.market.high, low: rec.market.low },
+            expectedMove: rec.market.expectedMove ?? null,
+            emUpper: rec.market.emUpper ?? null,
+            emLower: rec.market.emLower ?? null,
+          } : undefined,
+          direction: rec?.direction,
+          contracts: rec?.contracts ?? [],
+          timing: rec?.sessionQuality ? { label: rec.sessionQuality.label } : undefined,
+        }
+        setRecommendation(mapped)
+        setPlan(null)
+        setPulse(rec?.gamma ? { ok: true, gamma: rec.gamma } : null)
+        setFlow(null)
+        setNews(newsData)
+      }
       setUpdatedAt(new Date())
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [idx])
 
   useEffect(() => {
     void load()
@@ -187,33 +226,39 @@ export default function SpxDecisionRoomPage() {
     || recommendation?.timing?.label?.includes('بعد الإغلاق')
   )
 
-  const checks = useMemo(() => [
-    {
-      label: 'الجلسة',
-      ok: !sessionClosed,
-      value: sessionClosed ? recommendation?.timing?.label ?? recommendation?.marketStatus ?? 'السوق مغلق' : recommendation?.marketStatus ?? 'جاهزة',
-    },
-    {
-      label: 'ردة السوق',
-      ok: recommendation?.marketReaction?.action !== 'block',
-      value: recommendation?.marketReaction?.label ?? 'مستقرة',
-    },
-    {
-      label: 'الأخبار',
-      ok: news?.level !== 'danger' && recommendation?.newsRisk?.action !== 'block',
-      value: news?.label ?? 'هادئة',
-    },
-    {
-      label: 'التدفقات',
-      ok: flowSupports,
-      value: flowSupports ? 'تدعم الاتجاه' : 'غير مؤكدة',
-    },
-    {
+  const checks = useMemo(() => {
+    const list = [
+      {
+        label: 'الجلسة',
+        ok: !sessionClosed,
+        value: sessionClosed ? recommendation?.timing?.label ?? recommendation?.marketStatus ?? 'السوق مغلق' : recommendation?.marketStatus ?? recommendation?.timing?.label ?? 'جاهزة',
+      },
+      {
+        label: 'ردة السوق',
+        ok: recommendation?.marketReaction?.action !== 'block',
+        value: recommendation?.marketReaction?.label ?? 'مستقرة',
+      },
+      {
+        label: 'الأخبار',
+        ok: news?.level !== 'danger' && recommendation?.newsRisk?.action !== 'block',
+        value: news?.label ?? 'هادئة',
+      },
+    ]
+    // التدفقات مصدرها سباكس فقط — للمؤشرات الأخرى نستغني عن هذا التأكيد
+    if (idx === 'SPX') {
+      list.push({
+        label: 'التدفقات',
+        ok: flowSupports,
+        value: flowSupports ? 'تدعم الاتجاه' : 'غير مؤكدة',
+      })
+    }
+    list.push({
       label: 'العقد',
       ok: contract?.status === 'execute' || contract?.focus?.action === 'enter',
       value: contract?.focus?.label ?? (contract ? 'قيد المراقبة' : 'غير متاح'),
-    },
-  ], [recommendation, news, flowSupports, contract, sessionClosed])
+    })
+    return list
+  }, [recommendation, news, flowSupports, contract, sessionClosed, idx])
 
   const passed = checks.filter(check => check.ok).length
   const hardBlock = Boolean(
@@ -223,7 +268,7 @@ export default function SpxDecisionRoomPage() {
     || news?.level === 'danger'
     || contract?.focus?.action === 'avoid',
   )
-  const ready = !hardBlock && passed >= 4 && Boolean(contract)
+  const ready = !hardBlock && passed >= checks.length - 1 && Boolean(contract)
   const state = hardBlock
     ? { label: 'لا دخول', color: '#F87171', action: contract?.focus?.nextStep ?? 'انتظر زوال سبب المنع.' }
     : ready
@@ -247,7 +292,7 @@ export default function SpxDecisionRoomPage() {
               <div className="flex items-center gap-2 text-[11px] font-black tracking-[.18em] text-amber-300">
                 <ShieldCheck size={15} /> حصري لباقة ألفا
               </div>
-              <h1 className="mt-3 text-3xl md:text-5xl font-black text-white">غرفة قرار SPX</h1>
+              <h1 className="mt-3 text-3xl md:text-5xl font-black text-white">غرفة قرار {idx === 'SPX' ? 'SPX' : indexMeta(idx).name}</h1>
             </div>
             <button onClick={load} disabled={loading}
               className="flex items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/10 px-4 py-2.5 text-xs font-black text-amber-200 disabled:opacity-40">
@@ -277,7 +322,7 @@ export default function SpxDecisionRoomPage() {
               <div>
                 <div className="text-[11px] font-black text-slate-500">القرار الآن</div>
                 <div className="mt-2 flex items-center gap-3">
-                  <span className="font-mono text-4xl font-black text-white">SPX</span>
+                  <span className="font-mono text-4xl font-black text-white">{idx}</span>
                   {direction ? (
                     <span className="rounded-lg px-2.5 py-1 text-xs font-black"
                       style={{ color: recommendation?.direction?.color, background: `${recommendation?.direction?.color}15`, border: `1px solid ${recommendation?.direction?.color}35` }}>
@@ -290,12 +335,12 @@ export default function SpxDecisionRoomPage() {
                   <span className="font-mono font-bold" style={{ color: (change ?? 0) >= 0 ? '#34D399' : '#F87171' }}>
                     {(change ?? 0) >= 0 ? '+' : ''}{number(change)}%
                   </span>
-                  <span className="text-slate-600">VIX {number(recommendation?.market?.vix?.price, 1)}</span>
+                  {idx === 'SPX' && <span className="text-slate-600">VIX {number(recommendation?.market?.vix?.price, 1)}</span>}
                 </div>
               </div>
               <div className="text-left">
                 <div className="text-2xl font-black" style={{ color: state.color }}>{state.label}</div>
-                <div className="mt-1 text-xs text-slate-500">{passed}/5 تأكيدات</div>
+                <div className="mt-1 text-xs text-slate-500">{passed}/{checks.length} تأكيدات</div>
               </div>
             </div>
 
@@ -345,7 +390,7 @@ export default function SpxDecisionRoomPage() {
             <Row label="الوقف" value={strategy ? `$${number(strategy.stopPrice)}` : number(plan?.stop, 0)} danger />
           </Panel>
 
-          <Panel title="مستويات SPX" Icon={BarChart3} color="#60A5FA">
+          <Panel title={`مستويات ${idx}`} Icon={BarChart3} color="#60A5FA">
             <Row label="أعلى الحركة" value={number(recommendation?.market?.emUpper ?? plan?.expectedMove?.upper, 0)} />
             <Row label="جدار الكول" value={number(gamma?.callWall, 0)} />
             <Row label="انقلاب الجاما" value={number(gamma?.flipLevel, 0)} />
@@ -355,7 +400,7 @@ export default function SpxDecisionRoomPage() {
 
           <Panel title="حالة السوق" Icon={Gauge} color="#A78BFA">
             <Row label="الجاما" value={gamma?.regime === 'positive' ? 'موجبة — حركة أهدأ' : gamma?.regime === 'negative' ? 'سالبة — حركة أسرع' : '—'} />
-            <Row label="التدفقات" value={flow?.summaryAr ?? '—'} />
+            {idx === 'SPX' && <Row label="التدفقات" value={flow?.summaryAr ?? '—'} />}
             <Row label="التسعير" value={recommendation?.pricing?.level ?? '—'} />
             <Row label="التوقيت" value={recommendation?.timing?.label ?? '—'} />
           </Panel>

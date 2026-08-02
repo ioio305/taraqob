@@ -8,6 +8,7 @@
 // لا تكرار: كل تنبيه يُرسل مرة واحدة في اليوم لنفس السبب.
 
 import { useEffect, useRef, useState } from 'react'
+import { getSelectedIndex } from '@/lib/v2/indexSelection'
 import {
   buildEntryNotification,
   buildExitNotification,
@@ -26,6 +27,7 @@ export interface WatchedPosition {
   type: 'call' | 'put'
   entry: number
   expiry?: string
+  underlying?: string
   addedAt: string
   source?: 'manual' | 'recommendation'
 }
@@ -48,14 +50,15 @@ function watchRecommendation(contract: {
   mid?: number
   ask?: number
   strategy?: { entryBalanced?: number }
-}) {
+}, underlying?: string) {
   const entry = contract.strategy?.entryBalanced ?? contract.mid ?? contract.ask
   if (!entry || !Number.isFinite(entry)) return
 
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
   const current = loadRecommendedPositions().filter(pos => !pos.expiry || pos.expiry >= today)
   const alreadyWatched = current.some(pos =>
-    pos.strike === contract.strike && pos.type === contract.type && pos.expiry === contract.expiration,
+    pos.strike === contract.strike && pos.type === contract.type && pos.expiry === contract.expiration
+    && (pos.underlying ?? 'SPX') === (underlying ?? 'SPX'),
   )
   if (alreadyWatched) return
 
@@ -64,6 +67,7 @@ function watchRecommendation(contract: {
     type: contract.type,
     entry,
     expiry: contract.expiration,
+    underlying: underlying ?? 'SPX',
     addedAt: new Date().toISOString(),
     source: 'recommendation',
   }].slice(-5)
@@ -172,24 +176,30 @@ export function AlertsWatcher() {
 
     async function tick() {
       if (!marketOpenNow()) return
-      // ── 1. فرص قوية قابلة للتنفيذ ──
+      const idx = getSelectedIndex()
+      // ── 1. فرص قوية قابلة للتنفيذ (على المؤشر المختار) ──
       try {
-        const rec = await fetch('/api/v2/recommend').then(r => r.json())
+        const recUrl = idx === 'SPX' ? '/api/v2/recommend' : `/api/v2/recommend?asset=funds&symbol=${idx}`
+        const rec = await fetch(recUrl).then(r => r.json())
+        // توحيد شكل السوق: توصية المؤشرات ترجع السعر مباشرة في market
+        const marketNorm = rec?.market?.spx
+          ? rec.market
+          : { spx: rec?.market ? { price: rec.market.price } : undefined }
         for (const c of rec?.contracts ?? []) {
           if ((c.grade === 'A+' || c.grade === 'A') && c.status === 'execute') {
             const typeAr = c.type === 'put' ? 'بوت' : 'كول'
             notifyOnce(`sig-${c.symbol}`,
               `🚨 فرصة ${c.grade} — ترقب`,
               `${typeAr} ${c.strike} بسعر ~$${c.mid ?? c.ask} — افتح المنصة للتفاصيل`)
-            watchRecommendation(c)
+            watchRecommendation(c, idx)
             void saveBellOnce(`sig-${c.symbol}`, buildEntryNotification(c))
-            void logSignalOnce(`sig-${c.symbol}`, c, rec?.market)
+            void logSignalOnce(`sig-${c.symbol}`, c, marketNorm)
           }
         }
       } catch { /* تجاهل */ }
 
-      // ── 2. كسر نقطة انقلاب جاما ──
-      try {
+      // ── 2. كسر نقطة انقلاب جاما (خاص بسباكس — مصدر الجاما) ──
+      if (idx === 'SPX') try {
         const g = await fetch('/api/v2/gamma').then(r => r.json())
         const gamma = g?.gamma
         if (gamma?.spot && gamma?.flipLevel) {
@@ -218,31 +228,35 @@ export function AlertsWatcher() {
       const recommended = loadRecommendedPositions().filter(pos => !pos.expiry || pos.expiry >= todayStr)
       const combined = new Map<string, WatchedPosition>()
       for (const pos of [...recommended, ...loadPositions()]) {
-        combined.set(`${pos.type}-${pos.strike}-${pos.expiry ?? ''}`, pos)
+        combined.set(`${pos.underlying ?? 'SPX'}-${pos.type}-${pos.strike}-${pos.expiry ?? ''}`, pos)
       }
 
       for (const pos of Array.from(combined.values()).slice(-8)) {
         if (pos.expiry && pos.expiry < todayStr) continue   // عقد منتهٍ — لا داعي للاستعلام
+        const posUnderlying = pos.underlying ?? 'SPX'
+        const symParam = posUnderlying !== 'SPX' ? `&symbol=${posUnderlying}` : ''
+        const posLabel = `${pos.type === 'put' ? 'بوت' : 'كول'} ${posUnderlying !== 'SPX' ? `${posUnderlying} ` : ''}${pos.strike}`
+        const posKey = `${posUnderlying}-${pos.type}${pos.strike}`
         try {
-          const q = `strike=${pos.strike}&type=${pos.type}&entry=${pos.entry}${pos.expiry ? `&expiry=${pos.expiry}` : ''}`
+          const q = `strike=${pos.strike}&type=${pos.type}&entry=${pos.entry}${pos.expiry ? `&expiry=${pos.expiry}` : ''}${symParam}`
           const ex = await fetch(`/api/v2/exit?${q}`).then(r => r.json())
           if (ex?.verdict === 'exit_now' || ex?.verdict === 'exit_thesis') {
-            notifyOnce(`exit-${pos.type}${pos.strike}`,
+            notifyOnce(`exit-${posKey}`,
               '🚪 قرار خروج — ترقب',
-              `${pos.type === 'put' ? 'بوت' : 'كول'} ${pos.strike}: ${ex.verdictText ?? 'اخرج الآن'}`)
+              `${posLabel}: ${ex.verdictText ?? 'اخرج الآن'}`)
             void saveBellOnce(
-              `exit-${pos.type}${pos.strike}`,
+              `exit-${posKey}`,
               buildExitNotification(pos, ex, 'exit'),
             )
           } else if (
             ex?.verdict === 'manage_profit' &&
             (pos.source !== 'recommendation' || (ex?.pnl?.pct ?? 0) >= 30)
           ) {
-            notifyOnce(`profit-${pos.type}${pos.strike}`,
+            notifyOnce(`profit-${posKey}`,
               '💰 أدر ربحك — ترقب',
-              `${pos.type === 'put' ? 'بوت' : 'كول'} ${pos.strike}: ${ex.verdictText ?? 'حان وقت جني جزء من الربح'}`)
+              `${posLabel}: ${ex.verdictText ?? 'حان وقت جني جزء من الربح'}`)
             void saveBellOnce(
-              `profit-${pos.type}${pos.strike}`,
+              `profit-${posKey}`,
               buildExitNotification(pos, ex, 'profit'),
             )
           }

@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { loadPositions, savePositions, type WatchedPosition } from '@/components/v2/AlertsWatcher'
+import { getSelectedIndex, type IndexId } from '@/lib/v2/indexSelection'
 
 interface ExitPlan {
   contract: { strike: number; type: string; expiration: string; dte: number; bid: number; ask: number; mid: number; delta: number }
   estimated: boolean
   entry: number
+  symbol?: string
   pnl: { perShare: number; pct: number; total: number }
   market: { spx: number; changePct: number; bias: string }
   gamma: { regime: string; callWall: number | null; putWall: number | null; flipLevel: number | null } | null
@@ -28,9 +30,10 @@ const VERDICT_STYLE: Record<string, { bg: string; border: string; color: string;
   standby:       { bg: 'rgba(96,165,250,0.10)', border: '#60A5FA', color: '#60A5FA', icon: '⏸' },
 }
 
-async function fetchExitPlan(strike: string, type: 'call' | 'put', entry: string, expiry?: string): Promise<ExitPlan> {
+async function fetchExitPlan(strike: string, type: 'call' | 'put', entry: string, expiry?: string, symbol?: string): Promise<ExitPlan> {
   const query = new URLSearchParams({ strike, type, entry })
   if (expiry) query.set('expiry', expiry)
+  if (symbol && symbol !== 'SPX') query.set('symbol', symbol)
   const response = await fetch(`/api/v2/exit?${query.toString()}`)
   return response.json()
 }
@@ -43,44 +46,55 @@ export default function ExitPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [watched, setWatched] = useState<WatchedPosition[]>([])
+  const [idx, setIdx]         = useState<IndexId>('SPX')
   useEffect(() => {
     setWatched(loadPositions())
+    setIdx(getSelectedIndex())
+    const onIndex = (e: Event) => setIdx(((e as CustomEvent).detail ?? 'SPX') as IndexId)
+    window.addEventListener('taraqob:index', onIndex)
 
     const params = new URLSearchParams(window.location.search)
     const linkedStrike = params.get('strike') ?? ''
     const linkedEntry = params.get('entry') ?? ''
     const linkedType = params.get('type') === 'put' ? 'put' : 'call'
     const linkedExpiry = params.get('expiry') ?? undefined
-    if (!linkedStrike || !linkedEntry) return
+    const linkedSymbol = (params.get('symbol') ?? '').toUpperCase()
+    if (linkedSymbol === 'NDX' || linkedSymbol === 'SPY' || linkedSymbol === 'QQQ') setIdx(linkedSymbol)
+    if (!linkedStrike || !linkedEntry) return () => window.removeEventListener('taraqob:index', onIndex)
 
     setStrike(linkedStrike)
     setEntry(linkedEntry)
     setType(linkedType)
     setLoading(true)
-    void fetchExitPlan(linkedStrike, linkedType, linkedEntry, linkedExpiry)
+    const sym = (linkedSymbol === 'NDX' || linkedSymbol === 'SPY' || linkedSymbol === 'QQQ') ? linkedSymbol : getSelectedIndex()
+    void fetchExitPlan(linkedStrike, linkedType, linkedEntry, linkedExpiry, sym)
       .then(result => {
         if (result.error) { setError(result.error); setPlan(null) }
         else setPlan(result)
       })
       .catch(() => setError('فشل الاتصال'))
       .finally(() => setLoading(false))
+    return () => window.removeEventListener('taraqob:index', onIndex)
   }, [])
 
+  const planSymbol = plan?.symbol ?? 'SPX'
+
   const isWatched = plan
-    ? watched.some(w => w.strike === plan.contract.strike && w.type === plan.contract.type)
+    ? watched.some(w => w.strike === plan.contract.strike && w.type === plan.contract.type && (w.underlying ?? 'SPX') === planSymbol)
     : false
 
   function toggleWatch() {
     if (!plan) return
     let next: WatchedPosition[]
     if (isWatched) {
-      next = watched.filter(w => !(w.strike === plan.contract.strike && w.type === plan.contract.type))
+      next = watched.filter(w => !(w.strike === plan.contract.strike && w.type === plan.contract.type && (w.underlying ?? 'SPX') === planSymbol))
     } else {
       next = [...watched, {
         strike: plan.contract.strike,
         type: plan.contract.type as 'call' | 'put',
         entry: plan.entry,
         expiry: plan.contract.expiration,
+        underlying: planSymbol,
         addedAt: new Date().toISOString(),
       }].slice(-5)   // خمس صفقات كحد أقصى
     }
@@ -88,19 +102,20 @@ export default function ExitPage() {
   }
 
   function removeWatch(w: WatchedPosition) {
-    const next = watched.filter(x => !(x.strike === w.strike && x.type === w.type))
+    const next = watched.filter(x => !(x.strike === w.strike && x.type === w.type && (x.underlying ?? 'SPX') === (w.underlying ?? 'SPX')))
     setWatched(next); savePositions(next)
   }
 
   function loadWatch(w: WatchedPosition) {
     setType(w.type); setStrike(String(w.strike)); setEntry(String(w.entry))
+    if (w.underlying) setIdx(w.underlying as IndexId)
   }
 
   async function evaluate() {
     if (!strike || !entry) { setError('أدخل رقم السترايك وسعر دخولك'); return }
     setLoading(true); setError('')
     try {
-      const d = await fetchExitPlan(strike, type, entry)
+      const d = await fetchExitPlan(strike, type, entry, undefined, idx)
       if (d.error) { setError(d.error); setPlan(null) }
       else setPlan(d)
     } catch { setError('فشل الاتصال') }
@@ -118,6 +133,9 @@ export default function ExitPage() {
 
       {/* Input */}
       <div className="bg-[#0a1929] border border-[#1e3a50] rounded-2xl p-4 space-y-3">
+        {idx !== 'SPX' && (
+          <div className="text-xs font-bold text-[#93B8E8]">التقييم على عقود {idx} — لتقييم عقد سباكس بدّل المؤشر من الأعلى</div>
+        )}
         <div className="flex gap-2">
           <button onClick={() => setType('call')}
             className="px-4 py-2 rounded-xl text-sm font-bold"
@@ -163,7 +181,7 @@ export default function ExitPage() {
               <div key={`${w.type}${w.strike}`} className="flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-mono"
                 style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}>
                 <button onClick={() => loadWatch(w)} className="font-bold" style={{ color: w.type === 'call' ? '#26D07C' : '#F0435A' }}>
-                  {w.type === 'call' ? '▲' : '▼'} {w.strike} @ ${w.entry}
+                  {w.type === 'call' ? '▲' : '▼'} {(w.underlying ?? 'SPX') !== 'SPX' ? `${w.underlying} ` : ''}{w.strike} @ ${w.entry}
                 </button>
                 <button onClick={() => removeWatch(w)} className="text-gray-500 hover:text-red-400">✕</button>
               </div>
@@ -208,8 +226,8 @@ export default function ExitPage() {
             {[
               { label: 'مركزك الآن', value: `${plan.pnl.total >= 0 ? '+' : ''}$${plan.pnl.total}`, sub: `${plan.pnl.pct >= 0 ? '+' : ''}${plan.pnl.pct}%`, color: plan.pnl.total >= 0 ? '#26D07C' : '#F0435A' },
               { label: 'سعر العقد الآن', value: `$${plan.contract.mid}`, sub: `دخولك $${plan.entry}`, color: '#E8D5A3' },
-              { label: 'الوقف', value: `$${plan.stop.optionPrice}`, sub: plan.stop.spxLevel ? `SPX ${plan.stop.spxLevel}` : '', color: '#F59E0B' },
-              { label: 'SPX الآن', value: plan.market.spx.toFixed(0), sub: plan.market.bias, color: '#60A5FA' },
+              { label: 'الوقف', value: `$${plan.stop.optionPrice}`, sub: plan.stop.spxLevel ? `${planSymbol} ${plan.stop.spxLevel}` : '', color: '#F59E0B' },
+              { label: `${planSymbol} الآن`, value: plan.market.spx.toFixed(0), sub: plan.market.bias, color: '#60A5FA' },
             ].map(x => (
               <div key={x.label} className="bg-[#0a1929] border border-[#1e3a50] rounded-xl p-3 text-center">
                 <div className="text-xs text-gray-500">{x.label}</div>
@@ -240,7 +258,7 @@ export default function ExitPage() {
                 </div>
                 <div className="bg-[#0d1f2e] rounded-lg p-2.5">
                   <div className="text-xs text-gray-500">هدف الربح التالي</div>
-                  <div className="font-mono font-bold text-[#E8D5A3] mt-0.5">{plan.profitPlan.nextTarget ? `SPX ${plan.profitPlan.nextTarget}` : '—'}</div>
+                  <div className="font-mono font-bold text-[#E8D5A3] mt-0.5">{plan.profitPlan.nextTarget ? `${planSymbol} ${plan.profitPlan.nextTarget}` : '—'}</div>
                   <div className="text-xs text-gray-600">جدار جاما</div>
                 </div>
               </div>
