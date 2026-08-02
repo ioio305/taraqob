@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { NewsImpactBadge, useNews } from '@/components/v2/NewsBar'
 import { DisciplineBar } from '@/components/v2/PositionSizing'
+import { IndexSwitcher } from '@/components/v2/IndexSwitcher'
 
 type Market = {
   spx: { price: number; prevClose?: number; changePct: number; high: number; low: number }
@@ -298,29 +299,7 @@ export default function V2Dashboard() {
       <DisciplineBar />
 
       {/* ── محوّل المؤشرات: SPX صفحته هنا · الباقي على نفس المحرك ── */}
-      <div className="flex gap-2 flex-wrap">
-        {([
-          { s: 'SPX', href: null },
-          { s: 'NDX', href: '/v2/index?symbol=NDX' },
-          { s: 'SPY', href: '/v2/index?symbol=SPY' },
-          { s: 'QQQ', href: '/v2/index?symbol=QQQ' },
-        ] as const).map(ix => (
-          ix.href
-            ? (
-              <Link key={ix.s} prefetch={false} href={ix.href}
-                    className="px-4 py-1.5 rounded-full text-xs font-black"
-                    style={{ color: '#8A97A6', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                {ix.s}
-              </Link>
-            )
-            : (
-              <span key={ix.s} className="px-4 py-1.5 rounded-full text-xs font-black"
-                    style={{ color: '#C9943A', background: 'rgba(201,148,58,0.12)', border: '1px solid rgba(201,148,58,0.4)' }}>
-                {ix.s}
-              </span>
-            )
-        ))}
-      </div>
+      <IndexSwitcher active="SPX" />
 
       {/* ── تحذير حدث اقتصادي كبير اليوم/غداً (معلومة لا منع) ── */}
       {data?.econ?.warning && (

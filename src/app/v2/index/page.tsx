@@ -2,8 +2,9 @@
 
 import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import Link from 'next/link'
 import { RefreshCw } from 'lucide-react'
+import { IndexSwitcher } from '@/components/v2/IndexSwitcher'
+import { getSelectedIndex, setSelectedIndex, indexMeta, type IndexId } from '@/lib/v2/indexSelection'
 
 export default function IndexPage() {
   return (
@@ -16,12 +17,6 @@ export default function IndexPage() {
 // ── منصة المؤشرات — NDX · SPY · QQQ على نفس محرك SPX (الاتجاه + العقد + الخطة) ──
 // SPX له صفحته الكاملة (/v2) بجاما والجلسات؛ هذه الصفحة لبقية المؤشرات.
 
-const INDICES = [
-  { s: 'SPX', name: 'السوق الأمريكي',   href: '/v2' },
-  { s: 'NDX', name: 'ناسداك ١٠٠',        href: '/v2/index?symbol=NDX' },
-  { s: 'SPY', name: 'يتبع السوق الأمريكي', href: '/v2/index?symbol=SPY' },
-  { s: 'QQQ', name: 'يتبع ناسداك ١٠٠',    href: '/v2/index?symbol=QQQ' },
-] as const
 
 const GOLD = '#C9943A'
 const REFRESH_SEC = 60
@@ -51,12 +46,17 @@ type Detail = {
 
 function IndexPageInner() {
   const params = useSearchParams()
-  const symbol = (params.get('symbol')?.toUpperCase() ?? 'NDX')
-  const current = INDICES.find(ix => ix.s === symbol) ?? INDICES[1]
+  const symbol = (params.get('symbol')?.toUpperCase() ?? (getSelectedIndex() !== 'SPX' ? getSelectedIndex() : 'NDX'))
+  const current = indexMeta(symbol as IndexId)
 
   const [data, setData] = useState<Detail | null>(null)
   const [loading, setLoading] = useState(true)
   const [ts, setTs] = useState<Date | null>(null)
+
+  // الدخول لهذه الصفحة برمز يعني اختياره هويةً للمنصة
+  useEffect(() => {
+    if (symbol === 'NDX' || symbol === 'SPY' || symbol === 'QQQ') setSelectedIndex(symbol)
+  }, [symbol])
 
   const load = useCallback(async () => {
     try {
@@ -95,20 +95,7 @@ function IndexPageInner() {
 
       {/* ── محوّل المؤشرات ── */}
       <div className="flex gap-2 flex-wrap items-center">
-        {INDICES.map(ix => {
-          const active = ix.s === current.s
-          const inner = (
-            <span className="px-4 py-1.5 rounded-full text-xs font-black inline-block"
-                  style={{
-                    color: active ? GOLD : '#8A97A6',
-                    background: active ? 'rgba(201,148,58,0.12)' : 'rgba(255,255,255,0.03)',
-                    border: `1px solid ${active ? 'rgba(201,148,58,0.4)' : 'rgba(255,255,255,0.07)'}`,
-                  }}>
-              {ix.s}
-            </span>
-          )
-          return <Link key={ix.s} prefetch={false} href={ix.href}>{inner}</Link>
-        })}
+        <IndexSwitcher active={current.id} />
         <button onClick={() => { setLoading(true); void load() }}
                 className="mr-auto flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full"
                 style={{ color: '#8A97A6', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
@@ -123,7 +110,7 @@ function IndexPageInner() {
           <div>
             <div className="text-[11px] font-bold" style={{ color: '#7C8A99' }}>{current.name}</div>
             <div className="flex items-baseline gap-3 mt-1">
-              <span className="text-4xl font-black font-mono text-white">{current.s}</span>
+              <span className="text-4xl font-black font-mono text-white">{current.id}</span>
               {mk ? (
                 <span className="text-xl font-black font-mono" style={{ color: (mk.changePct ?? 0) >= 0 ? '#10B981' : '#EF4444' }}>
                   {mk.price?.toLocaleString('en-US', { maximumFractionDigits: 2 })}
@@ -140,6 +127,14 @@ function IndexPageInner() {
           ) : null}
         </div>
         {dir?.reason ? <div className="mt-3 text-xs" style={{ color: '#7C8A99' }}>{dir.reason}</div> : null}
+        {mk ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
+            <Metric label="التذبذب" value={mk.volMeasure != null ? `${mk.volMeasure.toFixed(0)}%` : '—'} />
+            <Metric label="الحركة المتوقعة" value={mk.expectedMove != null ? `±${mk.expectedMove.toFixed(0)}` : '—'} />
+            <Metric label="العقود المرشحة" value={`${contracts.length}`} />
+            <Metric label="المحرك" value="محرك SPX" gold />
+          </div>
+        ) : null}
       </section>
 
       {/* ── التوصية ── */}
@@ -190,6 +185,32 @@ function IndexPageInner() {
           {data?.error ?? 'لا توجد فرصة صالحة على هذا المؤشر الآن — انتظر حركة أوضح.'}
         </section>
       )}
+
+      {/* ── عقود أخرى مرشحة ── */}
+      {contracts.length > 1 ? (
+        <section className="space-y-2">
+          <div className="text-xs font-bold" style={{ color: GOLD }}>عقود أخرى مرشحة على {current.id}</div>
+          {contracts.filter(c => c !== best).slice(0, 2).map(c => (
+            <div key={c.symbol} className="rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap"
+                 style={{ background: '#0C1219', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-sm font-black font-mono" style={{ color: c.type === 'call' ? '#10B981' : '#EF4444' }}>
+                  {c.type === 'call' ? '▲' : '▼'} {c.strike}
+                </span>
+                <span className="text-xs font-mono" style={{ color: '#7C8A99' }}>${c.mid.toFixed(2)} · قوة {c.score}</span>
+                <span className="text-xs font-mono" style={{ color: '#55657A' }}>ينتهي {c.expiration}</span>
+              </div>
+              {c.strategy ? (
+                <div className="flex items-center gap-3 text-xs font-mono">
+                  <span style={{ color: '#94A3B8' }}>دخول ${c.strategy.entryBalanced.toFixed(2)}</span>
+                  <span style={{ color: '#34D399' }}>هدف ${c.strategy.t1Price.toFixed(2)}</span>
+                  <span style={{ color: '#F87171' }}>وقف ${c.strategy.stopPrice.toFixed(2)}</span>
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </section>
+      ) : null}
 
       <div className="text-[11px]" style={{ color: '#55657A' }}>
         نفس محرك SPX بالكامل: الاتجاه، اختيار العقد، وخطة الدخول والأهداف والوقف.

@@ -11,6 +11,7 @@ import { AssistantWidget } from '@/components/v2/AssistantWidget'
 import { NewsTicker } from '@/components/v2/NewsTicker'
 import { MarketClock } from '@/components/v2/MarketClock'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
+import { getSelectedIndex, indexMeta, type IndexId } from '@/lib/v2/indexSelection'
 
 const ROLE_LABEL_MAP: Record<string, string>  = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
 const ROLE_COLOR_MAP: Record<string, string>  = { admin: '#C9943A', moderator: '#60A5FA', user: '#7C8A99' }
@@ -127,12 +128,20 @@ const PLATFORM_LINKS: PlatformLink[] = [
 
 function PlatformSwitcher({ access }: { access: PlatformAccess }) {
   const pathname = usePathname()
+  const [idx, setIdx] = useState<IndexId>('SPX')
+  useEffect(() => {
+    setIdx(getSelectedIndex())
+    const onCustom = (e: Event) => setIdx((e as CustomEvent<IndexId>).detail)
+    window.addEventListener('taraqob:index', onCustom)
+    return () => window.removeEventListener('taraqob:index', onCustom)
+  }, [])
   return (
     <div className="px-3 pt-3 pb-1">
       <SectionTitle>منصّات ترقّب</SectionTitle>
       <div className="grid grid-cols-3 gap-1.5 mt-1">
         {PLATFORM_LINKS.map(p => {
           const key = p.match === '/v2' ? 'spx' : p.match.slice(1) as keyof PlatformAccess
+          const href = p.match === '/v2' ? indexMeta(idx).href : p.href
           const allowed = access[key]
           const active = p.status === 'available' && (p.match === '/v2' ? pathname === '/v2' || pathname.startsWith('/v2/') : pathname.startsWith(p.match))
           const soon = p.status === 'soon'
@@ -145,12 +154,16 @@ function PlatformSwitcher({ access }: { access: PlatformAccess }) {
                  }}>
               <span className="text-base leading-none">{p.icon}</span>
               <span className="text-[11px] font-bold" style={{ color: active ? p.color : '#8A97A6' }}>{p.label}</span>
+              {p.match === '/v2' && idx !== 'SPX' ? (
+                <span className="text-[9px] font-black font-mono px-1.5 py-0.5 rounded"
+                      style={{ color: '#C9943A', background: 'rgba(201,148,58,0.12)', border: '1px solid rgba(201,148,58,0.35)' }}>{idx}</span>
+              ) : null}
               {soon ? <span className="text-[9px] font-mono" style={{ color: '#55657A' }}>قريباً</span>
                 : !allowed ? <span className="text-[9px] font-mono" style={{ color: '#7C8A99' }}>مقفلة</span> : null}
             </div>
           )
           if (soon) return <div key={p.label} title="قريباً">{inner}</div>
-          return <Link key={p.label} prefetch={false} href={allowed ? p.href : `/v2/upgrade?platform=${key}`}>{inner}</Link>
+          return <Link key={p.label} prefetch={false} href={allowed ? href : `/v2/upgrade?platform=${key}`}>{inner}</Link>
         })}
       </div>
     </div>
