@@ -170,8 +170,10 @@ export async function GET(request: NextRequest) {
   const asset = (searchParams.get('asset') ?? 'spx').toLowerCase()
   if (asset === 'stocks') {
     const symbol = (searchParams.get('symbol') ?? 'AAPL').toUpperCase()
+    const dteParam = searchParams.get('dte')
+    const targetDte = dteParam != null && dteParam !== '' && Number.isFinite(+dteParam) ? +dteParam : null
     try {
-      const result = await recommendForStock(symbol, { mode: recMode, forceType, full: true, tradeStyle: searchParams.get('style') })
+      const result = await recommendForStock(symbol, { mode: recMode, forceType, full: true, tradeStyle: searchParams.get('style'), targetDte })
       return NextResponse.json(result)
     } catch (err: any) {
       return NextResponse.json({ success: false, error: err.message, contracts: [] }, { status: 200 })

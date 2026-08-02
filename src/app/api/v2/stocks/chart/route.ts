@@ -17,11 +17,43 @@ const NO_STORE = { 'Cache-Control': 'no-store, max-age=0, must-revalidate' }
 // المنصة تحت المعايرة → أي «ادخل الآن» من التحليل يُخفَّض إلى «راقب» بنص صادق
 // (إحصاءات 51% مُعايَرة على SPX لا الأسهم).
 
-type TfId = '15m' | '1h' | '1d'
-const TF: Record<TfId, { intraday: boolean; interval: string }> = {
+type TfId = '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d' | '1w' | '1M'
+const TF: Record<TfId, { intraday: boolean; interval?: string; days?: number; agg?: '4h' | '1w' | '1M' }> = {
+  '1m':  { intraday: true,  interval: '1min'  },
+  '5m':  { intraday: true,  interval: '5min'  },
   '15m': { intraday: true,  interval: '15min' },
-  '1h':  { intraday: true,  interval: '1h' },
-  '1d':  { intraday: false, interval: 'daily' },
+  '30m': { intraday: true,  interval: '30min' },
+  '1h':  { intraday: true,  interval: '1h'    },
+  '4h':  { intraday: true,  interval: '1h',   agg: '4h' },
+  '1d':  { intraday: false, days: 365 },
+  '1w':  { intraday: false, days: 730, agg: '1w' },
+  '1M':  { intraday: false, days: 730, agg: '1M' },
+}
+
+// دمج الشموع: ٤ ساعات (من الساعة) · أسبوعي وشهري (من اليومي)
+function aggBars(bars: RawBar[], mode: '4h' | '1w' | '1M'): RawBar[] {
+  const key = (t: string) => {
+    if (mode === '1M') return t.slice(0, 7)
+    const d = new Date(t)
+    if (mode === '1w') {
+      const day = (d.getUTCDay() + 6) % 7 // الأسبوع يبدأ الاثنين
+      return new Date(d.getTime() - day * 86400000).toISOString().slice(0, 10)
+    }
+    return `${t.slice(0, 10)}-${Math.floor(d.getUTCHours() / 4)}`
+  }
+  const map = new Map<string, RawBar>()
+  for (const b of bars) {
+    const k = key(b.time)
+    const cur = map.get(k)
+    if (!cur) map.set(k, { ...b })
+    else {
+      cur.high = Math.max(cur.high, b.high)
+      cur.low = Math.min(cur.low, b.low)
+      cur.close = b.close
+      cur.volume = (cur.volume ?? 0) + (b.volume ?? 0)
+    }
+  }
+  return [...map.values()]
 }
 
 const WATCH_ONLY_TEXT =
@@ -40,8 +72,9 @@ export async function GET(request: NextRequest) {
   let bars: RawBar[] = []
   try {
     bars = cfg.intraday
-      ? await getStockIntradayBars(symbol, cfg.interval)
-      : await getStockDailyBars(symbol, 365)
+      ? await getStockIntradayBars(symbol, cfg.interval ?? '15min')
+      : await getStockDailyBars(symbol, cfg.days ?? 365)
+    if (cfg.agg) bars = aggBars(bars, cfg.agg)
   } catch { /* أدناه */ }
 
   if (bars.length < 20) {
@@ -63,7 +96,7 @@ export async function GET(request: NextRequest) {
   const { macdLine, signalLine, histogram } = macdFn(closes)
   const { upper: bbUpper, mid: bbMid, lower: bbLower, width: bbWidth } = bollinger(closes)
   const atrArr = atrFn(highs, lows, closes)
-  const vwapArr = cfg.intraday ? computeVwap(bars) : bars.map(() => null)
+  const vwapArr = cfg.intraday && !cfg.agg ? computeVwap(bars) : bars.map(() => null)
 
   const n2 = (v: number | null) => (v !== null ? +v.toFixed(2) : null)
   const n1 = (v: number | null) => (v !== null ? +v.toFixed(1) : null)
@@ -90,7 +123,7 @@ export async function GET(request: NextRequest) {
 
   // حارس الانهيارات على شموع السهم اليومية
   try {
-    const daily = cfg.intraday ? await getStockDailyBars(symbol, 60).catch(() => []) : bars
+    const daily = cfg.intraday || cfg.agg ? await getStockDailyBars(symbol, 60).catch(() => []) : bars
     applyCrashGuard(analysis, crashGuard(daily, null))
   } catch { /* تجاهل */ }
 

@@ -14,6 +14,26 @@ type NewsItem = { id: string; title: string; titleAr: string; source: string; pu
 const ACCENT = '#60A5FA'
 const UNIVERSE = ['AAPL', 'NVDA', 'TSLA', 'MSFT', 'AMZN', 'META', 'GOOGL', 'AMD', 'NFLX', 'AVGO', 'COIN', 'PLTR']
 
+// مدة العقد حتى الانتهاء — يختارها المستخدم، والمنصة تنتقي أقرب انتهاء متاح لها
+const DTE_OPTIONS: { value: number | null; label: string }[] = [
+  { value: null, label: 'تلقائي' },
+  { value: 0,    label: 'اليوم' },
+  { value: 2,    label: 'يومان' },
+  { value: 3,    label: '٣ أيام' },
+  { value: 4,    label: '٤ أيام' },
+  { value: 7,    label: 'أسبوع' },
+  { value: 14,   label: 'أسبوعان' },
+  { value: 30,   label: 'شهر' },
+]
+
+// حكم الملاءمة: كلما طالت المدة قلّت المخاطرة
+function dteNote(dte: number): { text: string; color: string } {
+  if (dte === 0)  return { text: 'مضاربة اليوم — الأعلى مخاطرة: الوقت يذوب بسرعة والعقد يحتاج حركة فورية', color: '#F87171' }
+  if (dte <= 4)   return { text: 'مدة قصيرة — مخاطرة عالية: الوقت ضدّك، راقب العقد عن قرب', color: '#FBBF24' }
+  if (dte <= 7)   return { text: 'مدة مريحة — مخاطرة متوسطة والوقت يعمل معك', color: '#34D399' }
+  return               { text: 'كلما طالت المدة قلّت المخاطرة — الأنسب لصفقات الأيام', color: '#34D399' }
+}
+
 type Strategy = {
   entryBalanced: number; entryBalancedTotal: number
   entryConservative: number
@@ -69,6 +89,7 @@ function AnalyzeInner() {
   const [input, setInput] = useState('')
   const [chart, setChart] = useState<StockChartData | null>(null)
   const [news, setNews] = useState<NewsItem[] | null>(null)
+  const [dte, setDte] = useState<number | null>(null)
 
   useEffect(() => {
     try {
@@ -81,11 +102,11 @@ function AnalyzeInner() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/v2/recommend?asset=stocks&symbol=${encodeURIComponent(symbol)}&mode=${mode}`)
+      const res = await fetch(`/api/v2/recommend?asset=stocks&symbol=${encodeURIComponent(symbol)}&mode=${mode}${dte != null ? `&dte=${dte}` : ''}`)
       setData(await res.json())
     } catch { /* أبقِ القديم */ }
     setLoading(false)
-  }, [symbol, mode])
+  }, [symbol, mode, dte])
 
   useEffect(() => { load() }, [load])
 
@@ -149,6 +170,26 @@ function AnalyzeInner() {
             <button key={x.m} onClick={() => switchMode(x.m)} className="text-xs px-2.5 py-1 font-bold"
                     style={{ background: mode === x.m ? `${ACCENT}22` : 'transparent', color: mode === x.m ? '#BFDBFE' : '#4A5568' }}>{x.label}</button>
           ))}
+        </div>
+        {/* مدة العقد حتى الانتهاء */}
+        <div>
+          <div className="text-xs font-bold mb-1.5" style={{ color: '#8A97A6' }}>مدة العقد حتى الانتهاء</div>
+          <div className="flex flex-wrap gap-1.5">
+            {DTE_OPTIONS.map(o => (
+              <button key={String(o.value)} onClick={() => setDte(o.value)}
+                      className="text-xs font-bold px-2.5 py-1 rounded-lg"
+                      style={{
+                        background: dte === o.value ? `${ACCENT}22` : 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${dte === o.value ? `${ACCENT}55` : 'rgba(255,255,255,0.07)'}`,
+                        color: dte === o.value ? '#BFDBFE' : '#8A97A6',
+                      }}>{o.label}</button>
+            ))}
+          </div>
+          {dte != null && (
+            <div className="text-xs mt-2 leading-5 font-bold" style={{ color: dteNote(dte).color }}>
+              {dteNote(dte).text}
+            </div>
+          )}
         </div>
       </div>
 

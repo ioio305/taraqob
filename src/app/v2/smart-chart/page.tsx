@@ -25,8 +25,8 @@ interface ChartData {
   gamma?: GammaExposure | null; em?: { upper: number; lower: number; points: number } | null; error?: string
 }
 
-const TFS = ['1m', '3m', '5m', '15m', '1h', '1d'] as const
-const TF_AR: Record<string, string> = { '1m': 'دقيقة', '3m': '3 دقائق', '5m': '5 دقائق', '15m': '15 دقيقة', '1h': 'ساعة', '1d': 'يومي' }
+const TFS = ['1m', '3m', '5m', '15m', '30m', '1h', '4h', '1d', '1w', '1M'] as const
+const TF_AR: Record<string, string> = { '1m': 'دقيقة', '3m': '3 دقائق', '5m': '5 دقائق', '15m': '15 دقيقة', '30m': '30 دقيقة', '1h': 'ساعة', '4h': '4 ساعات', '1d': 'يومي', '1w': 'أسبوعي', '1M': 'شهري' }
 
 function toTime(t: string, intraday: boolean): Time {
   if (!intraday) return t.slice(0, 10) as Time
@@ -70,6 +70,23 @@ export default function SmartChartPage() {
   const [error, setError]     = useState('')
   const [showDetails, setShowDetails] = useState(false)
   const [strikeInput, setStrikeInput] = useState('')   // سترايك يدوي لجسر التحليل
+  const [expInfo, setExpInfo] = useState<{ expiration: string; dte: number; type: string } | null>(null)
+
+  // تاريخ انتهاء العقد المقترح حالياً (يُجلب مرة ويتحدّث كل ٥ دقائق)
+  useEffect(() => {
+    let alive = true
+    const pull = () => fetch('/api/v2/recommend?mode=balanced').then(r => r.json()).then(j => {
+      if (!alive) return
+      const c = (j?.contracts ?? [])[0]
+      if (c?.expiration) {
+        const dte = Math.max(0, Math.round((new Date(c.expiration + 'T12:00:00Z').getTime() - Date.now()) / 86400000))
+        setExpInfo({ expiration: c.expiration, dte, type: c.type })
+      } else setExpInfo(null)
+    }).catch(() => {})
+    pull()
+    const id = setInterval(pull, 300_000)
+    return () => { alive = false; clearInterval(id) }
+  }, [])
 
   // انتقال مباشر لتحليل عقد بالسترايك والاتجاه المختارين
   const goAnalyze = (type: 'call' | 'put', fallbackStrike?: number) => {
@@ -266,13 +283,11 @@ export default function SmartChartPage() {
           {refreshing && <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#26D07C' }} title="يتحدّث" />}
         </div>
         <div className="flex gap-1">
-          {TFS.map(t => (
-            <button key={t} onClick={() => setTf(t)}
-              className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
-              style={{ background: tf === t ? '#C9943A' : 'rgba(255,255,255,0.04)', color: tf === t ? '#060D14' : '#8A97A6', border: tf === t ? 'none' : '1px solid rgba(255,255,255,0.06)' }}>
-              {TF_AR[t]}
-            </button>
-          ))}
+          <select value={tf} onChange={e => setTf(e.target.value as typeof TFS[number])}
+            className="px-3 py-1.5 rounded-lg text-xs font-bold outline-none cursor-pointer"
+            style={{ background: 'rgba(255,255,255,0.04)', color: '#E8D5A3', border: '1px solid rgba(201,148,58,0.3)' }}>
+            {TFS.map(t => <option key={t} value={t}>{TF_AR[t]}</option>)}
+          </select>
         </div>
       </div>
 
@@ -335,6 +350,11 @@ export default function SmartChartPage() {
               <span className="text-[11px]" style={{ color: '#5E6E7F' }}>
                 ({verdict.dir === 'put' ? 'بوت: الهدف تحت والوقف فوق' : 'كول: الهدف فوق والوقف تحت'})
               </span>
+              {expInfo && (
+                <span style={{ color: '#8A97A6' }}>📅 ينتهي <b className="font-mono" style={{ color: '#E8D5A3' }}>{expInfo.expiration}</b>
+                  <span style={{ color: expInfo.dte <= 2 ? '#FBBF24' : '#5E6E7F' }}> (خلال {expInfo.dte} {expInfo.dte === 1 ? 'يوم' : 'أيام'}{expInfo.dte === 0 ? ' — مضاربة اليوم' : expInfo.dte <= 2 ? ' — مدة قصيرة' : ''})</span>
+                </span>
+              )}
               <span className="mr-auto" style={{ color: '#5E6E7F' }}>SPX <b className="font-mono text-white">{verdict.spot.toLocaleString()}</b></span>
             </div>
           )}

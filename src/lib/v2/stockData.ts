@@ -111,8 +111,10 @@ export async function getStockChain(symbol: string, expiration: string): Promise
 // ── شموع داخل اليوم للسهم (للشارت والتحليل الفني) ─────────────────────────────
 // Yahoo أولاً (بسيط وموثوق للأسهم)، ثم Tradier timesales احتياطاً.
 const YF_INTRADAY: Record<string, { interval: string; range: string }> = {
+  '1min':  { interval: '1m',  range: '1d'  },
   '5min':  { interval: '5m',  range: '5d'  },
   '15min': { interval: '15m', range: '1mo' },
+  '30min': { interval: '30m', range: '1mo' },
   '1h':    { interval: '60m', range: '3mo' },
 }
 export async function getStockIntradayBars(symbol: string, tf = '15min'): Promise<MdBar[]> {

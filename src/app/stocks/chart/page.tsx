@@ -33,7 +33,13 @@ type Summary = {
 }
 type ChartData = { success: boolean; price: number; changePct: number; candles: any[]; analysis: { summary: Summary } }
 
-const TFS = [{ id: '1d', label: 'يومي' }, { id: '1h', label: 'ساعة' }, { id: '15m', label: '١٥ دقيقة' }] as const
+type TfId = '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d' | '1w' | '1M'
+const TFS: { id: TfId; label: string }[] = [
+  { id: '1m', label: 'دقيقة' }, { id: '5m', label: '٥ د' }, { id: '15m', label: '١٥ د' },
+  { id: '30m', label: '٣٠ د' }, { id: '1h', label: 'ساعة' }, { id: '4h', label: '٤ ساعات' },
+  { id: '1d', label: 'يومي' }, { id: '1w', label: 'أسبوعي' }, { id: '1M', label: 'شهري' },
+]
+const INTRADAY: TfId[] = ['1m', '5m', '15m', '30m', '1h', '4h']
 
 function toTime(t: string): Time { return Math.floor(new Date(t).getTime() / 1000) as unknown as Time }
 
@@ -45,7 +51,7 @@ const BIAS_META = {
 
 export default function StocksChart() {
   const [symbol, setSymbol] = useState('NVDA')
-  const [tf, setTf] = useState<'1d' | '1h' | '15m'>('1d')
+  const [tf, setTf] = useState<TfId>('1d')
   const [summary, setSummary] = useState<Summary | null>(null)
   const [price, setPrice] = useState<{ price: number; changePct: number } | null>(null)
   const [loading, setLoading] = useState(true)
@@ -67,7 +73,7 @@ export default function StocksChart() {
         grid: { vertLines: { color: 'rgba(255,255,255,.03)' }, horzLines: { color: 'rgba(255,255,255,.03)' } },
         crosshair: { mode: CrosshairMode.Normal },
         rightPriceScale: { borderColor: 'rgba(255,255,255,.08)' },
-        timeScale: { borderColor: 'rgba(255,255,255,.08)', timeVisible: tf !== '1d' },
+        timeScale: { borderColor: 'rgba(255,255,255,.08)', timeVisible: INTRADAY.includes(tf) },
         width: wrapRef.current.clientWidth,
         height: 400,
       })
@@ -122,15 +128,10 @@ export default function StocksChart() {
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border border-white/10">
-            {TFS.map(t => (
-              <button key={t.id} onClick={() => setTf(t.id)}
-                className="px-3 py-1.5 text-xs font-bold"
-                style={{ color: tf === t.id ? '#0B1220' : '#8A97A6', background: tf === t.id ? ACCENT : 'transparent' }}>
-                {t.label}
-              </button>
-            ))}
-          </div>
+          <select value={tf} onChange={e => setTf(e.target.value as TfId)}
+            className="rounded-lg border border-white/10 bg-[#0B1220] px-3 py-1.5 text-sm font-bold text-white">
+            {TFS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+          </select>
           <select value={symbol} onChange={e => setSymbol(e.target.value)}
             className="rounded-lg border border-white/10 bg-[#0B1220] px-3 py-1.5 text-sm font-bold text-white">
             {SYMBOLS.map(s => <option key={s.symbol} value={s.symbol}>{s.nameAr} ({s.symbol})</option>)}

@@ -18,7 +18,7 @@ const NO_STORE = { 'Cache-Control': 'no-store, max-age=0, must-revalidate' }
 
 // ─── Timeframe config ─────────────────────────────────────────────────────────
 
-type TfId = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '1d' | '1w' | '1M'
+type TfId = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d' | '1w' | '1M'
 
 const TF_CONFIG: Record<TfId, {
   intraday:        boolean
@@ -33,6 +33,7 @@ const TF_CONFIG: Record<TfId, {
   '15m': { intraday: true,  tradierInterval: '15min',   aggregate: 1, days: 10,   barMinutes: 15    },
   '30m': { intraday: true,  tradierInterval: '15min',   aggregate: 2, days: 20,   barMinutes: 30    },
   '1h':  { intraday: true,  tradierInterval: '15min',   aggregate: 4, days: 40,   barMinutes: 60    },
+  '4h':  { intraday: true,  tradierInterval: '15min',   aggregate: 16, days: 90,  barMinutes: 240   },
   '1d':  { intraday: false, tradierInterval: 'daily',   aggregate: 1, days: 365,  barMinutes: 1440  },
   '1w':  { intraday: false, tradierInterval: 'weekly',  aggregate: 1, days: 1095, barMinutes: 10080 },
   '1M':  { intraday: false, tradierInterval: 'monthly', aggregate: 1, days: 1825, barMinutes: 43200 },

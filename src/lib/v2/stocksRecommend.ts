@@ -85,6 +85,8 @@ export interface RecommendStockOptions {
   prefetched?: { quote: Awaited<ReturnType<typeof getStockQuote>>; bars: Awaited<ReturnType<typeof getStockDailyBars>> }
   // ⚡ مضاربة يومية (نفس اليوم) أم 📅 صفقات أيام (الافتراضي)
   tradeStyle?: string | null
+  // المدة المطلوبة حتى الانتهاء (يوم) — يختارها المستخدم؛ أقرب انتهاء متاح يُنتقى
+  targetDte?: number | null
 }
 
 export async function recommendForStock(symbol: string, options: RecommendStockOptions = {}): Promise<StockRecResult> {
@@ -191,6 +193,11 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
   const dteRanges = (options.full || tradeStyle === 'day')
     ? [{ min: 0, max: 2 }, { min: 2, max: 9 }, { min: 9, max: 21 }]
     : [{ min: 5, max: 12 }, { min: 9, max: 21 }, { min: 2, max: 5 }]
+  const dteOf = (e: string) => Math.round((new Date(e + 'T12:00:00Z').getTime() - new Date(todayStr + 'T12:00:00Z').getTime()) / 86400000)
+  // المستخدم اختار مدة: أقرب انتهاء متاح لطلبه يُستخدم مباشرة
+  const userPicked = options.targetDte != null
+    ? [...tradableExpirations].sort((x, y) => Math.abs(dteOf(x) - options.targetDte!) - Math.abs(dteOf(y) - options.targetDte!)).slice(0, 1)
+    : null
 
   let contracts: any[] = []
   let usedExp = ''
@@ -201,12 +208,13 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
 
   const typesToFetch: Array<'call' | 'put'> = contractType ? [contractType] : ['call', 'put']
 
-  for (const range of dteRanges) {
-    const exp = tradableExpirations.find(e => {
-      const dte = Math.round((new Date(e + 'T12:00:00Z').getTime() - new Date(todayStr + 'T12:00:00Z').getTime()) / 86400000)
+  const candidateExps: string[] = userPicked
+    ?? dteRanges.map(range => tradableExpirations.find(e => {
+      const dte = dteOf(e)
       return dte >= range.min && dte <= range.max
-    })
-    if (!exp) continue
+    })).filter((e): e is string => Boolean(e))
+
+  for (const exp of candidateExps) {
     const chain = await stocksAdapter.getChain(sym, exp).catch(() => [] as any[])
     if (!chain.length) continue
 
