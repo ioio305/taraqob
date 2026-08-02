@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { getHistoryBars, getIntradayBars } from '@/lib/v2/marketData'
+import { getHistoryBars, getIntradayBars, type MdBar } from '@/lib/v2/marketData'
+import { getStockDailyBars, getStockIntradayBars } from '@/lib/v2/stockData'
+import { underlyingFromContract } from '@/lib/v2/underlying'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,24 +26,41 @@ export async function GET(request: NextRequest) {
   const sb = createServiceClient()
   const { data: signals } = await sb
     .from('v2_signals')
-    .select('id, contract_type, target_level, stop_loss_level, spx_at_signal, expiry, created_at, status')
+    .select('id, contract_symbol, contract_type, target_level, stop_loss_level, spx_at_signal, expiry, created_at, status')
     .eq('status', 'active')
     .limit(200)
 
   if (!signals || signals.length === 0) return NextResponse.json({ ok: true, evaluated: 0 })
 
-  // شموع داخلية (تسلسل حقيقي: أول لمس يفوز) + يومي احتياطي للإشارات الأقدم
-  const [daily, intraday] = await Promise.all([
-    getHistoryBars('daily', 60).catch(() => []),
-    getIntradayBars('5min', 25).catch(() => []),
-  ])
-  if (daily.length === 0 && intraday.length === 0) return NextResponse.json({ ok: false, error: 'no price data' })
+  // شموع سباكس (المسار الأصلي) + شموع كل مؤشر آخر له إشارات نشطة — كل توصية
+  // تُقيَّم على أسعار مؤشرها هي، لا على سباكس.
+  const underlyings = new Set<string>()
+  for (const s of signals as any[]) underlyings.add(underlyingFromContract(s.contract_symbol))
+
+  const barsByUnderlying = new Map<string, { daily: MdBar[]; intraday: MdBar[] }>()
+  await Promise.all(Array.from(underlyings).map(async (u) => {
+    if (u === 'SPX') {
+      const [daily, intraday] = await Promise.all([
+        getHistoryBars('daily', 60).catch(() => []),
+        getIntradayBars('5min', 25).catch(() => []),
+      ])
+      barsByUnderlying.set(u, { daily, intraday })
+    } else {
+      const [daily, intraday] = await Promise.all([
+        getStockDailyBars(u, 60).catch(() => []),
+        getStockIntradayBars(u, '5min').catch(() => []),
+      ])
+      barsByUnderlying.set(u, { daily, intraday })
+    }
+  }))
 
   const todayStr = new Date().toISOString().slice(0, 10)
   let win = 0, loss = 0, expired = 0
 
   for (const s of signals as any[]) {
     if (s.target_level == null || s.stop_loss_level == null) continue
+    const { daily, intraday } = barsByUnderlying.get(underlyingFromContract(s.contract_symbol)) ?? { daily: [], intraday: [] }
+    if (daily.length === 0 && intraday.length === 0) continue
     const createdIso = String(s.created_at)
     const fromDate = createdIso.slice(0, 10)
     // نافذة حياة الإشارة فقط: من الإنشاء حتى نهاية يوم الانتهاء (0DTE = يوم واحد)

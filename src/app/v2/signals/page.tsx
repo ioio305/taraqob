@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { underlyingFromContract } from '@/lib/v2/underlying'
 
 type Signal = {
   id: string
@@ -56,6 +57,7 @@ export default function SignalsPage() {
   const [signals, setSignals] = useState<Signal[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter]   = useState<string>('all')
+  const [underlying, setUnderlying] = useState<string>('all')
 
   useEffect(() => {
     async function load() {
@@ -66,7 +68,7 @@ export default function SignalsPage() {
           .from('v2_signals')
           .select('*')
           .order('created_at', { ascending: false })
-          .limit(50)
+          .limit(100)
         setSignals(data ?? [])
       } catch { setSignals([]) }
       setLoading(false)
@@ -74,9 +76,20 @@ export default function SignalsPage() {
     load()
   }, [])
 
-  const filtered = filter === 'all'
+  const underlyings = Array.from(new Set(signals.map(s => underlyingFromContract(s.contract_symbol)))).sort()
+  const byUnderlying = underlying === 'all'
     ? signals
-    : signals.filter((s) => s.status === filter)
+    : signals.filter(s => underlyingFromContract(s.contract_symbol) === underlying)
+
+  // ملخص النتائج للمجموعة المعروضة (المغلقة فقط تدخل في نسبة النجاح)
+  const wins = byUnderlying.filter(s => s.status === 'closed_win').length
+  const losses = byUnderlying.filter(s => s.status === 'closed_loss').length
+  const active = byUnderlying.filter(s => s.status === 'active').length
+  const winRate = wins + losses > 0 ? Math.round((wins / (wins + losses)) * 100) : null
+
+  const filtered = filter === 'all'
+    ? byUnderlying
+    : byUnderlying.filter((s) => s.status === filter)
 
   return (
     <div className="min-h-screen bg-navy-950 text-white" dir="rtl">
@@ -89,6 +102,45 @@ export default function SignalsPage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-6 space-y-4">
+
+        {/* ملخص النتائج */}
+        {!loading && byUnderlying.length > 0 && (
+          <div className="bg-navy-900 border border-navy-700 rounded-xl p-4 flex items-center gap-5 flex-wrap">
+            <div>
+              <div className="text-2xl font-bold" style={{ color: winRate == null ? '#8FA3B8' : winRate >= 50 ? '#26D07C' : '#F0435A' }}>
+                {winRate == null ? '—' : `${winRate}%`}
+              </div>
+              <div className="text-[11px] text-surface-500">نسبة النجاح</div>
+            </div>
+            <div className="text-xs text-surface-400 leading-6">
+              <span className="text-emerald-400 font-bold">{wins} ربح</span>
+              <span className="text-surface-600 mx-1.5">·</span>
+              <span className="text-red-400 font-bold">{losses} خسارة</span>
+              <span className="text-surface-600 mx-1.5">·</span>
+              <span>{active} نشطة</span>
+            </div>
+            <div className="text-[11px] text-surface-600 mr-auto">تُقيَّم كل توصية على أسعار مؤشرها — آخر ١٠٠ توصية</div>
+          </div>
+        )}
+
+        {/* تصفية المؤشر */}
+        {underlyings.length > 1 && (
+          <div className="flex gap-2 flex-wrap">
+            {['all', ...underlyings].map((u) => (
+              <button
+                key={u}
+                onClick={() => setUnderlying(u)}
+                className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                  underlying === u
+                    ? 'bg-blue-600 border-blue-600 text-white font-semibold'
+                    : 'border-navy-700 text-surface-400 hover:text-white hover:border-navy-600'
+                }`}
+              >
+                {u === 'all' ? 'كل المؤشرات' : u}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Filters */}
         <div className="flex gap-2 flex-wrap">
@@ -140,6 +192,9 @@ export default function SignalsPage() {
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         {/* اسم مفهوم بدل رمز العقد التقني */}
+                        <span className="text-[10px] px-1.5 py-0.5 rounded border border-blue-800 bg-blue-900/40 text-blue-300 font-mono font-bold">
+                          {underlyingFromContract(s.contract_symbol)}
+                        </span>
                         <span className="font-bold text-base"
                           style={{ color: s.contract_type === 'put' ? '#F0435A' : '#26D07C' }}>
                           {s.contract_type === 'put' ? '▼ بوت' : '▲ كول'} {fmt(s.strike, 0)}
