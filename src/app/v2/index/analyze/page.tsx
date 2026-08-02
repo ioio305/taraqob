@@ -67,12 +67,36 @@ function Inner() {
   const [data, setData] = useState<Result | null>(null)
   const [loading, setLoading] = useState(false)
 
+  // حفظ آخر اختيارات التحليل لكل مؤشر — تُسترجع تلقائياً عند العودة
+  const PREFS_KEY = 'taraqob_index_analyze_prefs'
+  const loadPrefs = (id: string): { strike: string; ctype: 'auto' | 'call' | 'put'; dte: number | null } | null => {
+    try { return JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}')[id] ?? null } catch { return null }
+  }
+  const savePrefs = (id: string, prefs: { strike: string; ctype: 'auto' | 'call' | 'put'; dte: number | null }) => {
+    try {
+      const all = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}')
+      all[id] = prefs
+      localStorage.setItem(PREFS_KEY, JSON.stringify(all))
+    } catch { /* تجاهل */ }
+  }
+
   useEffect(() => {
     const cur = getSelectedIndex()
-    setIdx(cur !== 'SPX' ? cur : 'NDX')
+    const startIdx = cur !== 'SPX' ? cur : 'NDX'
+    setIdx(startIdx)
+    // القادم من الشارت (رابط فيه سترايك) يتقدّم على المحفوظ
+    if (!params.get('strike')) {
+      const saved = loadPrefs(startIdx)
+      if (saved) { setStrike(saved.strike); setCtype(saved.ctype); setDte(saved.dte) }
+    }
     const onCustom = (e: Event) => {
       const v = (e as CustomEvent<IndexId>).detail
-      setIdx(v !== 'SPX' ? v : 'NDX')
+      const next = v !== 'SPX' ? v : 'NDX'
+      setIdx(next)
+      const saved = loadPrefs(next)
+      setStrike(saved?.strike ?? '')
+      setCtype(saved?.ctype ?? 'auto')
+      setDte(saved?.dte ?? null)
     }
     window.addEventListener('taraqob:index', onCustom)
     return () => window.removeEventListener('taraqob:index', onCustom)
@@ -88,6 +112,7 @@ function Inner() {
       if (dte != null) q.set('dte', String(dte))
       const res = await fetch(`/api/v2/index/analyze?${q.toString()}`)
       setData(await res.json())
+      savePrefs(symbol, { strike: strike.trim(), ctype, dte })
     } catch { /* تبقى آخر نتيجة */ }
     setLoading(false)
   }, [strike, ctype, dte])
@@ -161,7 +186,7 @@ function Inner() {
                 <span className="text-2xl font-black font-mono text-white">
                   {c.type === 'call' ? '▲ كول' : '▼ بوت'} {c.strike}
                 </span>
-                <span className="text-xs font-mono" style={{ color: '#7C8A99' }}>ينتهي {data.expiration} (خلال {data.dte} {data.dte === 1 ? 'يوم' : 'أيام'})</span>
+                <span className="text-xs font-mono" style={{ color: '#7C8A99' }}>ينتهي {data.expiration} (خلال {data.dte === 2 ? 'يومان' : `${data.dte} ${data.dte === 1 ? 'يوم' : data.dte >= 11 ? 'يوماً' : 'أيام'}`})</span>
               </div>
               {data.direction ? (
                 <span className="rounded-lg px-3 py-1.5 text-xs font-black"

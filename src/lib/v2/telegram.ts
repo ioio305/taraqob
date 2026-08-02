@@ -5,6 +5,8 @@
 //                        api.telegram.org/bot<المفتاح>/getUpdates لتجده)
 // بدون المتغيرين، الدالة تتجاهل الإرسال بصمت — لا تكسر شيئاً.
 
+import { underlyingFromContract } from './underlying'
+
 export async function sendTelegram(text: string): Promise<boolean> {
   const token = process.env.TELEGRAM_BOT_TOKEN
   const chatId = process.env.TELEGRAM_CHAT_ID
@@ -28,14 +30,15 @@ export function formatSignalMessage(s: {
   spx_at_signal?: number | null; reason?: string
 }): string {
   const typeAr = s.contract_type === 'put' ? 'بوت' : 'كول'
+  const underlying = underlyingFromContract(s.contract_symbol)
   const lines = [
     `🚨 <b>فرصة ${s.grade} — ترقب</b>`,
     `العقد: ${typeAr} ${s.strike} (${s.contract_symbol})`,
   ]
   if (s.entry_price != null)      lines.push(`الدخول: $${s.entry_price}`)
-  if (s.stop_loss_level != null)  lines.push(`الوقف (SPX): ${s.stop_loss_level}`)
-  if (s.target_level != null)     lines.push(`الهدف (SPX): ${s.target_level}`)
-  if (s.spx_at_signal != null)    lines.push(`SPX عند الإشارة: ${s.spx_at_signal}`)
+  if (s.stop_loss_level != null)  lines.push(`الوقف (${underlying}): ${s.stop_loss_level}`)
+  if (s.target_level != null)     lines.push(`الهدف (${underlying}): ${s.target_level}`)
+  if (s.spx_at_signal != null)    lines.push(`${underlying} عند الإشارة: ${s.spx_at_signal}`)
   if (s.reason)                   lines.push(`السبب: ${s.reason}`)
   lines.push('', '⚠️ راجع المنصة قبل الدخول — القرار قرارك')
   return lines.join('\n')
