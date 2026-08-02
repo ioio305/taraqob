@@ -18,12 +18,12 @@ const NAME_OVERRIDES: Record<string, string> = {
   TLT: 'سندات الخزانة طويلة الأجل', IEF: 'سندات الخزانة المتوسطة',
   HYG: 'سندات الشركات عالية العائد', DBC: 'سلة السلع',
 }
-const SYMBOLS = ['QQQ', 'XLK', 'SMH', 'XLF', 'XLE', 'XLY', 'IWM', 'RSP', 'GLD', 'TLT', 'IEF', 'HYG', 'DBC']
+const SYMBOLS = ['IWM', 'XLK', 'SMH', 'XLF', 'XLE', 'XLY', 'RSP', 'GLD', 'TLT', 'IEF', 'HYG', 'DBC']
 
 function toTime(t: string): Time { return Math.floor(new Date(t).getTime() / 1000) as unknown as Time }
 
 export default function FundsChart() {
-  const [symbol, setSymbol] = useState('QQQ')
+  const [symbol, setSymbol] = useState('IWM')
   const [verdicts, setVerdicts] = useState<Record<string, VerdictInfo>>({})
   const [names, setNames] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)

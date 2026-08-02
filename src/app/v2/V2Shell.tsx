@@ -120,7 +120,7 @@ type PlatformLink = {
   status: 'available' | 'soon'
 }
 const PLATFORM_LINKS: PlatformLink[] = [
-  { href: '/v2',     match: '/v2',     label: 'المؤشر SPX', icon: '📈', color: '#C9943A', status: 'available' },
+  { href: '/v2',     match: '/v2',     label: 'المؤشرات', icon: '📈', color: '#C9943A', status: 'available' },
   { href: '/stocks', match: '/stocks', label: 'الشركات',    icon: '🏢', color: '#60A5FA', status: 'available' },
   { href: '/funds',  match: '/funds',  label: 'الصناديق',   icon: '🧺', color: '#26D07C', status: 'available' },
 ]

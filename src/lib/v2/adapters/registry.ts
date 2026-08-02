@@ -8,7 +8,7 @@ export const PLATFORMS: PlatformMeta[] = [
   {
     key:     'spx',
     label:   'الخيارات SPX الأمريكية',
-    tagline: 'توصيات وتحليل وشارت لخيارات مؤشر S&P 500 — مُعايَرة على 8 سنوات',
+    tagline: 'توصيات وتحليل وشارت لخيارات المؤشرات الكبرى — مُعايَرة على 8 سنوات',
     icon:    '📈',
     route:   '/v2',
     status:  'available',
@@ -26,7 +26,7 @@ export const PLATFORMS: PlatformMeta[] = [
   {
     key:     'funds',
     label:   'الصناديق',
-    tagline: 'خيارات الصناديق (SPY · QQQ · القطاعات) مع دوران القطاعات',
+    tagline: 'خيارات صناديق القطاعات والأسواق مع دوران القطاعات',
     icon:    '🧺',
     route:   '/funds',
     status:  'available',

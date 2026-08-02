@@ -26,8 +26,6 @@ export interface FundItem extends UniverseItem {
 
 export const FUNDS_UNIVERSE: FundItem[] = [
   // ── مؤشرات واسعة ──
-  { symbol: 'SPY',  name: 'S&P 500',      nameAr: 'مؤشر السوق الأمريكي',  kind: 'index',  liquid: true },
-  { symbol: 'QQQ',  name: 'Nasdaq 100',   nameAr: 'كبرى شركات التقنية',   kind: 'index',  liquid: true },
   { symbol: 'IWM',  name: 'Russell 2000', nameAr: 'الشركات الصغيرة',       kind: 'index',  liquid: true },
   { symbol: 'DIA',  name: 'Dow Jones',    nameAr: 'داو جونز الصناعي',      kind: 'index',  liquid: true },
   // ── قطاعات S&P الأحد عشر ──

@@ -84,6 +84,11 @@ export default function StocksDecisionRoom() {
   const search = useCallback(async () => {
     const sym = query.trim().toUpperCase()
     if (!sym || searching) return
+    if (['SPX', 'SPXW', 'NDX', 'SPY', 'QQQ', 'VIX'].includes(sym)) {
+      setSearchError('هذا مؤشر — تجده في تبويب «المؤشرات»')
+      setSearched(null)
+      return
+    }
     setSearching(true)
     setSearchError(null)
     try {

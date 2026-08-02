@@ -73,7 +73,7 @@ export default function FundsDecisionRoomPage() {
         </section>
         <section className="grid gap-4 md:grid-cols-2">
           <div className="rounded-2xl border border-white/[.06] bg-[#0B1B15] p-5"><div className="text-sm font-black text-white">دوران القطاعات</div><div className="mt-3 text-2xl font-black text-emerald-300">{strongest?.symbol ?? '—'}</div><div className="text-xs text-slate-500">{strongest?.nameAr} {strongest ? `${strongest.changePct > 0 ? '+' : ''}${strongest.changePct.toFixed(2)}%` : ''}</div></div>
-          <div className="rounded-2xl border border-emerald-300/15 bg-emerald-300/[.04] p-5"><div className="text-sm font-black text-white">الخطوة التالية</div><div className="mt-2 text-xs text-slate-500">{blocked ? 'ابقَ خارج السوق.' : 'راجع الصندوق والعقد قبل التنفيذ.'}</div><Link href={`/funds/analyze?symbol=${opportunity?.symbol ?? 'SPY'}`} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-emerald-300 px-4 py-2.5 text-xs font-black text-emerald-950">فتح التحليل <ArrowLeft size={14} /></Link></div>
+          <div className="rounded-2xl border border-emerald-300/15 bg-emerald-300/[.04] p-5"><div className="text-sm font-black text-white">الخطوة التالية</div><div className="mt-2 text-xs text-slate-500">{blocked ? 'ابقَ خارج السوق.' : 'راجع الصندوق والعقد قبل التنفيذ.'}</div><Link href={`/funds/analyze?symbol=${opportunity?.symbol ?? 'XLK'}`} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-emerald-300 px-4 py-2.5 text-xs font-black text-emerald-950">فتح التحليل <ArrowLeft size={14} /></Link></div>
         </section>
         {opportunity ? <FundBrief symbol={opportunity.symbol} /> : null}
       </div>

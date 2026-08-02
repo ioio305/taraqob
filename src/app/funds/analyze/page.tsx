@@ -20,7 +20,7 @@ type Detail = {
 
 export default function FundAnalyzePage() {
   const params = useSearchParams()
-  const [symbol, setSymbol] = useState(params.get('symbol')?.toUpperCase() ?? 'SPY')
+  const [symbol, setSymbol] = useState(params.get('symbol')?.toUpperCase() ?? 'XLK')
   const [data, setData] = useState<Detail | null>(null)
   const [loading, setLoading] = useState(false)
   const analyze = useCallback(async (value = symbol) => {

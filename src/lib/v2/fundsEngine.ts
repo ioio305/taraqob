@@ -111,7 +111,7 @@ const r2 = (x: number) => Math.round(x * 100) / 100
 
 // الكون النشط — اختير على فترة التدريب 2018–2022 فقط (ربحية موجبة)، ثم ثُبّت
 // قبل النظر في نتائج التحقق. الراسبون في التدريب: DIA XLV XLI XLP XLU SLV
-export const FUNDS_ACTIVE = ['QQQ','IWM','RSP','XLK','XLF','XLE','XLY','SMH','GLD','TLT','IEF','HYG','DBC']
+export const FUNDS_ACTIVE = ['IWM','RSP','XLK','XLF','XLE','XLY','SMH','GLD','TLT','IEF','HYG','DBC']
 
 // ── المحرك ────────────────────────────────────────────────────────────────────
 export function judgeFund(input: EngineInput, opts?: { allowShort?: boolean }): FundVerdict {

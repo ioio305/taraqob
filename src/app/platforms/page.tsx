@@ -29,9 +29,9 @@ const PLATFORM_CARDS: Array<{
 }> = [
   {
     key: 'spx',
-    name: 'خيارات SPX',
-    eyebrow: 'قرار المؤشر',
-    description: 'توصية مركّزة على مؤشر S&P 500، مع خطة دخول وأهداف ووقف ومتابعة للعقد.',
+    name: 'المؤشرات',
+    eyebrow: 'SPX · NDX · SPY · QQQ',
+    description: 'توصية مركّزة على المؤشرات الكبرى، مع خطة دخول وأهداف ووقف ومتابعة للعقد.',
     route: '/v2',
     color: '#C9943A',
     Icon: BarChart3,
@@ -51,7 +51,7 @@ const PLATFORM_CARDS: Array<{
     key: 'funds',
     name: 'الصناديق',
     eyebrow: 'القطاعات والتنويع',
-    description: 'خيارات SPY وQQQ وصناديق القطاعات مع رصد دوران الأموال والقوة النسبية.',
+    description: 'خيارات صناديق القطاعات والأسواق مع رصد دوران الأموال والقوة النسبية.',
     route: '/funds',
     color: '#26D07C',
     Icon: Layers3,
