@@ -1,0 +1,237 @@
+'use client'
+
+// ── تحليل عقد المؤشرات (NDX/SPY/QQQ) — نفس روح تحليل عقد سباكس ───────────────
+// اكتب السترايك واختر كول/بوت والمدة → خطة كاملة من نفس المحرك.
+
+import { Suspense, useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { RefreshCw } from 'lucide-react'
+import { IndexSwitcher } from '@/components/v2/IndexSwitcher'
+import { getSelectedIndex, indexMeta, type IndexId } from '@/lib/v2/indexSelection'
+
+const GOLD = '#C9943A'
+
+const DTE_OPTIONS: { value: number | null; label: string }[] = [
+  { value: null, label: 'أسبوع (افتراضي)' },
+  { value: 0,    label: 'اليوم' },
+  { value: 2,    label: 'يومان' },
+  { value: 3,    label: '٣ أيام' },
+  { value: 4,    label: '٤ أيام' },
+  { value: 14,   label: 'أسبوعان' },
+  { value: 30,   label: 'شهر' },
+]
+
+type Result = {
+  success: boolean
+  error?: string
+  symbol: string
+  price: number
+  changePct: number
+  direction: { type: 'call' | 'put' | null; label: string; color: string; reason: string }
+  expiration: string
+  dte: number
+  nearestNote: string | null
+  contract: {
+    symbol: string; type: 'call' | 'put'; strike: number
+    bid: number; ask: number; mid: number
+    delta: number | null; gamma: number | null; ivPct: number
+  }
+  strategy?: {
+    strategyLabel: string; strategyReason: string; postT1Action: string
+    entryBalanced: number; entryBalancedTotal: number
+    t1Price: number; t1Total: number; t1Profit: number
+    t2Price: number | null; t2Total: number | null
+    stopPrice: number; stopTotal: number; stopLoss: number
+  }
+  dayPlan?: {
+    entryWindowAr: string; forcedExitAr: string
+    targetPrice: number; stopPrice: number
+    notesAr: string[]
+  } | null
+}
+
+export default function IndexAnalyzePage() {
+  return (
+    <Suspense fallback={<div className="min-h-full p-4 max-w-3xl mx-auto"><div className="h-64 animate-pulse rounded-3xl" style={{ background: 'rgba(255,255,255,0.03)' }} /></div>}>
+      <Inner />
+    </Suspense>
+  )
+}
+
+function Inner() {
+  const params = useSearchParams()
+  const [idx, setIdx] = useState<IndexId>('SPX')
+  const [strike, setStrike] = useState(params.get('strike') ?? '')
+  const [ctype, setCtype] = useState<'auto' | 'call' | 'put'>((params.get('type') as 'call' | 'put') ?? 'auto')
+  const [dte, setDte] = useState<number | null>(null)
+  const [data, setData] = useState<Result | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const cur = getSelectedIndex()
+    setIdx(cur !== 'SPX' ? cur : 'NDX')
+    const onCustom = (e: Event) => {
+      const v = (e as CustomEvent<IndexId>).detail
+      setIdx(v !== 'SPX' ? v : 'NDX')
+    }
+    window.addEventListener('taraqob:index', onCustom)
+    return () => window.removeEventListener('taraqob:index', onCustom)
+  }, [])
+
+  const analyze = useCallback(async (symbol: IndexId) => {
+    if (symbol === 'SPX') return
+    setLoading(true)
+    try {
+      const q = new URLSearchParams({ symbol })
+      if (strike.trim()) q.set('strike', strike.trim())
+      if (ctype !== 'auto') q.set('type', ctype)
+      if (dte != null) q.set('dte', String(dte))
+      const res = await fetch(`/api/v2/index/analyze?${q.toString()}`)
+      setData(await res.json())
+    } catch { /* تبقى آخر نتيجة */ }
+    setLoading(false)
+  }, [strike, ctype, dte])
+
+  useEffect(() => { if (idx !== 'SPX') void analyze(idx) }, [idx, analyze])
+
+  const meta = indexMeta(idx)
+  const c = data?.contract
+  const st = data?.strategy
+  const dp = data?.dayPlan
+
+  return (
+    <div className="min-h-full p-4 pb-10 space-y-4 max-w-3xl mx-auto" dir="rtl"
+         style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
+
+      <IndexSwitcher active={idx} />
+
+      {/* ── مدخلات التحليل ── */}
+      <section className="rounded-3xl p-5 space-y-3"
+               style={{ background: 'linear-gradient(145deg,#101720,#0C1219)', border: '1px solid rgba(201,148,58,0.18)' }}>
+        <div className="text-sm font-black text-white">تحليل عقد — {meta.name} ({idx})</div>
+        <div className="flex gap-2 flex-wrap items-center">
+          <input value={strike} onChange={e => setStrike(e.target.value.replace(/[^\d.]/g, ''))}
+                 onKeyDown={e => { if (e.key === 'Enter') void analyze(idx) }}
+                 inputMode="numeric" dir="ltr" placeholder="السترايك (اتركه فارغاً = الأقرب للسعر)"
+                 className="flex-1 min-w-44 rounded-xl px-3 py-2.5 text-sm font-mono text-white outline-none"
+                 style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.1)' }} />
+          <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
+            {([{ v: 'auto' as const, label: 'تلقائي' }, { v: 'call' as const, label: '▲ كول' }, { v: 'put' as const, label: '▼ بوت' }]).map(x => (
+              <button key={x.v} onClick={() => setCtype(x.v)}
+                      className="text-xs px-3 py-2.5 font-bold"
+                      style={{
+                        background: ctype === x.v ? (x.v === 'put' ? 'rgba(239,68,68,0.2)' : x.v === 'call' ? 'rgba(16,185,129,0.2)' : 'rgba(201,148,58,0.2)') : 'transparent',
+                        color: ctype === x.v ? '#fff' : '#64748B',
+                      }}>{x.label}</button>
+            ))}
+          </div>
+          <button onClick={() => void analyze(idx)} disabled={loading}
+                  className="rounded-xl px-4 py-2.5 flex items-center gap-2 text-xs font-black disabled:opacity-40"
+                  style={{ background: GOLD, color: '#060D14' }}>
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> حلّل
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-1.5 items-center">
+          <span className="text-[11px] font-bold" style={{ color: '#7C8A99' }}>المدة:</span>
+          {DTE_OPTIONS.map(o => (
+            <button key={String(o.value)} onClick={() => setDte(o.value)}
+                    className="text-xs font-bold px-2.5 py-1 rounded-lg"
+                    style={{
+                      background: dte === o.value ? 'rgba(201,148,58,0.15)' : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${dte === o.value ? 'rgba(201,148,58,0.45)' : 'rgba(255,255,255,0.07)'}`,
+                      color: dte === o.value ? GOLD : '#8A97A6',
+                    }}>{o.label}</button>
+          ))}
+        </div>
+      </section>
+
+      {/* ── النتيجة ── */}
+      {loading && !data ? (
+        <div className="h-56 animate-pulse rounded-3xl" style={{ background: 'rgba(255,255,255,0.03)' }} />
+      ) : data && !data.success ? (
+        <section className="rounded-3xl p-10 text-center text-sm"
+                 style={{ background: '#0C1219', border: '1px solid rgba(255,255,255,0.07)', color: '#F87171' }}>
+          {data.error}
+        </section>
+      ) : data && c ? (
+        <>
+          <section className="rounded-3xl p-5 space-y-4" style={{ background: '#0C1219', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-2xl font-black font-mono text-white">
+                  {c.type === 'call' ? '▲ كول' : '▼ بوت'} {c.strike}
+                </span>
+                <span className="text-xs font-mono" style={{ color: '#7C8A99' }}>ينتهي {data.expiration} (خلال {data.dte} {data.dte === 1 ? 'يوم' : 'أيام'})</span>
+              </div>
+              {data.direction ? (
+                <span className="rounded-lg px-3 py-1.5 text-xs font-black"
+                      style={{ color: data.direction.color, background: `${data.direction.color}15`, border: `1px solid ${data.direction.color}35` }}>
+                  {data.direction.label}
+                </span>
+              ) : null}
+            </div>
+            {data.nearestNote ? <div className="text-xs font-bold" style={{ color: '#FBBF24' }}>{data.nearestNote}</div> : null}
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <Metric label="سعر العقد" value={`$${c.mid.toFixed(2)}`} />
+              <Metric label="شراء / بيع" value={`${c.bid.toFixed(2)} / ${c.ask.toFixed(2)}`} />
+              <Metric label="سرعة التفاعل" value={c.delta != null ? c.delta.toFixed(2) : '—'} />
+              <Metric label="تذبذب العقد" value={`${c.ivPct.toFixed(0)}%`} />
+            </div>
+
+            {st ? (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <Metric label="الدخول" value={`$${st.entryBalanced.toFixed(2)}`} />
+                  <Metric label="الهدف الأول" value={`$${st.t1Price.toFixed(2)}`} good />
+                  {st.t2Price != null ? <Metric label="الهدف الثاني" value={`$${st.t2Price.toFixed(2)}`} good /> : null}
+                  <Metric label="وقف الخسارة" value={`$${st.stopPrice.toFixed(2)}`} danger />
+                </div>
+                <div className="rounded-xl p-4 text-sm leading-7"
+                     style={{ color: '#94A3B8', background: 'rgba(201,148,58,0.06)', border: '1px solid rgba(201,148,58,0.18)' }}>
+                  {st.postT1Action}
+                </div>
+                <div className="text-xs" style={{ color: '#7C8A99' }}>{st.strategyReason}</div>
+              </>
+            ) : null}
+          </section>
+
+          {/* ── خطة اليوم ── */}
+          {dp ? (
+            <section className="rounded-3xl p-5 space-y-3" style={{ background: '#0C1219', border: '1px solid rgba(255,255,255,0.07)' }}>
+              <div className="text-sm font-black" style={{ color: GOLD }}>خطة اليوم على {idx}</div>
+              <div className="grid grid-cols-2 gap-2">
+                <Metric label="هدف المؤشر" value={dp.targetPrice.toLocaleString()} good />
+                <Metric label="وقف المؤشر" value={dp.stopPrice.toLocaleString()} danger />
+              </div>
+              <div className="text-xs leading-6" style={{ color: '#94A3B8' }}>
+                {dp.entryWindowAr} · {dp.forcedExitAr}
+              </div>
+              {dp.notesAr?.length ? (
+                <ul className="text-xs space-y-1" style={{ color: '#64748B' }}>
+                  {dp.notesAr.map(n => <li key={n}>• {n}</li>)}
+                </ul>
+              ) : null}
+            </section>
+          ) : null}
+        </>
+      ) : (
+        <div className="rounded-3xl p-10 text-center text-sm" style={{ background: '#0C1219', border: '1px solid rgba(255,255,255,0.07)', color: '#7C8A99' }}>
+          اختر المؤشر والسترايك واضغط «حلّل»
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Metric({ label, value, good = false, danger = false }: {
+  label: string; value: string; good?: boolean; danger?: boolean
+}) {
+  const color = danger ? '#F87171' : good ? '#34D399' : '#E2E8F0'
+  return (
+    <div className="rounded-xl p-3" style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.05)' }}>
+      <div className="text-[10px]" style={{ color: '#64748B' }}>{label}</div>
+      <div className="mt-1 text-base font-black font-mono" style={{ color }}>{value}</div>
+    </div>
+  )
+}

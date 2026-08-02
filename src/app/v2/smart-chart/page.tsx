@@ -102,7 +102,9 @@ export default function SmartChartPage() {
   const goAnalyze = (type: 'call' | 'put', fallbackStrike?: number) => {
     const s = (strikeInput.trim() || (fallbackStrike ?? '')).toString().trim()
     if (!s) return
-    window.location.href = `/v2/analyze?strike=${encodeURIComponent(s)}&type=${type}`
+    window.location.href = idx === 'SPX'
+      ? `/v2/analyze?strike=${encodeURIComponent(s)}&type=${type}`
+      : `/v2/index/analyze?strike=${encodeURIComponent(s)}&type=${type}`
   }
 
   const chartRef  = useRef<HTMLDivElement>(null)
@@ -327,8 +329,7 @@ export default function SmartChartPage() {
               </div>
             </div>
 
-            {/* اكتب السترايك واختر كول/بوت — انتقال مباشر لتحليل العقد (سباكس؛ المؤشرات في المرحلة ٣) */}
-            {idx === 'SPX' && (
+            {/* اكتب السترايك واختر كول/بوت — انتقال مباشر لتحليل العقد */}
             <div className="shrink-0">
               <div className="flex items-center gap-1.5">
                 <input
@@ -355,7 +356,6 @@ export default function SmartChartPage() {
               </div>
               <div className="text-[10px] mt-1 text-center" style={{ color: '#5E6E7F' }}>اكتب سترايكاً أو استخدم المقترح</div>
             </div>
-            )}
           </div>
 
           {verdict.dir && (verdict.target != null || verdict.stop != null) && (
