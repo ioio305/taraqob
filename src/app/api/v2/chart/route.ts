@@ -39,17 +39,61 @@ const TF_CONFIG: Record<TfId, {
   '1M':  { intraday: false, tradierInterval: 'monthly', aggregate: 1, days: 1825, barMinutes: 43200 },
 }
 
+// ── شموع المؤشرات الإضافية (NDX/SPY/QQQ) من طبقة بيانات الشركات ──────────────
+async function getIndexBars(symbol: string, tf: TfId, cfg: (typeof TF_CONFIG)[TfId]): Promise<RawBar[]> {
+  const { getStockIntradayBars, getStockDailyBars } = await import('@/lib/v2/stockData')
+  if (cfg.intraday) {
+    const base = cfg.barMinutes <= 3 ? '1min' : cfg.barMinutes <= 5 ? '5min' : cfg.barMinutes <= 15 ? '15min' : cfg.barMinutes <= 30 ? '30min' : '1h'
+    const baseMin = base === '1min' ? 1 : base === '5min' ? 5 : base === '15min' ? 15 : base === '30min' ? 30 : 60
+    let bars = await getStockIntradayBars(symbol, base)
+    const factor = Math.max(1, Math.round(cfg.barMinutes / baseMin))
+    if (factor > 1) bars = aggregateBars(bars, factor)
+    return bars
+  }
+  const daily = await getStockDailyBars(symbol, cfg.days)
+  if (tf === '1w' || tf === '1M') return calendarAgg(daily, tf)
+  return daily
+}
+
+// دمج تقويمي: أسبوعي (يبدأ الاثنين) وشهري
+function calendarAgg(bars: RawBar[], mode: '1w' | '1M'): RawBar[] {
+  const key = (t: string) => {
+    if (mode === '1M') return t.slice(0, 7)
+    const d = new Date(t)
+    const day = (d.getUTCDay() + 6) % 7
+    return new Date(d.getTime() - day * 86400000).toISOString().slice(0, 10)
+  }
+  const map = new Map<string, RawBar>()
+  for (const bar of bars) {
+    const k = key(bar.time)
+    const cur = map.get(k)
+    if (!cur) map.set(k, { ...bar })
+    else {
+      cur.high = Math.max(cur.high, bar.high)
+      cur.low = Math.min(cur.low, bar.low)
+      cur.close = bar.close
+      cur.volume = (cur.volume ?? 0) + (bar.volume ?? 0)
+    }
+  }
+  return [...map.values()]
+}
+
 // ─── GET handler ──────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const tf  = (searchParams.get('tf') ?? '1d') as TfId
   const cfg = TF_CONFIG[tf] ?? TF_CONFIG['1d']
+  // المؤشرات الإضافية (NDX/SPY/QQQ) — نفس المحرك، بياناتها من طبقة الشركات
+  const reqSymbol = (searchParams.get('symbol') ?? 'SPX').toUpperCase()
+  const isIndex = reqSymbol === 'NDX' || reqSymbol === 'SPY' || reqSymbol === 'QQQ'
 
   let bars: RawBar[] = []
 
   try {
-    if (cfg.intraday) {
+    if (isIndex) {
+      bars = await getIndexBars(reqSymbol, tf, cfg)
+    } else if (cfg.intraday) {
       bars = await getIntradayBars(cfg.tradierInterval, cfg.days)
       if (cfg.aggregate > 1) bars = aggregateBars(bars, cfg.aggregate)
     } else {
@@ -61,7 +105,7 @@ export async function GET(request: NextRequest) {
 
   if (bars.length < 10) {
     return NextResponse.json(
-      { tf, symbol: 'SPX', candles: [], analysis: defaultAnalysis(), error: 'بيانات غير كافية — تعذّر جلب الشموع' },
+      { tf, symbol: reqSymbol, candles: [], analysis: defaultAnalysis(), error: 'بيانات غير كافية — تعذّر جلب الشموع' },
       { headers: NO_STORE },
     )
   }
@@ -116,9 +160,13 @@ export async function GET(request: NextRequest) {
 
   // الطلبات المستقلة تبدأ معاً لتقليل زمن انتظار الصفحة.
   const newsPromise = getNewsResult().catch(() => null)
-  const gammaPromise = getGammaExposure().catch(() => null)
+  const gammaPromise = isIndex ? Promise.resolve(null) : getGammaExposure().catch(() => null)
   const snapshotPromise = getMarketSnapshot().catch(() => null)
-  const dailyBarsPromise = cfg.intraday ? getHistoryBars('daily', 60).catch(() => []) : Promise.resolve(bars)
+  const dailyBarsPromise = isIndex
+    ? (tf === '1d'
+        ? Promise.resolve(bars)
+        : import('@/lib/v2/stockData').then(m => m.getStockDailyBars(reqSymbol, 60)).catch(() => [] as RawBar[]))
+    : (cfg.intraday ? getHistoryBars('daily', 60).catch(() => []) : Promise.resolve(bars))
   const [news, gamma, snap, dailyBars] = await Promise.all([
     newsPromise,
     gammaPromise,
@@ -186,7 +234,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     tf,
-    symbol: 'SPX',
+    symbol: reqSymbol,
     candles,
     analysis,
     gamma,

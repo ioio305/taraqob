@@ -117,12 +117,16 @@ const YF_INTRADAY: Record<string, { interval: string; range: string }> = {
   '30min': { interval: '30m', range: '1mo' },
   '1h':    { interval: '60m', range: '3mo' },
 }
+// رموز المؤشرات عند المصدر المجاني تحتاج صيغة المؤشر (^)
+const YF_SYMBOL: Record<string, string> = { NDX: '^NDX', SPX: '^GSPC', RUT: '^RUT', VIX: '^VIX' }
+
 export async function getStockIntradayBars(symbol: string, tf = '15min'): Promise<MdBar[]> {
   const sym = symbol.toUpperCase()
   const cfg = YF_INTRADAY[tf] ?? YF_INTRADAY['15min']
+  const yfSym = YF_SYMBOL[sym] ?? sym
   try {
     const res = await fetch(
-      `${YF}/${encodeURIComponent(sym)}?interval=${cfg.interval}&range=${cfg.range}`,
+      `${YF}/${encodeURIComponent(yfSym)}?interval=${cfg.interval}&range=${cfg.range}`,
       { headers: UA, cache: 'no-store' },
     )
     if (!res.ok) return []

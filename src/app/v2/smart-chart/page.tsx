@@ -14,6 +14,8 @@ import type { GammaExposure } from '@/lib/v2/gammaExposure'
 import { computeConfluence } from '@/lib/v2/confluence'
 import { ShareCard } from '@/components/v2/ShareCard'
 import { CountUp } from '@/components/v2/CountUp'
+import { IndexSwitcher } from '@/components/v2/IndexSwitcher'
+import { getSelectedIndex, type IndexId } from '@/lib/v2/indexSelection'
 
 interface Candle {
   time: string; open: number; high: number; low: number; close: number; volume: number
@@ -70,12 +72,20 @@ export default function SmartChartPage() {
   const [error, setError]     = useState('')
   const [showDetails, setShowDetails] = useState(false)
   const [strikeInput, setStrikeInput] = useState('')   // سترايك يدوي لجسر التحليل
+  // المؤشر المختار — يقلب الشارت عليه (SPX افتراضي بلا أي تغيير)
+  const [idx, setIdx] = useState<IndexId>('SPX')
+  useEffect(() => {
+    setIdx(getSelectedIndex())
+    const onCustom = (e: Event) => setIdx((e as CustomEvent<IndexId>).detail)
+    window.addEventListener('taraqob:index', onCustom)
+    return () => window.removeEventListener('taraqob:index', onCustom)
+  }, [])
   const [expInfo, setExpInfo] = useState<{ expiration: string; dte: number; type: string } | null>(null)
 
   // تاريخ انتهاء العقد المقترح حالياً (يُجلب مرة ويتحدّث كل ٥ دقائق)
   useEffect(() => {
     let alive = true
-    const pull = () => fetch('/api/v2/recommend?mode=balanced').then(r => r.json()).then(j => {
+    const pull = () => fetch(idx === 'SPX' ? '/api/v2/recommend?mode=balanced' : `/api/v2/recommend?asset=funds&symbol=${idx}&mode=balanced`).then(r => r.json()).then(j => {
       if (!alive) return
       const c = (j?.contracts ?? [])[0]
       if (c?.expiration) {
@@ -86,7 +96,7 @@ export default function SmartChartPage() {
     pull()
     const id = setInterval(pull, 300_000)
     return () => { alive = false; clearInterval(id) }
-  }, [])
+  }, [idx])
 
   // انتقال مباشر لتحليل عقد بالسترايك والاتجاه المختارين
   const goAnalyze = (type: 'call' | 'put', fallbackStrike?: number) => {
@@ -110,14 +120,14 @@ export default function SmartChartPage() {
   const fetchData = useCallback(async (timeframe: string) => {
     if (!loadedOnce.current) setLoading(true); else setRefreshing(true)
     try {
-      const res = await fetch(`/api/v2/chart?tf=${timeframe}`)
+      const res = await fetch(`/api/v2/chart?tf=${timeframe}${idx !== 'SPX' ? `&symbol=${idx}` : ''}`)
       if (!res.ok) throw new Error('تعذّر الاتصال')
       const d: ChartData = await res.json()
       if (d.error && !d.candles?.length) throw new Error(d.error)
       setData(d); loadedOnce.current = true; setError('')
     } catch (e) { if (!loadedOnce.current) setError(e instanceof Error ? e.message : 'تعذّر تحميل البيانات') }
     finally { setLoading(false); setRefreshing(false) }
-  }, [])
+  }, [idx])
 
   useEffect(() => { loadedOnce.current = false; fetchData(tf) }, [tf, fetchData])
   useEffect(() => {
@@ -275,10 +285,14 @@ export default function SmartChartPage() {
   return (
     <main className="max-w-4xl mx-auto px-4 py-5 space-y-4" dir="rtl" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
 
+      {/* محوّل المؤشرات */}
+      <IndexSwitcher active={idx} />
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-bold" style={{ color: '#E8D5A3' }}>الشارت الذكي ✦</h1>
+          <span className="text-xs font-black font-mono px-2 py-0.5 rounded-full" style={{ color: '#C9943A', background: 'rgba(201,148,58,0.10)', border: '1px solid rgba(201,148,58,0.3)' }}>{idx}</span>
           <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(201,148,58,0.12)', border: '1px solid rgba(201,148,58,0.3)', color: '#C9943A' }}>قرار لا كومة بيانات</span>
           {refreshing && <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#26D07C' }} title="يتحدّث" />}
         </div>
@@ -313,7 +327,8 @@ export default function SmartChartPage() {
               </div>
             </div>
 
-            {/* اكتب السترايك واختر كول/بوت — انتقال مباشر لتحليل العقد */}
+            {/* اكتب السترايك واختر كول/بوت — انتقال مباشر لتحليل العقد (سباكس؛ المؤشرات في المرحلة ٣) */}
+            {idx === 'SPX' && (
             <div className="shrink-0">
               <div className="flex items-center gap-1.5">
                 <input
@@ -340,6 +355,7 @@ export default function SmartChartPage() {
               </div>
               <div className="text-[10px] mt-1 text-center" style={{ color: '#5E6E7F' }}>اكتب سترايكاً أو استخدم المقترح</div>
             </div>
+            )}
           </div>
 
           {verdict.dir && (verdict.target != null || verdict.stop != null) && (
@@ -355,7 +371,7 @@ export default function SmartChartPage() {
                   <span style={{ color: expInfo.dte <= 2 ? '#FBBF24' : '#5E6E7F' }}> (خلال {expInfo.dte} {expInfo.dte === 1 ? 'يوم' : 'أيام'}{expInfo.dte === 0 ? ' — مضاربة اليوم' : expInfo.dte <= 2 ? ' — مدة قصيرة' : ''})</span>
                 </span>
               )}
-              <span className="mr-auto" style={{ color: '#5E6E7F' }}>SPX <b className="font-mono text-white">{verdict.spot.toLocaleString()}</b></span>
+              <span className="mr-auto" style={{ color: '#5E6E7F' }}>{idx} <b className="font-mono text-white">{verdict.spot.toLocaleString()}</b></span>
             </div>
           )}
         </div>
