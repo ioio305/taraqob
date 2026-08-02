@@ -190,7 +190,7 @@ export default function StocksScanner() {
         <div>
           <div className="text-sm font-bold" style={{ color: '#F59E0B' }}>راقب — لا تدخل بعد</div>
           <div className="text-xs mt-0.5 leading-relaxed" style={{ color: '#94A3B8' }}>
-            {data?.notCalibratedNote ?? 'لا نُظهر توصية «اشترِ» للأسهم حتى نتأكد من ربحيتها على بيانات تاريخية. هذه أفضل الفرص للمراقبة والتعلّم.'}
+            {data?.notCalibratedNote ?? 'لا نُظهر توصية «اشترِ» للشركات حتى نتأكد من ربحيتها على بيانات تاريخية. هذه أفضل الفرص للمراقبة والتعلّم.'}
           </div>
         </div>
       </div>
@@ -361,8 +361,8 @@ export default function StocksScanner() {
             <div>
               <div className="text-base font-bold text-white leading-tight">الفرص البديلة</div>
               <div className="text-xs mt-0.5" style={{ color: '#5E6E7F' }}>
-                {loading ? 'جاري فحص الأسهم…'
-                  : data?.withOpportunity ? `${data.withOpportunity} سهم عليه فرصة تستحق المراقبة`
+                {loading ? 'جاري فحص الشركات…'
+                  : data?.withOpportunity ? `${data.withOpportunity} شركة عليها فرصة تستحق المراقبة`
                   : 'لا فرص واضحة الآن — سنبلّغك فور ظهورها'}
                 {data?.nearEarnings ? ` · ${data.nearEarnings} قرب أرباح` : ''}
               </div>
@@ -411,7 +411,7 @@ export default function StocksScanner() {
             <div className="py-12 text-center">
               <div className="text-4xl mb-3 opacity-25">🔍</div>
               <div className="text-base font-bold mb-1" style={{ color: '#F59E0B' }}>لا بيانات الآن</div>
-              <div className="text-sm" style={{ color: '#5E6E7F' }}>{data?.error ?? 'تعذّر جلب بيانات الأسهم — حاول لاحقاً'}</div>
+              <div className="text-sm" style={{ color: '#5E6E7F' }}>{data?.error ?? 'تعذّر جلب بيانات الشركات — حاول لاحقاً'}</div>
             </div>
           )}
 
@@ -492,7 +492,7 @@ export default function StocksScanner() {
                   </div>
                 </button>
 
-                {/* تفصيل السهم عند الاختيار */}
+                {/* تفصيل الشركة عند الاختيار */}
                 {isSel && (
                   <div className="px-4 pb-4 pt-1" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                     {detailLoading && <div className="py-6 text-center text-sm" style={{ color: '#5E6E7F' }}>جاري تحميل التفاصيل…</div>}
@@ -501,7 +501,7 @@ export default function StocksScanner() {
                     )}
                     {!detailLoading && detail && detail.symbol === r.symbol && detail.contracts.length === 0 && (
                       <div className="py-4 text-center text-sm" style={{ color: '#5E6E7F' }}>
-                        {detail.watchMode ? 'السهم بلا اتجاه واضح اليوم — راقب فقط' : (detail.error ?? 'لا عقود مناسبة الآن لهذا السهم')}
+                        {detail.watchMode ? 'الشركة بلا اتجاه واضح اليوم — راقب فقط' : (detail.error ?? 'لا عقود مناسبة الآن لهذه الشركة')}
                       </div>
                     )}
                   </div>

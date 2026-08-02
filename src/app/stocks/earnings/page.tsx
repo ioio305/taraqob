@@ -37,7 +37,7 @@ export default function EarningsCalendar() {
           <div>
             <div className="text-base font-bold text-white">تقويم الأرباح</div>
             <div className="text-xs mt-0.5" style={{ color: '#5E6E7F' }}>
-              {loading ? 'جاري التحميل…' : data?.imminent ? `${data.imminent} سهم لديه أرباح خلال ٥ أيام — احذر الشراء قربها` : 'مواعيد أرباح الأسهم السائلة'}
+              {loading ? 'جاري التحميل…' : data?.imminent ? `${data.imminent} شركة لديها أرباح خلال ٥ أيام — احذر الشراء قربها` : 'مواعيد أرباح الشركات السائلة'}
             </div>
           </div>
         </div>
@@ -47,7 +47,7 @@ export default function EarningsCalendar() {
       <div className="rounded-xl px-4 py-3 flex items-start gap-3" style={{ background: 'rgba(240,67,90,0.06)', border: '1px solid rgba(240,67,90,0.25)' }}>
         <span className="text-lg">⚠</span>
         <div className="text-xs leading-relaxed" style={{ color: '#E4A7B2' }}>
-          {data?.note ?? 'الأرباح أخطر حدث للسهم — الفجوة الليلية قد تُبخّر العقد حتى لو صحّ اتجاهك، وأسعار العقود تنهار بعد الإعلان. لا تشترِ عقوداً قرب موعد الأرباح.'}
+          {data?.note ?? 'الأرباح أخطر حدث للشركة — الفجوة الليلية قد تُبخّر العقد حتى لو صحّ اتجاهك، وأسعار العقود تنهار بعد الإعلان. لا تشترِ عقوداً قرب موعد الأرباح.'}
         </div>
       </div>
 
@@ -83,7 +83,7 @@ export default function EarningsCalendar() {
       )}
 
       {!loading && data?.upcoming && data.upcoming.length === 0 && data?.known !== false && (
-        <div className="py-8 text-center text-sm" style={{ color: '#5E6E7F' }}>لا أرباح مجدولة للأسهم المتابَعة خلال ٣ أسابيع.</div>
+        <div className="py-8 text-center text-sm" style={{ color: '#5E6E7F' }}>لا أرباح مجدولة للشركات المتابَعة خلال ٣ أسابيع.</div>
       )}
 
       {!loading && data?.unknown && data.unknown.length > 0 && (

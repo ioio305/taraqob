@@ -37,7 +37,7 @@ const NAV_DECISION: NavItem[] = [
 ]
 const NAV_ANALYSIS: NavItem[] = [
   { href: '/stocks/price-radar', label: 'رادار الأسعار', icon: '⌁', exact: false, requiredTier: 'signal' },
-  { href: '/stocks/analyze', label: 'تحليل سهم',   icon: '⬡', exact: false, requiredTier: 'signal' },
+  { href: '/stocks/analyze', label: 'تحليل الشركة',   icon: '⬡', exact: false, requiredTier: 'signal' },
   { href: '/stocks/watchlist', label: 'قائمة المراقبة', icon: '◇', exact: false, requiredTier: 'signal' },
 ]
 // أخبار وأحداث — للمشترك (سيجنال)

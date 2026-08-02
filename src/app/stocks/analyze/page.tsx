@@ -117,16 +117,16 @@ function AnalyzeInner() {
     <div className="min-h-full p-4 pb-10 space-y-4 max-w-3xl mx-auto"
          style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }} dir="rtl">
 
-      {/* منتقي السهم */}
+      {/* منتقي الشركة */}
       <div className="rounded-2xl p-4 space-y-3" style={{ background: 'rgba(13,27,42,0.82)', border: `1px solid ${ACCENT}25` }}>
         <div className="flex items-center gap-2">
           <span className="text-lg">⬡</span>
-          <span className="text-base font-bold text-white">تحليل سهم</span>
+          <span className="text-base font-bold text-white">تحليل الشركة</span>
         </div>
         <div className="flex gap-2">
           <input value={input} onChange={e => setInput(e.target.value)}
                  onKeyDown={e => { if (e.key === 'Enter') go(input) }}
-                 placeholder="اكتب رمز السهم (مثال: AAPL)"
+                 placeholder="اكتب رمز الشركة (مثال: AAPL)"
                  className="flex-1 rounded-lg px-3 py-2 text-sm font-mono text-white outline-none"
                  style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.1)' }} />
           <button onClick={() => go(input)} className="px-4 py-2 rounded-lg text-sm font-bold"
@@ -172,7 +172,7 @@ function AnalyzeInner() {
 
       {!loading && data?.success && (
         <>
-          {/* لقطة السهم */}
+          {/* لقطة الشركة */}
           <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(13,27,42,0.82)', border: '1px solid rgba(255,255,255,0.06)' }}>
             <div className="px-5 py-4 flex items-center justify-between gap-3 flex-wrap" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
               <div className="flex items-baseline gap-3">
@@ -188,7 +188,7 @@ function AnalyzeInner() {
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-px" style={{ background: 'rgba(255,255,255,0.05)' }}>
               <Metric label="السعر" value={`$${n(mk?.price)}`} sub={pct(mk?.changePct)} subColor={clr(mk?.changePct)} />
-              <Metric label={mk?.volLabel ?? 'التذبذب'} value={mk?.volMeasure != null ? `${n(mk.volMeasure, 0)}%` : '—'} sub="تذبذب السهم السنوي" />
+              <Metric label={mk?.volLabel ?? 'التذبذب'} value={mk?.volMeasure != null ? `${n(mk.volMeasure, 0)}%` : '—'} sub="تذبذب الشركة السنوي" />
               <Metric label="الحركة المتوقعة" value={mk?.expectedMove != null ? `±$${n(mk.expectedMove)}` : '—'} sub="حتى الانتهاء" />
               <Metric label="أعلى/أدنى اليوم" value={`${n(mk?.high, 0)} / ${n(mk?.low, 0)}`} sub="نطاق اليوم" />
             </div>
@@ -203,7 +203,7 @@ function AnalyzeInner() {
           <StockChart symbol={data.symbol} onData={setChart} />
           {chart?.analysis && <TechnicalRead analysis={chart.analysis} />}
 
-          {/* أخبار السهم */}
+          {/* أخبار الشركة */}
           <StockNews items={news} symbol={data.symbol} />
 
           {/* بوابة الأرباح */}
@@ -233,7 +233,7 @@ function AnalyzeInner() {
               <div className="text-3xl mb-2 opacity-25">⏸</div>
               <div className="text-sm font-bold mb-1" style={{ color: '#F59E0B' }}>لا عقد مناسب الآن</div>
               <div className="text-sm max-w-sm mx-auto" style={{ color: '#5E6E7F' }}>
-                {data.watchMode ? 'السهم بلا اتجاه واضح اليوم — انتظر حركة أوضح.' : 'لم نجد عقداً يستوفي معايير الجودة لهذا السهم حالياً.'}
+                {data.watchMode ? 'الشركة بلا اتجاه واضح اليوم — انتظر حركة أوضح.' : 'لم نجد عقداً يستوفي معايير الجودة لهذه الشركة حالياً.'}
               </div>
             </div>
           ) : (
@@ -434,7 +434,7 @@ function StockNews({ items, symbol }: { items: NewsItem[] | null; symbol: string
       <div className="p-3">
         {items === null && <div className="py-6 text-center text-sm" style={{ color: '#5E6E7F' }}>جاري تحميل الأخبار…</div>}
         {items && items.length === 0 && (
-          <div className="py-6 text-center text-sm" style={{ color: '#5E6E7F' }}>لا أخبار حديثة متاحة لهذا السهم الآن.</div>
+          <div className="py-6 text-center text-sm" style={{ color: '#5E6E7F' }}>لا أخبار حديثة متاحة لهذه الشركة الآن.</div>
         )}
         {items && items.length > 0 && (
           <div className="space-y-1.5">

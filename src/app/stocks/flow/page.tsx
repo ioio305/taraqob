@@ -30,7 +30,7 @@ export default function StockFlowRadar() {
             <span className="text-lg">📡</span>
             <div>
               <div className="text-base font-bold text-white">رادار التدفقات غير المعتادة</div>
-              <div className="text-xs mt-0.5" style={{ color: '#5E6E7F' }}>أين تتحرك أموال المؤسسات في خيارات الأسهم الآن</div>
+              <div className="text-xs mt-0.5" style={{ color: '#5E6E7F' }}>أين تتحرك أموال المؤسسات في عقود الشركات الآن</div>
             </div>
           </div>
           <button onClick={load} disabled={loading} className="w-9 h-9 rounded-xl flex items-center justify-center disabled:opacity-30"

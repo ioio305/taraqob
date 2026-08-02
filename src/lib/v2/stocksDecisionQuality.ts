@@ -33,7 +33,7 @@ export function evaluateStockDataQuality(
   const sessionOpen = isUsCashSessionOpen(now)
   const ageSeconds = quoteAgeSeconds(quote.asOf, now)
 
-  if (!Number.isFinite(quote.price) || quote.price <= 0) issues.push('سعر السهم غير صالح')
+  if (!Number.isFinite(quote.price) || quote.price <= 0) issues.push('سعر الشركة غير صالح')
   if (!Number.isFinite(quote.prevClose) || quote.prevClose <= 0) issues.push('الإغلاق السابق غير متاح')
   if (bars.length < 20) issues.push('الشموع التاريخية غير كافية لحسم الاتجاه')
 
@@ -42,13 +42,13 @@ export function evaluateStockDataQuality(
       issues.push('بيانات جلسة اليوم غير مكتملة')
     }
     if (ageSeconds === null) issues.push('وقت تحديث السعر غير معروف')
-    else if (ageSeconds > 10 * 60) issues.push('سعر السهم متأخر أثناء الجلسة')
+    else if (ageSeconds > 10 * 60) issues.push('سعر الشركة متأخر أثناء الجلسة')
   }
 
   const blocked = issues.some(issue =>
-    issue === 'سعر السهم غير صالح'
+    issue === 'سعر الشركة غير صالح'
     || issue === 'الإغلاق السابق غير متاح'
-    || issue === 'سعر السهم متأخر أثناء الجلسة'
+    || issue === 'سعر الشركة متأخر أثناء الجلسة'
     || issue === 'وقت تحديث السعر غير معروف',
   )
   const status: StockDataQualityStatus = blocked ? 'blocked' : issues.length ? 'watch' : 'ready'

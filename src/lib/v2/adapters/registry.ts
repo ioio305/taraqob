@@ -17,7 +17,7 @@ export const PLATFORMS: PlatformMeta[] = [
   {
     key:     'stocks',
     label:   'الشركات',
-    tagline: 'أفضل فرص خيارات الأسهم الأمريكية السائلة — ماسح متعدد الرموز + تقويم الأرباح',
+    tagline: 'أفضل فرص عقود الشركات الأمريكية السائلة — ماسح متعدد الرموز + تقويم الأرباح',
     icon:    '🏢',
     route:   '/stocks',
     status:  'available',

@@ -50,7 +50,7 @@ export default function StockChart({ symbol, onData }: { symbol: string; onData?
       .then((d: StockChartData) => {
         if (!alive) return
         if (Array.isArray(d.candles) && d.candles.length) { setCandles(d.candles); setErr('') }
-        else if (lenRef.current === 0) { setCandles([]); setErr(d.error || 'لا تتوفر بيانات شارت لهذا السهم') }
+        else if (lenRef.current === 0) { setCandles([]); setErr(d.error || 'لا تتوفر بيانات شارت لهذه الشركة') }
         onData?.(d)
       })
       .catch(() => { if (alive && lenRef.current === 0) setErr('تعذّر جلب الشارت') })

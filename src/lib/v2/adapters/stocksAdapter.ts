@@ -68,11 +68,11 @@ function atrPct(bars: { high: number; low: number; close: number }[]): number | 
 
 // اتجاه السهم من زخمه اليومي — عتبات أوسع من المؤشر (السهم المفرد أكثر تذبذباً)
 export function stockDirection(changePct: number): AdapterDirection {
-  if (changePct >= 1.5)   return { type: 'call', label: '▲ السهم صاعد بقوة — عقود شراء (Call)', color: '#10B981', reason: `السهم +${changePct.toFixed(2)}% اليوم — زخم صاعد قوي` }
-  if (changePct <= -1.5)  return { type: 'put',  label: '▼ السهم هابط بقوة — عقود هبوط (Put)',  color: '#EF4444', reason: `السهم ${changePct.toFixed(2)}% اليوم — زخم هابط قوي` }
-  if (changePct >= 0.6)   return { type: 'call', label: '▲ السهم صاعد — عقود شراء (Call)', color: '#34D399', reason: `السهم +${changePct.toFixed(2)}% اليوم` }
-  if (changePct <= -0.6)  return { type: 'put',  label: '▼ السهم هابط — عقود هبوط (Put)',  color: '#F87171', reason: `السهم ${changePct.toFixed(2)}% اليوم` }
-  return { type: null, label: '↔ حركة ضعيفة — انتظر', color: '#F59E0B', reason: 'السهم يتحرك بلا اتجاه واضح اليوم — انتظر' }
+  if (changePct >= 1.5)   return { type: 'call', label: '▲ الشركة صاعدة بقوة — عقود شراء (Call)', color: '#10B981', reason: `الشركة +${changePct.toFixed(2)}% اليوم — زخم صاعد قوي` }
+  if (changePct <= -1.5)  return { type: 'put',  label: '▼ الشركة هابطة بقوة — عقود هبوط (Put)',  color: '#EF4444', reason: `الشركة ${changePct.toFixed(2)}% اليوم — زخم هابط قوي` }
+  if (changePct >= 0.6)   return { type: 'call', label: '▲ الشركة صاعدة — عقود شراء (Call)', color: '#34D399', reason: `الشركة +${changePct.toFixed(2)}% اليوم` }
+  if (changePct <= -0.6)  return { type: 'put',  label: '▼ الشركة هابطة — عقود هبوط (Put)',  color: '#F87171', reason: `الشركة ${changePct.toFixed(2)}% اليوم` }
+  return { type: null, label: '↔ حركة ضعيفة — انتظر', color: '#F59E0B', reason: 'الشركة تتحرك بلا اتجاه واضح اليوم — انتظر' }
 }
 
 export const stocksAdapter: AssetAdapter = {
@@ -89,7 +89,7 @@ export const stocksAdapter: AssetAdapter = {
       getStockQuote(sym),
       getStockDailyBars(sym, 60).catch(() => []),
     ])
-    if (!quote) throw new Error(`تعذر جلب سعر السهم ${sym}`)
+    if (!quote) throw new Error(`تعذر جلب سعر الشركة ${sym}`)
     const closes = bars.map(b => b.close)
     const rv = realizedVolPct(closes)
     const atr = atrPct(bars)
@@ -134,7 +134,7 @@ export const stocksAdapter: AssetAdapter = {
         active: true,
         nameAr: 'إعلان الأرباح',
         when: whenAr,
-        advice: 'الأرباح أخطر حدث للسهم — لا تشترِ عقوداً قربها. الفجوة الليلية قد تُبخّر العقد حتى لو صحّ اتجاهك، وأسعار العقود تنهار بعد الإعلان.',
+        advice: 'الأرباح أخطر حدث للشركة — لا تشترِ عقوداً قربها. الفجوة الليلية قد تُبخّر العقد حتى لو صحّ اتجاهك، وأسعار العقود تنهار بعد الإعلان.',
         impact: 'high',
       }
     }

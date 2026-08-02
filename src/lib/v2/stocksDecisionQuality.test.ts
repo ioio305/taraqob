@@ -34,7 +34,7 @@ describe('stocks decision quality', () => {
     }, bars(Array.from({ length: 30 }, (_, index) => 170 + index)), now)
 
     expect(result.status).toBe('blocked')
-    expect(result.issues).toContain('سعر السهم متأخر أثناء الجلسة')
+    expect(result.issues).toContain('سعر الشركة متأخر أثناء الجلسة')
   })
 
   it('does not treat missing intraday high and low as live data', () => {

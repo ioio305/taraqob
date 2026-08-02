@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const rawMode = searchParams.get('mode')
   const tradeStyle = searchParams.get('style')
+  const onlySymbol = searchParams.get('symbol')?.toUpperCase().trim() || null
   const mode: RecMode =
     rawMode === 'safe' ? 'safe'
     : (rawMode === 'bold' || rawMode === 'cheap') ? 'bold'
@@ -66,10 +67,14 @@ export async function GET(request: NextRequest) {
   const sessionQuality = evaluateSessionQuality()
 
   try {
-    const [universe, marketQuote] = await Promise.all([
+    const [fullUniverse, marketQuote] = await Promise.all([
       stocksAdapter.getUniverse(),
       getStockQuote('SPY').catch(() => null),
     ])
+    // بحث برمز واحد: نفحص الشركة المطلوبة فقط (حتى لو خارج قائمة الرصد)
+    const universe = onlySymbol
+      ? [fullUniverse.find(u => u.symbol === onlySymbol) ?? { symbol: onlySymbol, name: onlySymbol, liquid: true }]
+      : fullUniverse
 
     const rows = await mapLimit(universe, 4, async (u): Promise<ScanRow> => {
       try {

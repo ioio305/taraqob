@@ -138,7 +138,7 @@ export default function ExitPage() {
               style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }} />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">سعر دخولك (لكل سهم)</label>
+            <label className="block text-xs text-gray-500 mb-1">سعر دخولك (سعر العقد)</label>
             <input value={entry} onChange={e => setEntry(e.target.value)} placeholder="مثال: 4.60" dir="ltr"
               className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none font-mono"
               style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }} />

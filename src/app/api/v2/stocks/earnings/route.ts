@@ -41,7 +41,7 @@ export async function GET() {
       imminent: withDate.filter(r => r.imminent).length,
       upcoming: withDate,
       unknown: unknown.map(r => ({ symbol: r.symbol, name: r.name })),
-      note: 'الأرباح أخطر حدث للسهم — الفجوة الليلية قد تُبخّر العقد. لا تشترِ عقوداً قرب الإعلان.',
+      note: 'الأرباح أخطر حدث للشركة — الفجوة الليلية قد تُبخّر العقد. لا تشترِ عقوداً قرب الإعلان.',
     }, { headers: { 'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=120' } })
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err?.message ?? 'خطأ', upcoming: [] })

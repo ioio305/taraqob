@@ -80,7 +80,7 @@ export async function GET() {
     const callShare = total > 0 ? Math.round((callMoney / total) * 100) : 50
     const summaryAr = total === 0
       ? 'لا تدفقات تُذكر الآن — السوق في وضع انتظار'
-      : callShare >= 60 ? `أموال اليوم تميل للكول (${callShare}%) — رهانات صعود تتراكم على الأسهم`
+      : callShare >= 60 ? `أموال اليوم تميل للكول (${callShare}%) — رهانات صعود تتراكم على الشركات`
       : callShare <= 40 ? `أموال اليوم تميل للبوت (${100 - callShare}%) — تحوّط أو رهانات هبوط`
       : `أموال اليوم متوازنة (${callShare}% كول) — لا انحياز واضح`
 

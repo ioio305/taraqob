@@ -355,7 +355,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
             {
               icon: '📡', color: '#A78BFA',
               title: 'رصد متكامل',
-              desc: 'السوق والقطاع والسهم والعقد تُقرأ معًا قبل ترتيب الفرص.',
+              desc: 'السوق والقطاع والشركة والعقد تُقرأ معًا قبل ترتيب الفرص.',
             },
             {
               icon: '🎮', color: '#C9943A',

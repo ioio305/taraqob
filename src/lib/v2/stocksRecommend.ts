@@ -117,7 +117,7 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
   const [quote, bars] = options.prefetched
     ? [options.prefetched.quote, options.prefetched.bars]
     : await Promise.all([getStockQuote(sym), getStockDailyBars(sym, 60).catch(() => [])])
-  if (!quote) return empty(`تعذر جلب سعر السهم ${sym}`)
+  if (!quote) return empty(`تعذر جلب سعر الشركة ${sym}`)
 
   const price = quote.price
   const closes = bars.map(b => b.close)
@@ -278,7 +278,7 @@ function buildStockContext(a: {
     chgPct: a.changePct,
     volValue: a.ivPct,
     volExtreme,
-    volExtremeReason: `تذبذب السهم مرتفع جداً (${a.ivPct.toFixed(0)}%) — أسعار العقود منتفخة والحركة خطرة، راقب فقط`,
+    volExtremeReason: `تذبذب الشركة مرتفع جداً (${a.ivPct.toFixed(0)}%) — أسعار العقود منتفخة والحركة خطرة، راقب فقط`,
     volCalmForEdge: a.ivPct < 45,
     hasDirection: !!a.contractType,
     recMode: a.recMode,
@@ -289,7 +289,7 @@ function buildStockContext(a: {
     blockedReason,
     closedWatchlist: a.sessionQuality.phase === 'closed' || a.sessionQuality.phase === 'pre_market',
     watchMode: a.watchMode,
-    watchModeReason: 'السهم يتحرك بلا اتجاه واضح — راقب فقط، لا تشترِ الآن',
+    watchModeReason: 'الشركة تتحرك بلا اتجاه واضح — راقب فقط، لا تشترِ الآن',
     executeScore: STOCKS_CALIBRATION.executeScore,
     watchScore: STOCKS_CALIBRATION.watchScore,
     minNetRR: STOCKS_CALIBRATION.minNetRR,

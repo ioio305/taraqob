@@ -13,12 +13,14 @@ import {
   Newspaper,
   RefreshCw,
   Route,
+  Search,
   ShieldCheck,
   Waves,
 } from 'lucide-react'
 
 type ScanRow = {
   symbol: string; name: string; price: number | null; changePct: number | null
+  error?: string
   direction: { type: 'call' | 'put' | null; label: string; color: string }
   eventRisk: { active: boolean; nameAr: string } | null
   dataQuality: { status: 'ready' | 'watch' | 'blocked'; label: string; issues: string[] } | null
@@ -74,6 +76,31 @@ export default function StocksDecisionRoom() {
   const [flows, setFlows] = useState<Flow[]>([])
   const [earnings, setEarnings] = useState<Earnings[]>([])
   const [news, setNews] = useState<News[]>([])
+  const [query, setQuery] = useState('')
+  const [searched, setSearched] = useState<ScanRow | null>(null)
+  const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+
+  const search = useCallback(async () => {
+    const sym = query.trim().toUpperCase()
+    if (!sym || searching) return
+    setSearching(true)
+    setSearchError(null)
+    try {
+      const res = await fetch(`/api/v2/stocks/scan?mode=balanced&symbol=${encodeURIComponent(sym)}`)
+      const data = await res.json()
+      const row: ScanRow | null = Array.isArray(data.results) ? data.results[0] ?? null : null
+      if (!row || row.error || row.price == null) {
+        setSearchError('تعذر جلب بيانات هذه الشركة — تأكد من رمزها')
+        setSearched(null)
+      } else {
+        setSearched(row)
+      }
+    } catch {
+      setSearchError('تعذر البحث الآن — حاول مجدداً')
+    }
+    setSearching(false)
+  }, [query, searching])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -104,7 +131,8 @@ export default function StocksDecisionRoom() {
     return () => clearInterval(id)
   }, [load])
 
-  const primary = scanRows.find(row => row.best && row.dataQuality?.status !== 'blocked') ?? null
+  const platformPick = scanRows.find(row => row.best && row.dataQuality?.status !== 'blocked') ?? null
+  const primary = searched ?? platformPick
   const symbol = primary?.symbol ?? ''
   const radar = radarRows.find(row => row.symbol === symbol) ?? null
   const matchingFlows = flows.filter(flow => flow.symbol === symbol)
@@ -201,6 +229,31 @@ export default function StocksDecisionRoom() {
             </button>
           </div>
 
+          <div className="mt-6 flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 rounded-xl px-3 py-2 bg-black/25 border border-violet-400/25">
+              <Search size={15} className="text-violet-300 shrink-0" />
+              <input
+                value={query}
+                onChange={e => setQuery(e.target.value.toUpperCase())}
+                onKeyDown={e => { if (e.key === 'Enter') void search() }}
+                placeholder="رمز أي شركة… AAPL"
+                className="bg-transparent outline-none text-sm text-white w-40 font-mono placeholder:text-slate-600"
+                dir="ltr"
+              />
+            </div>
+            <button onClick={() => void search()} disabled={searching || !query.trim()}
+                    className="rounded-xl px-4 py-2 text-xs font-black text-slate-950 bg-violet-300 disabled:opacity-40">
+              {searching ? 'يفحص…' : 'أعطني قرارها'}
+            </button>
+            {searched ? (
+              <button onClick={() => { setSearched(null); setQuery(''); setSearchError(null) }}
+                      className="rounded-xl px-3 py-2 text-xs font-bold text-violet-200 bg-violet-400/10 border border-violet-400/25">
+                العودة لاختيار المنصة ✕
+              </button>
+            ) : null}
+            {searchError ? <span className="text-xs font-bold text-red-400">{searchError}</span> : null}
+          </div>
+
           <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mt-8">
             {STAGES.map(({ label, Icon }, index) => {
               const active = primary ? index <= Math.min(4, Math.max(1, passed)) : index === 0
@@ -222,7 +275,9 @@ export default function StocksDecisionRoom() {
           <div className="rounded-3xl p-5 md:p-7 bg-[#0D1B2A] border border-white/[.07]">
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
-                <div className="text-[11px] font-bold text-slate-500">القرار الحالي</div>
+                <div className="text-[11px] font-bold text-slate-500">
+                  {searched ? 'قرار الشركة التي بحثت عنها' : 'القرار الحالي — اختيار المنصة حسب الزخم'}
+                </div>
                 {primary?.best ? (
                   <>
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
