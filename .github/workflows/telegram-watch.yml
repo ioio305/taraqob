@@ -1,0 +1,24 @@
+# ── مراقب تليجرام — نبضة كل 5 دقائق أثناء جلسة نيويورك ─────────────────────
+# حساب Vercel الحالي (Hobby) يسمح بمهام مجدولة يومية فقط، لذلك تتولى
+# GitHub Actions النداء كل 5 دقائق (13:00–21:59 UTC = ساعات جلسة نيويورك
+# صيفاً وشتاءً) والمسار نفسه يتحقق من توقيت نيويورك بدقة ويخرج مبكراً
+# خارج الجلسة. السر يُقرأ من أسرار المستودع (CRON_SECRET) ولا يُكتب هنا.
+name: telegram-watch
+
+on:
+  schedule:
+    - cron: "*/5 13-21 * * 1-5"
+  workflow_dispatch:   # تشغيل يدوي من تبويب Actions عند الحاجة
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: نداء مراقب تليجرام
+        run: |
+          code=$(curl -sS -o /tmp/tw.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://trqob.com/api/v2/telegram-watch")
+          echo "HTTP $code"
+          cat /tmp/tw.json
