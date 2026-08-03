@@ -1,47 +1,40 @@
 -- ═══════════════════════════════════════════════════════════════════
--- جدولة مراقب تيليجرام والملخص اليومي من داخل Supabase
--- بديل دقيق (كل 3 دقائق) لجدولة GitHub التي تتأخر أوقات الذروة
--- التشغيل: الصق هذا الملف كاملاً في Supabase → SQL Editor → Run
+-- جدولة تليجرام من داخل Supabase (pg_cron) — النسخة المطبّقة فعلاً 2026-08-03
+-- ملاحظة: ALTER DATABASE SET محظور في Supabase المُستضاف، لذلك يُضمَّن
+-- السر مباشرة في تعريف المهمة (تعريفات cron.job لا تظهر إلا لدور postgres)
+-- التشغيل: SQL Editor ← الصق بعد استبدال ضع_CRON_SECRET_هنا ← Run
 -- ═══════════════════════════════════════════════════════════════════
 
--- 1) تفعيل الامتدادين (مرة واحدة)
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
 
--- 2) تخزين السر في إعدادات قاعدة البيانات (لا يُكتب داخل الجدولة نفسها)
---    ⚠️ استبدل القيمة أدناه بقيمة CRON_SECRET من ملف .env.local
-ALTER DATABASE postgres SET app.cron_secret = 'ضع_CRON_SECRET_هنا';
-
--- 3) مراقب تليجرام: كل 3 دقائق أثناء جلسة نيويورك (13:00–21:59 UTC، إثنين–جمعة)
---    المسار نفسه يتحقق من توقيت نيويورك بدقة ويخرج مبكراً خارج الجلسة
+-- مراقب تليجرام: كل 3 دقائق أثناء جلسة نيويورك (إثنين–جمعة، UTC)
 SELECT cron.schedule(
   'telegram-watch',
   '*/3 13-21 * * 1-5',
   $$
   SELECT net.http_get(
     url := 'https://trqob.com/api/v2/telegram-watch',
-    headers := jsonb_build_object(
-      'Authorization',
-      'Bearer ' || current_setting('app.cron_secret')
-    )
+    headers := jsonb_build_object('Authorization', 'Bearer ضع_CRON_SECRET_هنا')
   );
   $$
 );
 
--- 4) الملخص اليومي: 21:47 UTC (بعد إغلاق نيويورك وبعد اكتمال التقييم)
+-- الملخص اليومي: 21:47 UTC بعد الإغلاق وبعد اكتمال التقييم
 SELECT cron.schedule(
   'telegram-digest',
   '47 21 * * 1-5',
   $$
   SELECT net.http_get(
     url := 'https://trqob.com/api/v2/telegram-digest',
-    headers := jsonb_build_object(
-      'Authorization',
-      'Bearer ' || current_setting('app.cron_secret')
-    )
+    headers := jsonb_build_object('Authorization', 'Bearer ضع_CRON_SECRET_هنا')
   );
   $$
 );
 
--- 5) تحقق: يجب أن ترى المهمتين
+-- تحقق من التسجيل: مهمتان نشطتان
 SELECT jobname, schedule, active FROM cron.job;
+
+-- تحقق من التشغيل الفعلي (بعد دقائق): نبضات succeeded كل 3 دقائق
+-- SELECT j.jobname, d.status, d.start_time FROM cron.job_run_details d
+-- JOIN cron.job j ON j.jobid = d.jobid ORDER BY d.start_time DESC LIMIT 6;
