@@ -57,14 +57,17 @@ export async function GET(req: NextRequest) {
     const losses = sigs.filter((s: any) => s.status === 'closed_loss').length
     const lines = [
       `📊 <b>ملخص ترقّب — ${nyToday}</b>`,
+      '━━━━━━━━━━━━',
       `فرص اليوم القوية (${sigs.length}):`,
       '',
     ]
     sigs.forEach((s: any, i: number) => {
       const typeAr = s.contract_type === 'put' ? 'بوت' : 'كول'
+      const tIcon  = s.contract_type === 'put' ? '🔴' : '🟢'
+      const gIcon  = s.grade === 'A+' ? '🏆' : '⚡'
       const underlying = underlyingFromContract(s.contract_symbol)
       const st = STATUS_AR[s.status] ?? s.status
-      lines.push(`${i + 1}. <b>${s.grade} · ${typeAr} ${s.strike}</b> — ${st}`)
+      lines.push(`${i + 1}. ${gIcon} <b>${s.grade}</b> ${tIcon} <b>${typeAr} ${s.strike}</b> — ${st}`)
       const details: string[] = []
       if (s.entry_price != null)    details.push(`الدخول $${s.entry_price}`)
       if (s.target_level != null)   details.push(`الهدف ${Math.round(s.target_level)}`)

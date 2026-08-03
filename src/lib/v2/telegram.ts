@@ -23,23 +23,33 @@ export async function sendTelegram(text: string): Promise<boolean> {
   }
 }
 
-// رسالة فرصة جاهزة بصيغة موحدة
+// رسالة فرصة جاهزة بصيغة موحدة — تصميم غني بأيقونات وتسلسل بصري واضح
 export function formatSignalMessage(s: {
   grade: string; contract_symbol: string; contract_type?: string; strike: number
   entry_price?: number | null; stop_loss_level?: number | null; target_level?: number | null
   spx_at_signal?: number | null; reason?: string
 }): string {
-  const typeAr = s.contract_type === 'put' ? 'بوت' : 'كول'
+  const isPut      = s.contract_type === 'put'
+  const typeAr     = isPut ? 'بوت' : 'كول'
+  const typeIcon   = isPut ? '🔴' : '🟢'
+  const gradeIcon  = s.grade === 'A+' ? '🏆' : '⚡'
   const underlying = underlyingFromContract(s.contract_symbol)
+  const DIV        = '━━━━━━━━━━━━'
+
   const lines = [
-    `🚨 <b>فرصة ${s.grade} — ترقب</b>`,
-    `العقد: ${typeAr} ${s.strike} (${s.contract_symbol})`,
+    `${gradeIcon} <b>فرصة ${s.grade} — ترقّب</b>`,
+    DIV,
+    `${typeIcon} <b>${typeAr} ${s.strike}</b> · <b>${underlying}</b>`,
+    `<code>${s.contract_symbol}</code>`,
+    '',
   ]
-  if (s.entry_price != null)      lines.push(`الدخول: $${s.entry_price}`)
-  if (s.stop_loss_level != null)  lines.push(`الوقف (${underlying}): ${s.stop_loss_level}`)
-  if (s.target_level != null)     lines.push(`الهدف (${underlying}): ${s.target_level}`)
-  if (s.spx_at_signal != null)    lines.push(`${underlying} عند الإشارة: ${s.spx_at_signal}`)
-  if (s.reason)                   lines.push(`السبب: ${s.reason}`)
-  lines.push('', '⚠️ راجع المنصة قبل الدخول — القرار قرارك')
+  if (s.entry_price != null)     lines.push(`💵 <b>الدخول:</b> $${s.entry_price}`)
+  if (s.target_level != null)    lines.push(`🎯 <b>الهدف:</b> ${s.target_level} <i>(${underlying})</i>`)
+  if (s.stop_loss_level != null) lines.push(`🛑 <b>الوقف:</b> ${s.stop_loss_level} <i>(${underlying})</i>`)
+  if (s.spx_at_signal != null)   lines.push(`📊 <b>${underlying} عند الإشارة:</b> ${s.spx_at_signal}`)
+  if (s.reason) {
+    lines.push('', `💡 <b>لماذا هذه الفرصة؟</b>`, `<blockquote>${s.reason}</blockquote>`)
+  }
+  lines.push(DIV, '⚠️ <i>راجع المنصة قبل الدخول — القرار قرارك</i>')
   return lines.join('\n')
 }
