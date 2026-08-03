@@ -21,6 +21,13 @@ const STATUS_AR: Record<string, string> = {
   cancelled:   '⛔ أُلغيت',
 }
 
+
+// ── اتجاه RTL: علامة يمين→يسار لكل سطر + عزل المقاطع اللاتينية ──────────────
+const RLM = '\u200F'
+const LRI = '\u2066'
+const PDI = '\u2069'
+const ltr = (t: string) => `${LRI}${t}${PDI}`
+
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET
   if (!secret) return NextResponse.json({ ok: false, error: 'CRON_SECRET غير مضبوط' }, { status: 503 })
@@ -59,7 +66,7 @@ export async function GET(req: NextRequest) {
       '',
       'يوم هادئ — لم تظهر فرصة بمعايير ترقّب الصارمة اليوم.',
       'الانضباط جزء من الاستراتيجية: الأيام الهادئة تحمي رأس المال بقدر ما تفعل الفرص الجيدة.',
-    ].join('\n')
+    ].map((l) => RLM + l).join('\n')
   } else {
     const wins   = sigs.filter((s: any) => s.status === 'closed_win').length
     const losses = sigs.filter((s: any) => s.status === 'closed_loss').length
@@ -75,12 +82,12 @@ export async function GET(req: NextRequest) {
       const gIcon  = s.grade === 'A+' ? '🏆' : '⚡'
       const underlying = underlyingFromContract(s.contract_symbol)
       const st = STATUS_AR[s.status] ?? s.status
-      lines.push(`${i + 1}. ${gIcon} <b>${s.grade}</b> ${tIcon} <b>${typeAr} ${s.strike}</b> — ${st}`)
+      lines.push(`${i + 1}. ${gIcon} <b>${ltr(s.grade)}</b> ${tIcon} <b>${typeAr} ${ltr(String(s.strike))}</b> — ${st}`)
       const details: string[] = []
-      if (s.entry_price != null)    details.push(`الدخول $${s.entry_price}`)
+      if (s.entry_price != null)    details.push(`الدخول ${ltr('$' + s.entry_price)}`)
       if (s.target_level != null)   details.push(`الهدف ${Math.round(s.target_level)}`)
       if (s.stop_loss_level != null) details.push(`الوقف ${Math.round(s.stop_loss_level)}`)
-      if (details.length) lines.push(`   ${details.join(' · ')} (${underlying})`)
+      if (details.length) lines.push(`   ${details.join(' · ')} ${ltr('(' + underlying + ')')}`)
     })
     lines.push('')
     const tally: string[] = []
@@ -90,7 +97,7 @@ export async function GET(req: NextRequest) {
     if (open) tally.push(`🔵 بلا نتيجة بعد ${open}`)
     lines.push(`الحصيلة: ${tally.join(' · ')}`)
     lines.push('', '⚠️ راجع المنصة للتفاصيل الكاملة — القرار قرارك')
-    text = lines.join('\n')
+    text = lines.map((l) => RLM + l).join('\n')
   }
 
   if (dry) {
