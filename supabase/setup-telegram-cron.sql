@@ -8,10 +8,10 @@
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
 
--- مراقب تليجرام: كل 3 دقائق أثناء جلسة نيويورك (إثنين–جمعة، UTC)
+-- مراقب تليجرام: كل دقيقة أثناء جلسة نيويورك (إثنين–جمعة، UTC)
 SELECT cron.schedule(
   'telegram-watch',
-  '*/3 13-21 * * 1-5',
+  '* 13-21 * * 1-5',
   $$
   SELECT net.http_get(
     url := 'https://trqob.com/api/v2/telegram-watch',
