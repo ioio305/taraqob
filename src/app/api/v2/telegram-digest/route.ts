@@ -37,12 +37,20 @@ export async function GET(req: NextRequest) {
 
   const { data } = await sb
     .from('v2_signals')
-    .select('created_at, grade, contract_symbol, contract_type, strike, status, entry_price, target_level, stop_loss_level, spx_at_signal')
+    .select('created_at, summary_ar, contract_symbol, contract_type, strike, status, entry_price, target_level, stop_loss_level, spx_at_signal')
     .gte('created_at', nyToday + 'T00:00:00')
     .order('total_score', { ascending: false })
     .limit(20)
 
-  const sigs = (data ?? []).filter((s: any) => !String(s.contract_symbol ?? '').startsWith('TEST_')).slice(0, 5)
+  // لا يوجد عمود grade في الجدول — الدرجة مخزّنة داخل summary_ar كـ [A+]
+  const gradeOf = (summary: string | null): string => {
+    const m = (summary ?? '').match(/^\[(A\+|A)\]/)
+    return m ? m[1] : 'A'
+  }
+  const sigs = (data ?? [])
+    .filter((s: any) => !String(s.contract_symbol ?? '').startsWith('TEST_'))
+    .slice(0, 5)
+    .map((s: any) => ({ ...s, grade: gradeOf(s.summary_ar) }))
 
   let text: string
   if (sigs.length === 0) {

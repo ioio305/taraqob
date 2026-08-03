@@ -54,11 +54,15 @@ export async function GET(req: NextRequest) {
   // فرص اليوم القوية من السجل نفسه
   const { data: sigData } = await sb
     .from('v2_signals')
-    .select('created_at, contract_type, strike, grade, total_score, entry_price, target_level, stop_loss_level, spx_at_signal, status, summary_ar, contract_symbol')
+    .select('created_at, contract_type, strike, total_score, entry_price, target_level, stop_loss_level, spx_at_signal, status, summary_ar, contract_symbol')
     .gte('created_at', nyToday + 'T00:00:00')
     .order('total_score', { ascending: false })
     .limit(20)
-  const sigs = (sigData ?? []).filter((s: any) => !String(s.contract_symbol ?? '').startsWith('TEST_')).slice(0, 3)
+  // لا يوجد عمود grade — تُستخرج الدرجة من summary_ar كـ [A+]
+  const sigs = (sigData ?? [])
+    .filter((s: any) => !String(s.contract_symbol ?? '').startsWith('TEST_'))
+    .slice(0, 3)
+    .map((s: any) => ({ ...s, grade: ((s.summary_ar ?? '').match(/^\[(A\+|A)\]/) ?? [null, 'A'])[1] }))
 
   // ── بناء الجسم ──
   let body: string
