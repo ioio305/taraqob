@@ -56,6 +56,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // ── مجدولات الخادم: حامل CRON_SECRET يمر بلا جلسة ────────────
+  // يتيح لمراقب تليجرام الخادمي قراءة واجهات التوصية الداخلية بنفس
+  // سر المجدولات. السر مشفّر في فيرسل ولا يظهر في أي عميل.
+  const cronSecret = process.env.CRON_SECRET
+  if (cronSecret && request.headers.get('authorization') === `Bearer ${cronSecret}`) {
+    return NextResponse.next()
+  }
+
   // ── التحقق من الجلسة ─────────────────────────────────────────
   let response = NextResponse.next({ request: { headers: request.headers } })
 

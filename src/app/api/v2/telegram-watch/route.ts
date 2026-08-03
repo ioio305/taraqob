@@ -45,7 +45,11 @@ export async function GET(req: NextRequest) {
   const results = await Promise.all(
     INDICES.map(async idx => {
       try {
-        const res = await fetch(recUrl(idx), { cache: 'no-store' })
+        const res = await fetch(recUrl(idx), {
+          cache: 'no-store',
+          // مرور عبر الوسيط كمجدول خادم (بند CRON_SECRET في middleware)
+          headers: { authorization: `Bearer ${process.env.CRON_SECRET}` },
+        })
         const json = await res.json()
         return { idx, json }
       } catch {
