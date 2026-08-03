@@ -1,0 +1,23 @@
+# ── الملخص اليومي للقناة — بعد إغلاق نيويورك وبعد اكتمال التقييم ────────────
+# مجدول فيرسل signals/evaluate ينتهي ~21:30 UTC؛ نرسل الملخص 21:47 UTC
+# (دقيقة خارج الذروة، وبعد الإغلاق صيفاً 20:00 وشتاءً 21:00 UTC)
+# حتى تصل النتائج النهائية لفرص اليوم. السر من أسرار المستودع.
+name: telegram-digest
+
+on:
+  schedule:
+    - cron: "47 21 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: نداء الملخص اليومي
+        run: |
+          code=$(curl -sS -o /tmp/td.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://trqob.com/api/v2/telegram-digest")
+          echo "HTTP $code"
+          cat /tmp/td.json
