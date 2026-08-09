@@ -151,6 +151,10 @@ async function logSignalOnce(key: string, contract: any, market: any) {
         total_score: contract.score,
         grade: contract.grade,
         entry_price: contract.strategy?.entryBalanced ?? contract.mid ?? contract.ask ?? null,
+        entry_bid: contract.bid ?? null,
+        entry_ask: contract.ask ?? null,
+        contract_stop_price: contract.strategy?.stopPrice ?? null,
+        contract_target_price: contract.strategy?.t1Price ?? null,
         stop_loss_level: contract.strategy?.stopSpxLevel ?? null,
         target_level: contract.strategy?.t1SpxLevel ?? null,
         risk_reward_ratio: contract.strategy?.stopLoss
@@ -185,16 +189,17 @@ export function AlertsWatcher() {
         const marketNorm = rec?.market?.spx
           ? rec.market
           : { spx: rec?.market ? { price: rec.market.price } : undefined }
-        for (const c of rec?.contracts ?? []) {
-          if ((c.grade === 'A+' || c.grade === 'A') && c.status === 'execute') {
-            const typeAr = c.type === 'put' ? 'بوت' : 'كول'
-            notifyOnce(`sig-${c.symbol}`,
-              `🚨 فرصة ${c.grade} — ترقب`,
-              `${typeAr} ${c.strike} بسعر ~$${c.mid ?? c.ask} — افتح المنصة للتفاصيل`)
-            watchRecommendation(c, idx)
-            void saveBellOnce(`sig-${c.symbol}`, buildEntryNotification(c))
-            void logSignalOnce(`sig-${c.symbol}`, c, marketNorm)
-          }
+        const [c] = (rec?.contracts ?? [])
+          .filter((contract: any) => (contract.grade === 'A+' || contract.grade === 'A') && contract.status === 'execute')
+          .sort((a: any, b: any) => (b.grade === 'A+' ? 1 : 0) - (a.grade === 'A+' ? 1 : 0) || Number(b.score ?? 0) - Number(a.score ?? 0))
+        if (c) {
+          const typeAr = c.type === 'put' ? 'بوت' : 'كول'
+          notifyOnce(`sig-${c.symbol}`,
+            `🚨 فرصة ${c.grade} — ترقب`,
+            `${typeAr} ${c.strike} بسعر ~$${c.mid ?? c.ask} — افتح المنصة للتفاصيل`)
+          watchRecommendation(c, idx)
+          void saveBellOnce(`sig-${c.symbol}`, buildEntryNotification(c))
+          void logSignalOnce(`sig-${c.symbol}`, c, marketNorm)
         }
       } catch { /* تجاهل */ }
 

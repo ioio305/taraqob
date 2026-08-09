@@ -8,10 +8,11 @@
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
 
--- مراقب تليجرام: كل دقيقة أثناء جلسة نيويورك (إثنين–جمعة، UTC)
+-- مراقب تليجرام: نبضة احتياطية كل 15 ثانية.
+-- المسار نفسه يتوقف فوراً خارج جلسة نيويورك، ولا يرسل إلا بعد اعتماد الفرصة.
 SELECT cron.schedule(
   'telegram-watch',
-  '* 13-21 * * 1-5',
+  '15 seconds',
   $$
   SELECT net.http_get(
     url := 'https://trqob.com/api/v2/telegram-watch',
@@ -35,6 +36,6 @@ SELECT cron.schedule(
 -- تحقق من التسجيل: مهمتان نشطتان
 SELECT jobname, schedule, active FROM cron.job;
 
--- تحقق من التشغيل الفعلي (بعد دقائق): نبضات succeeded كل 3 دقائق
+-- تحقق من التشغيل الفعلي: نبضات ناجحة كل 15 ثانية
 -- SELECT j.jobname, d.status, d.start_time FROM cron.job_run_details d
 -- JOIN cron.job j ON j.jobid = d.jobid ORDER BY d.start_time DESC LIMIT 6;

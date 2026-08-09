@@ -35,7 +35,10 @@ const ltr = (t: string | number) => `${LRI}${t}${PDI}`
 export function formatSignalMessage(s: {
   grade: string; contract_symbol: string; contract_type?: string; strike: number
   entry_price?: number | null; stop_loss_level?: number | null; target_level?: number | null
-  spx_at_signal?: number | null; reason?: string
+  spx_at_signal?: number | null; reason?: string; expiry?: string | null; dte?: number | null
+  bid?: number | null; ask?: number | null; max_entry_price?: number | null
+  valid_until?: string | null; risk_budget_pct?: number | null; contract_stop_price?: number | null
+  contract_target_price?: number | null
 }): string {
   const isPut      = s.contract_type === 'put'
   const typeAr     = isPut ? 'بوت' : 'كول'
@@ -52,8 +55,26 @@ export function formatSignalMessage(s: {
     '',
   ]
   if (s.entry_price != null)     lines.push(`${RLM}💵 <b>الدخول:</b> <b>${ltr('$' + s.entry_price)}</b>`)
-  if (s.target_level != null)    lines.push(`${RLM}🎯 <b>الهدف:</b> ${s.target_level} <i>${ltr('(' + underlying + ')')}</i>`)
-  if (s.stop_loss_level != null) lines.push(`${RLM}🛑 <b>الوقف:</b> ${s.stop_loss_level} <i>${ltr('(' + underlying + ')')}</i>`)
+  if (s.max_entry_price != null) lines.push(`${RLM}📌 <b>أقصى سعر شراء:</b> <b>${ltr('$' + s.max_entry_price)}</b>`)
+  if (s.bid != null && s.ask != null) {
+    const mid = (s.bid + s.ask) / 2
+    const spread = mid > 0 ? Math.round(((s.ask - s.bid) / mid) * 100) : null
+    lines.push(`${RLM}💧 <b>السيولة:</b> ${ltr('$' + s.bid + ' / $' + s.ask)}${spread != null ? ` · فرق ${ltr(spread + '%')}` : ''}`)
+  }
+  if (s.expiry)                  lines.push(`${RLM}📅 <b>الانتهاء:</b> ${ltr(s.expiry)}${s.dte != null ? ` · ${ltr(s.dte + ' DTE')}` : ''}`)
+  if (s.contract_target_price != null) lines.push(`${RLM}🎯 <b>هدف العقد:</b> <b>${ltr('$' + s.contract_target_price)}</b>`)
+  if (s.contract_stop_price != null)   lines.push(`${RLM}🛑 <b>وقف العقد:</b> <b>${ltr('$' + s.contract_stop_price)}</b>`)
+  if (s.target_level != null)    lines.push(`${RLM}📈 <b>منطقة الهدف:</b> ${s.target_level} <i>${ltr('(' + underlying + ')')}</i>`)
+  if (s.stop_loss_level != null) lines.push(`${RLM}📉 <b>منطقة الإلغاء:</b> ${s.stop_loss_level} <i>${ltr('(' + underlying + ')')}</i>`)
+  if (s.entry_price != null && s.contract_stop_price != null) {
+    const maxLoss = Math.max(0, Math.round((s.entry_price - s.contract_stop_price) * 100))
+    lines.push(`${RLM}🧮 <b>الخسارة المخططة للعقد:</b> ${ltr('$' + maxLoss)}`)
+  }
+  if (s.risk_budget_pct != null) lines.push(`${RLM}🛡️ <b>سقف مخاطرة المحفظة:</b> ${ltr(s.risk_budget_pct + '%')}`)
+  if (s.valid_until) {
+    const time = new Date(s.valid_until).toLocaleTimeString('ar-SA', { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit' })
+    lines.push(`${RLM}⏱️ <b>صلاحية السعر:</b> حتى ${ltr(time)} بتوقيت الرياض`)
+  }
   if (s.spx_at_signal != null)   lines.push(`${RLM}📊 <b>${underlying} عند الإشارة:</b> ${ltr(s.spx_at_signal)}`)
   if (s.reason) {
     lines.push('', `${RLM}💡 <b>لماذا هذه الفرصة؟</b>`, `${RLM}<blockquote>${s.reason}</blockquote>`)

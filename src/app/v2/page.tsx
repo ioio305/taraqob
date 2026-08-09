@@ -83,6 +83,7 @@ type ShortlistItem = {
 }
 type Data = {
   success: boolean; error?: string
+  issuedAt?: string
   marketClosed?: boolean; marketStatus?: string
   watchMode?: boolean
   market: Market; sessions: Sessions; direction: Direction
@@ -237,22 +238,27 @@ export default function V2Dashboard() {
 
   // ── السجل الحي: تسجيل فرص A+/A التنفيذية (بلا تكرار، السيرفر يزيل المكرر) ──
   useEffect(() => {
-    const cs = (data?.contracts ?? []).filter(c => (c.grade === 'A+' || c.grade === 'A') && c.status === 'execute')
-    for (const c of cs) {
-      fetch('/api/v2/signals/log', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contract_symbol: c.symbol, contract_type: c.type, strike: c.strike, expiry: c.expiration,
-          total_score: c.score, grade: c.grade,
-          entry_price: c.strategy?.entryBalanced ?? null,
-          stop_loss_level: c.strategy?.stopSpxLevel ?? null,
-          target_level: c.strategy?.t1SpxLevel ?? null,
-          risk_reward_ratio: c.strategy?.stopLoss ? Math.abs((c.strategy.t1Profit ?? 0) / c.strategy.stopLoss) : null,
-          spx_at_signal: data?.market?.spx?.price ?? null,
-          reason: c.reason,
-        }),
-      }).catch(() => {})
-    }
+    const [c] = (data?.contracts ?? [])
+      .filter(c => (c.grade === 'A+' || c.grade === 'A') && c.status === 'execute')
+      .sort((a, b) => (b.grade === 'A+' ? 1 : 0) - (a.grade === 'A+' ? 1 : 0) || (b.score ?? 0) - (a.score ?? 0))
+    if (!c) return
+    fetch('/api/v2/signals/log', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contract_symbol: c.symbol, contract_type: c.type, strike: c.strike, expiry: c.expiration,
+        total_score: c.score, grade: c.grade,
+        entry_price: c.strategy?.entryBalanced ?? null,
+        entry_bid: c.bid ?? null,
+        entry_ask: c.ask ?? null,
+        contract_stop_price: c.strategy?.stopPrice ?? null,
+        contract_target_price: c.strategy?.t1Price ?? null,
+        stop_loss_level: c.strategy?.stopSpxLevel ?? null,
+        target_level: c.strategy?.t1SpxLevel ?? null,
+        risk_reward_ratio: c.strategy?.stopLoss ? Math.abs((c.strategy.t1Profit ?? 0) / c.strategy.stopLoss) : null,
+        spx_at_signal: data?.market?.spx?.price ?? null,
+        reason: c.reason,
+      }),
+    }).catch(() => {})
   }, [data])
 
   // 1-second countdown between refreshes
@@ -297,6 +303,13 @@ export default function V2Dashboard() {
 
       {/* ── الانضباط: حد الخسارة اليومي/الأسبوعي ── */}
       <DisciplineBar />
+
+      {data?.issuedAt && (
+        <div className="text-xs px-3 py-2 rounded-lg text-center" style={{ color: '#94A3B8', background: 'rgba(255,255,255,.035)' }}>
+          آخر تحليل: {new Date(data.issuedAt).toLocaleTimeString('ar-SA', { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit' })} بتوقيت الرياض
+          {' · '}{hasExecute ? 'الفرصة صالحة الآن بالسعر المحدد فقط' : 'لا توجد فرصة دخول صالحة الآن'}
+        </div>
+      )}
 
       {/* ── محوّل المؤشرات: SPX صفحته هنا · الباقي على نفس المحرك ── */}
       <IndexSwitcher active="SPX" />
