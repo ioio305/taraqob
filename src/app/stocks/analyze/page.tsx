@@ -152,8 +152,15 @@ function AnalyzeInner() {
         low: liveQuote.low || baseMarket.low,
       }
     : baseMarket
-  const dir = data?.direction
-  const isCall = dir?.type === 'call'
+  const councilAction = data?.decisionCouncil?.action
+  const councilDirection = councilAction === 'call' || councilAction === 'put' ? councilAction : null
+  const dir = councilDirection
+    ? { type: councilDirection, label: councilDirection === 'call' ? 'شراء صاعد' : 'شراء هابط', color: councilDirection === 'call' ? '#10B981' : '#EF4444' }
+    : null
+  const isCall = councilDirection === 'call'
+  const visibleContracts = councilDirection
+    ? (data?.contracts ?? []).filter(contract => contract.type === councilDirection && contract.status === 'execute')
+    : []
 
   return (
     <div className="min-h-full p-4 pb-10 space-y-4 max-w-3xl mx-auto"
@@ -254,9 +261,9 @@ function AnalyzeInner() {
               <Metric label="الحركة المتوقعة" value={mk?.expectedMove != null ? `±$${n(mk.expectedMove)}` : '—'} sub="حتى الانتهاء" />
               <Metric label="أعلى/أدنى اليوم" value={`${n(mk?.high, 0)} / ${n(mk?.low, 0)}`} sub="نطاق اليوم" />
             </div>
-            {dir?.reason && (
+            {data.direction?.reason && (
               <div className="px-5 py-3 text-xs" style={{ color: '#94A3B8', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                {dir.reason}
+                قراءة مساندة: {data.direction.reason}
               </div>
             )}
           </div>
@@ -294,18 +301,18 @@ function AnalyzeInner() {
           )}
 
           {/* العقود المقترحة */}
-          {data.contracts.length === 0 ? (
+          {visibleContracts.length === 0 ? (
             <div className="py-10 text-center">
               <div className="text-3xl mb-2 opacity-25">⏸</div>
               <div className="text-sm font-bold mb-1" style={{ color: '#F59E0B' }}>لا عقد مناسب الآن</div>
               <div className="text-sm max-w-sm mx-auto" style={{ color: '#5E6E7F' }}>
-                {data.watchMode ? 'الشركة بلا اتجاه واضح اليوم — انتظر حركة أوضح.' : 'لم نجد عقداً يستوفي معايير الجودة لهذه الشركة حالياً.'}
+                لا توجد توصية مكتملة الشروط لهذه الشركة حاليًا.
               </div>
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="text-xs font-bold" style={{ color: ACCENT }}>العقود الأفضل الآن (للمراقبة)</div>
-              {data.contracts.map((c, i) => <ContractCard key={c.symbol} c={c} primary={i === 0} symbol={data.symbol} scenario={data.scenario} opportunityWindow={data.opportunityWindow} />)}
+              <div className="text-xs font-bold" style={{ color: ACCENT }}>العقود المعتمدة للتنفيذ الآن</div>
+              {visibleContracts.map((c, i) => <ContractCard key={c.symbol} c={c} primary={i === 0} symbol={data.symbol} scenario={data.scenario} opportunityWindow={data.opportunityWindow} />)}
             </div>
           )}
         </>
@@ -443,7 +450,8 @@ function TechnicalRead({ analysis }: { analysis: StockChartData['analysis'] }) {
         </span>
       </div>
       <div className="p-4 space-y-3">
-        <div className="text-sm leading-relaxed" style={{ color: '#CBD5E1' }}>{s.decisionText}</div>
+        <div className="text-sm leading-relaxed" style={{ color: '#CBD5E1' }}>{s.reason}</div>
+        <div className="text-[11px]" style={{ color: '#5E6E7F' }}>هذه قراءة مساندة، ولا تصنع قراراً منفصلاً عن قرار ترقّب المركزي.</div>
 
         {/* القراءات المستقلة */}
         <div className="grid grid-cols-3 gap-2">

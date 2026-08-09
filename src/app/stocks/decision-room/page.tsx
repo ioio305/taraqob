@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useLiveQuote } from '@/lib/v2/useLiveQuotes'
+import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
+import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
+import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
 import {
   Activity,
   ArrowLeft,
@@ -25,8 +28,11 @@ type ScanRow = {
   direction: { type: 'call' | 'put' | null; label: string; color: string }
   eventRisk: { active: boolean; nameAr: string } | null
   dataQuality: { status: 'ready' | 'watch' | 'blocked'; label: string; issues: string[] } | null
+  decisionCouncil?: DecisionCouncil | null
+  scenario?: UnderlyingScenario | null
+  opportunityWindow?: OpportunityWindow | null
   best: null | {
-    strike: number; type: string; expiration: string; mid: number; reason: string
+    strike: number; type: string; expiration: string; mid: number; reason: string; status: string
     ranking: {
       score: number; expectedMovePoints: number; expectedMovePct: number
       riskReward: number; spreadPct: number; relativeStrengthPct: number; timeDecayBurdenPct: number; reasons: string[]
@@ -138,7 +144,11 @@ export default function StocksDecisionRoom() {
   }, [load])
 
   const platformPick = useMemo(
-    () => scanRows.find(row => row.best && row.dataQuality?.status !== 'blocked') ?? null,
+    () => scanRows.find(row => row.decisionCouncil
+      && row.best?.status === 'execute'
+      && row.decisionCouncil.action === row.best.type)
+      ?? scanRows.find(row => row.decisionCouncil)
+      ?? null,
     [scanRows],
   )
   const basePrimary = searched ?? platformPick
@@ -149,12 +159,13 @@ export default function StocksDecisionRoom() {
     : basePrimary, [basePrimary, liveQuote])
   const radar = radarRows.find(row => row.symbol === symbol) ?? null
   const matchingFlows = flows.filter(flow => flow.symbol === symbol)
-  const supportingFlow = matchingFlows.find(flow => flow.type === primary?.direction.type) ?? null
   const earning = earnings.find(item => item.symbol === symbol) ?? null
   const relatedNews = news.filter(item => item.tickers?.includes(symbol)).slice(0, 3)
+  const council = primary?.decisionCouncil ?? null
 
   // ── حسم الاتجاه: هل يتفق الرصد الفني مع اتجاه العقد أم يعارضه؟ ──
-  const dir = primary?.direction.type ?? null
+  const dir = council?.direction ?? null
+  const supportingFlow = matchingFlows.find(flow => flow.type === dir) ?? null
   const radarDir = radarDirection(radar)
   const radarConflict = Boolean(dir && radarDir && radarDir !== dir)
   const radarConfirms = Boolean(dir && radarDir && radarDir === dir)
@@ -173,7 +184,6 @@ export default function StocksDecisionRoom() {
         ? { label: 'بيانات محجوبة', color: '#F87171' }
         : { label: 'لا بيانات', color: '#64748B' }
   const priceValid = primary?.price != null && primary.price > 0
-
   const checks = useMemo(() => {
     if (!primary) return []
     return [
@@ -212,16 +222,19 @@ export default function StocksDecisionRoom() {
   }, [primary, earning, radar, supportingFlow, relatedNews, priceValid, radarConfirms, radarConflict, adverseNews])
 
   const passed = checks.filter(check => check.ok).length
-  const blocked = Boolean(primary?.eventRisk?.active || primary?.dataQuality?.status === 'blocked' || earning?.imminent || !priceValid)
+  const executable = Boolean(council
+    && primary?.best
+    && council.action === primary.best.type
+    && primary.best.status === 'execute')
+  const activeBest = executable ? primary?.best ?? null : null
+  const blocked = !council || council.action === 'wait' || (!executable && council.action !== 'manage')
   const roomState = !primary
     ? { label: 'لا توجد فرصة صالحة', color: '#64748B', instruction: 'ابقَ نقداً حتى تظهر فرصة تستحق المخاطرة.' }
-    : blocked
-      ? { label: 'ممنوعة مؤقتاً', color: '#F87171', instruction: !priceValid ? 'بيانات السعر ناقصة — لا يُبنى قرار عليها.' : 'لا تدخل. راقب زوال سبب المنع أولاً.' }
-      : radarConflict
-        ? { label: 'تعارض الاتجاه', color: '#FB923C', instruction: 'الرصد الفني يعارض اتجاه العقد — لا تدخل حتى يتفق الاتجاهان.' }
-        : passed >= 4
-          ? { label: 'قريبة من التأكيد', color: '#34D399', instruction: 'راقب شرط الدخول؛ لا تنفذ قبل التأكيد النهائي.' }
-          : { label: 'تحت المراقبة', color: '#FBBF24', instruction: 'الأدلة غير مكتملة. انتظر ولا تطارد السعر.' }
+    : council?.action === 'manage'
+      ? { label: 'إدارة فرصة قائمة', color: '#60A5FA', instruction: council.explanation }
+      : blocked
+        ? { label: 'انتظار', color: '#FBBF24', instruction: council?.explanation ?? 'لا تدخل حتى يكتمل القرار.' }
+        : { label: 'قرار قابل للتنفيذ', color: '#34D399', instruction: council?.explanation ?? 'التزم بالدخول والإلغاء المحددين.' }
 
   return (
     <div className="min-h-full pb-14" dir="rtl">
@@ -284,6 +297,9 @@ export default function StocksDecisionRoom() {
       </section>
 
       <div className="max-w-6xl mx-auto p-4 md:p-7 space-y-5">
+        {council ? (
+          <DecisionCouncilCard council={council} scenario={primary?.scenario} window={primary?.opportunityWindow} />
+        ) : null}
         <section className="grid lg:grid-cols-[1.35fr_.65fr] gap-4">
           <div className="rounded-3xl p-5 md:p-7 bg-[#0D1B2A] border border-white/[.07]">
             <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -291,13 +307,13 @@ export default function StocksDecisionRoom() {
                 <div className="text-[11px] font-bold text-slate-500">
                   {searched ? 'قرار الشركة التي بحثت عنها' : 'القرار الحالي — اختيار المنصة حسب الزخم'}
                 </div>
-                {primary?.best ? (
+                {activeBest ? (
                   <>
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      <span className="text-4xl font-black font-mono text-white">{primary.symbol}</span>
+                      <span className="text-4xl font-black font-mono text-white">{primary?.symbol}</span>
                       <span className="rounded-lg px-2.5 py-1 text-xs font-black"
-                            style={{ color: primary.direction.color, background: `${primary.direction.color}15`, border: `1px solid ${primary.direction.color}35` }}>
-                        عقد {primary.best.type === 'call' ? 'صاعد ▲' : 'هابط ▼'} · هدف {primary.best.strike}
+                            style={{ color: activeBest.type === 'call' ? '#34D399' : '#F87171', background: activeBest.type === 'call' ? 'rgba(52,211,153,.09)' : 'rgba(248,113,113,.09)', border: `1px solid ${activeBest.type === 'call' ? 'rgba(52,211,153,.3)' : 'rgba(248,113,113,.3)'}` }}>
+                        عقد {activeBest.type === 'call' ? 'صاعد ▲' : 'هابط ▼'} · هدف {activeBest.strike}
                       </span>
                       <span className="rounded-lg px-2 py-1 text-[10px] font-black"
                             style={{ color: dataMeta.color, background: `${dataMeta.color}15`, border: `1px solid ${dataMeta.color}35` }}>
@@ -305,7 +321,7 @@ export default function StocksDecisionRoom() {
                       </span>
                     </div>
                     <div className="text-sm mt-2 text-slate-500">
-                      {primary.name} · {priceValid ? `$${primary.price!.toFixed(2)}` : 'سعر غير مكتمل'}
+                      {primary?.name} · {priceValid ? `$${primary?.price!.toFixed(2)}` : 'سعر غير مكتمل'}
                     </div>
                   </>
                 ) : <div className="text-2xl font-black text-white mt-2">لا توصية الآن</div>}
@@ -316,13 +332,13 @@ export default function StocksDecisionRoom() {
               </div>
             </div>
 
-            {primary?.best ? (
+            {activeBest ? (
               <>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-6">
-                  <Metric label="قوة الفرصة" value={`${primary.best.ranking.score}/100`} />
-                  <Metric label="حركة السهم المستهدفة" value={`${primary.best.ranking.expectedMovePoints} نقطة`} />
-                  <Metric label="نسبة حركة السهم" value={`${primary.best.ranking.expectedMovePct}%`} />
-                  <Metric label="عائد/مخاطرة" value={`${primary.best.ranking.riskReward}`} />
+                  <Metric label="قوة الفرصة" value={`${activeBest.ranking.score}/100`} />
+                  <Metric label="حركة السهم المستهدفة" value={`${activeBest.ranking.expectedMovePoints} نقطة`} />
+                  <Metric label="نسبة حركة السهم" value={`${activeBest.ranking.expectedMovePct}%`} />
+                  <Metric label="عائد/مخاطرة" value={`${activeBest.ranking.riskReward}`} />
                 </div>
                 <div className="mt-4 rounded-xl p-4 text-sm leading-7"
                      style={{ color: roomState.color, background: `${roomState.color}0C`, border: `1px solid ${roomState.color}22` }}>
@@ -332,7 +348,7 @@ export default function StocksDecisionRoom() {
                   <div className="mt-3 rounded-xl p-3 flex items-start gap-2 text-xs font-bold"
                        style={{ color: '#FDBA74', background: 'rgba(251,146,60,.1)', border: '1px solid rgba(251,146,60,.3)' }}>
                     <CircleAlert size={15} className="mt-0.5 shrink-0" />
-                    <span>تعارض في الاتجاه: العقد {primary.best.type === 'call' ? 'صاعد' : 'هابط'} لكن الرصد الفني يشير إلى «{radar?.signalAr}». لا تدخل حتى يتفق المؤشران.</span>
+                    <span>تعارض في الاتجاه: العقد {activeBest.type === 'call' ? 'صاعد' : 'هابط'} لكن الرصد الفني يشير إلى «{radar?.signalAr}». لا تدخل حتى يتفق المؤشران.</span>
                   </div>
                 ) : null}
               </>

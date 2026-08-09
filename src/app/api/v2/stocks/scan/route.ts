@@ -154,6 +154,8 @@ export async function GET(request: NextRequest) {
 
     // ── الترتيب: أفضل فرصة ربحية قابلة للتنفيذ، لا أعلى درجة عقد منفردة ──
     const ranked = [...rows].sort((a, b) => {
+      const councilGap = (b.decisionCouncil?.opportunityScore ?? -1) - (a.decisionCouncil?.opportunityScore ?? -1)
+      if (councilGap) return councilGap
       const sa = a.best?.ranking.score ?? -1
       const sb = b.best?.ranking.score ?? -1
       return sb - sa

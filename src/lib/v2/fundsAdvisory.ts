@@ -35,7 +35,16 @@ export interface FundsToday {
   leadingDecision: FundCard | null
   stats: { scanned: number; breadthPct: number | null }
   prices?: Record<string, { price: number; changePct: number | null }> // كل المفحوص (للمحفظة التجريبية)
-  verdicts?: Record<string, { score: number; tierLabelAr: string; side: 1 | -1 | 0; votes: { labelAr: string; vote: 1 | -1 | 0 }[]; plan: FundVerdict['plan'] }>
+  verdicts?: Record<string, {
+    score: number
+    tierLabelAr: string
+    side: 1 | -1 | 0
+    votes: { labelAr: string; vote: 1 | -1 | 0 }[]
+    plan: FundVerdict['plan']
+    decisionCouncil: DecisionCouncil
+    scenario: UnderlyingScenario | null
+    opportunityWindow: OpportunityWindow | null
+  }>
 }
 
 const NAME_OVERRIDES: Record<string, string> = {
@@ -186,12 +195,17 @@ export async function fundsTodayAdvisory(): Promise<FundsToday> {
     econNote: econ ? `${econ.nameAr} ${econ.when} — ${econ.advice}` : null,
     opportunities, watchlist,
     noOpportunity: opportunities.length === 0,
-    leadingDecision: [...cards].sort((a, b) => b.decisionCouncil.opportunityScore - a.decisionCouncil.opportunityScore)[0] ?? null,
+    leadingDecision: opportunities[0]
+      ?? [...cards].sort((a, b) => b.decisionCouncil.opportunityScore - a.decisionCouncil.opportunityScore)[0]
+      ?? null,
     stats: { scanned: cards.length, breadthPct: breadth },
     prices: Object.fromEntries(cards.map(c => [c.symbol, { price: c.price, changePct: c.changePct }])),
     verdicts: Object.fromEntries(cards.map(c => [c.symbol, {
       score: c.verdict.score, tierLabelAr: c.verdict.tierLabelAr, side: c.verdict.side,
       votes: c.verdict.votes.map(v => ({ labelAr: v.labelAr, vote: v.vote })), plan: c.verdict.plan,
+      decisionCouncil: c.decisionCouncil,
+      scenario: c.scenario,
+      opportunityWindow: c.opportunityWindow,
     }])),
   }
 }

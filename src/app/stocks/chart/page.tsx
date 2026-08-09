@@ -7,6 +7,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createChart, CandlestickSeries, HistogramSeries, ColorType, CrosshairMode, type IChartApi, type ISeriesApi, type Time } from 'lightweight-charts'
 import { useLiveQuote } from '@/lib/v2/useLiveQuotes'
+import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
+import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
+import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
 
 const ACCENT = '#60A5FA'
 
@@ -44,16 +47,15 @@ const INTRADAY: TfId[] = ['1m', '5m', '15m', '30m', '1h', '4h']
 
 function toTime(t: string): Time { return Math.floor(new Date(t).getTime() / 1000) as unknown as Time }
 
-const BIAS_META = {
-  'صاعد': { color: '#10B981', icon: '▲' },
-  'هابط': { color: '#EF4444', icon: '▼' },
-  'محايد': { color: '#F59E0B', icon: '◆' },
-} as const
-
 export default function StocksChart() {
   const [symbol, setSymbol] = useState('NVDA')
   const [tf, setTf] = useState<TfId>('1d')
   const [summary, setSummary] = useState<Summary | null>(null)
+  const [central, setCentral] = useState<{
+    decisionCouncil: DecisionCouncil | null
+    scenario: UnderlyingScenario | null
+    opportunityWindow: OpportunityWindow | null
+  } | null>(null)
   const [price, setPrice] = useState<{ price: number; changePct: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const { quote: liveQuote } = useLiveQuote(symbol)
@@ -65,8 +67,17 @@ export default function StocksChart() {
 
   const load = useCallback(() => {
     let alive = true
-    fetch(`/api/v2/stocks/chart?symbol=${symbol}&tf=${tf}`).then(r => r.json()).then((d: ChartData) => {
+    Promise.all([
+      fetch(`/api/v2/stocks/chart?symbol=${symbol}&tf=${tf}`, { cache: 'no-store' }).then(r => r.json()),
+      fetch(`/api/v2/stocks/scan?symbol=${symbol}&mode=balanced`, { cache: 'no-store' }).then(r => r.json()),
+    ]).then(([d, recommendation]: [ChartData, any]) => {
       if (!alive) return
+      const row = recommendation?.results?.[0] ?? null
+      setCentral({
+        decisionCouncil: row?.decisionCouncil ?? null,
+        scenario: row?.scenario ?? null,
+        opportunityWindow: row?.opportunityWindow ?? null,
+      })
       if (d?.analysis?.summary) setSummary(d.analysis.summary)
       if (d?.price) setPrice({ price: d.price, changePct: d.changePct })
       if (!Array.isArray(d?.candles) || !d.candles.length || !wrapRef.current) return
@@ -92,17 +103,18 @@ export default function StocksChart() {
       chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } })
       vol.setData(bars.map((b: any) => ({ time: toTime(b.time), value: b.volume ?? 0, color: b.close >= b.open ? 'rgba(96,165,250,.35)' : 'rgba(239,68,68,.35)' })))
 
-      // خطوط الخطة على الشارت
-      const s = d?.analysis?.summary
-      if (s) {
+      // خطوط الخطة تأتي حصراً من القرار المركزي المبني على الأصل.
+      const council = row?.decisionCouncil as DecisionCouncil | null
+      const scenario = row?.scenario as UnderlyingScenario | null
+      if (scenario && council && (council.action === 'call' || council.action === 'put' || council.action === 'manage')) {
         const line = (price: number | null, color: string, title: string) => {
           if (price == null) return
           cs.createPriceLine({ price, color, lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title })
         }
-        line(s.entryLevel, ACCENT, 'دخول')
-        line(s.stopLevel, '#EF4444', 'وقف')
-        line(s.t1Level, '#10B981', 'هدف ١')
-        line(s.t2Level, '#10B981', 'هدف ٢')
+        line(scenario.entry, ACCENT, 'دخول')
+        line(scenario.invalidation.value, '#EF4444', 'إلغاء')
+        line(scenario.target1.value, '#10B981', 'هدف ١')
+        line(scenario.target2.value, '#10B981', 'هدف ٢')
       }
       chart.timeScale().fitContent()
     }).catch(() => {}).finally(() => { if (alive) setLoading(false) })
@@ -130,7 +142,6 @@ export default function StocksChart() {
     })
   }, [liveQuote?.price, tf])
 
-  const bm = summary ? BIAS_META[summary.bias] : null
   const cur = SYMBOLS.find(s => s.symbol === symbol)
 
   return (
@@ -165,30 +176,15 @@ export default function StocksChart() {
 
         {/* لوحة القرار */}
         <div className="space-y-3">
-          {summary && bm ? (
+          {central?.decisionCouncil ? (
             <>
-              <div className="rounded-2xl border border-white/8 p-4 text-center" style={{ background: 'rgba(255,255,255,.02)' }}>
-                <div className="text-2xl font-black" style={{ color: bm.color }}>{bm.icon} {summary.bias}</div>
-                <div className="mt-1 text-xs text-slate-400">قوة الإشارة {summary.score} من 100</div>
-                <div className="mt-2 rounded-lg px-2 py-1 text-[11px] font-bold" style={{ color: bm.color, background: `${bm.color}14` }}>
-                  {summary.decisionText}
-                </div>
-              </div>
-              <div className="rounded-2xl border border-white/8 p-3 text-xs leading-6" style={{ background: 'rgba(255,255,255,.02)' }}>
-                <div className="font-bold text-slate-300">لماذا؟</div>
-                <div className="text-slate-400">{summary.reason}</div>
-              </div>
-              <div className="rounded-2xl border border-white/8 p-3 text-xs leading-6" style={{ background: 'rgba(255,255,255,.02)' }}>
-                <div className="flex justify-between"><span className="text-slate-500">الدخول</span><span className="font-bold text-white">{summary.entryLevel ?? '—'}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500">وقف الخسارة</span><span className="font-bold text-red-300">{summary.stopLevel ?? '—'}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500">الهدف الأول</span><span className="font-bold text-emerald-300">{summary.t1Level ?? '—'}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500">الهدف الثاني</span><span className="font-bold text-emerald-300">{summary.t2Level ?? '—'}</span></div>
-              </div>
-              {summary.cancelCondition ? (
-                <div className="rounded-2xl border border-red-400/20 p-3 text-xs leading-6" style={{ background: 'rgba(239,68,68,.05)' }}>
-                  <span className="font-bold text-red-300">شرط الإلغاء: </span>
-                  <span className="text-slate-300">{summary.cancelCondition}</span>
-                </div>
+              <DecisionCouncilCard council={central.decisionCouncil} scenario={central.scenario} window={central.opportunityWindow} compact />
+              {summary ? (
+                <details className="rounded-2xl border border-white/8 p-3 text-xs leading-6" style={{ background: 'rgba(255,255,255,.02)' }}>
+                  <summary className="cursor-pointer font-bold text-slate-300">قراءة الشارت المساندة</summary>
+                  <div className="mt-2 text-slate-400">{summary.reason}</div>
+                  <div className="mt-1 text-slate-500">قوة القراءة {summary.score} من 100 — لا تصنع قراراً منفصلاً.</div>
+                </details>
               ) : null}
             </>
           ) : (

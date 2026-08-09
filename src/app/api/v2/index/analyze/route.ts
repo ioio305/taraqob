@@ -20,7 +20,12 @@ export async function GET(request: NextRequest) {
   try {
     const result = await recommendForFund(symbol, { mode: 'balanced', forceType, full: true })
     const contract = result.contracts[0] ?? null
-    if (!result.success || !contract || !result.scenario || !result.opportunityWindow) {
+    if (!result.success
+      || !contract
+      || !result.scenario
+      || !result.opportunityWindow
+      || result.decisionCouncil?.action !== contract.type
+      || contract.status !== 'execute') {
       return NextResponse.json({
         success: false,
         error: result.error ?? 'لا توجد فرصة مكتملة وعقد مناسب الآن',

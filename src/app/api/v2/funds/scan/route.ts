@@ -47,6 +47,9 @@ interface ScanRow {
   } | null
   watchMode: boolean
   signalStrength: number
+  scenario?: import('@/lib/v2/opportunityModel').UnderlyingScenario | null
+  opportunityWindow?: import('@/lib/v2/opportunityModel').OpportunityWindow | null
+  decisionCouncil?: import('@/lib/v2/decisionCouncil').DecisionCouncil | null
   error?: string
 }
 
@@ -76,6 +79,7 @@ export async function GET(request: NextRequest) {
             price: null, changePct: null, source: null,
             volMeasure: null, direction: { type: null, label: '—', color: '#4A5568' },
             gamma: null, best: null, watchMode: false, signalStrength: 0, error: 'تعذر جلب السعر',
+            scenario: null, opportunityWindow: null, decisionCouncil: null,
           }
         }
         const rec = await recommendForFund(u.symbol, { mode, full: false, prefetched: { quote, bars }, newsDecision })
@@ -98,6 +102,9 @@ export async function GET(request: NextRequest) {
           } : null,
           watchMode: rec.watchMode,
           signalStrength: rec.signalStrength,
+          scenario: rec.scenario,
+          opportunityWindow: rec.opportunityWindow,
+          decisionCouncil: rec.decisionCouncil,
         }
       } catch (err: any) {
         return {
@@ -105,14 +112,15 @@ export async function GET(request: NextRequest) {
           price: null, changePct: null, source: null,
           volMeasure: null, direction: { type: null, label: '—', color: '#4A5568' },
           gamma: null, best: null, watchMode: false, signalStrength: 0, error: err?.message ?? 'خطأ',
+          scenario: null, opportunityWindow: null, decisionCouncil: null,
         }
       }
     })
 
     // ── الترتيب: الفرص ذات العقد أولاً (بالدرجة)، ثم البقية ──
     const ranked = [...rows].sort((a, b) => {
-      const sa = (a.best?.score ?? -1) + a.signalStrength * 0.12
-      const sb = (b.best?.score ?? -1) + b.signalStrength * 0.12
+      const sa = a.decisionCouncil?.opportunityScore ?? -1
+      const sb = b.decisionCouncil?.opportunityScore ?? -1
       return sb - sa
     })
 

@@ -7,6 +7,9 @@ import { useRiskSettings, RiskBar, SizeCard, DisciplineBar } from '@/components/
 import { computePositionSize } from '@/lib/v2/positionSizing'
 import { PerformanceView } from '@/components/v2/PerformanceView'
 import ContractChart from '@/components/v2/ContractChart'
+import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
+import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
+import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
 import {
   buildContractAnalysisUrl,
   getOccDirection,
@@ -275,6 +278,11 @@ function AnalyzeContent() {
   const [frozenPlan, setFrozenPlan] = useState<FrozenPlan | null>(null)
   // ── Live mode toggle: OFF by default (plan is frozen until user enables) ─
   const [liveMode, setLiveMode] = useState(true)
+  const [central, setCentral] = useState<{
+    decisionCouncil: DecisionCouncil | null
+    scenario: UnderlyingScenario | null
+    opportunityWindow: OpportunityWindow | null
+  } | null>(null)
 
   function clearCurrentResult() {
     setAnalysis(null)
@@ -359,8 +367,7 @@ function AnalyzeContent() {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/v2/analyze?mode=expirations')
-      .then(res => res.json())
+    fetch('/api/v2/analyze?mode=expirations').then(response => response.json())
       .then(data => {
         if (cancelled || !Array.isArray(data.expirations)) return
         setExpirations(data.expirations)
@@ -368,6 +375,27 @@ function AnalyzeContent() {
       })
       .catch(() => {})
     return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const refreshCentral = async () => {
+      try {
+        const recommendation = await fetch(`/api/v2/recommend?mode=balanced&_=${Date.now()}`, { cache: 'no-store' }).then(response => response.json())
+        if (cancelled) return
+        setCentral({
+          decisionCouncil: recommendation?.decisionCouncil ?? null,
+          scenario: recommendation?.scenario ?? null,
+          opportunityWindow: recommendation?.opportunityWindow ?? null,
+        })
+      } catch { /* نحتفظ بآخر قرار مركزي صحيح */ }
+    }
+    void refreshCentral()
+    const timer = window.setInterval(() => { void refreshCentral() }, 15_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
   }, [])
 
   useEffect(() => {
@@ -422,6 +450,10 @@ function AnalyzeContent() {
       </div>
 
       {tab === 'performance' ? <PerformanceView /> : (<>
+
+      {central?.decisionCouncil ? (
+        <DecisionCouncilCard council={central.decisionCouncil} scenario={central.scenario} window={central.opportunityWindow} />
+      ) : null}
 
       {/* ── Input ── */}
       <Card>
@@ -575,10 +607,14 @@ function AnalyzeContent() {
 
       {/* ── Results ── */}
       {analysis && !loading && (() => {
-        const dec      = DECISION[analysis.decision] ?? DECISION.reject
+        const centralMatches = central?.decisionCouncil?.action === analysis.type
+        const effectiveDecision: Analysis['decision'] = centralMatches ? analysis.decision : 'watch'
+        const effectiveEntryAllowed = Boolean(centralMatches && analysis.entry_allowed)
+        const centralReason = centralMatches ? analysis.decision_reason_ar : central?.decisionCouncil?.explanation ?? analysis.decision_reason_ar
+        const dec      = DECISION[effectiveDecision] ?? DECISION.reject
         // «ادخل الآن؟» هو البطل الواضح؛ الرقم مجرد «جودة إعداد» جانبية لا أمر شراء.
-        const entryAnswer = analysis.decision === 'execute' ? '✓ نعم'
-          : analysis.decision === 'conditional' ? '◈ بشرط' : '✕ لا'
+        const entryAnswer = effectiveDecision === 'execute' ? '✓ نعم'
+          : effectiveDecision === 'conditional' ? '◈ بشرط' : '✕ لا'
         const scoreEntries = Object.entries(analysis.scores) as [string, ScoreEntry][]
 
         return (
@@ -603,13 +639,13 @@ function AnalyzeContent() {
               const stopPx  = analysis.stop_spx ?? null
               const t1Px    = analysis.target1_spx ?? null
               const ps = entryPx && stopPx ? computePositionSize(riskSettings, entryPx, stopPx) : null
-              const canEnter = analysis.entry_allowed
-              const decAr = analysis.decision === 'execute' ? 'نعم — الظروف مناسبة'
-                : analysis.decision === 'conditional' ? 'نعم بشرط — اقرأ السبب'
-                : analysis.decision === 'watch' ? 'ليس الآن — راقب فقط' : 'لا — ابتعد عن هذا العقد'
-              const decClr = analysis.decision === 'execute' ? '#26D07C'
-                : analysis.decision === 'conditional' ? '#C9943A'
-                : analysis.decision === 'watch' ? '#60A5FA' : '#F0435A'
+              const canEnter = effectiveEntryAllowed
+              const decAr = effectiveDecision === 'execute' ? 'نعم — الظروف مناسبة'
+                : effectiveDecision === 'conditional' ? 'نعم بشرط — اقرأ السبب'
+                : effectiveDecision === 'watch' ? 'ليس الآن — راقب فقط' : 'لا — ابتعد عن هذا العقد'
+              const decClr = effectiveDecision === 'execute' ? '#26D07C'
+                : effectiveDecision === 'conditional' ? '#C9943A'
+                : effectiveDecision === 'watch' ? '#60A5FA' : '#F0435A'
               return (
                 <div className="rounded-2xl p-4"
                   style={{ background: `${decClr}08`, border: `1px solid ${decClr}35` }}>
@@ -644,7 +680,7 @@ function AnalyzeContent() {
                       </div>
                     </div>
                   </div>
-                  <p className="text-xs text-gray-500 mt-3 text-center">{analysis.decision_reason_ar}</p>
+                  <p className="text-xs text-gray-500 mt-3 text-center">{centralReason}</p>
                 </div>
               )
             })()}
@@ -791,12 +827,12 @@ function AnalyzeContent() {
 
                   <div className="rounded-xl px-4 py-3 text-sm leading-relaxed" dir="rtl"
                     style={{ background: 'rgba(0,0,0,0.3)', color: '#94A3B8', border: '1px solid rgba(255,255,255,0.04)' }}>
-                    {analysis.decision_reason_ar}
+                    {centralReason}
                   </div>
                 </div>
               </div>
 
-              {analysis.focus && (
+              {analysis.focus && centralMatches && (
                 <div className="mt-4 rounded-xl px-4 py-3"
                      style={{
                        background: analysis.focus.action === 'enter' ? 'rgba(16,185,129,0.10)' : analysis.focus.action === 'wait' ? 'rgba(245,158,11,0.10)' : 'rgba(239,68,68,0.10)',
@@ -828,7 +864,7 @@ function AnalyzeContent() {
             />
 
             {/* ── One executable plan. Hidden completely when entry is not allowed. ── */}
-            {analysis.entry_allowed && analysis.targets && analysis.entry_balanced ? (() => {
+            {effectiveEntryAllowed && analysis.targets && analysis.entry_balanced ? (() => {
               const entry = analysis.entry_balanced!
               const entryTotal = Math.round(entry * 100)
               const metrics = analysis.plan_metrics

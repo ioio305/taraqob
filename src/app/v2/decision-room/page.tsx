@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import Link from 'next/link'
 import { getSelectedIndex, indexMeta, type IndexId } from '@/lib/v2/indexSelection'
 import { useLiveQuote, useLiveQuotes } from '@/lib/v2/useLiveQuotes'
+import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
+import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
+import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
 import {
   Activity,
   ArrowLeft,
@@ -72,6 +75,7 @@ type Recommendation = {
   contracts?: Contract[]
   scenario?: { entry: number; target1: { value: number; source: string }; target2: { value: number; source: string }; invalidation: { value: number; source: string } } | null
   opportunityWindow?: { label: string; validUntil: string; reason: string } | null
+  decisionCouncil?: DecisionCouncil | null
   timing?: { label?: string; advice?: string; color?: string }
   pricing?: { level?: string; advice?: string; color?: string }
 }
@@ -123,20 +127,6 @@ const STAGES = ['السوق', 'الاتجاه', 'التأكيد', 'العقد', 
 
 const number = (value: number | null | undefined, digits = 2) =>
   value == null ? '—' : value.toLocaleString('en-US', { maximumFractionDigits: digits })
-
-function isUsMarketOpenNow() {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    weekday: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(new Date())
-  const value = (type: string) => parts.find(part => part.type === type)?.value ?? ''
-  const weekday = value('weekday')
-  const minutes = (Number(value('hour')) % 24) * 60 + Number(value('minute'))
-  return !['Sat', 'Sun'].includes(weekday) && minutes >= 570 && minutes < 960
-}
 
 export default function SpxDecisionRoomPage() {
   const [loading, setLoading] = useState(true)
@@ -198,6 +188,7 @@ export default function SpxDecisionRoomPage() {
           contracts: rec?.contracts ?? [],
           scenario: rec?.scenario ?? null,
           opportunityWindow: rec?.opportunityWindow ?? null,
+          decisionCouncil: rec?.decisionCouncil ?? null,
           timing: rec?.sessionQuality ? { label: rec.sessionQuality.label } : undefined,
         }
         setRecommendation(mapped)
@@ -214,77 +205,52 @@ export default function SpxDecisionRoomPage() {
 
   useEffect(() => {
     void load()
-    const interval = window.setInterval(load, 60_000)
+    const interval = window.setInterval(load, 15_000)
     return () => window.clearInterval(interval)
   }, [load])
 
-  const contract = recommendation?.contracts?.[0] ?? null
+  const council = recommendation?.decisionCouncil ?? null
+  const contract = council?.action === 'call' || council?.action === 'put'
+    ? recommendation?.contracts?.find(item => item.type === council.action && item.status === 'execute') ?? null
+    : null
   const { quotes: contractQuotes } = useLiveQuotes(contract?.symbol ? [contract.symbol] : [])
   const contractMid = contract
     ? contractQuotes[contract.symbol]?.mid ?? contractQuotes[contract.symbol]?.price ?? contract.mid
     : null
-  const direction = recommendation?.direction?.type ?? null
-  const flowSupports = direction === 'call'
-    ? (flow?.callShare ?? 50) >= 55
-    : direction === 'put'
-      ? (flow?.callShare ?? 50) <= 45
-      : false
-  const sessionClosed = Boolean(
-    !isUsMarketOpenNow()
-    || recommendation?.watchMode
-    || recommendation?.marketClosed
-    || recommendation?.timing?.label?.includes('مغلق')
-    || recommendation?.timing?.label?.includes('بعد الإغلاق')
-  )
-
+  const direction = council?.direction ?? null
   const checks = useMemo(() => {
-    const list = [
+    if (!council) return []
+    const core = council.advisors.filter(advisor => advisor.layer === 'core')
+    return [
+      ...core.map(advisor => ({
+        label: advisor.label.replace('مستشار ', ''),
+        ok: advisor.supportsScenario !== false && advisor.strength >= 45,
+        value: advisor.summary,
+      })),
       {
-        label: 'الجلسة',
-        ok: !sessionClosed,
-        value: sessionClosed ? recommendation?.timing?.label ?? recommendation?.marketStatus ?? 'السوق مغلق' : recommendation?.marketStatus ?? recommendation?.timing?.label ?? 'جاهزة',
+        label: 'الحماية',
+        ok: council.vetoes.length === 0,
+        value: council.vetoes[0] ?? `المخاطرة ${council.riskLevel}`,
       },
       {
-        label: 'ردة السوق',
-        ok: recommendation?.marketReaction?.action !== 'block',
-        value: recommendation?.marketReaction?.label ?? 'مستقرة',
-      },
-      {
-        label: 'الأخبار',
-        ok: news?.level !== 'danger' && recommendation?.newsRisk?.action !== 'block',
-        value: news?.label ?? 'هادئة',
+        label: 'العقد',
+        ok: Boolean(contract && council.action === contract.type && contract.status === 'execute'),
+        value: contract?.focus?.label ?? (contract ? 'متوافق مع القرار' : 'غير متاح'),
       },
     ]
-    // التدفقات مصدرها سباكس فقط — للمؤشرات الأخرى نستغني عن هذا التأكيد
-    if (idx === 'SPX') {
-      list.push({
-        label: 'التدفقات',
-        ok: flowSupports,
-        value: flowSupports ? 'تدعم الاتجاه' : 'غير مؤكدة',
-      })
-    }
-    list.push({
-      label: 'العقد',
-      ok: contract?.status === 'execute' || contract?.focus?.action === 'enter',
-      value: contract?.focus?.label ?? (contract ? 'قيد المراقبة' : 'غير متاح'),
-    })
-    return list
-  }, [recommendation, news, flowSupports, contract, sessionClosed, idx])
+  }, [council, contract])
 
   const passed = checks.filter(check => check.ok).length
-  const hardBlock = Boolean(
-    sessionClosed
-    || recommendation?.marketReaction?.action === 'block'
-    || recommendation?.newsRisk?.action === 'block'
-    || news?.level === 'danger'
-    || contract?.focus?.action === 'avoid',
-  )
-  const ready = !hardBlock && passed >= checks.length - 1 && Boolean(contract)
-  const state = hardBlock
-    ? { label: 'لا دخول', color: '#F87171', action: contract?.focus?.nextStep ?? 'انتظر زوال سبب المنع.' }
+  const hardBlock = !council || council.action === 'wait'
+  const ready = Boolean(council
+    && contract
+    && council.action === contract.type
+    && contract.status === 'execute')
+  const state = council?.action === 'manage'
+    ? { label: 'إدارة فرصة قائمة', color: '#60A5FA', action: council.explanation }
     : ready
-      ? { label: contract?.status === 'execute' ? 'جاهزة للتنفيذ' : 'قريبة من التنفيذ', color: '#34D399', action: contract?.focus?.nextStep ?? 'التزم بسعر الدخول والوقف.' }
-      : { label: 'انتظار التأكيد', color: '#FBBF24', action: contract?.focus?.nextStep ?? 'لا تطارد الحركة.' }
+      ? { label: 'جاهزة للتنفيذ', color: '#34D399', action: council?.explanation ?? 'التزم بالخطة.' }
+      : { label: 'انتظار', color: hardBlock ? '#FBBF24' : '#F87171', action: council?.explanation ?? 'لا يوجد قرار مكتمل.' }
 
   const spot = liveQuote?.price ?? recommendation?.market?.spx?.price
   const change = liveQuote?.changePct ?? recommendation?.market?.spx?.changePct
@@ -328,6 +294,13 @@ export default function SpxDecisionRoomPage() {
       </section>
 
       <div className="mx-auto max-w-6xl space-y-4 p-4 md:p-7">
+        {council ? (
+          <DecisionCouncilCard
+            council={council}
+            scenario={(recommendation?.scenario ?? null) as UnderlyingScenario | null}
+            window={(recommendation?.opportunityWindow ?? null) as OpportunityWindow | null}
+          />
+        ) : null}
         <section className="grid gap-4 lg:grid-cols-[1.3fr_.7fr]">
           <div className="rounded-3xl border border-white/[.07] bg-[#0D1B2A] p-5 md:p-7">
             <div className="flex items-start justify-between gap-4 flex-wrap">

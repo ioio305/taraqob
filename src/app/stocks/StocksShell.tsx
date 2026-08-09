@@ -9,6 +9,8 @@ import type { PlatformAccess } from '@/lib/v2/accessRules'
 import { StocksTierProvider } from './StocksTierContext'
 import { MarketClock } from '@/components/v2/MarketClock'
 import { StocksDecisionTicker } from '@/components/v2/StocksDecisionTicker'
+import { DecisionCouncilStrip } from '@/components/v2/DecisionCouncilStrip'
+import { StocksWatcher } from '@/components/v2/StocksWatcher'
 
 // ══════════════════════════════════════════════════════════════════════════
 // قوقعة منصة الشركات — مستقلة تماماً عن منصة المؤشر (SPX)
@@ -297,6 +299,8 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
         </header>
 
         <StocksDecisionTicker />
+        <DecisionCouncilStrip platform="stocks" />
+        <StocksWatcher />
 
         <main className="flex-1 min-h-0 overflow-y-auto">{children}</main>
 

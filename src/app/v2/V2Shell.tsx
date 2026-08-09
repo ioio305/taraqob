@@ -10,6 +10,7 @@ import { BeginnerHelpers } from '@/components/v2/BeginnerGuide'
 import { AssistantWidget } from '@/components/v2/AssistantWidget'
 import { NewsTicker } from '@/components/v2/NewsTicker'
 import { MarketClock } from '@/components/v2/MarketClock'
+import { DecisionCouncilStrip } from '@/components/v2/DecisionCouncilStrip'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
 import { getSelectedIndex, indexMeta, type IndexId } from '@/lib/v2/indexSelection'
 
@@ -31,7 +32,6 @@ function tierAllows(userTier: string, required: string): boolean {
 // قرار اليوم — الداشبورد (التوصية) أولاً، ثم بقية القرار (للجميع)
 const NAV_DECISION = [
   { href: '/v2',             label: 'الداشبورد',    icon: '◈', exact: true,  requiredTier: 'radar' },
-  { href: '/v2/experiment',  label: 'القرار الجديد', icon: '✦', exact: false, requiredTier: 'radar' },
   { href: '/v2/plan',        label: 'خطة اليوم',    icon: '📋', exact: false, requiredTier: 'radar' },
   { href: '/v2/smart-chart', label: 'الشارت الذكي ✦', icon: '✨', exact: false, requiredTier: 'radar' },
   { href: '/v2/analyze',     label: 'تحليل العقد',  icon: '⬡', exact: false, requiredTier: 'radar' },
@@ -636,6 +636,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
 
         {/* شريط الأخبار المتحرك — ثابت في كل الأقسام */}
         <NewsTicker />
+        <DecisionCouncilStrip platform="index" />
 
         {/* شريط التجربة المجانية */}
         {trialDaysLeft != null && (

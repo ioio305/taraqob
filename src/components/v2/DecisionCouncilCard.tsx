@@ -20,6 +20,7 @@ export function DecisionCouncilCard({
   compact?: boolean
 }) {
   const action = ACTION[council.action]
+  const actionable = council.action === 'call' || council.action === 'put' || council.action === 'manage'
   return (
     <section className="rounded-2xl border p-4" style={{ borderColor: `${action.color}45`, background: `${action.color}0B` }} dir="rtl">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -38,10 +39,10 @@ export function DecisionCouncilCard({
         <Datum label="الثقة" value={council.confidence} />
         <Datum label="حالة السوق" value={council.marketState.label} />
         <Datum label="المخاطرة" value={council.riskLevel} />
-        <Datum label="نافذة الفرصة" value={window?.label ?? (council.action === 'wait' ? 'غير مكتملة' : 'قيد التقدير')} />
+        <Datum label="نافذة الفرصة" value={actionable ? window?.label ?? 'قيد التقدير' : 'غير مكتملة'} />
       </div>
 
-      {scenario ? (
+      {scenario && actionable ? (
         <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
           <Datum label="الحركة المتوقعة" value={`${scenario.movementMin.toFixed(1)}–${scenario.movementMax.toFixed(1)} نقطة`} />
           <Datum label="الهدف الأول" value={scenario.target1.value.toLocaleString()} />

@@ -6,6 +6,9 @@ import { RefreshCw } from 'lucide-react'
 import { IndexSwitcher } from '@/components/v2/IndexSwitcher'
 import { getSelectedIndex, setSelectedIndex, indexMeta, type IndexId } from '@/lib/v2/indexSelection'
 import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
+import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
+import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
+import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
 
 export default function IndexPage() {
   return (
@@ -44,8 +47,9 @@ type Detail = {
   market?: { price: number; changePct: number; volMeasure: number | null; expectedMove: number | null } | null
   direction?: { type: 'call' | 'put' | null; label: string; color: string; reason: string }
   contracts?: Contract[]
-  scenario?: { entry: number; target1: { value: number; source: string }; target2: { value: number; source: string }; invalidation: { value: number; source: string } } | null
-  opportunityWindow?: { label: string; validUntil: string; reason: string } | null
+  scenario?: UnderlyingScenario | null
+  opportunityWindow?: OpportunityWindow | null
+  decisionCouncil?: DecisionCouncil | null
   error?: string
 }
 
@@ -80,11 +84,17 @@ function IndexPageInner() {
     return () => clearInterval(id)
   }, [load])
 
-  const dir = data?.direction
+  const councilAction = data?.decisionCouncil?.action
+  const councilDirection = councilAction === 'call' || councilAction === 'put' ? councilAction : null
+  const dir = councilDirection
+    ? { ...data?.direction, type: councilDirection, color: councilDirection === 'call' ? '#10B981' : '#EF4444', label: councilDirection === 'call' ? 'شراء صاعد' : 'شراء هابط' }
+    : null
   const contracts = data?.contracts ?? []
   const { quotes } = useLiveQuotes([symbol, ...contracts.map(contract => contract.symbol)])
   const liveQuote = quotes[symbol]
-  const best = (dir?.type ? contracts.find(c => c.type === dir.type) : null) ?? contracts[0] ?? null
+  const best = councilDirection
+    ? contracts.find(c => c.type === councilDirection && c.status === 'execute') ?? null
+    : null
   const bestMid = best ? quotes[best.symbol]?.mid ?? quotes[best.symbol]?.price ?? best.mid : null
   const st = best?.strategy
   const mk = data?.market
@@ -113,6 +123,10 @@ function IndexPageInner() {
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> تحديث
         </button>
       </div>
+
+      {data?.decisionCouncil ? (
+        <DecisionCouncilCard council={data.decisionCouncil} scenario={data.scenario} window={data.opportunityWindow} />
+      ) : null}
 
       {/* ── رأس المؤشر ── */}
       <section className="rounded-3xl p-5 md:p-6"

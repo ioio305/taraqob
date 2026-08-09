@@ -1,12 +1,12 @@
 'use client'
 
 // ── مراقب تنبيهات الصناديق — يناديك عند فرصة جديدة بدل أن تراقب الشاشة ────────
-// يفحص توصية اليوم كل 5 دقائق. فرصة جديدة (قوية أو استثنائية) = تنبيه واحد
+// يفحص توصية اليوم كل 15 ثانية. فرصة جديدة قابلة للتنفيذ = تنبيه واحد
 // لكل صندوق في اليوم، بلا تكرار. يعمل بصمت داخل هيكل الصناديق.
 
 import { useEffect } from 'react'
 
-const POLL_MS = 300_000
+const POLL_MS = 15_000
 const SENT_KEY = 'taraqob_funds_alerted_v1'
 
 function alreadySent(key: string): boolean {
@@ -31,6 +31,21 @@ function notify(title: string, body: string) {
   try { new Notification(title, { body, icon: '/favicon.ico', dir: 'rtl', lang: 'ar' }) } catch { /* تجاهل */ }
 }
 
+async function saveBell(key: string, title: string, body: string, symbol: string) {
+  const response = await fetch('/api/v2/notifications', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'signal',
+      title,
+      body,
+      url: `/funds/analyze?symbol=${encodeURIComponent(symbol)}`,
+      dedupe_key: key,
+    }),
+  })
+  if (response.ok) window.dispatchEvent(new Event('taraqob:notifications-changed'))
+}
+
 export function FundsWatcher() {
   useEffect(() => {
     // نطلب إذن التنبيهات عند أول تفاعل (لا نزعج المستخدم فور الدخول)
@@ -49,14 +64,15 @@ export function FundsWatcher() {
         const json = await res.json()
         if (!alive || !json?.success) return
         for (const c of json.opportunities ?? []) {
+          if (c?.decisionCouncil?.action !== 'call') continue
           const key = `funds-${c.symbol}`
           if (alreadySent(key)) continue
-          markSent(key)
           const p = c.verdict.plan
-          notify(
-            `${c.verdict.tierLabelAr} — ${c.nameAr}`,
-            p ? `درجة ${c.verdict.score} — دخول ${p.entryLow}–${p.entryHigh}، وقف ${p.stop}، هدف ${p.t1}` : `درجة ${c.verdict.score}`,
-          )
+          const title = `${c.verdict.tierLabelAr} — ${c.nameAr}`
+          const body = p ? `درجة ${c.decisionCouncil.opportunityScore} — دخول ${p.entryLow}–${p.entryHigh}، إلغاء ${p.stop}، هدف ${p.t1}` : c.decisionCouncil.explanation
+          notify(title, body)
+          await saveBell(key, title, body, c.symbol).catch(() => {})
+          markSent(key)
         }
       } catch { /* أبقِ الصمت */ }
     }

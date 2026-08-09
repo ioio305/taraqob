@@ -40,7 +40,10 @@ export default function FundAnalyzePage() {
     finally { setLoading(false) }
   }, [symbol])
   useEffect(() => { void analyze(symbol) }, []) // eslint-disable-line react-hooks/exhaustive-deps
-  const contract = data?.contracts?.[0]
+  const councilAction = data?.decisionCouncil?.action
+  const contract = councilAction === 'call' || councilAction === 'put'
+    ? data?.contracts?.find(item => item.type === councilAction && item.status === 'execute')
+    : undefined
   const contractSymbol = data?.success && contract
     ? `${data.symbol}${contract.expiration.replaceAll('-', '').slice(2)}${contract.type === 'call' ? 'C' : 'P'}${Math.round(contract.strike * 1_000).toString().padStart(8, '0')}`
     : ''
@@ -74,13 +77,15 @@ export default function FundAnalyzePage() {
                   <div className="font-mono text-4xl font-black text-white">{data.symbol}</div>
                   <div className="mt-1 text-sm text-slate-500">{data.name} · ${marketPrice?.toFixed(2)}</div>
                 </div>
-                <div className="text-left font-black" style={{ color: data.direction?.color }}>{data.direction?.label}</div>
+                <div className="text-left font-black" style={{ color: councilAction === 'call' ? '#34D399' : councilAction === 'put' ? '#F87171' : '#94A3B8' }}>
+                  {councilAction === 'call' ? 'شراء صاعد' : councilAction === 'put' ? 'شراء هابط' : 'انتظار'}
+                </div>
               </div>
               <div className="mt-6 grid grid-cols-2 gap-2 md:grid-cols-4">
                 <Metric label="العقد" value={`${contract.type.toUpperCase()} ${contract.strike}`} />
                 <Metric label="السعر" value={`$${contractMid?.toFixed(2)}`} />
                 <Metric label="القوة" value={`${contract.score}/100`} />
-                <Metric label="الحالة" value={contract.status === 'execute' ? 'جاهز' : 'راقب'} />
+                <Metric label="الحالة" value="جاهز" />
               </div>
               {data.scenario ? (
                 <>

@@ -17,6 +17,9 @@ import { CountUp } from '@/components/v2/CountUp'
 import { IndexSwitcher } from '@/components/v2/IndexSwitcher'
 import { getSelectedIndex, type IndexId } from '@/lib/v2/indexSelection'
 import { useLiveQuote } from '@/lib/v2/useLiveQuotes'
+import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
+import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
+import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
 
 interface Candle {
   time: string; open: number; high: number; low: number; close: number; volume: number
@@ -83,6 +86,11 @@ export default function SmartChartPage() {
     return () => window.removeEventListener('taraqob:index', onCustom)
   }, [])
   const [expInfo, setExpInfo] = useState<{ expiration: string; dte: number; type: string } | null>(null)
+  const [central, setCentral] = useState<{
+    decisionCouncil: DecisionCouncil | null
+    scenario: UnderlyingScenario | null
+    opportunityWindow: OpportunityWindow | null
+  } | null>(null)
 
   // تاريخ انتهاء العقد المقترح حالياً (يُجلب مرة ويتحدّث كل ٥ دقائق)
   useEffect(() => {
@@ -90,13 +98,18 @@ export default function SmartChartPage() {
     const pull = () => fetch(idx === 'SPX' ? '/api/v2/recommend?mode=balanced' : `/api/v2/recommend?asset=funds&symbol=${idx}&mode=balanced`).then(r => r.json()).then(j => {
       if (!alive) return
       const c = (j?.contracts ?? [])[0]
+      setCentral({
+        decisionCouncil: j?.decisionCouncil ?? null,
+        scenario: j?.scenario ?? null,
+        opportunityWindow: j?.opportunityWindow ?? null,
+      })
       if (c?.expiration) {
         const dte = Math.max(0, Math.round((new Date(c.expiration + 'T12:00:00Z').getTime() - Date.now()) / 86400000))
         setExpInfo({ expiration: c.expiration, dte, type: c.type })
       } else setExpInfo(null)
     }).catch(() => {})
     pull()
-    const id = setInterval(pull, 300_000)
+    const id = setInterval(pull, 15_000)
     return () => { alive = false; clearInterval(id) }
   }, [idx])
 
@@ -161,28 +174,22 @@ export default function SmartChartPage() {
     if (!data || !candles.length) return null
     const s = data.analysis.summary
     const spot = liveQuote?.price ?? candles[candles.length - 1].close
-    let lastKind: 'gold' | 'purple' | null = null
-    for (const c of candles) { const p = confShown.get(c.time); if (p) lastKind = p.kind }
-    const dir: 'call' | 'put' | null =
-      lastKind === 'gold' ? 'call' : lastKind === 'purple' ? 'put'
-      : s.bias === 'صاعد' ? 'call' : s.bias === 'هابط' ? 'put' : null
+    const centralAction = central?.decisionCouncil?.action
+    const dir: 'call' | 'put' | null = centralAction === 'call' || centralAction === 'put' ? centralAction : null
 
-    // مسافات لحظية معقولة من محرّك الملخّص، موجّهة حسب اتجاه الصفقة
-    const em = data.em
-    const entryLvl = s.entryLevel ?? spot
-    // حدّ أدنى للمسافة حتى لا يلتصق الهدف/الوقف بالسعر
-    const volMove = em?.points ? Math.max(5, em.points * 0.3) : Math.max(5, spot * 0.0025)
-    const tDist = Math.max(volMove, s.t1Level != null ? Math.abs(s.t1Level - entryLvl) : 0)
-    const sDist = Math.max(Math.round(volMove * 0.6), s.stopLevel != null ? Math.abs(s.stopLevel - entryLvl) : 0)
-    let target: number | null = null, stop: number | null = null
-    if (dir === 'call') { target = entryLvl + tDist; stop = entryLvl - sDist }   // كول: هدف فوق، وقف تحت
-    else if (dir === 'put') { target = entryLvl - tDist; stop = entryLvl + sDist } // بوت: هدف تحت، وقف فوق
+    const entryLvl = central?.scenario?.entry ?? spot
     return {
-      dir, spot, strike: nearestStrike(spot), hasSignal: lastKind !== null,
-      bias: s.bias, score: s.score, decisionCode: s.decisionCode, decisionText: s.decisionText, reason: s.reason,
-      entry: Math.round(entryLvl), target: target != null ? Math.round(target) : null, stop: stop != null ? Math.round(stop) : null,
+      dir, spot, strike: nearestStrike(spot), hasSignal: Boolean(dir),
+      bias: dir === 'call' ? 'صاعد' : dir === 'put' ? 'هابط' : 'محايد',
+      score: central?.decisionCouncil?.opportunityScore ?? s.score,
+      decisionCode: dir ? 'execute' : 'watch',
+      decisionText: dir ? (dir === 'call' ? 'شراء صاعد' : 'شراء هابط') : 'انتظار',
+      reason: central?.decisionCouncil?.explanation ?? s.reason,
+      entry: Math.round(entryLvl),
+      target: central?.scenario?.target1.value != null ? Math.round(central.scenario.target1.value) : null,
+      stop: central?.scenario?.invalidation.value != null ? Math.round(central.scenario.invalidation.value) : null,
     }
-  }, [data, candles, confShown, liveQuote?.price])
+  }, [data, candles, liveQuote?.price, central])
 
   // نعبّئ حقل السترايك تلقائياً بالسترايك المقترح (يبقى قابلاً للتعديل)
   useEffect(() => {
@@ -243,7 +250,9 @@ export default function SmartChartPage() {
     const markers: { time: Time; position: 'aboveBar' | 'belowBar'; color: string; shape: 'arrowUp' | 'arrowDown'; text?: string }[] = []
     let prev: string | null = null
     for (const c of candles) {
-      const cf = confShown.get(c.time); if (!cf) { prev = null; continue }
+      const cf = confShown.get(c.time)
+      const markerDirection = cf?.kind === 'gold' ? 'call' : cf?.kind === 'purple' ? 'put' : null
+      if (!cf || !verdict?.dir || markerDirection !== verdict.dir) { prev = null; continue }
       const gold = cf.kind === 'gold'
       markers.push({ time: toTime(c.time, intraday), position: gold ? 'belowBar' : 'aboveBar', color: gold ? GOLD : PURPLE, shape: gold ? 'arrowUp' : 'arrowDown', text: cf.kind !== prev ? (gold ? '✦ كول' : '✦ بوت') : undefined })
       prev = cf.kind
@@ -269,7 +278,7 @@ export default function SmartChartPage() {
       add(g.callWall,  '#F0435A88', LineStyle.Dashed, 'مقاومة جاما')
       add(g.flipLevel, '#A78BFA88', LineStyle.Solid,  'انقلاب')
     }
-  }, [data, candles, confShown, tf, showDetails, intraday])
+  }, [data, candles, confShown, tf, showDetails, intraday, verdict?.dir])
 
   // تنظيف عند مغادرة الصفحة
   useEffect(() => () => {
@@ -304,6 +313,10 @@ export default function SmartChartPage() {
 
       {/* محوّل المؤشرات */}
       <IndexSwitcher active={idx} />
+
+      {central?.decisionCouncil ? (
+        <DecisionCouncilCard council={central.decisionCouncil} scenario={central.scenario} window={central.opportunityWindow} />
+      ) : null}
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">

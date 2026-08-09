@@ -3,6 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
+import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
+import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
+import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -70,6 +73,12 @@ interface StrategyData {
   ts: number
 }
 
+type CentralRecommendation = {
+  decisionCouncil?: DecisionCouncil | null
+  scenario?: UnderlyingScenario | null
+  opportunityWindow?: OpportunityWindow | null
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function conditionMeta(c: Condition) {
@@ -112,13 +121,18 @@ export default function StrategyPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [lastFetch, setLastFetch] = useState<Date | null>(null)
+  const [central, setCentral] = useState<CentralRecommendation | null>(null)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/v2/strategy')
-      const d   = await res.json()
+      const [strategyResponse, decisionResponse] = await Promise.all([
+        fetch('/api/v2/strategy'),
+        fetch('/api/v2/recommend?mode=balanced', { cache: 'no-store' }),
+      ])
+      const [d, decision] = await Promise.all([strategyResponse.json(), decisionResponse.json()])
+      setCentral(decision as CentralRecommendation)
       if (d.error) { setError(d.error); return }
       setData(d as StrategyData)
       setLastFetch(new Date())
@@ -130,12 +144,37 @@ export default function StrategyPage() {
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    let active = true
+    const timer = window.setInterval(() => {
+      fetch(`/api/v2/recommend?mode=balanced&_=${Date.now()}`, { cache: 'no-store' })
+        .then(response => response.json())
+        .then(recommendation => { if (active) setCentral(recommendation as CentralRecommendation) })
+        .catch(() => {})
+    }, 15_000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [])
 
   const cm  = data ? conditionMeta(data.condition) : null
   const st  = data?.strategy ?? null
   const { quotes } = useLiveQuotes(['SPX', ...(st?.legs ?? []).map(leg => leg.symbol ?? '')])
   const liveSpx = quotes.SPX
   const dm  = st  ? decisionMeta(st.decision) : null
+  const centralAction = central?.decisionCouncil?.action ?? 'wait'
+  const centralLabel = centralAction === 'call' ? 'شراء صاعد'
+    : centralAction === 'put' ? 'شراء هابط'
+      : centralAction === 'manage' ? 'إدارة فرصة قائمة' : 'انتظار'
+  const centralCompatible = centralAction === 'manage'
+    || (centralAction === 'call' && data?.condition === 'bullish')
+    || (centralAction === 'put' && data?.condition === 'bearish')
+  const centralTone = centralAction === 'call'
+    ? { bg: 'bg-emerald-500/20', border: 'border-emerald-500', text: 'text-emerald-300' }
+    : centralAction === 'put'
+      ? { bg: 'bg-red-500/20', border: 'border-red-500', text: 'text-red-300' }
+      : centralAction === 'manage'
+        ? { bg: 'bg-blue-500/20', border: 'border-blue-500', text: 'text-blue-300' }
+        : { bg: 'bg-yellow-500/20', border: 'border-yellow-500', text: 'text-yellow-300' }
+  const suitability = st ? (st.score >= 85 ? 'ملاءمة مرتفعة' : st.score >= 70 ? 'ملاءمة متوسطة' : 'ملاءمة ضعيفة') : 'غير متاحة'
 
   return (
     <div className="min-h-screen bg-[#060D14] text-white" dir="rtl">
@@ -167,6 +206,9 @@ export default function StrategyPage() {
 
         {data && (
           <>
+            {central?.decisionCouncil ? (
+              <DecisionCouncilCard council={central.decisionCouncil} scenario={central.scenario} window={central.opportunityWindow} />
+            ) : null}
             {/* ── 1. Market status bar ───────────────────────────────────── */}
             <div className={`rounded-xl p-3 border text-sm flex flex-wrap items-center gap-3 ${
               data.market_open ? 'bg-emerald-900/10 border-emerald-800' : 'bg-gray-800/30 border-gray-700'
@@ -204,28 +246,28 @@ export default function StrategyPage() {
             )}
 
             {/* No-trade message */}
-            {!st && (
+            {(!st || !centralCompatible) && (
               <div className="bg-gray-800/40 border border-gray-700 rounded-2xl p-8 text-center">
                 <div className="text-4xl mb-3">⚠</div>
-                <div className="text-xl font-bold text-gray-300 mb-2">لا تداول — شروط السوق غير مناسبة</div>
-                <p className="text-sm text-gray-500">{data.condition_reason}</p>
+                <div className="text-xl font-bold text-gray-300 mb-2">لا توجد استراتيجية تنفيذ مناسبة الآن</div>
+                <p className="text-sm text-gray-500">{central?.decisionCouncil?.explanation ?? data.condition_reason}</p>
                 <p className="text-xs text-gray-700 mt-3">انتظر تأكيداً أوضح قبل البدء في أي صفقة</p>
               </div>
             )}
 
-            {st && dm && (
+            {st && dm && centralCompatible && (
               <>
                 {/* ── 2. Strategy overview ─────────────────────────────────── */}
-                <div className={`rounded-2xl p-5 border ${dm.bg} ${dm.border}`}>
+                <div className={`rounded-2xl p-5 border ${centralTone.bg} ${centralTone.border}`}>
                   <div className="text-xs text-gray-500 font-bold tracking-widest uppercase mb-2">الاستراتيجية المقترحة</div>
                   <div className="flex items-start gap-4">
                     <div>
                       <div className="text-2xl font-black text-white">{st.name_ar}</div>
                       <div className="text-xs text-gray-500 font-mono mt-0.5">{st.name}</div>
                     </div>
-                    <div className={`mr-auto text-right ${dm.text}`}>
-                      <div className="text-3xl font-black" style={{ color: scoreColor(st.score) }}>{st.score}</div>
-                      <div className={`text-sm font-bold mt-0.5 ${dm.text}`}>{st.decision_label}</div>
+                    <div className={`mr-auto text-right ${centralTone.text}`}>
+                      <div className="text-3xl font-black" style={{ color: scoreColor(central?.decisionCouncil?.opportunityScore ?? st.score) }}>{central?.decisionCouncil?.opportunityScore ?? st.score}</div>
+                      <div className={`text-sm font-bold mt-0.5 ${centralTone.text}`}>{centralLabel}</div>
                     </div>
                   </div>
                   <p className="text-sm text-gray-300 mt-3">{st.reason}</p>
@@ -338,17 +380,14 @@ export default function StrategyPage() {
                 <div className="bg-[#0d1f2e] rounded-2xl p-5 border border-[#1e3a50]">
                   <div className="flex items-center gap-4 mb-4">
                     <div>
-                      <div className="text-xs text-gray-500 font-bold tracking-widest uppercase">درجة الاستراتيجية</div>
+                      <div className="text-xs text-gray-500 font-bold tracking-widest uppercase">درجة ملاءمة الاستراتيجية</div>
                       <div className="text-5xl font-black mt-1" style={{ color: scoreColor(st.score) }}>{st.score}</div>
                       <div className="text-xs text-gray-500 mt-1">/ 100</div>
                     </div>
                     <div className={`flex-1 p-3 rounded-xl border text-sm font-bold ${dm.bg} ${dm.border} ${dm.text}`}>
-                      {st.decision_label}
+                      {suitability}
                       <div className="text-xs font-normal text-gray-400 mt-1">
-                        {st.score < 70 && 'أقل من 70 — لا تداول'}
-                        {st.score >= 70 && st.score < 80 && '70-79 — مراقبة فقط'}
-                        {st.score >= 80 && st.score < 90 && '80-89 — دخول مشروط'}
-                        {st.score >= 90 && '90+ — فرصة قوية مشروطة'}
+                        هذا القياس يختبر ملاءمة البناء المقترح، ولا يصنع قرارًا مستقلًا عن القرار المركزي.
                       </div>
                     </div>
                   </div>

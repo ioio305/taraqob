@@ -20,6 +20,8 @@ import type { AnalysisResult, SRZone } from '@/lib/v2/marketAnalysis'
 import type { GammaExposure } from '@/lib/v2/gammaExposure'
 import { gammaVerdict } from '@/lib/v2/gammaExposure'
 import { keepsLatestCandlePosition, preserveLogicalRangeWidth } from '@/lib/v2/chartViewport'
+import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
+import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -129,33 +131,6 @@ function formatRiyadhTime(time: Time, withDate = false): string | null {
   const date = timeValueToDate(time)
   if (!date || Number.isNaN(date.getTime())) return null
   return (withDate ? RIYADH_CROSSHAIR : RIYADH_CLOCK).format(date)
-}
-
-function decisionStyle(code: string) {
-  if (code === 'execute')     return 'bg-emerald-500/20 border border-emerald-500 text-emerald-300'
-  if (code === 'conditional') return 'bg-yellow-500/20 border border-yellow-500 text-yellow-300'
-  if (code === 'watch')       return 'bg-blue-500/20 border border-blue-500 text-blue-300'
-  return 'bg-red-500/20 border border-red-500 text-red-400'
-}
-
-function decisionIcon(code: string) {
-  if (code === 'execute')     return '✅'
-  if (code === 'conditional') return '⚠️'
-  if (code === 'watch')       return '👁'
-  return '🚫'
-}
-
-function biasColor(bias: string) {
-  if (bias === 'صاعد') return 'text-emerald-400'
-  if (bias === 'هابط') return 'text-red-400'
-  return 'text-gray-400'
-}
-
-function scoreColor(s: number) {
-  if (s >= 70) return 'text-emerald-400'
-  if (s >= 55) return 'text-yellow-400'
-  if (s >= 40) return 'text-blue-400'
-  return 'text-red-400'
 }
 
 function zoneColor(zone: SRZone) {
@@ -415,6 +390,15 @@ export default function ChartPage() {
   const [support, setSupport]     = useState<SupportQuote[]>([])
   const [gamma, setGamma]         = useState<GammaExposure | null>(null)
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
+  const [central, setCentral] = useState<{
+    decisionCouncil: DecisionCouncil | null
+    scenario: UnderlyingScenario | null
+    opportunityWindow: OpportunityWindow | null
+  } | null>(null)
+  const centralCouncil = central?.decisionCouncil ?? null
+  const centralScenario = central?.scenario ?? null
+  const centralDirection = centralCouncil?.direction ?? null
+  const centralActive = centralCouncil?.action === 'call' || centralCouncil?.action === 'put' || centralCouncil?.action === 'manage'
 
   // Strike input state
   const [strike, setStrike]           = useState('')
@@ -503,12 +487,32 @@ export default function ChartPage() {
     }
   }, [])
 
-  // ── Auto-set option type from market bias ──────────────────────────────────
+  // ── القرار المركزي هو المصدر الوحيد لاتجاه التنفيذ ─────────────────────────
   useEffect(() => {
-    const bias = data?.analysis?.summary?.bias
-    if (bias === 'صاعد') setOptionType('call')
-    else if (bias === 'هابط') setOptionType('put')
-  }, [data])
+    let active = true
+    const loadCentral = async () => {
+      try {
+        const response = await fetch(`/api/v2/recommend?mode=balanced&_=${Date.now()}`, { cache: 'no-store' })
+        const payload = response.ok ? await response.json() : null
+        if (!active || !payload) return
+        setCentral({
+          decisionCouncil: payload.decisionCouncil ?? null,
+          scenario: payload.scenario ?? null,
+          opportunityWindow: payload.opportunityWindow ?? null,
+        })
+      } catch { /* نحتفظ بآخر قرار مركزي صحيح */ }
+    }
+    void loadCentral()
+    const timer = window.setInterval(() => { void loadCentral() }, 15_000)
+    return () => {
+      active = false
+      window.clearInterval(timer)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (centralDirection) setOptionType(centralDirection)
+  }, [centralDirection])
 
   // ── Build / rebuild all charts ──────────────────────────────────────────────
   useEffect(() => {
@@ -664,7 +668,7 @@ export default function ChartPage() {
       // ── العلامات المدمجة: إشارات العرض/الطلب + بنية السوق ──
       const markers: { time: Time; position: 'aboveBar' | 'belowBar'; color: string; shape: 'arrowUp' | 'arrowDown' | 'circle'; text?: string }[] = []
       if (layers.zones) {
-        for (const s of sr.signals) markers.push({
+        for (const s of sr.signals.filter(signal => centralActive && signal.type === centralDirection)) markers.push({
           time: toTime(s.time, intraday),
           position: s.type === 'call' ? 'belowBar' : 'aboveBar',
           color: s.type === 'call' ? '#26D07C' : '#F0435A',
@@ -691,7 +695,8 @@ export default function ChartPage() {
         let prevKind: string | null = null
         for (const c of candles) {
           const cf = conf.get(c.time)
-          if (!cf) { prevKind = null; continue }
+          const markerDirection = cf?.kind === 'gold' ? 'call' : cf?.kind === 'purple' ? 'put' : null
+          if (!cf || !centralActive || markerDirection !== centralDirection) { prevKind = null; continue }
           const isGold = cf.kind === 'gold'
           markers.push({
             time: toTime(c.time, intraday),
@@ -830,8 +835,6 @@ export default function ChartPage() {
     // ── Chart 4: Decision (candles + price levels) ────────────────────────
     if (decRef.current) {
       const chart = mkChart(decRef.current, 300, 'decision')
-      const { summary } = data.analysis
-
       // Use last 80 candles max for clarity
       const decCandles = candles.slice(-80)
 
@@ -844,13 +847,9 @@ export default function ChartPage() {
         time: toTime(c.time, intraday), open: c.open, high: c.high, low: c.low, close: c.close,
       })))
 
-      // توافق إلزامي مع اتجاه الخطة: في يوم صاعد لا تظهر إلا علامات CALL،
-      // وفي يوم هابط علامات PUT فقط — علامة تعارض نقطة الدخول تُربك القرار.
-      // في اليوم المحايد (يوم نطاق) تبقى الجهتان لأن التداول على الحدين.
-      const biasDir = data.analysis.summary.bias
       const decSignals = data.analysis.sr.signals.filter(s =>
         decCandles.some(c => c.time === s.time) &&
-        (biasDir === 'محايد' || (biasDir === 'صاعد' ? s.type === 'call' : s.type === 'put')))
+        centralActive && s.type === centralDirection)
       if (decSignals.length > 0) {
         createSeriesMarkers(cSeries, decSignals.map(s => ({
           time: toTime(s.time, intraday),
@@ -862,17 +861,11 @@ export default function ChartPage() {
       }
 
       // Price level lines
-      if (summary.entryLevel !== null) {
-        cSeries.createPriceLine({ price: summary.entryLevel, color: '#f59e0b',  lineWidth: 1, lineStyle: LineStyle.Dotted,  title: 'الدخول' })
-      }
-      if (summary.t1Level !== null) {
-        cSeries.createPriceLine({ price: summary.t1Level, color: '#22c55e',  lineWidth: 1, lineStyle: LineStyle.Dashed,  title: 'H1' })
-      }
-      if (summary.t2Level !== null) {
-        cSeries.createPriceLine({ price: summary.t2Level, color: '#10b981',  lineWidth: 1, lineStyle: LineStyle.Dashed,  title: 'H2' })
-      }
-      if (summary.stopLevel !== null) {
-        cSeries.createPriceLine({ price: summary.stopLevel, color: '#ef4444', lineWidth: 1, lineStyle: LineStyle.Dashed, title: 'Stop' })
+      if (centralActive && centralScenario) {
+        cSeries.createPriceLine({ price: centralScenario.entry, color: '#f59e0b', lineWidth: 1, lineStyle: LineStyle.Dotted, title: 'الدخول' })
+        cSeries.createPriceLine({ price: centralScenario.target1.value, color: '#22c55e', lineWidth: 1, lineStyle: LineStyle.Dashed, title: 'الهدف 1' })
+        cSeries.createPriceLine({ price: centralScenario.target2.value, color: '#10b981', lineWidth: 1, lineStyle: LineStyle.Dashed, title: 'الهدف 2' })
+        cSeries.createPriceLine({ price: centralScenario.invalidation.value, color: '#ef4444', lineWidth: 1, lineStyle: LineStyle.Dashed, title: 'الإلغاء' })
       }
 
       drawSRZones(chart, cSeries, decSrRef.current, data.analysis.sr.zones, decCandles)
@@ -939,7 +932,7 @@ export default function ChartPage() {
       chartInstances.current.forEach(c => { try { c.remove() } catch {} })
       chartInstances.current = []
     }
-  }, [data, tf, showPanels, gamma, layers])
+  }, [data, tf, showPanels, gamma, layers, centralActive, centralDirection, centralScenario])
 
   const analysis = data?.analysis
   const last     = data?.candles[data.candles.length - 1]
@@ -1122,26 +1115,26 @@ export default function ChartPage() {
       </div>
 
       {/* ── Unified Summary Card ───────────────────────────────────────────── */}
-      {analysis && (
-        <div className={`rounded-2xl p-4 ${decisionStyle(analysis.summary.decisionCode)}`}>
+      {analysis && centralCouncil && (
+        <div className="rounded-2xl border border-white/10 bg-[#0a1929] p-4">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
-              <span className="text-2xl">{decisionIcon(analysis.summary.decisionCode)}</span>
+              <span className="text-2xl">{centralCouncil.action === 'call' ? '▲' : centralCouncil.action === 'put' ? '▼' : centralCouncil.action === 'manage' ? '◆' : '◌'}</span>
               <div>
-                <div className="text-lg font-bold">{analysis.summary.decisionText}</div>
-                <div className="text-sm opacity-75 mt-0.5">{analysis.summary.reason}</div>
+                <div className="text-lg font-bold text-[#E8D5A3]">قرار ترقّب المركزي: {centralCouncil.action === 'call' ? 'شراء صاعد' : centralCouncil.action === 'put' ? 'شراء هابط' : centralCouncil.action === 'manage' ? 'إدارة فرصة قائمة' : 'انتظار'}</div>
+                <div className="text-sm text-gray-300 mt-0.5">{centralCouncil.explanation}</div>
               </div>
             </div>
             <div className="flex gap-4 items-center flex-wrap">
               <div className="text-center">
-                <div className={`text-3xl font-black ${scoreColor(analysis.summary.score)}`}>
-                  {analysis.summary.score}
+                <div className="text-3xl font-black text-[#C9943A]">
+                  {centralCouncil.opportunityScore}
                 </div>
                 <div className="text-xs text-gray-500">القرار</div>
               </div>
               <div className="text-center">
-                <div className={`text-xl font-bold ${biasColor(analysis.summary.bias)}`}>
-                  {analysis.summary.bias === 'صاعد' ? '↑' : analysis.summary.bias === 'هابط' ? '↓' : '→'} {analysis.summary.bias}
+                <div className={`text-xl font-bold ${centralDirection === 'call' ? 'text-emerald-400' : centralDirection === 'put' ? 'text-red-400' : 'text-gray-400'}`}>
+                  {centralDirection === 'call' ? '↑ صاعد' : centralDirection === 'put' ? '↓ هابط' : '→ غير محسوم'}
                 </div>
                 <div className="text-xs text-gray-500">الاتجاه</div>
               </div>
@@ -1151,11 +1144,11 @@ export default function ChartPage() {
           <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-white/10">
             <div>
               <span className="text-xs text-gray-400">شرط الدخول: </span>
-              <span className="text-xs">{analysis.summary.entryCondition}</span>
+              <span className="text-xs">{centralActive && centralScenario ? `الأصل قرب ${centralScenario.entry.toLocaleString()}` : 'لا يوجد دخول الآن'}</span>
             </div>
             <div>
               <span className="text-xs text-gray-400">شرط الإلغاء: </span>
-              <span className="text-xs">{analysis.summary.cancelCondition}</span>
+              <span className="text-xs">{centralActive && centralScenario ? `فقدان ${centralScenario.invalidation.value.toLocaleString()}` : 'لا توجد خطة نشطة'}</span>
             </div>
           </div>
 
@@ -1194,20 +1187,12 @@ export default function ChartPage() {
           )}
 
           {/* Levels strip */}
-          {analysis.summary.t1Level && (
+          {centralActive && centralScenario && (
             <div className="flex gap-4 mt-3 text-xs flex-wrap">
-              {analysis.summary.entryLevel && (
-                <span><span className="text-[#f59e0b]">● الدخول</span> <span className="font-mono">{analysis.summary.entryLevel.toFixed(0)}</span></span>
-              )}
-              {analysis.summary.t1Level && (
-                <span><span className="text-emerald-400">● H1</span> <span className="font-mono">{analysis.summary.t1Level.toFixed(0)}</span></span>
-              )}
-              {analysis.summary.t2Level && (
-                <span><span className="text-green-300">● H2</span> <span className="font-mono">{analysis.summary.t2Level.toFixed(0)}</span></span>
-              )}
-              {analysis.summary.stopLevel && (
-                <span><span className="text-red-400">● Stop</span> <span className="font-mono">{analysis.summary.stopLevel.toFixed(0)}</span></span>
-              )}
+              <span><span className="text-[#f59e0b]">● الدخول</span> <span className="font-mono">{centralScenario.entry.toFixed(0)}</span></span>
+              <span><span className="text-emerald-400">● الهدف 1</span> <span className="font-mono">{centralScenario.target1.value.toFixed(0)}</span></span>
+              <span><span className="text-green-300">● الهدف 2</span> <span className="font-mono">{centralScenario.target2.value.toFixed(0)}</span></span>
+              <span><span className="text-red-400">● الإلغاء</span> <span className="font-mono">{centralScenario.invalidation.value.toFixed(0)}</span></span>
             </div>
           )}
         </div>
@@ -1654,22 +1639,16 @@ export default function ChartPage() {
                 <h2 className="font-bold text-[#E8D5A3]">④ القرار والتنفيذ</h2>
                 <p className="text-xs text-gray-500 mt-0.5">آخر 80 شمعة + خطوط الأهداف ووقف الخسارة</p>
               </div>
-              {analysis && (
+              {centralCouncil && (
                 <div className="flex items-center gap-2">
-                  {/* اتجاه الخطة صريح — حتى لا يبدو ككول بينما الاتجاه بوت أو العكس */}
                   <span className="text-xs font-bold px-2 py-1 rounded-full" style={{
-                    background: analysis.summary.bias === 'صاعد' ? 'rgba(16,185,129,0.15)' : analysis.summary.bias === 'هابط' ? 'rgba(239,68,68,0.15)' : 'rgba(148,163,184,0.15)',
-                    color:      analysis.summary.bias === 'صاعد' ? '#26D07C' : analysis.summary.bias === 'هابط' ? '#F0435A' : '#94A3B8',
+                    background: centralDirection === 'call' ? 'rgba(16,185,129,0.15)' : centralDirection === 'put' ? 'rgba(239,68,68,0.15)' : 'rgba(148,163,184,0.15)',
+                    color: centralDirection === 'call' ? '#26D07C' : centralDirection === 'put' ? '#F0435A' : '#94A3B8',
                   }}>
-                    {analysis.summary.bias === 'صاعد' ? '▲ خطة كول (صاعد)' : analysis.summary.bias === 'هابط' ? '▼ خطة بوت (هابط)' : '↔ محايد'}
+                    {centralDirection === 'call' ? '▲ خطة صاعدة' : centralDirection === 'put' ? '▼ خطة هابطة' : '↔ انتظار'}
                   </span>
-                  <span className={`text-xs font-bold px-2 py-1 rounded-full ${
-                    analysis.summary.decisionCode === 'execute'     ? 'bg-emerald-500/20 text-emerald-300' :
-                    analysis.summary.decisionCode === 'conditional' ? 'bg-yellow-500/20 text-yellow-300' :
-                    analysis.summary.decisionCode === 'watch'       ? 'bg-blue-500/20 text-blue-300' :
-                    'bg-red-500/20 text-red-300'
-                  }`}>
-                    {analysis.summary.score}/85
+                  <span className="text-xs font-bold px-2 py-1 rounded-full bg-[#C9943A]/15 text-[#E8D5A3]">
+                    {centralCouncil.opportunityScore}/100
                   </span>
                 </div>
               )}
@@ -1678,12 +1657,12 @@ export default function ChartPage() {
             {/* Decision chart guide */}
             <div className="px-4 pt-2 pb-1 space-y-1.5">
               <p className="text-xs text-gray-600">يجمع هذا الشارت نتائج المؤشرات الثلاثة ويضع مستويات التداول المقترحة مباشرة على السعر</p>
-              {analysis?.summary.t1Level && (
+              {centralActive && centralScenario && (
                 <div className="flex gap-4 text-xs flex-wrap">
                   <span><span className="text-[#f59e0b] font-bold">·· الدخول</span><span className="text-gray-600"> — السعر الحالي (مرجع)</span></span>
-                  <span><span className="text-emerald-400 font-bold">-- H1</span><span className="text-gray-600"> — الهدف الأول (ATR × 1.5)</span></span>
-                  <span><span className="text-green-300 font-bold">-- H2</span><span className="text-gray-600"> — الهدف الثاني (ATR × 3)</span></span>
-                  <span><span className="text-red-400 font-bold">-- Stop</span><span className="text-gray-600"> — وقف الخسارة (ATR × 1)</span></span>
+                  <span><span className="text-emerald-400 font-bold">-- الهدف 1</span><span className="text-gray-600"> — مستوى حقيقي من السوق</span></span>
+                  <span><span className="text-green-300 font-bold">-- الهدف 2</span><span className="text-gray-600"> — امتداد الحركة</span></span>
+                  <span><span className="text-red-400 font-bold">-- الإلغاء</span><span className="text-gray-600"> — فقدان السيناريو</span></span>
                 </div>
               )}
             </div>
@@ -1693,17 +1672,10 @@ export default function ChartPage() {
               <div ref={decSrRef} className="absolute inset-0 pointer-events-none z-10" />
             </div>
 
-            {analysis && (
+            {analysis && centralCouncil && (
               <div className="px-4 py-3 border-t border-[#1e3a50] bg-[#060D14]/50 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3">
-                    <div className="text-xs text-emerald-400 font-bold mb-1">▲ السيناريو الصاعد</div>
-                    <div className="text-xs text-gray-300">{analysis.summary.bullishScenario}</div>
-                  </div>
-                  <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3">
-                    <div className="text-xs text-red-400 font-bold mb-1">▼ السيناريو الهابط</div>
-                    <div className="text-xs text-gray-300">{analysis.summary.bearishScenario}</div>
-                  </div>
+                <div className="rounded-xl border border-white/10 bg-black/10 p-3 text-xs text-gray-300">
+                  {centralCouncil.explanation}
                 </div>
 
                 {/* Advanced toggle */}

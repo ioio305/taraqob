@@ -7,11 +7,23 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createChart, CandlestickSeries, HistogramSeries, ColorType, CrosshairMode, type IChartApi, type Time } from 'lightweight-charts'
 import { useLiveQuote } from '@/lib/v2/useLiveQuotes'
+import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
+import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
+import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
 
 const ACCENT = '#26D07C'
 
 type Plan = { entryLow: number; entryHigh: number; stop: number; t1: number; t2: number; horizonAr: string; reasonAr: string; cancelAr: string; riskLevel: string }
-type VerdictInfo = { score: number; tierLabelAr: string; side: 1 | -1 | 0; votes: { labelAr: string; vote: 1 | -1 | 0 }[]; plan: Plan | null }
+type VerdictInfo = {
+  score: number
+  tierLabelAr: string
+  side: 1 | -1 | 0
+  votes: { labelAr: string; vote: 1 | -1 | 0 }[]
+  plan: Plan | null
+  decisionCouncil: DecisionCouncil
+  scenario: UnderlyingScenario | null
+  opportunityWindow: OpportunityWindow | null
+}
 type Bar = { time: string; open: number; high: number; low: number; close: number; volume: number }
 type ChartBar = { time: Time; open: number; high: number; low: number; close: number }
 
@@ -39,7 +51,9 @@ export default function FundsChart() {
 
   // خلاصات المحرك لكل الصناديق
   useEffect(() => {
-    fetch('/api/v2/funds/advisory').then(r => r.json()).then(d => {
+    let alive = true
+    const refresh = () => fetch('/api/v2/funds/advisory', { cache: 'no-store' }).then(r => r.json()).then(d => {
+      if (!alive) return
       if (d?.verdicts) setVerdicts(d.verdicts)
       if (d?.prices) {
         const nm: Record<string, string> = {}
@@ -47,6 +61,9 @@ export default function FundsChart() {
         setNames(nm)
       }
     }).catch(() => {})
+    void refresh()
+    const timer = window.setInterval(() => { void refresh() }, 60_000)
+    return () => { alive = false; window.clearInterval(timer) }
   }, [])
 
   const load = useCallback(() => {
@@ -80,7 +97,7 @@ export default function FundsChart() {
 
       // خطوط الخطة
       const v = verdicts[symbol]
-      if (v?.plan) {
+      if (v?.plan && v.decisionCouncil.action === 'call' && v.scenario) {
         const p = v.plan
         const line = (price: number, color: string, title: string) =>
           cs.createPriceLine({ price, color, lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title })
@@ -140,24 +157,10 @@ export default function FundsChart() {
 
         {/* لوحة المحرك */}
         <div className="space-y-3">
-          {v ? (
+          {v?.decisionCouncil ? (
             <>
-              <div className="rounded-2xl border border-white/8 p-4 text-center" style={{ background: 'rgba(255,255,255,.02)' }}>
-                <div className="text-3xl font-black" style={{ color: v.plan ? ACCENT : '#6E7E8F' }}>{v.score}</div>
-                <div className="mt-1 text-[11px] text-slate-400">{v.tierLabelAr}</div>
-              </div>
-              <div className="rounded-2xl border border-white/8 p-3" style={{ background: 'rgba(255,255,255,.02)' }}>
-                <div className="mb-2 text-[11px] font-bold text-slate-400">أصوات الاستراتيجيات</div>
-                <div className="space-y-1">
-                  {v.votes.map(vt => (
-                    <div key={vt.labelAr} className="flex items-center justify-between text-xs">
-                      <span className="text-slate-300">{vt.labelAr}</span>
-                      <span dangerouslySetInnerHTML={{ __html: voteIcon(vt.vote) }} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-              {v.plan ? (
+              <DecisionCouncilCard council={v.decisionCouncil} scenario={v.scenario} window={v.opportunityWindow} compact />
+              {v.plan && v.decisionCouncil.action === 'call' ? (
                 <div className="rounded-2xl border border-emerald-400/25 p-3 text-xs leading-6" style={{ background: 'rgba(38,208,124,.05)' }}>
                   <div className="font-bold text-emerald-300">الخطة</div>
                   <div className="text-slate-300">دخول {v.plan.entryLow} — {v.plan.entryHigh}</div>
@@ -169,6 +172,17 @@ export default function FundsChart() {
                   لا خطة لهذا الصندوق اليوم
                 </div>
               )}
+              <details className="rounded-2xl border border-white/8 p-3" style={{ background: 'rgba(255,255,255,.02)' }}>
+                <summary className="cursor-pointer text-[11px] font-bold text-slate-400">الأدلة المساندة</summary>
+                <div className="mt-2 space-y-1">
+                  {v.votes.map(vt => (
+                    <div key={vt.labelAr} className="flex items-center justify-between text-xs">
+                      <span className="text-slate-300">{vt.labelAr}</span>
+                      <span dangerouslySetInnerHTML={{ __html: voteIcon(vt.vote) }} />
+                    </div>
+                  ))}
+                </div>
+              </details>
             </>
           ) : (
             <div className="rounded-2xl border border-white/8 p-4 text-center text-xs text-slate-500" style={{ background: 'rgba(255,255,255,.02)' }}>

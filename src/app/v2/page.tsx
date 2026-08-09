@@ -259,7 +259,9 @@ export default function V2Dashboard() {
   // ── السجل الحي: تسجيل فرص A+/A التنفيذية (بلا تكرار، السيرفر يزيل المكرر) ──
   useEffect(() => {
     const [c] = (data?.contracts ?? [])
-      .filter(c => (c.grade === 'A+' || c.grade === 'A') && c.status === 'execute')
+      .filter(c => (c.grade === 'A+' || c.grade === 'A')
+        && c.status === 'execute'
+        && data?.decisionCouncil?.action === c.type)
       .sort((a, b) => (b.grade === 'A+' ? 1 : 0) - (a.grade === 'A+' ? 1 : 0) || (b.score ?? 0) - (a.score ?? 0))
     if (!c) return
     fetch('/api/v2/signals/log', {
@@ -319,12 +321,16 @@ export default function V2Dashboard() {
   const em       = data?.market?.expectedMove
   const emUpper  = data?.market?.emUpper
   const emLower  = data?.market?.emLower
-  const dir      = data?.direction
+  const councilDirection = data?.decisionCouncil?.direction ?? null
+  const dir      = councilDirection
+    ? { ...data?.direction, type: councilDirection, color: councilDirection === 'call' ? '#26D07C' : '#F0435A' }
+    : null
   const dirColor = dir?.color ?? '#7C8A99'
-  const noTrade  = !dir?.type
-
-  const contracts = data?.contracts ?? []
-  const hasExecute = contracts.some(c => c.status === 'execute')
+  const allContracts = data?.contracts ?? []
+  const contracts = councilDirection
+    ? allContracts.filter(c => c.status === 'execute' && c.type === councilDirection)
+    : []
+  const hasExecute = contracts.length > 0
 
   function statusMeta(s: Contract['status']) {
     if (s === 'execute') return { label: 'اشترِ الآن', color: '#10B981', bg: 'rgba(16,185,129,0.14)', border: 'rgba(16,185,129,0.35)' }
@@ -391,7 +397,6 @@ export default function V2Dashboard() {
               <div className="text-xs mt-0.5" style={{ color: '#5E6E7F' }}>
                 {loading ? 'جاري الحساب…'
                   : hasExecute ? 'فرصة جاهزة للتنفيذ الآن'
-                  : contracts.length ? 'مرشّحات تحت المراقبة — لا دخول بعد'
                   : 'لا توصية الآن'}
               </div>
             </div>

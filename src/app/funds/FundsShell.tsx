@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { MarketClock } from '@/components/v2/MarketClock'
 import { FundsWatcher } from '@/components/v2/FundsWatcher'
 import { NewsTicker } from '@/components/v2/NewsTicker'
+import { DecisionCouncilStrip } from '@/components/v2/DecisionCouncilStrip'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
 
 const ACCENT = '#26D07C'
@@ -140,6 +141,7 @@ export default function FundsShell({ children, userName, tier, isStaff, platform
           <button onClick={logout} disabled={loggingOut} className="h-8 w-8 rounded-lg border border-red-400/15 bg-red-400/5 text-red-300" aria-label="تسجيل الخروج">↪</button>
         </header>
         <NewsTicker />
+        <DecisionCouncilStrip platform="funds" />
         <FundsWatcher />
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
         <nav className="flex shrink-0 items-center justify-around border-t border-white/5 bg-[#07130F] px-2 py-2 lg:hidden">

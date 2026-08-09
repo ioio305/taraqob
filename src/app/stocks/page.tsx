@@ -198,7 +198,10 @@ export default function StocksScanner() {
     const live = liveQuotes[row.symbol]
     return live ? { ...row, price: live.price, changePct: live.changePct, source: live.source } : row
   })
-  const topOpportunity = results.find(row => row.best && row.dataQuality?.status !== 'blocked') ?? null
+  const topOpportunity = results.find(row => row.best
+    && row.dataQuality?.status !== 'blocked'
+    && row.best.status === 'execute'
+    && row.decisionCouncil?.action === row.best.type) ?? null
   const topDecision = [...results]
     .filter(row => row.decisionCouncil && row.dataQuality?.status !== 'blocked')
     .sort((left, right) => (right.decisionCouncil?.opportunityScore ?? 0) - (left.decisionCouncil?.opportunityScore ?? 0))[0] ?? null
@@ -279,7 +282,9 @@ export default function StocksScanner() {
               </div>
               <div className="text-left">
                 <div className="text-xs text-slate-500">القرار الحالي</div>
-                <div className="text-lg font-black mt-1" style={{ color: '#F59E0B' }}>راقب — لا تدخل بعد</div>
+                <div className="text-lg font-black mt-1" style={{ color: topOpportunity.best.type === 'call' ? '#10B981' : '#EF4444' }}>
+                  {topOpportunity.best.type === 'call' ? 'شراء صاعد' : 'شراء هابط'}
+                </div>
               </div>
             </div>
 
@@ -446,9 +451,10 @@ export default function StocksScanner() {
 
           {results.map((r, i) => {
             const isSel = selected === r.symbol
-            const isCall = r.best?.type === 'call' || r.direction.type === 'call'
-            const sm = r.best ? statusMeta(r.best.status) : null
-            const dirType = r.direction.type
+            const activeBest = r.best && r.best.status === 'execute' && r.decisionCouncil?.action === r.best.type ? r.best : null
+            const dirType = activeBest?.type ?? null
+            const isCall = dirType === 'call'
+            const sm = activeBest ? statusMeta(activeBest.status) : null
 
             return (
               <div key={r.symbol} id={`stock-detail-${r.symbol}`} className="rounded-xl overflow-hidden scroll-mt-24"
@@ -495,16 +501,16 @@ export default function StocksScanner() {
                         📅 أرباح {r.eventRisk.when}
                       </span>
                     )}
-                    {r.best ? (
+                    {activeBest ? (
                       <>
                         <span className="text-xs font-mono px-2 py-1 rounded-lg"
                               style={{ background: 'rgba(255,255,255,0.04)', color: '#CBD5E1', border: '1px solid rgba(255,255,255,0.08)' }}>
-                          {r.best.type === 'call' ? 'CALL' : 'PUT'} {n(r.best.strike, 0)} · {r.best.dte}ي
+                          {activeBest.type === 'call' ? 'CALL' : 'PUT'} {n(activeBest.strike, 0)} · {activeBest.dte}ي
                         </span>
-                        {r.best.grade && (
+                        {activeBest.grade && (
                           <span className="text-xs font-black px-1.5 py-1 rounded-md"
-                                style={{ background: `${gradeColor(r.best.grade)}1A`, color: gradeColor(r.best.grade), border: `1px solid ${gradeColor(r.best.grade)}55` }}>
-                            {r.best.grade}
+                                style={{ background: `${gradeColor(activeBest.grade)}1A`, color: gradeColor(activeBest.grade), border: `1px solid ${gradeColor(activeBest.grade)}55` }}>
+                            {activeBest.grade}
                           </span>
                         )}
                         {sm && (
@@ -515,7 +521,7 @@ export default function StocksScanner() {
                         )}
                       </>
                     ) : (
-                      <span className="text-xs" style={{ color: '#4A5568' }}>{r.error ?? 'لا عقد مناسب'}</span>
+                      <span className="text-xs" style={{ color: '#4A5568' }}>{r.error ?? 'انتظار'}</span>
                     )}
                     <span className="text-xs" style={{ color: '#64748B' }}>{isSel ? '▲' : '▼'}</span>
                   </div>
@@ -547,7 +553,10 @@ export default function StocksScanner() {
 
 // ── بطاقة تفصيل السهم (أفضل عقد + الخطة + لماذا) ──────────────────────────────
 function StockDetail({ detail }: { detail: DetailData }) {
-  const c = detail.contracts[0]
+  const councilAction = detail.decisionCouncil?.action
+  const c = councilAction === 'call' || councilAction === 'put'
+    ? detail.contracts.find(contract => contract.type === councilAction && contract.status === 'execute')
+    : undefined
   const councilCard = detail.decisionCouncil ? (
     <DecisionCouncilCard council={detail.decisionCouncil} scenario={detail.scenario} window={detail.opportunityWindow} compact />
   ) : null

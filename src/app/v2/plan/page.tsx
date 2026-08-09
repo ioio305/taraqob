@@ -4,6 +4,9 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useLiveQuote } from '@/lib/v2/useLiveQuotes'
+import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
+import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
+import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
 
 interface Plan {
   success: boolean; error?: string
@@ -27,18 +30,42 @@ interface Plan {
 
 const TONE = { res: '#F0435A', mid: '#C9943A', sup: '#26D07C' }
 
+type CentralRecommendation = {
+  decisionCouncil?: DecisionCouncil | null
+  scenario?: UnderlyingScenario | null
+  opportunityWindow?: OpportunityWindow | null
+}
+
 export default function PlanPage() {
   const [plan, setPlan] = useState<Plan | null>(null)
   const [err, setErr] = useState('')
+  const [central, setCentral] = useState<CentralRecommendation | null>(null)
   const { quote: liveSpx } = useLiveQuote('SPX')
 
   useEffect(() => {
-    fetch('/api/v2/gameplan').then(r => r.json())
-      .then(d => d.success ? setPlan(d) : setErr(d.error ?? 'تعذر بناء الخطة'))
+    fetch('/api/v2/gameplan').then(response => response.json())
+      .then(dayPlan => {
+        if (dayPlan.success) setPlan(dayPlan)
+        else setErr(dayPlan.error ?? 'تعذر بناء الخطة')
+      })
       .catch(() => setErr('فشل الاتصال'))
   }, [])
 
-  const biasColor = plan?.bias === 'صاعد' ? '#26D07C' : plan?.bias === 'هابط' ? '#F0435A' : '#C9943A'
+  useEffect(() => {
+    let active = true
+    const refresh = () => fetch(`/api/v2/recommend?mode=balanced&_=${Date.now()}`, { cache: 'no-store' })
+      .then(response => response.json())
+      .then(recommendation => { if (active) setCentral(recommendation) })
+      .catch(() => {})
+    void refresh()
+    const timer = window.setInterval(() => { void refresh() }, 15_000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [])
+
+  const centralAction = central?.decisionCouncil?.action
+  const centralActive = centralAction === 'call' || centralAction === 'put' || centralAction === 'manage'
+  const centralBias = centralAction === 'call' ? 'صاعد' : centralAction === 'put' ? 'هابط' : 'محايد'
+  const biasColor = centralBias === 'صاعد' ? '#26D07C' : centralBias === 'هابط' ? '#F0435A' : '#C9943A'
 
   return (
     <div className="min-h-screen p-4 space-y-4 max-w-3xl mx-auto" dir="rtl"
@@ -61,6 +88,9 @@ export default function PlanPage() {
 
       {plan && (
         <>
+          {central?.decisionCouncil ? (
+            <DecisionCouncilCard council={central.decisionCouncil} scenario={central.scenario} window={central.opportunityWindow} />
+          ) : null}
           {/* حدث اليوم قبل الافتتاح */}
           {plan.preMarketNote && (
             <div className="rounded-xl px-4 py-3 text-sm font-bold"
@@ -74,24 +104,26 @@ export default function PlanPage() {
             style={{ background: `linear-gradient(135deg, ${biasColor}0D, rgba(13,27,42,0.9))`, border: `1px solid ${biasColor}40` }}>
             <div className="flex items-center gap-3 mb-3 flex-wrap">
               <span className="text-2xl font-black" style={{ color: biasColor }}>
-                {plan.bias === 'صاعد' ? '▲ صاعد' : plan.bias === 'هابط' ? '▼ هابط' : '↔ محايد'}
+                {centralBias === 'صاعد' ? '▲ صاعد' : centralBias === 'هابط' ? '▼ هابط' : '↔ انتظار'}
               </span>
               <span className="text-xs font-mono px-2 py-0.5 rounded-lg"
                 style={{ background: 'rgba(255,255,255,0.05)', color: '#94A3B8' }}>
-                الدرجة {plan.score}/100
+                الدرجة {central?.decisionCouncil?.opportunityScore ?? plan.score}/100
               </span>
               <span className="text-xs font-mono text-gray-500">SPX {(liveSpx?.price ?? plan.market.spx).toFixed(0)} · خوف {plan.market.vix.toFixed(1)}</span>
             </div>
-            <p className="text-base leading-relaxed text-white font-semibold">{plan.stance}</p>
-            <div className="mt-3 text-sm" style={{ color: '#E8D5A3' }}>{plan.entryZone}</div>
+            <p className="text-base leading-relaxed text-white font-semibold">{central?.decisionCouncil?.explanation ?? plan.stance}</p>
+            <div className="mt-3 text-sm" style={{ color: '#E8D5A3' }}>
+              {centralActive && central?.scenario ? `الدخول على الأصل قرب ${central.scenario.entry.toFixed(0)}` : 'لا دخول قبل اكتمال القرار المركزي'}
+            </div>
           </div>
 
           {/* الأهداف والوقف والإلغاء */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: 'الهدف الأول', value: plan.targets.t1?.toFixed(0) ?? '—', color: '#26D07C' },
-              { label: 'الهدف الثاني', value: plan.targets.t2?.toFixed(0) ?? '—', color: '#60A5FA' },
-              { label: 'وقف الخطة', value: plan.stop?.toFixed(0) ?? '—', color: '#F0435A' },
+              { label: 'الهدف الأول', value: centralActive ? central?.scenario?.target1.value.toFixed(0) ?? '—' : '—', color: '#26D07C' },
+              { label: 'الهدف الثاني', value: centralActive ? central?.scenario?.target2.value.toFixed(0) ?? '—' : '—', color: '#60A5FA' },
+              { label: 'إلغاء السيناريو', value: centralActive ? central?.scenario?.invalidation.value.toFixed(0) ?? '—' : '—', color: '#F0435A' },
               { label: 'الحركة المتوقعة', value: `±${plan.expectedMove.points}`, color: '#C9943A' },
             ].map(x => (
               <div key={x.label} className="bg-[#0a1929] border border-[#1e3a50] rounded-xl p-3 text-center">
@@ -105,7 +137,7 @@ export default function PlanPage() {
           <div className="rounded-xl px-4 py-3 text-sm"
             style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.3)' }}>
             <span className="font-bold" style={{ color: '#F59E0B' }}>⚠ تُلغى الخطة إذا: </span>
-            <span className="text-gray-300">{plan.cancel}</span>
+            <span className="text-gray-300">{centralActive ? central?.scenario?.invalidation.source ?? '—' : 'لا توجد خطة دخول نشطة حالياً'}</span>
           </div>
 
           {/* الجاما */}
