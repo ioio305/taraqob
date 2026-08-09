@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { analyzeContract } from '@/lib/v2/actions'
+import { useLiveQuote } from '@/lib/v2/useLiveQuotes'
 
 type Analysis = Awaited<ReturnType<typeof analyzeContract>>['analysis']
 
@@ -38,6 +39,7 @@ export default function ContractQualityPage() {
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState<string | null>(null)
+  const { quote: liveContract } = useLiveQuote(analysis?.selected_symbol ?? '')
 
   async function run() {
     if (!input.trim()) { setError('أدخل رمز عقد أو Strike'); return }
@@ -118,7 +120,7 @@ export default function ContractQualityPage() {
           <div className="rounded-xl p-4 space-y-4" style={{ background: 'rgba(13,27,42,0.6)', border: '1px solid rgba(255,255,255,0.04)' }}>
             <div className="text-xs font-semibold tracking-widest" style={{ color: '#6B7B8D', letterSpacing: '0.15em' }}>تفاصيل التقييم</div>
             {[
-              { label: 'Bid / Ask', value: `${n(analysis.bid)} / ${n(analysis.ask)}` },
+              { label: 'Bid / Ask', value: `${n(liveContract?.bid ?? analysis.bid)} / ${n(liveContract?.ask ?? analysis.ask)}` },
               { label: 'Spread', value: analysis.spread_percent != null ? n(analysis.spread_percent, 1) + '%' : '—', alert: (analysis.spread_percent ?? 0) > 10 },
               { label: 'Volume', value: (analysis.volume ?? 0).toLocaleString() },
               { label: 'Open Interest', value: (analysis.open_interest ?? 0).toLocaleString() },
