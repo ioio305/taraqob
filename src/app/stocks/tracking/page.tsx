@@ -12,7 +12,7 @@ type Row = {
   dataQuality: { status: string; label: string } | null
   best: null | {
     strike: number; type: string; expiration: string; status: string; reason: string
-    ranking: { score: number; expectedProfit: number; expectedReturnPct: number; riskReward: number }
+    ranking: { score: number; expectedMovePoints: number; expectedMovePct: number; riskReward: number }
   }
 }
 
@@ -82,8 +82,8 @@ export default function RecommendationTrackingPage() {
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
                 <Metric label="العقد" value={`${row.best?.type.toUpperCase()} ${row.best?.strike}`} />
-                <Metric label="الربح المستهدف" value={`$${row.best?.ranking.expectedProfit}`} />
-                <Metric label="العائد المتوقع" value={`${row.best?.ranking.expectedReturnPct}%`} />
+                <Metric label="حركة السهم المستهدفة" value={`${row.best?.ranking.expectedMovePoints} نقطة`} />
+                <Metric label="نسبة حركة السهم" value={`${row.best?.ranking.expectedMovePct}%`} />
                 <Metric label="عائد/مخاطرة" value={`${row.best?.ranking.riskReward}`} />
               </div>
 

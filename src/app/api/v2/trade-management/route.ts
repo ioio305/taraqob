@@ -36,6 +36,8 @@ export async function GET(request: NextRequest) {
   const direction = request.nextUrl.searchParams.get('direction') as UnderlyingDirection
   const startedAtRaw = request.nextUrl.searchParams.get('startedAt')
   const startedAt = startedAtRaw && Number.isFinite(Date.parse(startedAtRaw)) ? new Date(startedAtRaw).toISOString() : null
+  const validUntilRaw = request.nextUrl.searchParams.get('validUntil')
+  const validUntil = validUntilRaw && Number.isFinite(Date.parse(validUntilRaw)) ? new Date(validUntilRaw).toISOString() : null
   const plan: UnderlyingTradePlan = {
     entry: numberParam(request, 'entry'),
     target1: numberParam(request, 'target1'),
@@ -83,7 +85,7 @@ export async function GET(request: NextRequest) {
       sourceLive = quote?.source === 'tradier'
     }
 
-    const result = manageUnderlyingTrade({ bars, currentPrice, direction, plan, startedAt, liquidity })
+    const result = manageUnderlyingTrade({ bars, currentPrice, direction, plan, startedAt, validUntil, liquidity })
     return NextResponse.json({
       success: true,
       platform,

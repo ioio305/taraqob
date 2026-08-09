@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { Search } from 'lucide-react'
 import { FundBrief } from '../FundBrief'
 import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
+import { UnderlyingTradeManager } from '@/components/v2/UnderlyingTradeManager'
 
 type Detail = {
   success: boolean
@@ -13,9 +14,12 @@ type Detail = {
   market?: { price: number; changePct: number; expectedMove: number | null } | null
   direction?: { type: string | null; label: string; color: string; reason: string }
   contracts?: Array<{
-    type: string; strike: number; expiration: string; mid: number; score: number; status: string; grade?: string
-    strategy?: { entryBalanced: number; t1Price: number; stopPrice: number }
+    symbol: string; type: string; strike: number; expiration: string; mid: number; score: number; status: string; grade?: string
+    execution?: { entryLow: number; entryHigh: number; hardProtectionPrice: number }
+    selection?: { fitScore: number; fitLabel: string; timeDecayBurdenPct: number }
   }>
+  scenario?: { entry: number; target1: { value: number; source: string }; target2: { value: number; source: string }; invalidation: { value: number; source: string } } | null
+  opportunityWindow?: { label: string; validUntil: string; reason: string } | null
   error?: string
 }
 
@@ -71,12 +75,34 @@ export default function FundAnalyzePage() {
                 <Metric label="القوة" value={`${contract.score}/100`} />
                 <Metric label="الحالة" value={contract.status === 'execute' ? 'جاهز' : 'راقب'} />
               </div>
-              {contract.strategy ? (
-                <div className="mt-4 grid grid-cols-3 gap-2">
-                  <Metric label="الدخول" value={`$${contract.strategy.entryBalanced.toFixed(2)}`} />
-                  <Metric label="الهدف" value={`$${contract.strategy.t1Price.toFixed(2)}`} />
-                  <Metric label="الوقف" value={`$${contract.strategy.stopPrice.toFixed(2)}`} danger />
-                </div>
+              {data.scenario ? (
+                <>
+                  <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+                    <Metric label="دخول العقد" value={contract.execution ? `$${contract.execution.entryLow.toFixed(2)}–$${contract.execution.entryHigh.toFixed(2)}` : `$${contractMid?.toFixed(2)}`} />
+                    <Metric label="هدف الأصل الأول" value={data.scenario.target1.value.toFixed(2)} />
+                    <Metric label="هدف الأصل الثاني" value={data.scenario.target2.value.toFixed(2)} />
+                    <Metric label="إلغاء السيناريو" value={data.scenario.invalidation.value.toFixed(2)} danger />
+                  </div>
+                  <div className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/[.06] p-3 text-sm text-amber-100">
+                    نافذة الفرصة: <b>{data.opportunityWindow?.label ?? 'تحت التقدير'}</b> — الأهداف والخروج من حركة الصندوق، ولا يوجد هدف مصطنع لسعر العقد.
+                  </div>
+                  <div className="mt-4">
+                    <UnderlyingTradeManager
+                      platform="funds"
+                      symbol={data.symbol}
+                      direction={contract.type === 'call' ? 'bullish' : 'bearish'}
+                      plan={{
+                        entry: data.scenario.entry,
+                        target1: data.scenario.target1.value,
+                        target2: data.scenario.target2.value,
+                        invalidation: data.scenario.invalidation.value,
+                      }}
+                      contractSymbol={contract.symbol}
+                      hardContractStop={contract.execution?.hardProtectionPrice}
+                      validUntil={data.opportunityWindow?.validUntil}
+                    />
+                  </div>
+                </>
               ) : null}
             </>
           ) : <div className="py-10 text-center text-slate-500">{data.error ?? 'لا توجد فرصة صالحة'}</div>}

@@ -43,6 +43,9 @@ export interface FundVerdict {
     entryLow: number; entryHigh: number
     stop: number; t1: number; t2: number
     horizonAr: string              // مدة الصفقة
+    minSessions: number; maxSessions: number
+    target1Source: string; target2Source: string; stopSource: string
+    fallbackTargets: boolean
     riskLevel: 'منخفض' | 'متوسط' | 'مرتفع'
     reasonAr: string               // سبب التوصية
     cancelAr: string               // شرط الإلغاء
@@ -236,9 +239,30 @@ export function judgeFund(input: EngineInput, opts?: { allowShort?: boolean }): 
     const s = rv == null ? 5 : rv < 15 ? 10 : rv < 25 ? 7 : rv < 35 ? 4 : 1
     add('volatility', 'التقلب', s, 10)
   }
-  // العائد إلى المخاطرة (10) — مقاسًا بخطة الصفقة أدناه
-  const riskUnit = atr
-  const rr = (1.5 * riskUnit) / (1.0 * riskUnit) // هدف أول 1.5× مدى مقابل وقف 1× مدى
+  // مستويات السوق أولاً؛ المدى اليومي لا يُستخدم إلا عند غياب مستوى حقيقي.
+  const recentStructure = bars.slice(Math.max(0, i - 180), i + 1)
+  const structural: number[] = []
+  for (let p = 2; p < recentStructure.length - 2; p++) {
+    const around = recentStructure.slice(p - 2, p + 3)
+    const level = side === 1 ? recentStructure[p].high : recentStructure[p].low
+    const pivot = side === 1
+      ? level === Math.max(...around.map(bar => bar.high))
+      : level === Math.min(...around.map(bar => bar.low))
+    const distance = side === 1 ? level - close : close - level
+    if (pivot && distance >= atr * 0.25 && distance <= atr * 8) structural.push(level)
+  }
+  const ordered = [...new Set(structural.map(r2))].sort((a, b) => side === 1 ? a - b : b - a)
+  const firstStructure = ordered[0] ?? null
+  const secondStructure = ordered.find(level => Math.abs(level - (firstStructure ?? close)) >= atr * 0.7) ?? null
+  const plannedT1 = r2(firstStructure ?? (close + side * 1.5 * atr))
+  const plannedT2 = r2(secondStructure ?? (close + side * 3 * atr))
+  const adversePivots = recentStructure.slice(-35)
+    .map(bar => side === 1 ? bar.low : bar.high)
+    .filter(level => side === 1 ? level < close : level > close)
+    .sort((a, b) => side === 1 ? b - a : a - b)
+  const structuralStop = adversePivots.find(level => Math.abs(level - close) >= atr * 0.45 && Math.abs(level - close) <= atr * 2.5)
+  const plannedStop = r2(structuralStop ?? (close - side * atr))
+  const rr = Math.abs(plannedT1 - close) / Math.max(0.01, Math.abs(close - plannedStop))
   {
     const s = rr >= 1.5 ? 10 : rr >= 1.2 ? 6 : 2
     add('rr', 'العائد إلى المخاطرة', s, 10)
@@ -260,7 +284,7 @@ export function judgeFund(input: EngineInput, opts?: { allowShort?: boolean }): 
     if (side === 1 && ma50 < ma200) vetoes.push('الاتجاه الأسبوعي يعارض الصفقة')
     if (side === -1 && ma50 > ma200) vetoes.push('الاتجاه الأسبوعي يعارض الصفقة')
   }
-  // العائد إلى المخاطرة ضعيف (ثابت هنا لكن يُحفظ للمستقبل)
+  // العائد إلى المخاطرة من مستويات السوق الفعلية
   if (rr < 1.5) vetoes.push('العائد إلى المخاطرة ضعيف')
 
   // ── 4) صياغة التوصية ─────────────────────────────────────────────────────
@@ -280,9 +304,12 @@ export function judgeFund(input: EngineInput, opts?: { allowShort?: boolean }): 
   // منطقة الدخول: شراء عند تراجع نصف مدى تحت الإغلاق، بيع عند ارتداد نصف مدى فوقه
   const entryHigh = r2(side === 1 ? close : close + 0.5 * atr)
   const entryLow = r2(side === 1 ? close - 0.5 * atr : close)
-  const stop = r2(side === 1 ? entryLow - atr : entryHigh + atr)
-  const t1 = r2(close + side * 1.5 * atr)
-  const t2 = r2(close + side * 3 * atr)
+  const t1 = plannedT1
+  const t2 = plannedT2
+  const stop = plannedStop
+  const expectedSessions = Math.max(3, Math.min(20, Math.ceil(Math.abs(t2 - close) / Math.max(atr * 0.65, 0.01))))
+  const minSessions = Math.max(2, Math.round(expectedSessions * 0.6))
+  const maxSessions = Math.min(25, Math.max(minSessions + 2, Math.round(expectedSessions * 1.5)))
   const riskLevel: 'منخفض' | 'متوسط' | 'مرتفع' =
     rv == null ? 'متوسط' : rv < 18 ? 'منخفض' : rv < 30 ? 'متوسط' : 'مرتفع'
 
@@ -301,7 +328,12 @@ export function judgeFund(input: EngineInput, opts?: { allowShort?: boolean }): 
       entryLow: Math.min(entryLow, entryHigh),
       entryHigh: Math.max(entryLow, entryHigh),
       stop, t1, t2,
-      horizonAr: 'من 5 إلى 25 جلسة',
+      horizonAr: `من ${minSessions} إلى ${maxSessions} جلسة`,
+      minSessions, maxSessions,
+      target1Source: firstStructure ? 'قمة أو قاع سعري سابق' : 'حد احتياطي من الحركة اليومية',
+      target2Source: secondStructure ? 'منطقة سعرية تالية من السوق' : 'حد احتياطي من الحركة اليومية',
+      stopSource: structuralStop ? 'بطلان من بنية السعر' : 'حماية احتياطية من الحركة اليومية',
+      fallbackTargets: !firstStructure || !secondStructure,
       riskLevel, reasonAr, cancelAr, rr: r2(rr),
     },
   }

@@ -600,8 +600,8 @@ function AnalyzeContent() {
             {/* ── الخلاصة ببساطة — للمبتدئ: 3 إجابات فقط ── */}
             {(() => {
               const entryPx = analysis.entry_balanced
-              const stopPx  = analysis.targets?.stop?.exit_price ?? null
-              const t1Px    = analysis.targets?.t1?.exit_price ?? null
+              const stopPx  = analysis.stop_spx ?? null
+              const t1Px    = analysis.target1_spx ?? null
               const ps = entryPx && stopPx ? computePositionSize(riskSettings, entryPx, stopPx) : null
               const canEnter = analysis.entry_allowed
               const decAr = analysis.decision === 'execute' ? 'نعم — الظروف مناسبة'
@@ -626,7 +626,7 @@ function AnalyzeContent() {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">هل أدخل؟</div>
+                      <div className="text-xs text-gray-500 mb-1">هل العقد ملائم؟</div>
                       <div className="text-base font-black" style={{ color: decClr }}>{decAr}</div>
                     </div>
                     <div>
@@ -640,7 +640,7 @@ function AnalyzeContent() {
                     <div>
                       <div className="text-xs text-gray-500 mb-1">متى أخرج؟</div>
                       <div className="text-base font-black font-mono text-white" dir="ltr">
-                        {canEnter && t1Px && stopPx ? `🎯 $${t1Px} · 🛑 $${stopPx}` : 'لا توجد خطة دخول'}
+                        {canEnter && t1Px && stopPx ? `هدف الأصل ${n(t1Px, 0)} · إلغاء ${n(stopPx, 0)}` : 'لا توجد خطة دخول'}
                       </div>
                     </div>
                   </div>
@@ -753,7 +753,7 @@ function AnalyzeContent() {
                     الرقم صار «جودة إعداد» جانبية، لا يُخلَط بأمر الشراء. */}
                 <div className="shrink-0 flex flex-col items-center justify-center rounded-2xl px-3 py-4"
                      style={{ width: 130, background: `${dec.color}12`, border: `1px solid ${dec.color}40` }}>
-                  <div className="text-[11px] mb-1" style={{ color: '#6E7E8F' }}>ادخل الآن؟</div>
+                  <div className="text-[11px] mb-1" style={{ color: '#6E7E8F' }}>ملاءمة العقد</div>
                   <div className="text-2xl font-black leading-none" style={{ color: dec.color }}>{entryAnswer}</div>
                   <div className="text-xs font-bold mt-1.5 text-center" style={{ color: dec.color }}>{dec.ar}</div>
                   <div className="text-[10px] font-mono mt-2.5 px-2 py-0.5 rounded-full"
@@ -815,13 +815,16 @@ function AnalyzeContent() {
               )}
             </div>
 
-            {/* ── شارت سعر العقد (البريميوم) — سعر العقد نفسه لحظياً ── */}
+            <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.22)', color: '#FCD34D' }}>
+              شارت العقد للمراقبة والتنفيذ فقط. القرار والأهداف والخروج تُبنى على حركة الأصل، لا على شكل شارت العقد.
+            </div>
+            {/* شارت العقد للمراقبة فقط، بلا أهداف سعرية مصطنعة */}
             <ContractChart
               symbol={analysis.symbol} type={analysis.type} mid={analysis.mid}
               entryPx={analysis.entry_balanced}
-              t1Px={analysis.targets?.t1?.exit_price ?? null}
-              t2Px={analysis.targets?.t2?.exit_price ?? null}
-              stopPx={analysis.targets?.stop?.exit_price ?? null}
+              t1Px={null}
+              t2Px={null}
+              stopPx={null}
             />
 
             {/* ── One executable plan. Hidden completely when entry is not allowed. ── */}
@@ -836,7 +839,7 @@ function AnalyzeContent() {
               ]
               return (
                 <Card>
-                  <SectionLabel>خطة واحدة واضحة — دخول، هدفان، ووقف خسارة</SectionLabel>
+                  <SectionLabel>خطة واحدة واضحة — العقد للتنفيذ والأهداف من الأصل</SectionLabel>
                   <div className="rounded-xl p-4 mb-4 flex flex-wrap items-center justify-between gap-3"
                        style={{ background: 'rgba(201,148,58,0.08)', border: '1px solid rgba(201,148,58,0.28)' }}>
                     <div>
@@ -862,46 +865,20 @@ function AnalyzeContent() {
                       </div>
                     )}
                     {rows.map(row => {
-                      const changePct = ((row.data.exit_price - entry) / entry) * 100
                       return (
                         <div key={row.label} className="rounded-xl px-4 py-3"
                              style={{ background: `${row.color}0D`, border: `1px solid ${row.color}33` }}>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-center">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
                             <div className="font-bold" style={{ color: row.color }}>{row.label}</div>
                             <div>
                               <div className="text-[11px]" style={{ color: '#6E7E8F' }}>مستوى المؤشر</div>
                               <div className="font-bold font-mono" style={{ color: row.color }}>{row.data.spx.toLocaleString()}</div>
                               {row.data.source && <div className="text-[10px] mt-0.5" style={{ color: row.data.fallback ? '#F59E0B' : '#94A3B8' }}>{row.data.source}</div>}
                             </div>
-                            <div>
-                              <div className="text-[11px]" style={{ color: '#6E7E8F' }}>سعر العقد التقديري</div>
-                              <div className="font-bold font-mono text-white">${n(row.data.exit_price)}</div>
-                            </div>
-                            <div>
-                              <div className="text-[11px]" style={{ color: '#6E7E8F' }}>لعقد واحد</div>
-                              <div className="font-bold font-mono" style={{ color: row.data.pnl >= 0 ? '#10B981' : '#EF4444' }}>
-                                {row.data.pnl >= 0 ? '+' : ''}${row.data.pnl.toLocaleString()} ({changePct >= 0 ? '+' : ''}{n(changePct, 0)}%)
-                              </div>
-                            </div>
                           </div>
                         </div>
                       )
                     })}
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-                    {[
-                      { label: 'العائد مقابل الخسارة، الهدف الأول', value: metrics ? `1 : ${n(metrics.reward_risk_t1, 2)}` : '—', color: '#4ADE80' },
-                      { label: 'العائد مقابل الخسارة، الهدف الثاني', value: metrics ? `1 : ${n(metrics.reward_risk_t2, 2)}` : '—', color: '#10B981' },
-                      { label: 'خسارة الوقف المخططة', value: metrics ? `$${metrics.planned_risk_per_contract}` : '—', color: '#EF4444' },
-                      { label: 'أقصى خسارة ممكنة', value: metrics ? `$${metrics.maximum_possible_loss_per_contract}` : '—', color: '#F87171' },
-                    ].map(item => (
-                      <div key={item.label} className="rounded-xl p-3 text-center"
-                           style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div className="text-[11px] min-h-8" style={{ color: '#6E7E8F' }}>{item.label}</div>
-                        <div className="font-bold font-mono mt-1" style={{ color: item.color }}>{item.value}</div>
-                      </div>
-                    ))}
                   </div>
 
                   <div className="space-y-2 mb-4">
@@ -912,8 +889,7 @@ function AnalyzeContent() {
 
                   <div className="rounded-xl px-4 py-3 text-xs leading-relaxed"
                        style={{ background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.16)', color: '#94A3B8' }}>
-                    بعد الهدف الأول: بِع نصف العقود وارفع الوقف إلى سعر الدخول. ألغِ الدخول إذا تحرك المؤشر عكس الاتجاه وتجاوز مستوى الوقف قبل تنفيذ الأمر.
-                    <span className="block mt-1" style={{ color: '#F59E0B' }}>{analysis.target_price_note_ar}</span>
+                    بعد الهدف الأول: خفف المركز، ثم تابع استمرار حركة الأصل. ألغِ السيناريو إذا تجاوز الأصل مستوى الإلغاء، ولا تنتظر سعراً محدداً للعقد.
                   </div>
                 </Card>
               )
@@ -921,8 +897,8 @@ function AnalyzeContent() {
               <Card>
                 <div className="rounded-xl px-4 py-4 text-center"
                      style={{ background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.18)' }}>
-                  <div className="font-bold mb-1" style={{ color: '#60A5FA' }}>لا توجد خطة شراء الآن</div>
-                  <div className="text-sm" style={{ color: '#94A3B8' }}>لن يعرض الموقع عدد عقود أو أمر دخول ما دام القرار مراقبة أو رفضًا.</div>
+                  <div className="font-bold mb-1" style={{ color: '#60A5FA' }}>العقد غير مناسب للتنفيذ الآن</div>
+                  <div className="text-sm" style={{ color: '#94A3B8' }}>اختيار العقد لا يصنع فرصة؛ يجب أن يسبقه سيناريو أصل مكتمل.</div>
                 </div>
               </Card>
             )}

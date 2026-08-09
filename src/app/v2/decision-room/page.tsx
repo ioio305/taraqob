@@ -42,6 +42,7 @@ type Contract = {
   grade?: string
   probItmPct?: number
   strategy?: ContractStrategy
+  execution?: { entryLow: number; entryHigh: number; hardProtectionPrice: number }
   focus?: {
     action: 'enter' | 'wait' | 'avoid'
     label: string
@@ -69,6 +70,8 @@ type Recommendation = {
   marketReaction?: { action?: string; label?: string; reason?: string }
   sessionQuality?: { action?: string; label?: string; reason?: string }
   contracts?: Contract[]
+  scenario?: { entry: number; target1: { value: number; source: string }; target2: { value: number; source: string }; invalidation: { value: number; source: string } } | null
+  opportunityWindow?: { label: string; validUntil: string; reason: string } | null
   timing?: { label?: string; advice?: string; color?: string }
   pricing?: { level?: string; advice?: string; color?: string }
 }
@@ -193,6 +196,8 @@ export default function SpxDecisionRoomPage() {
           } : undefined,
           direction: rec?.direction,
           contracts: rec?.contracts ?? [],
+          scenario: rec?.scenario ?? null,
+          opportunityWindow: rec?.opportunityWindow ?? null,
           timing: rec?.sessionQuality ? { label: rec.sessionQuality.label } : undefined,
         }
         setRecommendation(mapped)
@@ -284,6 +289,7 @@ export default function SpxDecisionRoomPage() {
   const spot = liveQuote?.price ?? recommendation?.market?.spx?.price
   const change = liveQuote?.changePct ?? recommendation?.market?.spx?.changePct
   const strategy = contract?.strategy
+  const scenario = recommendation?.scenario
   const gamma = pulse?.gamma ?? plan?.gamma
 
   return (
@@ -390,10 +396,11 @@ export default function SpxDecisionRoomPage() {
 
         <section className="grid gap-4 md:grid-cols-3">
           <Panel title="خطة الصفقة" Icon={Target} color="#E8C66A">
-            <Row label="الدخول" value={strategy ? `$${number(strategy.entry)}` : plan?.entryZone ?? '—'} />
-            <Row label="الهدف الأول" value={strategy ? `$${number(strategy.t1Price)}  (+$${number(strategy.t1Profit, 0)})` : number(plan?.targets?.t1, 0)} positive />
-            <Row label="الهدف الثاني" value={strategy ? `$${number(strategy.t2Price)}  (+$${number(strategy.t2Profit, 0)})` : number(plan?.targets?.t2, 0)} positive />
-            <Row label="الوقف" value={strategy ? `$${number(strategy.stopPrice)}` : number(plan?.stop, 0)} danger />
+            <Row label="دخول العقد" value={contract?.execution ? `$${number(contract.execution.entryLow)}–$${number(contract.execution.entryHigh)}` : strategy ? `$${number(strategy.entry)}` : '—'} />
+            <Row label="هدف الأصل الأول" value={number(scenario?.target1.value ?? plan?.targets?.t1, 0)} positive />
+            <Row label="هدف الأصل الثاني" value={number(scenario?.target2.value ?? plan?.targets?.t2, 0)} positive />
+            <Row label="إلغاء السيناريو" value={number(scenario?.invalidation.value ?? plan?.stop, 0)} danger />
+            <Row label="نافذة الفرصة" value={recommendation?.opportunityWindow?.label ?? '—'} />
           </Panel>
 
           <Panel title={`مستويات ${idx}`} Icon={BarChart3} color="#60A5FA">

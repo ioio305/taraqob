@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import StockChart, { type StockChartData } from '@/components/v2/StockChart'
 import { useLiveQuote } from '@/lib/v2/useLiveQuotes'
+import { UnderlyingTradeManager } from '@/components/v2/UnderlyingTradeManager'
 
 type NewsItem = { id: string; title: string; titleAr: string; source: string; publishedAt: string; url: string | null; sentiment: string | null; sentimentAr: string | null }
 
@@ -50,6 +51,8 @@ type Contract = {
   grade?: string; edges?: { ok: boolean; label: string }[]; probItmPct?: number
   wallNote?: string | null
   strategy: Strategy
+  execution?: { entryLow: number; entryHigh: number; hardProtectionPrice: number }
+  selection?: { fitScore: number; fitLabel: string; timeDecayBurdenPct: number }
   focus?: { primaryReason: string; nextStep: string; confidence: number }
   spread?: { maxLoss: number; maxProfit: number; breakeven: number; rr: number; noteAr: string } | null
 }
@@ -63,6 +66,8 @@ type Data = {
   expiration: string
   watchMode: boolean
   notCalibratedNote?: string
+  scenario?: { entry: number; target1: { value: number; source: string }; target2: { value: number; source: string }; invalidation: { value: number; source: string } } | null
+  opportunityWindow?: { label: string; validUntil: string; reason: string } | null
 }
 
 function n(v: number | null | undefined, d = 2) {
@@ -292,7 +297,7 @@ function AnalyzeInner() {
           ) : (
             <div className="space-y-3">
               <div className="text-xs font-bold" style={{ color: ACCENT }}>العقود الأفضل الآن (للمراقبة)</div>
-              {data.contracts.map((c, i) => <ContractCard key={c.symbol} c={c} primary={i === 0} />)}
+              {data.contracts.map((c, i) => <ContractCard key={c.symbol} c={c} primary={i === 0} symbol={data.symbol} scenario={data.scenario} opportunityWindow={data.opportunityWindow} />)}
             </div>
           )}
         </>
@@ -311,7 +316,7 @@ function Metric({ label, value, sub, subColor }: { label: string; value: string;
   )
 }
 
-function ContractCard({ c, primary }: { c: Contract; primary: boolean }) {
+function ContractCard({ c, primary, symbol, scenario, opportunityWindow }: { c: Contract; primary: boolean; symbol: string; scenario?: Data['scenario']; opportunityWindow?: Data['opportunityWindow'] }) {
   const isCall = c.type === 'call'
   const sm = statusMeta(c.status)
   const strat = c.strategy
@@ -355,25 +360,43 @@ function ContractCard({ c, primary }: { c: Contract; primary: boolean }) {
           </div>
         )}
 
-        {/* الخطة: دخول · هدف · وقف */}
-        {strat && (
-          <div className="grid grid-cols-3 gap-2">
+        {/* العقد للتنفيذ، والأهداف من حركة الأصل */}
+        {scenario && (
+          <>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
             <div className="rounded-xl p-3 text-center" style={{ background: `${ACCENT}12`, border: `1px solid ${ACCENT}30` }}>
-              <div className="text-xs font-bold mb-1" style={{ color: ACCENT }}>ادخل عند</div>
-              <div className="text-lg font-black font-mono" style={{ color: '#BFDBFE' }}>${n(strat.entryBalanced)}</div>
-              <div className="text-xs font-mono mt-0.5" style={{ color: '#3B6CA8' }}>${strat.entryBalancedTotal} للعقد</div>
+              <div className="text-xs font-bold mb-1" style={{ color: ACCENT }}>نطاق دخول العقد</div>
+              <div className="text-lg font-black font-mono" style={{ color: '#BFDBFE' }}>${n(c.execution?.entryLow ?? c.bid)}–${n(c.execution?.entryHigh ?? c.ask)}</div>
             </div>
             <div className="rounded-xl p-3 text-center" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)' }}>
-              <div className="text-xs font-bold mb-1" style={{ color: '#10B981' }}>الهدف الأول</div>
-              <div className="text-lg font-black font-mono" style={{ color: '#26D07C' }}>${n(strat.t1Price)}</div>
-              <div className="text-xs font-mono mt-0.5" style={{ color: '#10B981' }}>+${strat.t1Profit}</div>
+              <div className="text-xs font-bold mb-1" style={{ color: '#10B981' }}>هدف السهم الأول</div>
+              <div className="text-lg font-black font-mono" style={{ color: '#26D07C' }}>${n(scenario.target1.value)}</div>
+            </div>
+            <div className="rounded-xl p-3 text-center" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)' }}>
+              <div className="text-xs font-bold mb-1" style={{ color: '#10B981' }}>هدف السهم الثاني</div>
+              <div className="text-lg font-black font-mono" style={{ color: '#26D07C' }}>${n(scenario.target2.value)}</div>
             </div>
             <div className="rounded-xl p-3 text-center" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
-              <div className="text-xs font-bold mb-1" style={{ color: '#EF4444' }}>أوقف عند</div>
-              <div className="text-lg font-black font-mono" style={{ color: '#F87171' }}>${n(strat.stopPrice)}</div>
-              <div className="text-xs font-mono mt-0.5" style={{ color: '#EF4444' }}>${strat.stopLoss}</div>
+              <div className="text-xs font-bold mb-1" style={{ color: '#EF4444' }}>إلغاء السيناريو</div>
+              <div className="text-lg font-black font-mono" style={{ color: '#F87171' }}>${n(scenario.invalidation.value)}</div>
             </div>
           </div>
+          <div className="rounded-xl border border-amber-300/20 bg-amber-300/[.06] px-4 py-3 text-xs text-amber-100">
+            نافذة الفرصة: <b>{opportunityWindow?.label ?? 'تحت التقدير'}</b> — لا يوجد هدف ثابت لسعر العقد؛ الخروج من اكتمال حركة السهم أو تغيرها.
+          </div>
+          </>
+        )}
+
+        {scenario && (
+          <UnderlyingTradeManager
+            platform="stocks"
+            symbol={symbol}
+            direction={c.type === 'call' ? 'bullish' : 'bearish'}
+            plan={{ entry: scenario.entry, target1: scenario.target1.value, target2: scenario.target2.value, invalidation: scenario.invalidation.value }}
+            contractSymbol={c.symbol}
+            hardContractStop={c.execution?.hardProtectionPrice}
+            validUntil={opportunityWindow?.validUntil}
+          />
         )}
 
         {/* خطة محدودة الخسارة (سبريد) */}

@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
 
   const { data } = await sb
     .from('v2_signals')
-    .select('created_at, summary_ar, contract_symbol, contract_type, strike, status, entry_price, target_level, stop_loss_level, spx_at_signal')
+    .select('*')
     .gte('created_at', nyToday + 'T00:00:00')
     .order('total_score', { ascending: false })
     .limit(20)
@@ -85,8 +85,9 @@ export async function GET(req: NextRequest) {
       lines.push(`${i + 1}. ${gIcon} <b>${ltr(s.grade)}</b> ${tIcon} <b>${typeAr} ${ltr(String(s.strike))}</b> — ${st}`)
       const details: string[] = []
       if (s.entry_price != null)    details.push(`الدخول ${ltr('$' + s.entry_price)}`)
-      if (s.target_level != null)   details.push(`الهدف ${Math.round(s.target_level)}`)
-      if (s.stop_loss_level != null) details.push(`الوقف ${Math.round(s.stop_loss_level)}`)
+      if (s.target_level != null) details.push(`هدف الأصل الأول ${Math.round(s.target_level)}`)
+      if (s.target2_level != null) details.push(`هدف الأصل الثاني ${Math.round(s.target2_level)}`)
+      if (s.stop_loss_level != null) details.push(`إلغاء السيناريو ${Math.round(s.stop_loss_level)}`)
       if (details.length) lines.push(`   ${details.join(' · ')} ${ltr('(' + underlying + ')')}`)
     })
     lines.push('')

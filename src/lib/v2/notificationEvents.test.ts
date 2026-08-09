@@ -13,13 +13,18 @@ describe('notification events', () => {
       grade: 'A+',
       mid: 5.35,
       strategy: { entryBalanced: 5.36, t1Price: 8.01, t2Price: 10.68, stopPrice: 3.47 },
+      scenario: {
+        target1: { value: 7545 }, target2: { value: 7560 }, invalidation: { value: 7522 },
+      },
+      opportunityWindow: { label: '30 إلى 90 دقيقة' },
     }, fixedTime)
 
     expect(notice.title).toContain('كول 7535')
     expect(notice.body).toContain('الدخول $5.36')
-    expect(notice.body).toContain('الهدف الأول $8.01')
-    expect(notice.body).toContain('الهدف الثاني $10.68')
-    expect(notice.body).toContain('الوقف $3.47')
+    expect(notice.body).toContain('هدف الأصل الأول 7,545')
+    expect(notice.body).toContain('هدف الأصل الثاني 7,560')
+    expect(notice.body).toContain('إلغاء السيناريو 7,522')
+    expect(notice.body).toContain('30 إلى 90 دقيقة')
     expect(notice.body).toContain('بتوقيت الرياض')
     expect(notice.url).toContain('SPXW260722C07535000')
   })

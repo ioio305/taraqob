@@ -29,6 +29,7 @@ export type TradeManagementStatus =
   | 'target-two'
   | 'weakening'
   | 'reduce'
+  | 'reassess'
   | 'exit'
   | 'unavailable'
 
@@ -48,6 +49,8 @@ export type TradeManagementResult = {
   reversalNear: boolean
   reversalLevel: number | null
   scenarioValid: boolean
+  timeExpired: boolean
+  remainingMinutes: number | null
   atr: number
   reasons: string[]
   readings: { label: string; state: 'good' | 'warning' | 'danger' | 'neutral'; detail: string }[]
@@ -59,6 +62,7 @@ export type TradeManagementInput = {
   direction: UnderlyingDirection
   plan: UnderlyingTradePlan
   startedAt?: string | null
+  validUntil?: string | null
   liquidity?: LiquidityLevels | null
 }
 
@@ -167,6 +171,8 @@ function unavailable(currentPrice: number, reason: string): TradeManagementResul
     reversalNear: false,
     reversalLevel: null,
     scenarioValid: false,
+    timeExpired: false,
+    remainingMinutes: null,
     atr: 0,
     reasons: [reason],
     readings: [],
@@ -222,6 +228,11 @@ export function manageUnderlyingTrade(input: TradeManagementInput): TradeManagem
   const targetOneHit = favorable(input.direction, bestTrackedPrice, input.plan.target1)
   const targetTwoHit = favorable(input.direction, bestTrackedPrice, input.plan.target2)
   const scenarioValid = !invalidated(input.direction, worstTrackedPrice, input.plan.invalidation)
+  const validUntilMs = input.validUntil ? Date.parse(input.validUntil) : Number.NaN
+  const remainingMinutes = Number.isFinite(validUntilMs)
+    ? Math.max(0, Math.ceil((validUntilMs - Date.now()) / 60_000))
+    : null
+  const timeExpired = remainingMinutes === 0
   const nextTarget = targetTwoHit ? null : targetOneHit ? input.plan.target2 : input.plan.target1
   const nextTargetNear = nextTarget != null
     && Math.max(0, distance(input.direction, price, nextTarget)) <= currentAtr * 0.8
@@ -263,6 +274,12 @@ export function manageUnderlyingTrade(input: TradeManagementInput): TradeManagem
     action = 'يفضل جمع الربح المتبقي؛ الخطة اكتملت.'
     tone = 'positive'
     reasons.unshift('الأصل وصل إلى الهدف النهائي')
+  } else if (timeExpired) {
+    status = 'reassess'
+    title = 'انتهت النافذة الزمنية للفرصة'
+    action = 'لا تستمر تلقائيًا؛ أعد تقييم الاتجاه والحركة واختر عقدًا جديدًا إذا بقيت الفرصة صالحة.'
+    tone = 'caution'
+    reasons.unshift('الزمن المتوقع للحركة انتهى قبل اكتمالها')
   } else if (strongExitSignal) {
     status = 'exit'
     title = 'بدأ ضعف حاسم في الاتجاه'
@@ -311,6 +328,8 @@ export function manageUnderlyingTrade(input: TradeManagementInput): TradeManagem
     reversalNear,
     reversalLevel,
     scenarioValid,
+    timeExpired,
+    remainingMinutes,
     atr: currentAtr,
     reasons,
     readings: [
@@ -333,6 +352,11 @@ export function manageUnderlyingTrade(input: TradeManagementInput): TradeManagem
         label: 'صلاحية السيناريو',
         state: scenarioValid ? 'good' : 'danger',
         detail: scenarioValid ? 'ما زال صالحًا' : 'انتهت الصلاحية',
+      },
+      {
+        label: 'الوقت المتبقي',
+        state: timeExpired ? 'danger' : remainingMinutes != null && remainingMinutes <= 15 ? 'warning' : 'good',
+        detail: remainingMinutes == null ? 'غير محدد' : timeExpired ? 'انتهى — أعد التقييم' : `${remainingMinutes} دقيقة`,
       },
     ],
   }

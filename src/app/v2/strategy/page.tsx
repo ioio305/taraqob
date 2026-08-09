@@ -249,9 +249,6 @@ export default function StrategyPage() {
                     {[
                       { label: 'الدعم (EM السفلي)', value: data.em_lower, color: 'text-red-400' },
                       { label: 'المقاومة (EM العلوي)', value: data.em_upper, color: 'text-emerald-400' },
-                      { label: 'الهدف الأول (قسط ×60%)', value: `$${st.target1.toFixed(2)}`, color: 'text-emerald-300' },
-                      { label: 'الهدف الثاني (قسط كامل)', value: `$${st.target2.toFixed(2)}`, color: 'text-emerald-400' },
-                      { label: 'وقف الخسارة', value: `$${st.stop_loss.toFixed(2)}`, color: 'text-red-400' },
                       ...(st.breakeven1 ? [{ label: 'نقطة التعادل', value: st.breakeven1.toFixed(2), color: 'text-blue-300' }] : []),
                       ...(st.breakeven2 ? [{ label: 'نقطة التعادل ٢', value: st.breakeven2.toFixed(2), color: 'text-blue-300' }] : []),
                     ].map(r => (
@@ -262,7 +259,7 @@ export default function StrategyPage() {
                     ))}
                   </div>
                   <div className="mt-3 p-3 bg-yellow-900/20 border border-yellow-800/40 rounded-xl text-xs text-yellow-300">
-                    <span className="font-bold">شرط الإلغاء: </span>{st.cancel_condition}
+                    العقد أداة لتنفيذ حركة الأصل. لا تُستخدم أهداف ثابتة لسعر العقد؛ القرار والخروج من مستويات الأصل وتغير السيناريو.
                   </div>
                 </div>
 

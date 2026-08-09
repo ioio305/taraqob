@@ -22,6 +22,8 @@ import type { GammaExposure } from './gammaExposure'
 import type { NewsRiskDecision } from './newsRisk'
 import type { MarketReactionDecision } from './marketReaction'
 import type { SessionQuality } from './sessionQuality'
+import type { OpportunityWindow, UnderlyingScenario } from './opportunityModel'
+import type { ContractScenarioFit } from './scenarioContractSelector'
 
 // فئة الترشيح: محافظ / متوسط (الافتراضي) / مغامر — تغيّر الترتيب فقط، لا تمنع شيئاً
 export type RecMode = 'safe' | 'balanced' | 'bold'
@@ -315,6 +317,8 @@ export interface EnrichContext {
   newsRisk: NewsRiskDecision | null
   marketReaction: MarketReactionDecision | null
   session: SessionQuality | null
+  scenario?: UnderlyingScenario | null
+  opportunityWindow?: OpportunityWindow | null
 }
 
 const CLOSED_WATCH_TEXT = 'السوق مغلق الآن — هذه عقود جاهزة سنقيّمها فور فتح السوق'
@@ -331,6 +335,7 @@ export function enrichContracts(top3: ScoredContract[], ctx: EnrichContext): any
 
   return top3.map(o => {
     const score = o._score ?? 0
+    const selection = (o as ScoredContract & { selection?: ContractScenarioFit }).selection
     const absDeltaEarly = Math.abs(o.delta ?? 0)
     const midEarly = o.mid ?? 0
     const spreadFrac = midEarly > 0 ? ((o.ask ?? 0) - (o.bid ?? 0)) / midEarly : 1
@@ -359,6 +364,10 @@ export function enrichContracts(top3: ScoredContract[], ctx: EnrichContext): any
       status = 'watch'
       capReason = `الفرق بين سعر الشراء والبيع كبير (${(spreadFrac * 100).toFixed(0)}%) — التكلفة تأكل ربحك`
     }
+    if (selection && selection.fitLabel !== 'ممتاز' && status === 'execute') {
+      status = 'watch'
+      capReason = 'العقد جيد، لكنه لم يصل إلى الملاءمة الكاملة للحركة والزمن — راقب ولا تدخل.'
+    }
 
     const strat = computeStrategy({
       score,
@@ -379,11 +388,16 @@ export function enrichContracts(top3: ScoredContract[], ctx: EnrichContext): any
 
     // ── معيار واعٍ بالتكلفة: لا «نفّذ» إلا إذا بقيت الحافة موجبة بعد فرق السوق ──
     const absDelta = Math.abs(o.delta ?? 0)
-    const rr = strat.stopLoss !== 0 ? Math.abs(strat.t1Profit / strat.stopLoss) : 0
+    const scenarioRisk = ctx.scenario
+      ? Math.abs(ctx.scenario.entry - ctx.scenario.invalidation.value)
+      : 0
+    const rr = ctx.scenario && scenarioRisk > 0
+      ? ctx.scenario.movementMin / scenarioRisk
+      : strat.stopLoss !== 0 ? Math.abs(strat.t1Profit / strat.stopLoss) : 0
     const spreadCostC = Math.round(Math.max(0, (o.ask ?? 0) - (o.bid ?? 0)) * 100)
     const netRR = (Math.abs(strat.stopLoss) + spreadCostC) > 0
       ? (Math.abs(strat.t1Profit) - spreadCostC) / (Math.abs(strat.stopLoss) + spreadCostC) : 0
-    if (status === 'execute' && netRR < minNetRR) {
+    if (!selection && status === 'execute' && netRR < minNetRR) {
       status = 'watch'
       capReason = `بعد حساب تكلفة الفرق بين الشراء والبيع، الربح المتوقع لا يكفي مقابل الخطر — راقب ولا تشترِ`
     }
@@ -405,7 +419,7 @@ export function enrichContracts(top3: ScoredContract[], ctx: EnrichContext): any
       { ok: score >= executeScore,                               label: 'درجة الفرصة عالية' },
       { ok: !blocked,                                            label: 'لا أخبار خطرة' },
       { ok: rr >= 1.5,                                           label: 'الربح المتوقع أكبر من الخطر' },
-      { ok: volCalmForEdge,                                      label: 'تذبذب السوق معقول' },
+      { ok: selection ? selection.timeDecayBurdenPct <= 12 : volCalmForEdge, label: 'الوقت لا يستهلك أفضلية العقد' },
       { ok: gammaAlign,                                          label: 'قوى السوق تدعم الاتجاه' },
     ]
     const edgeCount = edges.filter(e => e.ok).length
@@ -425,6 +439,8 @@ export function enrichContracts(top3: ScoredContract[], ctx: EnrichContext): any
       ? blockedReason
       : volExtreme
       ? volExtremeReason
+      : selection
+      ? `هذا العقد هو الأنسب لحركة الأصل ونافذتها الزمنية — ملاءمة ${selection.fitScore} من 100.`
       : strat.strategyReason
 
     const { _score, ...rest } = o
@@ -454,6 +470,14 @@ export function enrichContracts(top3: ScoredContract[], ctx: EnrichContext): any
         wallNote = `الهدف خلف حاجز دعم قوي عند ${Math.round(gammaEx.putWall)} — الوصول إليه صعب`
     }
 
-    return { ...rest, score, status, reason, strategy: strat, focus, grade, edgeCount, edges, probItmPct, spread, wallNote }
+    const execution = {
+      entryLow: Math.round((o.bid + Math.max(0, o.ask - o.bid) * 0.25) * 100) / 100,
+      entryHigh: Math.round((o.bid + Math.max(0, o.ask - o.bid) * 0.7) * 100) / 100,
+      hardProtectionPrice: strat.stopPrice,
+      exitBasis: 'underlying' as const,
+      hasContractPriceTarget: false as const,
+    }
+
+    return { ...rest, score, status, reason, strategy: strat, execution, focus, grade, edgeCount, edges, probItmPct, spread, wallNote }
   })
 }

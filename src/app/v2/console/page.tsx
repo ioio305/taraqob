@@ -312,9 +312,6 @@ export default function ConsolePage() {
       const s = frozenPlan.snap.strategy
       try {
         candleS.current.createPriceLine({ price: s.entryConservative, color: '#60a5fa', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'دخول' })
-        candleS.current.createPriceLine({ price: s.t1Price,  color: '#22c55e', lineWidth: 1, lineStyle: LineStyle.Dashed,       axisLabelVisible: true, title: 'هدف١' })
-        candleS.current.createPriceLine({ price: s.t2Price,  color: '#a3e635', lineWidth: 1, lineStyle: LineStyle.SparseDotted, axisLabelVisible: true, title: 'هدف٢' })
-        candleS.current.createPriceLine({ price: s.stopPrice,color: '#ef4444', lineWidth: 1, lineStyle: LineStyle.Dashed,       axisLabelVisible: true, title: 'وقف'  })
       } catch { /* lines already drawn */ }
     }
 
@@ -581,8 +578,11 @@ export default function ConsolePage() {
                   ))}
                 </div>
 
-                {/* Levels table */}
-                <div className="rounded-xl overflow-hidden border border-[#1e3a50]">
+                <div className="rounded-xl border border-amber-400/25 bg-amber-400/[.06] p-3 text-xs text-amber-200">
+                  شارت العقد للتنفيذ والمراقبة فقط. الأهداف والإلغاء تُؤخذ من حركة الأصل في لوحة القرار.
+                </div>
+                {/* القيم القديمة مخفية حفاظاً على السجلات السابقة فقط */}
+                <div className="hidden rounded-xl overflow-hidden border border-[#1e3a50]">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-[#1e3a50] text-gray-500 bg-[#060D14]">

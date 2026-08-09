@@ -2,6 +2,8 @@ export type CorrelatedCandidate = {
   index: string
   contract: any
   marketPrice: number | null
+  scenario?: any
+  opportunityWindow?: any
 }
 
 function spreadPct(c: any): number {

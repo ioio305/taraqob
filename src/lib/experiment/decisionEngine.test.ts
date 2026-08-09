@@ -40,6 +40,12 @@ function contract(overrides: Partial<ExperimentalContract> = {}): ExperimentalCo
     grade: 'A+',
     edgeCount: 7,
     strategy: { entry: 9.94, entryBalanced: 10.04, stopPrice: 7, stopLoss: -294, t1Profit: 600 },
+    execution: { entryLow: 9.9, entryHigh: 10.2, hardProtectionPrice: 7, exitBasis: 'underlying', hasContractPriceTarget: false },
+    selection: {
+      fitScore: 93, fitLabel: 'ممتاز', timeFit: 'مطابق', strikeFit: 'مطابق', sensitivityFit: 'قوية',
+      volatilityFit: 'متوازن', timeDecayBurdenPct: 6, remainingTradingMinutes: 300,
+      expectedMovePoints: 35, reasons: [], warnings: [],
+    },
     ...overrides,
   }
 }
@@ -63,6 +69,18 @@ function recommendation(contracts = [contract()]): CurrentRecommendation {
     marketReaction: { action: 'confirm', reason: 'مؤكد' },
     sessionQuality: { action: 'allow', phase: 'morning', reason: 'وقت صالح', minutesToClose: 300 },
     watchMode: false,
+    scenario: {
+      direction: 'call', entry: 6000, expectedMovePoints: 50, movementMin: 15, movementMax: 35,
+      target1: { value: 6015, source: 'مركز توازن العقود', fallback: false },
+      target2: { value: 6035, source: 'جدار السيولة العلوي', fallback: false },
+      invalidation: { value: 5990, source: 'نقطة تحول السيولة', fallback: false },
+      reversalZone: { value: 6035, source: 'جدار السيولة العلوي', fallback: false },
+    },
+    opportunityWindow: {
+      kind: 'thirty-ninety', label: '30 إلى 90 دقيقة', minMinutes: 30, maxMinutes: 90,
+      expectedMinutes: 55, validForMinutes: 90, validUntil: '2026-08-04T16:30:00.000Z',
+      minimumDte: 0, recommendedDte: 0, confidence: 'مرتفعة', reason: 'مقدرة من سرعة الأصل',
+    },
     contracts,
   }
 }

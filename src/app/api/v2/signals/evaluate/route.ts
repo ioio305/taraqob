@@ -24,9 +24,18 @@ export async function GET(request: NextRequest) {
   }
 
   const sb = createServiceClient()
+  const updateSignal = async (id: string, values: Record<string, unknown>) => {
+    let result = await sb.from('v2_signals').update(values).eq('id', id)
+    if (result.error && /scenario_stage/i.test(result.error.message)) {
+      const compatibleValues = { ...values }
+      delete compatibleValues.scenario_stage
+      result = await sb.from('v2_signals').update(compatibleValues).eq('id', id)
+    }
+    return result
+  }
   const { data: signals } = await sb
     .from('v2_signals')
-    .select('id, contract_symbol, contract_type, target_level, stop_loss_level, spx_at_signal, expiry, created_at, status')
+    .select('*')
     .eq('status', 'active')
     .limit(200)
 
@@ -55,7 +64,7 @@ export async function GET(request: NextRequest) {
   }))
 
   const todayStr = new Date().toISOString().slice(0, 10)
-  let win = 0, loss = 0, expired = 0
+  let win = 0, loss = 0, expired = 0, advanced = 0
 
   for (const s of signals as any[]) {
     if (s.target_level == null || s.stop_loss_level == null) continue
@@ -66,40 +75,54 @@ export async function GET(request: NextRequest) {
     // نافذة حياة الإشارة فقط: من الإنشاء حتى نهاية يوم الانتهاء (0DTE = يوم واحد)
     const expiryDate = s.expiry ? String(s.expiry).slice(0, 10) : fromDate
     const isCall = s.contract_type === 'call'
-    const target = s.target_level as number, stop = s.stop_loss_level as number
+    const target = Number(s.target_level), target2 = Number(s.target2_level ?? s.target_level), stop = Number(s.stop_loss_level)
+    const validUntil = s.valid_until ? new Date(s.valid_until).toISOString() : `${expiryDate}T21:00:00.000Z`
+    let stage: 'active' | 'target_one' = s.scenario_stage === 'target_one' ? 'target_one' : 'active'
 
-    // أول لمس ضمن النافذة يفوز (لا انحياز «الوقف أولاً»)
-    const firstTouch = (bars: { time: string; high: number; low: number }[], intradaySeq: boolean) => {
-      for (const b of bars) {
+    // نتتبع السيناريو بالترتيب الزمني. عند غموض شمعة واحدة نأخذ النتيجة المحافظة.
+    const followScenario = (priceBars: { time: string; high: number; low: number }[], intradaySeq: boolean) => {
+      for (const b of priceBars) {
         const d = b.time.slice(0, 10)
         if (d < fromDate || d > expiryDate) continue
         if (intradaySeq && b.time < createdIso) continue   // بعد لحظة الإشارة فقط
-        const hitTarget = isCall ? b.high >= target : b.low <= target
-        const hitStop   = isCall ? b.low  <= stop   : b.high >= stop
-        // بلوغ الهدف = نجاح. توصية المنصة تقول «بِع عند الهدف»، فمتى لمس السعر
-        // الهدف الأول فقد أتيحت للمستخدم فرصة البيع بربح — يُسجَّل ناجحاً ولو
-        // انعكس بعدها. التسلسل الحقيقي (أيّهما أولاً) يُحسم بالشموع الداخلية 5د؛
-        // وعند غموض الشمعة الواحدة (لمست الحدّين معاً) نرجّح الهدف لا الوقف.
-        if (hitTarget) return 'closed_win' as const
-        if (hitStop)   return 'closed_loss' as const
+        if (b.time > validUntil) break
+        const hitFirst = isCall ? b.high >= target : b.low <= target
+        const hitSecond = isCall ? b.high >= target2 : b.low <= target2
+        const hitStop = isCall ? b.low <= stop : b.high >= stop
+        if (hitStop && (stage === 'active' || !hitSecond)) return stage === 'target_one' ? 'protected_after_target' as const : 'invalidated' as const
+        if (hitSecond) return 'completed' as const
+        if (hitFirst) stage = 'target_one'
       }
       return null
     }
 
-    // نفضّل الداخلي (5د)؛ فإن لم يغطِّ النافذة (إشارة أقدم من مدى الداخلي) نسقط لليومي
-    let outcome: 'closed_win' | 'closed_loss' | 'expired' | null =
-      firstTouch(intraday, true) ?? firstTouch(daily, false)
+    let event = followScenario(intraday, true)
+    if (!event && (intraday.length === 0 || intraday[0].time > createdIso)) event = followScenario(daily, false)
+    const timeExpired = Date.now() > Date.parse(validUntil) || todayStr > expiryDate
 
-    // مضى الانتهاء دون لمس أيّهما
-    if (!outcome && todayStr > expiryDate) outcome = 'expired'
-
-    if (outcome) {
-      await sb.from('v2_signals').update({ status: outcome }).eq('id', s.id)
-      if (outcome === 'closed_win') win++
-      else if (outcome === 'closed_loss') loss++
-      else expired++
+    if (event === 'completed') {
+      await updateSignal(s.id, { status: 'closed_win', scenario_stage: 'completed', outcome_reason: 'اكتملت حركة الأصل حتى الهدف الثاني', outcome_at: new Date().toISOString() })
+      win++
+    } else if (event === 'invalidated') {
+      await updateSignal(s.id, { status: 'closed_loss', scenario_stage: 'invalidated', outcome_reason: 'فقد سيناريو الأصل صلاحيته قبل الهدف الأول', outcome_at: new Date().toISOString() })
+      loss++
+    } else if (event === 'protected_after_target') {
+      await updateSignal(s.id, { status: 'closed_win', scenario_stage: 'completed', outcome_reason: 'تحقق الهدف الأول ثم انتهى السيناريو', outcome_at: new Date().toISOString() })
+      win++
+    } else if (timeExpired) {
+      const reachedFirst = stage === 'target_one'
+      await updateSignal(s.id, {
+        status: reachedFirst ? 'closed_win' : 'expired',
+        scenario_stage: 'expired',
+        outcome_reason: reachedFirst ? 'تحقق الهدف الأول وانتهت نافذة الفرصة' : 'انتهت نافذة الفرصة قبل اكتمال الحركة',
+        outcome_at: new Date().toISOString(),
+      })
+      if (reachedFirst) win++; else expired++
+    } else if (stage === 'target_one' && s.scenario_stage !== 'target_one') {
+      await updateSignal(s.id, { scenario_stage: 'target_one', outcome_reason: 'تحقق الهدف الأول؛ متابعة الهدف الثاني' })
+      advanced++
     }
   }
 
-  return NextResponse.json({ ok: true, evaluated: win + loss + expired, win, loss, expired })
+  return NextResponse.json({ ok: true, evaluated: win + loss + expired + advanced, win, loss, expired, advanced })
 }

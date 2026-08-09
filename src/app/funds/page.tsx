@@ -11,6 +11,8 @@ type Plan = {
   entryLow: number; entryHigh: number
   stop: number; t1: number; t2: number
   horizonAr: string
+  minSessions: number; maxSessions: number
+  target1Source: string; target2Source: string; stopSource: string; fallbackTargets: boolean
   riskLevel: 'منخفض' | 'متوسط' | 'مرتفع'
   reasonAr: string
   cancelAr: string
@@ -24,7 +26,7 @@ type Verdict = {
   plan: Plan | null
   vetoes: string[]
 }
-type Card = { symbol: string; nameAr: string; price: number; changePct: number | null; verdict: Verdict }
+type Card = { symbol: string; nameAr: string; price: number; changePct: number | null; verdict: Verdict; validUntil: string | null }
 type Data = {
   success: boolean; error?: string
   asOfNy?: string; asOfRiyadh?: string
@@ -107,6 +109,10 @@ function OpportunityCard({ c, onAdd }: { c: Card; onAdd: (c: Card) => void }) {
       </div>
 
       <div className="mt-3 space-y-2 text-xs leading-6">
+        <div className="rounded-lg px-3 py-2" style={{ background: 'rgba(96,165,250,.06)' }}>
+          <span className="font-bold text-blue-300">مصدر المستويات: </span>
+          <span className="text-slate-300">الأول: {p.target1Source} · الثاني: {p.target2Source} · الإلغاء: {p.stopSource}</span>
+        </div>
         <div className="rounded-lg px-3 py-2" style={{ background: 'rgba(38,208,124,.06)' }}>
           <span className="font-bold text-emerald-300">سبب التوصية: </span>
           <span className="text-slate-300">{p.reasonAr}</span>
@@ -129,6 +135,7 @@ function OpportunityCard({ c, onAdd }: { c: Card; onAdd: (c: Card) => void }) {
             target2: p.t2,
             invalidation: p.stop,
           }}
+          validUntil={c.validUntil ?? undefined}
           accent={tm.color}
         />
       </div>
@@ -168,6 +175,7 @@ function HeroCard({ c, onAdd }: { c: Card; onAdd: (c: Card) => void }) {
             </div>
           </div>
           <div className="mt-3 text-xs leading-6 text-slate-300">{p.reasonAr} · {p.horizonAr}</div>
+          <div className="text-[11px] text-slate-500">الأهداف: {p.target1Source} ثم {p.target2Source} · الإلغاء: {p.stopSource}</div>
           <div className="text-[11px] text-slate-500">شرط الإلغاء: {p.cancelAr}</div>
           <button onClick={() => onAdd(c)}
             className="mt-3 rounded-xl px-5 py-2 text-sm font-black text-emerald-950"
@@ -189,6 +197,7 @@ function HeroCard({ c, onAdd }: { c: Card; onAdd: (c: Card) => void }) {
             target2: p.t2,
             invalidation: p.stop,
           }}
+          validUntil={c.validUntil ?? undefined}
           accent={tm.color}
           defaultOpen
         />

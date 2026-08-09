@@ -35,7 +35,10 @@ type Result = {
   contract: {
     symbol: string; type: 'call' | 'put'; strike: number
     bid: number; ask: number; mid: number
-    delta: number | null; gamma: number | null; ivPct: number
+    delta: number | null; gamma: number | null; iv: number | null
+    score: number
+    execution?: { entryLow: number; entryHigh: number; hardProtectionPrice: number }
+    selection?: { fitScore: number; fitLabel: string; timeDecayBurdenPct: number }
   }
   strategy?: {
     strategyLabel: string; strategyReason: string; postT1Action: string
@@ -49,6 +52,8 @@ type Result = {
     targetPrice: number; stopPrice: number
     notesAr: string[]
   } | null
+  scenario: { entry: number; target1: { value: number; source: string }; target2: { value: number; source: string }; invalidation: { value: number; source: string } }
+  opportunityWindow: { label: string; validUntil: string; reason: string }
 }
 
 export default function IndexAnalyzePage() {
@@ -101,7 +106,7 @@ function Inner() {
     }
     window.addEventListener('taraqob:index', onCustom)
     return () => window.removeEventListener('taraqob:index', onCustom)
-  }, [])
+  }, [params])
 
   const analyze = useCallback(async (symbol: IndexId) => {
     if (symbol === 'SPX') return
@@ -139,40 +144,16 @@ function Inner() {
       {/* ── مدخلات التحليل ── */}
       <section className="rounded-3xl p-5 space-y-3"
                style={{ background: 'linear-gradient(145deg,#101720,#0C1219)', border: '1px solid rgba(201,148,58,0.18)' }}>
-        <div className="text-sm font-black text-white">تحليل عقد — {meta.name} ({idx})</div>
+        <div className="text-sm font-black text-white">تحليل الأصل واختيار العقد — {meta.name} ({idx})</div>
         <div className="flex gap-2 flex-wrap items-center">
-          <input value={strike} onChange={e => setStrike(e.target.value.replace(/[^\d.]/g, ''))}
-                 onKeyDown={e => { if (e.key === 'Enter') void analyze(idx) }}
-                 inputMode="numeric" dir="ltr" placeholder="السترايك (اتركه فارغاً = الأقرب للسعر)"
-                 className="flex-1 min-w-44 rounded-xl px-3 py-2.5 text-sm font-mono text-white outline-none"
-                 style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.1)' }} />
-          <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
-            {([{ v: 'auto' as const, label: 'تلقائي' }, { v: 'call' as const, label: '▲ كول' }, { v: 'put' as const, label: '▼ بوت' }]).map(x => (
-              <button key={x.v} onClick={() => setCtype(x.v)}
-                      className="text-xs px-3 py-2.5 font-bold"
-                      style={{
-                        background: ctype === x.v ? (x.v === 'put' ? 'rgba(239,68,68,0.2)' : x.v === 'call' ? 'rgba(16,185,129,0.2)' : 'rgba(201,148,58,0.2)') : 'transparent',
-                        color: ctype === x.v ? '#fff' : '#64748B',
-                      }}>{x.label}</button>
-            ))}
+          <div className="flex-1 rounded-xl px-3 py-2.5 text-xs leading-6" style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8' }}>
+            النظام يحدد الاتجاه والحركة والزمن أولاً، ثم يختار سعر التنفيذ وتاريخ الانتهاء تلقائياً.
           </div>
           <button onClick={() => void analyze(idx)} disabled={loading}
                   className="rounded-xl px-4 py-2.5 flex items-center gap-2 text-xs font-black disabled:opacity-40"
                   style={{ background: GOLD, color: '#060D14' }}>
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> حلّل
           </button>
-        </div>
-        <div className="flex flex-wrap gap-1.5 items-center">
-          <span className="text-[11px] font-bold" style={{ color: '#7C8A99' }}>المدة:</span>
-          {DTE_OPTIONS.map(o => (
-            <button key={String(o.value)} onClick={() => setDte(o.value)}
-                    className="text-xs font-bold px-2.5 py-1 rounded-lg"
-                    style={{
-                      background: dte === o.value ? 'rgba(201,148,58,0.15)' : 'rgba(255,255,255,0.03)',
-                      border: `1px solid ${dte === o.value ? 'rgba(201,148,58,0.45)' : 'rgba(255,255,255,0.07)'}`,
-                      color: dte === o.value ? GOLD : '#8A97A6',
-                    }}>{o.label}</button>
-          ))}
         </div>
       </section>
 
@@ -207,44 +188,25 @@ function Inner() {
               <Metric label="سعر العقد" value={`$${liveMid?.toFixed(2)}`} />
               <Metric label="شراء / بيع" value={`${liveBid?.toFixed(2)} / ${liveAsk?.toFixed(2)}`} />
               <Metric label="سرعة التفاعل" value={c.delta != null ? c.delta.toFixed(2) : '—'} />
-              <Metric label="تذبذب العقد" value={`${c.ivPct.toFixed(0)}%`} />
+              <Metric label="ملاءمة العقد" value={c.selection ? `${c.selection.fitScore}/100` : `${c.score}/100`} />
             </div>
 
-            {st ? (
+            {data.scenario ? (
               <>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  <Metric label="الدخول" value={`$${st.entryBalanced.toFixed(2)}`} />
-                  <Metric label="الهدف الأول" value={`$${st.t1Price.toFixed(2)}`} good />
-                  {st.t2Price != null ? <Metric label="الهدف الثاني" value={`$${st.t2Price.toFixed(2)}`} good /> : null}
-                  <Metric label="وقف الخسارة" value={`$${st.stopPrice.toFixed(2)}`} danger />
+                  <Metric label="دخول العقد" value={c.execution ? `$${c.execution.entryLow.toFixed(2)}–$${c.execution.entryHigh.toFixed(2)}` : `$${liveMid?.toFixed(2)}`} />
+                  <Metric label="هدف الأصل الأول" value={data.scenario.target1.value.toLocaleString()} good />
+                  <Metric label="هدف الأصل الثاني" value={data.scenario.target2.value.toLocaleString()} good />
+                  <Metric label="إلغاء السيناريو" value={data.scenario.invalidation.value.toLocaleString()} danger />
                 </div>
                 <div className="rounded-xl p-4 text-sm leading-7"
                      style={{ color: '#94A3B8', background: 'rgba(201,148,58,0.06)', border: '1px solid rgba(201,148,58,0.18)' }}>
-                  {st.postT1Action}
+                  نافذة الفرصة: <b>{data.opportunityWindow.label}</b> — لا يوجد هدف ثابت لسعر العقد؛ الخروج من اكتمال حركة الأصل أو تغيرها.
                 </div>
-                <div className="text-xs" style={{ color: '#7C8A99' }}>{st.strategyReason}</div>
+                <div className="text-xs" style={{ color: '#7C8A99' }}>{data.opportunityWindow.reason}</div>
               </>
             ) : null}
           </section>
-
-          {/* ── خطة اليوم ── */}
-          {dp ? (
-            <section className="rounded-3xl p-5 space-y-3" style={{ background: '#0C1219', border: '1px solid rgba(255,255,255,0.07)' }}>
-              <div className="text-sm font-black" style={{ color: GOLD }}>خطة اليوم على {idx}</div>
-              <div className="grid grid-cols-2 gap-2">
-                <Metric label="هدف المؤشر" value={dp.targetPrice.toLocaleString()} good />
-                <Metric label="وقف المؤشر" value={dp.stopPrice.toLocaleString()} danger />
-              </div>
-              <div className="text-xs leading-6" style={{ color: '#94A3B8' }}>
-                {dp.entryWindowAr} · {dp.forcedExitAr}
-              </div>
-              {dp.notesAr?.length ? (
-                <ul className="text-xs space-y-1" style={{ color: '#64748B' }}>
-                  {dp.notesAr.map(n => <li key={n}>• {n}</li>)}
-                </ul>
-              ) : null}
-            </section>
-          ) : null}
         </>
       ) : (
         <div className="rounded-3xl p-10 text-center text-sm" style={{ background: '#0C1219', border: '1px solid rgba(255,255,255,0.07)', color: '#7C8A99' }}>

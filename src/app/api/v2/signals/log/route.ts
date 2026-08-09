@@ -17,10 +17,14 @@ export async function POST(req: NextRequest) {
   const {
     contract_symbol, contract_type, strike, expiry, total_score, grade,
     entry_price, entry_bid, entry_ask, contract_stop_price, contract_target_price,
-    stop_loss_level, target_level, risk_reward_ratio, spx_at_signal, reason,
+    stop_loss_level, target_level, target2_level, opportunity_window, valid_until,
+    risk_reward_ratio, spx_at_signal, reason,
   } = body ?? {}
 
   if (!contract_symbol || !strike || !grade) return NextResponse.json({ ok: false, error: 'missing fields' })
+  if (target_level == null || stop_loss_level == null || !valid_until) {
+    return NextResponse.json({ ok: false, skipped: 'incomplete_scenario' })
+  }
   // نسجّل فقط الفرص القوية (A+/A) لبناء سجل نظيف
   if (grade !== 'A+' && grade !== 'A') return NextResponse.json({ ok: false, skipped: 'grade' })
 
@@ -50,10 +54,12 @@ export async function POST(req: NextRequest) {
   }
 
   const shouldSendTelegram = !existingGlobalResult.data || existingGlobalResult.data.length === 0
-  const validUntil = new Date(Date.now() + 2 * 60_000).toISOString()
+  const validUntil = valid_until && Date.parse(valid_until) > Date.now()
+    ? valid_until
+    : new Date(Date.now() + 2 * 60_000).toISOString()
   const riskBudgetPct = grade === 'A+' ? 0.75 : 0.5
 
-  const { data: inserted, error } = await sb.from('v2_signals').insert({
+  const signalRow = {
     user_id:           user.id,
     signal_ref:        `${grade}-${strike}-${Date.now().toString(36)}`,
     contract_symbol,
@@ -70,6 +76,8 @@ export async function POST(req: NextRequest) {
     contract_target_price: contract_target_price ?? null,
     stop_loss_level:   stop_loss_level ?? null,
     target_level:      target_level ?? null,
+    target2_level:     target2_level ?? null,
+    scenario_stage:    'active',
     risk_reward_ratio: risk_reward_ratio ?? null,
     // نخزّن التصنيف داخل الملخّص (لا عمود مخصّص) — يُقرأ لاحقاً للتفصيل
     summary_ar:        `[${grade}] ${reason ?? ''}`.trim(),
@@ -78,7 +86,16 @@ export async function POST(req: NextRequest) {
     valid_until:       validUntil,
     risk_budget_pct:   riskBudgetPct,
     telegram_status:   shouldSendTelegram ? 'pending' : 'not_required',
-  }).select('id').single()
+  }
+  let insertResult = await sb.from('v2_signals').insert(signalRow).select('id').single()
+  // توافق مؤقت أثناء وصول تحديث القاعدة: لا نوقف الإشارة إذا لم يصل العمودان الجديدان بعد.
+  if (insertResult.error && /target2_level|scenario_stage/i.test(insertResult.error.message)) {
+    const compatibleRow: Record<string, unknown> = { ...signalRow }
+    delete compatibleRow.target2_level
+    delete compatibleRow.scenario_stage
+    insertResult = await sb.from('v2_signals').insert(compatibleRow).select('id').single()
+  }
+  const { data: inserted, error } = insertResult
   if (error) return NextResponse.json({ ok: false, error: error.message })
 
   // إشعار تليجرام فوري (يعمل فقط عند ضبط TELEGRAM_BOT_TOKEN/CHAT_ID في Vercel)
@@ -88,6 +105,7 @@ export async function POST(req: NextRequest) {
         entry_price, stop_loss_level, target_level, spx_at_signal, reason, expiry,
         bid: entry_bid, ask: entry_ask, contract_stop_price,
         contract_target_price,
+        target2_level, opportunity_window,
         max_entry_price: entry_price, valid_until: validUntil, risk_budget_pct: riskBudgetPct,
       }))
     : false

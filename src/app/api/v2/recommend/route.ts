@@ -4,13 +4,15 @@ import { getNewsResult } from '@/app/api/v2/news/route'
 import { evaluateMarketReaction } from '@/lib/v2/marketReaction'
 import { computeStraddleMove } from '@/lib/v2/optionsExpectedMove'
 import { evaluateSessionQuality } from '@/lib/v2/sessionQuality'
-import { getMarketSnapshot, getExpirations, getOptionsChain, getHistoryBars } from '@/lib/v2/marketData'
+import { getMarketSnapshot, getExpirations, getOptionsChain, getHistoryBars, getIntradayBars } from '@/lib/v2/marketData'
 import { getGammaExposure } from '@/lib/v2/gammaExposure'
 import { crashGuard } from '@/lib/v2/marketAnalysis'
 import { econWarning, upcomingEvents } from '@/lib/v2/econCalendar'
 import { timingZone } from '@/lib/v2/timingZones'
 import { getAdapter } from '@/lib/v2/adapters/registry'
-import { collectBest, enrichContracts, SPX_BANDS, type RecMode, type EnrichContext } from '@/lib/v2/recommendCore'
+import { enrichContracts, SPX_BANDS, type RecMode, type EnrichContext } from '@/lib/v2/recommendCore'
+import { assessUnderlyingDirection, buildOpportunityWindow, buildUnderlyingScenario } from '@/lib/v2/opportunityModel'
+import { selectContractsForScenario } from '@/lib/v2/scenarioContractSelector'
 import { recommendForStock } from '@/lib/v2/stocksRecommend'
 import { recommendForFund } from '@/lib/v2/fundsRecommend'
 
@@ -233,8 +235,8 @@ export async function GET(request: NextRequest) {
       high: spxHigh, low: spxLow, volMeasure: vixPrice, volLabel: 'مؤشر الخوف',
       atrPct: null, expectedMove: em, source: dataSource,
     }
-    const dir          = adapter.getDirection('SPX', spxSnap)
-    const contractType = (forceType ?? dir.type) as 'call' | 'put' | null
+    let dir            = adapter.getDirection('SPX', spxSnap)
+    let contractType   = (forceType ?? dir.type) as 'call' | 'put' | null
     const mktStatus    = isMarketOpen()
     // بعد إغلاق يوم التداول (16:00 نيويورك فأكثر) يكون انتهاء اليوم نفسه (0DTE)
     // منتهياً فعلاً وأسعاره آخر أسعار قبل الإغلاق — نتخطّاه في قائمة الاستعداد
@@ -245,91 +247,128 @@ export async function GET(request: NextRequest) {
     // ملاحظة: حتى عند إغلاق السوق نحسب أفضل المرشّحات كـ«قائمة استعداد»
     // (بأسعار CBOE الحقيقية) بدل إرجاع قائمة فارغة.
 
-    // ── 2. Fetch expirations ─────────────────────────────────────
-    const expirations = await getExpirations()
-    let chainEstimated = false
-
-    // ── 3. Live Strike Rotation: fetch + score + rank ────────────
-    let top3: any[]      = []
-    let shortlist: any[] = []   // all qualifying OTM contracts from best expiration
-    let usedExp          = ''
-    let usedChain: any[] = []   // السلسلة الكاملة للانتهاء المختار — لاقتراح السبريدات
-    let watchMode        = false
-    let straddleMove     = computeStraddleMove([], spxPrice, em)
-
-    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-
-    // Helper: score + collect best N contracts — عبر النواة المشتركة بنطاقات SPX.
-    // نطاق البحث ±200 نقطة (STEP*40) كما في السابق تماماً.
-    function collectBestSpx(opts: any[], type: 'call' | 'put', base: number, n: number) {
-      const STEP = 5
-      const searchLow  = type === 'call' ? base            : base - STEP * 40
-      const searchHigh = type === 'call' ? base + STEP * 40 : base - STEP
-      return collectBest(opts, type, n, {
-        price: spxPrice, em, mode: recMode, bands: SPX_BANDS, todayStr, searchLow, searchHigh,
-      })
+    // ── 2. صورة الأصل أولاً: السيولة والشموع والحركة قبل اختيار أي عقد ──────
+    const [expirations, gammaEx, intradayBars, dailyForGuard] = await Promise.all([
+      getExpirations(),
+      getGammaExposure().catch(() => null),
+      getIntradayBars('5min', 5).catch(() => []),
+      getHistoryBars('daily', 60).catch(() => []),
+    ])
+    const scenarioBars = intradayBars.length >= 5 ? intradayBars : dailyForGuard
+    if (!forceType) {
+      const assessment = assessUnderlyingDirection(intradayBars, spxChgPct)
+      contractType = assessment.direction
+      dir = assessment.direction ? {
+        type: assessment.direction,
+        label: assessment.direction === 'call' ? '▲ اتجاه صاعد مؤكد' : '▼ اتجاه هابط مؤكد',
+        color: assessment.direction === 'call' ? '#10B981' : '#EF4444',
+        reason: assessment.reason,
+      } : { type: null, label: '↔ انتظر اتجاهاً أوضح', color: '#F59E0B', reason: assessment.reason }
     }
-
-    if (spxPrice > 0 && expirations.length > 0) {
-      const STEP = 5
-      const base = Math.ceil(spxPrice / STEP) * STEP
-
-      // When neutral: show best 1 call + 1 put as watchlist (not execution signal)
-      const typesToFetch: Array<'call' | 'put'> = contractType
-        ? [contractType]
-        : ['call', 'put']
-
-      for (const dteRange of [{ min: 0, max: 1 }, { min: 1, max: 7 }, { min: 7, max: 14 }]) {
-        if (top3.length >= 3) break
-
-        const exp = expirations.find(e => {
-          const eDate = new Date(e + 'T12:00:00Z')
-          const tDate = new Date(todayStr + 'T12:00:00Z')
-          const dte   = Math.round((eDate.getTime() - tDate.getTime()) / 86400000)
-          // بعد الإغلاق: تخطَّ انتهاء اليوم المنتهي (dte 0) وابدأ من انتهاء لاحق
-          return dte >= dteRange.min && dte <= dteRange.max && (dte >= 1 || !afterClose)
+    let scenario = contractType && em
+      ? buildUnderlyingScenario({
+          direction: contractType,
+          spot: spxPrice,
+          expectedMove: em,
+          bars: scenarioBars,
+          sessionHigh: spxHigh,
+          sessionLow: spxLow,
+          previousClose: spxPrev,
+          liquidity: gammaEx ? {
+            upper: gammaEx.callWall,
+            lower: gammaEx.putWall,
+            flip: gammaEx.flipLevel,
+            balance: gammaEx.maxPain,
+          } : null,
         })
-        if (!exp) continue
+      : null
+    let opportunityWindow = scenario
+      ? buildOpportunityWindow({
+          scenario,
+          bars: intradayBars,
+          style: 'day',
+          minutesToClose: sessionQuality.minutesToClose,
+        })
+      : null
 
+    // ── 3. اختيار الانتهاء والسترايك من الحركة + الزمن + التذبذب ──────────
+    let chainEstimated = false
+    let top3: any[] = []
+    let shortlist: any[] = []
+    let usedExp = ''
+    let usedChain: any[] = []
+    const watchMode = !contractType
+    let straddleMove = computeStraddleMove([], spxPrice, em)
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+    const dteOf = (expiration: string) => Math.max(0, Math.round(
+      (new Date(`${expiration}T12:00:00Z`).getTime() - new Date(`${todayStr}T12:00:00Z`).getTime()) / 86_400_000,
+    ))
+
+    if (contractType && scenario && opportunityWindow && expirations.length) {
+      const candidateExpirations = expirations
+        .filter(expiration => {
+          const dte = dteOf(expiration)
+          return dte >= opportunityWindow!.minimumDte && (dte >= 1 || !afterClose)
+        })
+        .sort((left, right) => Math.abs(dteOf(left) - opportunityWindow!.recommendedDte)
+          - Math.abs(dteOf(right) - opportunityWindow!.recommendedDte))
+        .slice(0, 3)
+
+      const fetchedChains = (await Promise.all(candidateExpirations.map(async expiration => {
         try {
-          const { options: opts, estimated } = await getOptionsChain(exp, spxPrice, vixPrice)
-          if (estimated) chainEstimated = true
-          if (straddleMove.source !== 'atm_straddle') {
-            straddleMove = computeStraddleMove(opts, spxPrice, em)
-          }
+          const chain = await getOptionsChain(expiration, spxPrice, vixPrice)
+          return { expiration, options: chain.options, estimated: chain.estimated }
+        } catch {
+          return { expiration, options: [] as any[], estimated: false }
+        }
+      }))).filter(chain => chain.options.length > 0)
 
-          let collected: any[] = []
-          if (!contractType) {
-            // Neutral market: 1 best call + 1 best put
-            const bestCall = collectBestSpx(opts, 'call', base, 1)
-            const bestPut  = collectBestSpx(opts, 'put',  base, 1)
-            collected = [...bestCall, ...bestPut]
-            if (collected.length > 0) watchMode = true
-          } else {
-            // Fetch up to 15 to populate shortlist; top3 = first 3
-            collected = collectBestSpx(opts, contractType, base, 15)
-          }
+      chainEstimated = fetchedChains.some(chain => chain.estimated)
+      if (fetchedChains[0]) straddleMove = computeStraddleMove(fetchedChains[0].options, spxPrice, em)
 
-          if (collected.length > 0) {
-            top3 = contractType ? collected.slice(0, 3) : collected
-            // Enrich shortlist with stop_spx level (EM-based, same as analyze page)
-            const stopDir = contractType === 'call' ? -1 : 1
-            shortlist = contractType
-              ? collected.map(o => ({
-                  ...o,
-                  stop_spx: Math.round(spxPrice + stopDir * (em ?? 0) * 0.35),
-                }))
-              : []
-            usedExp = exp
-            usedChain = opts
-          }
-        } catch { /* جرّب النطاق التالي */ }
-        if (top3.length > 0) break
+      // إعادة التقدير بعد اكتمال صورة الأصل، دون استخدام سعر العقد كهدف.
+      scenario = buildUnderlyingScenario({
+        direction: contractType,
+        spot: spxPrice,
+        expectedMove: em ?? 0,
+        bars: scenarioBars,
+        sessionHigh: spxHigh,
+        sessionLow: spxLow,
+        previousClose: spxPrev,
+        liquidity: gammaEx ? {
+          upper: gammaEx.callWall,
+          lower: gammaEx.putWall,
+          flip: gammaEx.flipLevel,
+          balance: gammaEx.maxPain,
+        } : null,
+      })
+      opportunityWindow = scenario ? buildOpportunityWindow({
+        scenario,
+        bars: intradayBars,
+        style: 'day',
+        minutesToClose: sessionQuality.minutesToClose,
+      }) : null
+
+      if (scenario && opportunityWindow) {
+        const selected = selectContractsForScenario({
+          chains: fetchedChains.map(chain => ({ expiration: chain.expiration, options: chain.options })),
+          direction: contractType,
+          scenario,
+          window: opportunityWindow,
+          referenceVolPct: vixPrice,
+          minutesToClose: sessionQuality.minutesToClose,
+          mode: recMode,
+          bands: SPX_BANDS,
+          limit: 15,
+        })
+        top3 = selected.slice(0, 1)
+        shortlist = selected.map(contract => ({ ...contract, stop_spx: scenario!.invalidation.value }))
+        usedExp = selected[0]?.expiration ?? ''
+        usedChain = fetchedChains.find(chain => chain.expiration === usedExp)?.options ?? []
       }
     }
 
-    // ── Enrich top3 with strategy engine ─────────────────────────────────────
-    const effectiveEM = straddleMove.points ?? em
+    const effectiveEM = em
     const emUpper = effectiveEM ? Math.round(spxPrice + effectiveEM) : Math.round(spxPrice + 50)
     const emLower = effectiveEM ? Math.round(spxPrice - effectiveEM) : Math.round(spxPrice - 50)
 
@@ -337,12 +376,7 @@ export async function GET(request: NextRequest) {
     const marketClosedPhase = sessionQuality.phase === 'closed' || sessionQuality.phase === 'pre_market'
     const closedWatchlist = marketClosedPhase && !newsBlocked && !reactionBlocked
 
-    // جاما لتصنيف الفرص (اتفاق الأدلة)
-    const gammaEx = await getGammaExposure().catch(() => null)
-
-    // ── حارس الانهيارات: شموع يومية + مؤشر الخوف — مثبت خارج العينة أن أيام
-    // العنف الشديد تخسر حتى مع أفضل الإشارات، فلا إشارة تنفيذ فيها ─────────────
-    const dailyForGuard = await getHistoryBars('daily', 60).catch(() => [])
+    // ── حارس الانهيارات: شموع يومية + مؤشر الخوف ──────────────────────────
     const guard = crashGuard(dailyForGuard, vixPrice)
 
     // ── إثراء العقود عبر النواة المشتركة — سياق SPX يعيد السلوك السابق حرفياً ──
@@ -375,18 +409,17 @@ export async function GET(request: NextRequest) {
       newsRisk: newsDecision,
       marketReaction,
       session: sessionQuality,
+      scenario,
+      opportunityWindow,
     }
     const enrichedTop3 = enrichContracts(top3, spxCtx)
+      .filter(contract => contract.status === 'execute' && contract.selection?.fitLabel === 'ممتاز')
+      .slice(0, 1)
 
-    // OTM range description
-    const STEP  = 5
-    const base2 = contractType && spxPrice ? Math.ceil(spxPrice / STEP) * STEP : 0
-    const otmRange = contractType && base2 ? {
-      low:  contractType === 'call' ? base2 : base2 - STEP * 40,
-      high: contractType === 'call' ? base2 + STEP * 40 : base2 - STEP,
-      note: contractType === 'call'
-        ? `${base2}–${base2 + STEP * 40} (Ask $0.50–$5.00 فوق SPX ${Math.round(spxPrice)})`
-        : `${base2 - STEP * 40}–${base2 - STEP} (Ask $0.50–$5.00 تحت SPX ${Math.round(spxPrice)})`,
+    const otmRange = scenario ? {
+      low: Math.min(scenario.entry, scenario.target2.value),
+      high: Math.max(scenario.entry, scenario.target2.value),
+      note: `اختيار قريب من السعر وداخل حركة الأصل المتوقعة حتى ${scenario.target2.value.toLocaleString()}`,
     } : null
 
     return NextResponse.json({
@@ -424,6 +457,8 @@ export async function GET(request: NextRequest) {
       marketReaction,
       sessionQuality,
       watchMode,
+      scenario,
+      opportunityWindow,
       contracts:   enrichedTop3,
       shortlist:   shortlist.map(({ _score, ...rest }) => rest),
       expiration:  usedExp,

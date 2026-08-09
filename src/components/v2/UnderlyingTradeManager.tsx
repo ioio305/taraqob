@@ -26,6 +26,7 @@ type Props = {
   contractSymbol?: string | null
   hardContractStop?: number | null
   startedAt?: string | null
+  validUntil?: string | null
   accent?: string
   defaultOpen?: boolean
 }
@@ -67,6 +68,7 @@ export function UnderlyingTradeManager(props: Props) {
   const [open, setOpen] = useState(props.defaultOpen ?? false)
   const lockedPlan = useRef(props.plan)
   const lockedStartedAt = useRef(props.startedAt ?? new Date().toISOString())
+  const lockedValidUntil = useRef(props.validUntil ?? null)
 
   if (!open) {
     return (
@@ -90,6 +92,7 @@ export function UnderlyingTradeManager(props: Props) {
       {...props}
       plan={lockedPlan.current}
       startedAt={lockedStartedAt.current}
+      validUntil={lockedValidUntil.current}
       onClose={() => setOpen(false)}
     />
   )
@@ -103,6 +106,7 @@ function TradeManagerPanel({
   contractSymbol,
   hardContractStop,
   startedAt,
+  validUntil,
   accent = '#C9943A',
   onClose,
 }: Props & { onClose: () => void }) {
@@ -125,9 +129,10 @@ function TradeManagerPanel({
       target2: String(plan.target2),
       invalidation: String(plan.invalidation),
       ...(startedAt ? { startedAt } : {}),
+      ...(validUntil ? { validUntil } : {}),
     })
     return values.toString()
-  }, [direction, plan.entry, plan.invalidation, plan.target1, plan.target2, platform, startedAt, upperSymbol])
+  }, [direction, plan.entry, plan.invalidation, plan.target1, plan.target2, platform, startedAt, upperSymbol, validUntil])
 
   const load = useCallback(async () => {
     if (document.visibilityState === 'hidden') return
@@ -231,7 +236,7 @@ function TradeManagerPanel({
             </div>
           </div>
 
-          <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="mt-3 grid grid-cols-2 md:grid-cols-5 gap-2">
             {result.readings.map(reading => (
               <div key={reading.label} className="rounded-xl px-3 py-2.5" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(148,163,184,0.10)' }}>
                 <div className="text-[10px]" style={{ color: '#718196' }}>{reading.label}</div>

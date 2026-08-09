@@ -16,6 +16,7 @@ export interface FundCard {
   price: number
   changePct: number | null
   verdict: FundVerdict
+  validUntil: string | null
 }
 
 export interface FundsToday {
@@ -39,6 +40,16 @@ const NAME_OVERRIDES: Record<string, string> = {
 
 function nameOf(symbol: string): string {
   return NAME_OVERRIDES[symbol] ?? fundBySymbol(symbol)?.nameAr ?? symbol
+}
+
+function addWeekdays(start: Date, days: number): string {
+  const cursor = new Date(start)
+  let remaining = days
+  while (remaining > 0) {
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
+    if (cursor.getUTCDay() !== 0 && cursor.getUTCDay() !== 6) remaining -= 1
+  }
+  return cursor.toISOString()
 }
 
 export async function fundsTodayAdvisory(): Promise<FundsToday> {
@@ -81,15 +92,14 @@ export async function fundsTodayAdvisory(): Promise<FundsToday> {
       symbol, nameAr: nameOf(symbol), price: last.close,
       changePct: prev ? Math.round(((last.close / prev.close) - 1) * 10000) / 100 : null,
       verdict,
+      validUntil: verdict.plan ? addWeekdays(now, verdict.plan.maxSessions) : null,
     })
   }
 
   const opportunities = cards
     .filter(c => c.verdict.plan)
     .sort((a, b) => b.verdict.score - a.verdict.score)
-  const watchlist = cards
-    .filter(c => !c.verdict.plan && c.verdict.tier === 'watch')
-    .sort((a, b) => b.verdict.score - a.verdict.score)
+  const watchlist: FundCard[] = []
 
   return {
     success: true,

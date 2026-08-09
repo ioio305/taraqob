@@ -26,6 +26,8 @@ type Contract = {
   symbol: string; type: 'call' | 'put'; strike: number; expiration: string
   mid: number; bid: number; ask: number; score: number; status: 'execute' | 'watch' | 'no-trade'
   grade?: string; reason?: string
+  execution?: { entryLow: number; entryHigh: number; hardProtectionPrice: number }
+  selection?: { fitScore: number; fitLabel: string; timeDecayBurdenPct: number }
   strategy?: {
     strategyLabel: string; strategyReason: string; postT1Action: string
     entryBalanced: number; entryBalancedTotal: number
@@ -42,6 +44,8 @@ type Detail = {
   market?: { price: number; changePct: number; volMeasure: number | null; expectedMove: number | null } | null
   direction?: { type: 'call' | 'put' | null; label: string; color: string; reason: string }
   contracts?: Contract[]
+  scenario?: { entry: number; target1: { value: number; source: string }; target2: { value: number; source: string }; invalidation: { value: number; source: string } } | null
+  opportunityWindow?: { label: string; validUntil: string; reason: string } | null
   error?: string
 }
 
@@ -169,17 +173,17 @@ function IndexPageInner() {
             <Metric label="الخطة" value={st?.strategyLabel ?? '—'} gold />
           </div>
 
-          {st ? (
+          {data?.scenario ? (
             <>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                <Metric label="الدخول" value={`$${st.entryBalanced.toFixed(2)}`} />
-                <Metric label="الهدف الأول" value={`$${st.t1Price.toFixed(2)}`} good />
-                {st.t2Price != null ? <Metric label="الهدف الثاني" value={`$${st.t2Price.toFixed(2)}`} good /> : null}
-                <Metric label="وقف الخسارة" value={`$${st.stopPrice.toFixed(2)}`} danger />
+                <Metric label="دخول العقد" value={best.execution ? `$${best.execution.entryLow.toFixed(2)}–$${best.execution.entryHigh.toFixed(2)}` : `$${bestMid?.toFixed(2)}`} />
+                <Metric label="هدف الأصل الأول" value={data?.scenario?.target1.value.toLocaleString('en-US') ?? '—'} good />
+                <Metric label="هدف الأصل الثاني" value={data?.scenario?.target2.value.toLocaleString('en-US') ?? '—'} good />
+                <Metric label="إلغاء السيناريو" value={data?.scenario?.invalidation.value.toLocaleString('en-US') ?? '—'} danger />
               </div>
               <div className="rounded-xl p-4 text-sm leading-7"
                    style={{ color: '#94A3B8', background: 'rgba(201,148,58,0.06)', border: '1px solid rgba(201,148,58,0.18)' }}>
-                {st.postT1Action}
+                نافذة الفرصة: <b>{data?.opportunityWindow?.label ?? 'تحت التقدير'}</b> — الأهداف والخروج من حركة الأصل، ولا يوجد هدف ثابت لسعر العقد.
               </div>
             </>
           ) : null}
@@ -193,34 +197,8 @@ function IndexPageInner() {
         </section>
       )}
 
-      {/* ── عقود أخرى مرشحة ── */}
-      {contracts.length > 1 ? (
-        <section className="space-y-2">
-          <div className="text-xs font-bold" style={{ color: GOLD }}>عقود أخرى مرشحة على {current.id}</div>
-          {contracts.filter(c => c !== best).slice(0, 2).map(c => (
-            <div key={c.symbol} className="rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap"
-                 style={{ background: '#0C1219', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="text-sm font-black font-mono" style={{ color: c.type === 'call' ? '#10B981' : '#EF4444' }}>
-                  {c.type === 'call' ? '▲' : '▼'} {c.strike}
-                </span>
-                <span className="text-xs font-mono" style={{ color: '#7C8A99' }}>${(quotes[c.symbol]?.mid ?? quotes[c.symbol]?.price ?? c.mid).toFixed(2)} · قوة {c.score}</span>
-                <span className="text-xs font-mono" style={{ color: '#55657A' }}>ينتهي {c.expiration}</span>
-              </div>
-              {c.strategy ? (
-                <div className="flex items-center gap-3 text-xs font-mono">
-                  <span style={{ color: '#94A3B8' }}>دخول ${c.strategy.entryBalanced.toFixed(2)}</span>
-                  <span style={{ color: '#34D399' }}>هدف ${c.strategy.t1Price.toFixed(2)}</span>
-                  <span style={{ color: '#F87171' }}>وقف ${c.strategy.stopPrice.toFixed(2)}</span>
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </section>
-      ) : null}
-
       <div className="text-[11px]" style={{ color: '#55657A' }}>
-        نفس محرك SPX بالكامل: الاتجاه، اختيار العقد، وخطة الدخول والأهداف والوقف.
+        الأصل أولاً، ثم مقدار الحركة والزمن والتذبذب، وبعدها يختار النظام عقداً واحداً مناسباً.
         {ts ? ` آخر تحديث ${ts.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })} — يتحدث كل دقيقة.` : ''}
       </div>
     </div>

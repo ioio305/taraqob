@@ -6,15 +6,16 @@
 // راجع docs/platforms.md و src/lib/v2/recommendCore.ts
 
 import {
-  collectBest, enrichContracts, STOCK_BANDS,
+  enrichContracts, STOCK_BANDS,
   type RecMode, type EnrichContext,
 } from './recommendCore'
-import { getStockQuote, getStockDailyBars } from './stockData'
+import { getStockQuote, getStockDailyBars, getStockIntradayBars } from './stockData'
+import { buildOpportunityWindow, buildUnderlyingScenario, type OpportunityWindow, type UnderlyingScenario } from './opportunityModel'
+import { selectContractsForScenario } from './scenarioContractSelector'
 import { stocksAdapter, stockDirection } from './adapters/stocksAdapter'
 import { STOCKS_CALIBRATION } from './adapters/registry'
 import { evaluateSessionQuality } from './sessionQuality'
 import { crashGuard } from './marketAnalysis'
-import { computeStraddleMove } from './optionsExpectedMove'
 import type { EventRisk } from './adapters/types'
 import {
   evaluateStockDataQuality,
@@ -28,7 +29,7 @@ import { judgeVeto } from './vetoJudge'
 import { getStockNews } from './stockNews'
 
 export const NOT_CALIBRATED_NOTE =
-  'راقب فقط — لا توصية «اشترِ» بعد.'
+  'لا تُعرض توصية حتى تكتمل المعايرة وتظهر فرصة ممتازة.'
 
 export interface StockRecResult {
   success: boolean
@@ -55,15 +56,11 @@ export interface StockRecResult {
   champion: { method: string; methodAr: string } | null
   tradeStyle: TradeStyle
   dayPlan: DayPlan | null
+  scenario: UnderlyingScenario | null
+  opportunityWindow: OpportunityWindow | null
 }
 
 // نطاق بحث الستريكات: ±20% حول السعر (mandatoryFilter يفرض «خارج المال» فعلياً)
-function searchRange(price: number, type: 'call' | 'put'): { searchLow: number; searchHigh: number } {
-  return type === 'call'
-    ? { searchLow: price, searchHigh: price * 1.2 }
-    : { searchLow: price * 0.8, searchHigh: price }
-}
-
 // التذبذب الضمني عند السعر (ATM) من السلسلة — بديل «مؤشر الخوف» للسهم
 function atmIvPct(chain: any[], price: number): number | null {
   if (!chain.length || !price) return null
@@ -106,7 +103,7 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
     notCalibratedNote: NOT_CALIBRATED_NOTE,
     dataQuality: null,
     champion: null,
-    tradeStyle, dayPlan: null,
+    tradeStyle, dayPlan: null, scenario: null, opportunityWindow: null,
   })
 
   // بوابة النظام البطل: الشركات المستبعدة تاريخيًا — مراقبة فقط، بلا عقود
@@ -157,6 +154,7 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
     mode, notCalibratedNote: NOT_CALIBRATED_NOTE, dataQuality,
     champion,
     tradeStyle, dayPlan,
+    scenario: null, opportunityWindow: null,
   }
 
   if (!expirations.length) {
@@ -188,68 +186,59 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
     }
   }
 
-  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+  const now = new Date()
+  const todayStr = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
   const tradableExpirations = expirations.filter(exp => isStockExpirationTradable(exp))
-  const dteRanges = (options.full || tradeStyle === 'day')
-    ? [{ min: 0, max: 2 }, { min: 2, max: 9 }, { min: 9, max: 21 }]
-    : [{ min: 5, max: 12 }, { min: 9, max: 21 }, { min: 2, max: 5 }]
   const dteOf = (e: string) => Math.round((new Date(e + 'T12:00:00Z').getTime() - new Date(todayStr + 'T12:00:00Z').getTime()) / 86400000)
-  // المستخدم اختار مدة: أقرب انتهاء متاح لطلبه يُستخدم مباشرة
-  const userPicked = options.targetDte != null
-    ? [...tradableExpirations].sort((x, y) => Math.abs(dteOf(x) - options.targetDte!) - Math.abs(dteOf(y) - options.targetDte!)).slice(0, 1)
-    : null
+  const intradayBars = options.full ? await getStockIntradayBars(sym, '5min').catch(() => []) : []
+  const scenarioBars = intradayBars.length >= 5 ? intradayBars : bars
+  const dailyExpectedMove = Math.max(price * 0.004, price * ((rv ?? 35) / 100) / Math.sqrt(252))
+  const scenario = contractType ? buildUnderlyingScenario({
+    direction: contractType, spot: price, expectedMove: dailyExpectedMove, bars: scenarioBars,
+    sessionHigh: quote.high, sessionLow: quote.low, previousClose: quote.prevClose,
+  }) : null
+  const opportunityWindow = scenario ? buildOpportunityWindow({
+    scenario, bars: scenarioBars, style: tradeStyle,
+    minutesToClose: sessionQuality.minutesToClose, now,
+  }) : null
 
   let contracts: any[] = []
   let usedExp = ''
-  let effectiveEM: number | null = null
-  let emUpper: number | null = null
-  let emLower: number | null = null
-  let watchMode = false
+  const effectiveEM: number | null = dailyExpectedMove
+  const emUpper: number | null = Math.round((price + dailyExpectedMove) * 100) / 100
+  const emLower: number | null = Math.round((price - dailyExpectedMove) * 100) / 100
+  const watchMode = !contractType || !scenario || !opportunityWindow
 
-  const typesToFetch: Array<'call' | 'put'> = contractType ? [contractType] : ['call', 'put']
-
-  const candidateExps: string[] = userPicked
-    ?? dteRanges.map(range => tradableExpirations.find(e => {
-      const dte = dteOf(e)
-      return dte >= range.min && dte <= range.max
-    })).filter((e): e is string => Boolean(e))
-
-  for (const exp of candidateExps) {
-    const chain = await stocksAdapter.getChain(sym, exp).catch(() => [] as any[])
-    if (!chain.length) continue
-
-    // الحركة المتوقعة حتى الانتهاء من ATM straddle (أدق من التقدير)
-    const straddle = computeStraddleMove(chain as any, price, rv ? Math.round(price * (rv / 100) * Math.sqrt(1 / 252) * 100) / 100 : null)
-    effectiveEM = straddle.points
-    emUpper = effectiveEM ? Math.round((price + effectiveEM) * 100) / 100 : null
-    emLower = effectiveEM ? Math.round((price - effectiveEM) * 100) / 100 : null
-
-    // التذبذب الضمني عند السعر (لمحرك الاستراتيجية والعتبات)
-    const ivPct = atmIvPct(chain, price) ?? rv ?? 40
-
-    // جمع المرشّحات
-    let collected: any[] = []
-    if (!contractType) {
-      const bestCall = collectBest(chain as any, 'call', 1, { price, em: effectiveEM, mode, bands: STOCK_BANDS, todayStr, ...searchRange(price, 'call') })
-      const bestPut  = collectBest(chain as any, 'put',  1, { price, em: effectiveEM, mode, bands: STOCK_BANDS, todayStr, ...searchRange(price, 'put') })
-      collected = [...bestCall, ...bestPut]
-      if (collected.length) watchMode = true
-    } else {
-      collected = collectBest(chain as any, contractType, 6, { price, em: effectiveEM, mode, bands: STOCK_BANDS, todayStr, ...searchRange(price, contractType) })
-    }
-    if (!collected.length) continue
-
-    const top = contractType ? collected.slice(0, 3) : collected
-    const guard = crashGuard(bars as any, null)
-    const ctx = buildStockContext({
-      price, emUpper: emUpper ?? Math.round(price + price * 0.03), emLower: emLower ?? Math.round(price - price * 0.03),
-      changePct: quote.changePct, ivPct, recMode: mode, chain,
-      guard, sessionQuality, eventRisk, contractType, watchMode,
-      dataQuality,
+  if (contractType && scenario && opportunityWindow) {
+    const requestedDte = Math.max(opportunityWindow.minimumDte, options.targetDte ?? opportunityWindow.recommendedDte)
+    const candidateExps = [...tradableExpirations]
+      .filter(exp => dteOf(exp) >= opportunityWindow.minimumDte)
+      .sort((left, right) => Math.abs(dteOf(left) - requestedDte) - Math.abs(dteOf(right) - requestedDte))
+      .slice(0, options.full ? 3 : 1)
+    const fetched = await Promise.all(candidateExps.map(async expiration => ({
+      expiration,
+      options: await stocksAdapter.getChain(sym, expiration).catch(() => [] as any[]),
+    })))
+    const nonEmpty = fetched.filter(item => item.options.length)
+    const ivPct = nonEmpty.length ? (atmIvPct(nonEmpty[0].options, price) ?? rv ?? 40) : (rv ?? 40)
+    const selected = selectContractsForScenario({
+      chains: nonEmpty, direction: contractType, scenario, window: opportunityWindow,
+      referenceVolPct: rv, minutesToClose: sessionQuality.minutesToClose,
+      mode, bands: STOCK_BANDS, limit: 1, now,
     })
-    contracts = enrichContracts(top, ctx)
-    usedExp = exp
-    break
+    if (selected.length) {
+      const selectedChain = nonEmpty.find(item => item.expiration === selected[0].expiration)?.options ?? []
+      const guard = crashGuard(bars as any, null)
+      const ctx = buildStockContext({
+        price, emUpper, emLower, changePct: quote.changePct, ivPct, recMode: mode,
+        chain: selectedChain, guard, sessionQuality, eventRisk, contractType, watchMode: false,
+        dataQuality, scenario, opportunityWindow,
+      })
+      contracts = enrichContracts(selected, ctx)
+        .filter(contract => contract.status === 'execute' && contract.selection?.fitLabel === 'ممتاز')
+        .slice(0, 1)
+      usedExp = selected[0].expiration
+    }
   }
 
   return {
@@ -258,6 +247,8 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
     watchMode,
     contracts,
     expiration: usedExp,
+    scenario,
+    opportunityWindow,
   }
 }
 
@@ -268,6 +259,7 @@ function buildStockContext(a: {
   sessionQuality: ReturnType<typeof evaluateSessionQuality>; eventRisk: EventRisk | null
   contractType: 'call' | 'put' | null; watchMode: boolean
   dataQuality: StockDataQuality
+  scenario: UnderlyingScenario | null; opportunityWindow: OpportunityWindow | null
 }): EnrichContext {
   const sessionBlocked = a.sessionQuality.action === 'block'
   const earningsBlocked = !!a.eventRisk?.active
@@ -306,6 +298,8 @@ function buildStockContext(a: {
     newsRisk: null,
     marketReaction: null,
     session: a.sessionQuality,
+    scenario: a.scenario,
+    opportunityWindow: a.opportunityWindow,
   }
 }
 

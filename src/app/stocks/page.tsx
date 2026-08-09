@@ -12,8 +12,8 @@ type Best = {
   bid: number; ask: number; mid: number; delta: number | null
   score: number; status: string; grade: string; reason: string; probItmPct: number
   ranking: {
-    score: number; expectedProfit: number; expectedReturnPct: number
-    riskReward: number; spreadPct: number; relativeStrengthPct: number
+    score: number; expectedMovePoints: number; expectedMovePct: number
+    riskReward: number; spreadPct: number; relativeStrengthPct: number; timeDecayBurdenPct: number
     reasons: string[]
   }
 }
@@ -33,6 +33,8 @@ type ScanRow = {
   dayPlan?: {
     targetPrice: number; stopPrice: number; targetPct: number; stopPct: number
   } | null
+  scenario?: { entry: number; target1: { value: number }; target2: { value: number }; invalidation: { value: number } } | null
+  opportunityWindow?: { label: string; validUntil: string } | null
   error?: string
 }
 type ScanData = {
@@ -59,6 +61,8 @@ type DetailContract = {
   grade?: string; edges?: { ok: boolean; label: string }[]; probItmPct?: number
   wallNote?: string | null
   strategy: Strategy
+  execution?: { entryLow: number; entryHigh: number; hardProtectionPrice: number }
+  selection?: { fitScore: number; fitLabel: string; timeDecayBurdenPct: number }
   focus?: { primaryReason: string; nextStep: string; confidence: number }
 }
 type DetailData = {
@@ -86,6 +90,8 @@ type DetailData = {
     targetPrice: number; stopPrice: number; targetPct: number; stopPct: number
     notesAr: string[]
   } | null
+  scenario?: { entry: number; target1: { value: number; source: string }; target2: { value: number; source: string }; invalidation: { value: number; source: string } } | null
+  opportunityWindow?: { label: string; validUntil: string; reason: string } | null
 }
 
 const ACCENT = '#60A5FA'   // لون هوية منصة الشركات
@@ -284,27 +290,27 @@ export default function StocksScanner() {
               </div>
             </div>
 
-            {topOpportunity.dayPlan && (
+            {topOpportunity.scenario && (
               <div className="grid grid-cols-2 gap-2 mt-3">
                 <div className="rounded-xl p-3" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)' }}>
-                  <div className="text-[10px] text-slate-500">🎯 هدف اليوم</div>
-                  <div className="font-black font-mono text-white">${topOpportunity.dayPlan.targetPrice} <span className="text-xs" style={{ color: '#10B981' }}>(+{topOpportunity.dayPlan.targetPct}%)</span></div>
+                  <div className="text-[10px] text-slate-500">🎯 هدف السهم الأول</div>
+                  <div className="font-black font-mono text-white">${topOpportunity.scenario.target1.value}</div>
                 </div>
                 <div className="rounded-xl p-3" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)' }}>
-                  <div className="text-[10px] text-slate-500">🛑 وقف اليوم</div>
-                  <div className="font-black font-mono text-white">${topOpportunity.dayPlan.stopPrice} <span className="text-xs" style={{ color: '#EF4444' }}>(-{topOpportunity.dayPlan.stopPct}%)</span></div>
+                  <div className="text-[10px] text-slate-500">🛑 إلغاء السيناريو</div>
+                  <div className="font-black font-mono text-white">${topOpportunity.scenario.invalidation.value}</div>
                 </div>
               </div>
             )}
 
             <div className="mt-4 grid grid-cols-3 gap-2">
               <div className="rounded-xl p-3 bg-amber-400/[.06] border border-amber-400/15">
-                <div className="text-[10px] text-slate-500">الربح</div>
-                <div className="font-black text-amber-300">${topOpportunity.best.ranking.expectedProfit}</div>
+                <div className="text-[10px] text-slate-500">حركة السهم</div>
+                <div className="font-black text-amber-300">{topOpportunity.best.ranking.expectedMovePoints}</div>
               </div>
               <div className="rounded-xl p-3 bg-amber-400/[.06] border border-amber-400/15">
-                <div className="text-[10px] text-slate-500">العائد</div>
-                <div className="font-black text-amber-300">{topOpportunity.best.ranking.expectedReturnPct}%</div>
+                <div className="text-[10px] text-slate-500">نسبة الحركة</div>
+                <div className="font-black text-amber-300">{topOpportunity.best.ranking.expectedMovePct}%</div>
               </div>
               <div className="rounded-xl p-3 bg-amber-400/[.06] border border-amber-400/15">
                 <div className="text-[10px] text-slate-500">العائد/المخاطرة</div>
@@ -550,20 +556,16 @@ function StockDetail({ detail }: { detail: DetailData }) {
   const strat = c.strategy
   const okEdges = (c.edges ?? []).filter(e => e.ok)
   const direction = isCall ? 'bullish' as const : 'bearish' as const
-  const entry = detail.market?.price ?? 0
-  const firstTarget = detail.tradeStyle === 'day' && detail.dayPlan
-    ? detail.dayPlan.targetPrice
-    : strat?.t1SpxLevel ?? 0
+  const entry = detail.scenario?.entry ?? detail.market?.price ?? 0
+  const firstTarget = detail.scenario?.target1.value ?? strat?.t1SpxLevel ?? 0
   const fallbackDistance = Math.max(Math.abs(firstTarget - entry), entry * 0.01)
-  const suggestedSecondTarget = strat?.t2SpxLevel
+  const suggestedSecondTarget = detail.scenario?.target2.value ?? strat?.t2SpxLevel
     ?? (isCall ? detail.market?.emUpper : detail.market?.emLower)
     ?? 0
   const secondTarget = isCall
     ? (suggestedSecondTarget > firstTarget ? suggestedSecondTarget : firstTarget + fallbackDistance)
     : (suggestedSecondTarget < firstTarget ? suggestedSecondTarget : firstTarget - fallbackDistance)
-  const invalidation = detail.tradeStyle === 'day' && detail.dayPlan
-    ? detail.dayPlan.stopPrice
-    : strat?.stopSpxLevel ?? 0
+  const invalidation = detail.scenario?.invalidation.value ?? strat?.stopSpxLevel ?? 0
   const managementReady = entry > 0 && firstTarget > 0 && secondTarget > 0 && invalidation > 0
     && (isCall
       ? invalidation < entry && entry < firstTarget && firstTarget < secondTarget
@@ -571,26 +573,14 @@ function StockDetail({ detail }: { detail: DetailData }) {
 
   return (
     <div className="space-y-3 mt-2">
-      {detail.tradeStyle === 'day' && detail.dayPlan && (
+      {detail.opportunityWindow && (
         <div className="rounded-xl px-4 py-3"
              style={{ background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.35)' }}>
           <div className="flex items-center gap-2">
-            <span className="text-base">⚡</span>
-            <span className="text-sm font-black" style={{ color: '#F59E0B' }}>خطة المضاربة اليومية — تُغلق اليوم مهما كان</span>
+            <span className="text-base">⏱</span>
+            <span className="text-sm font-black" style={{ color: '#F59E0B' }}>نافذة الفرصة: {detail.opportunityWindow.label}</span>
           </div>
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            <div className="rounded-lg px-3 py-2" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)' }}>
-              <div className="text-[10px]" style={{ color: '#94A3B8' }}>🎯 هدف الربح</div>
-              <div className="text-sm font-black font-mono text-white">${detail.dayPlan.targetPrice} <span style={{ color: '#10B981' }}>(+{detail.dayPlan.targetPct}%)</span></div>
-            </div>
-            <div className="rounded-lg px-3 py-2" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
-              <div className="text-[10px]" style={{ color: '#94A3B8' }}>🛑 حد الخسارة</div>
-              <div className="text-sm font-black font-mono text-white">${detail.dayPlan.stopPrice} <span style={{ color: '#EF4444' }}>(-{detail.dayPlan.stopPct}%)</span></div>
-            </div>
-          </div>
-          <div className="text-[11px] mt-2 font-bold" style={{ color: '#94A3B8' }}>
-            ⏰ دخول 09:45 · 🚪 خروج إجباري 15:30
-          </div>
+          <div className="text-[11px] mt-2 font-bold" style={{ color: '#94A3B8' }}>{detail.opportunityWindow.reason}</div>
         </div>
       )}
       {detail.dataQuality && detail.dataQuality.status !== 'ready' && (
@@ -669,23 +659,24 @@ function StockDetail({ detail }: { detail: DetailData }) {
         </div>
       )}
 
-      {/* الخطة: 3 أرقام */}
-      {strat && (
-        <div className="grid grid-cols-3 gap-2">
+      {/* العقد للتنفيذ، والقرار من حركة السهم */}
+      {detail.scenario && (
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
           <div className="rounded-xl p-3 text-center" style={{ background: `${ACCENT}12`, border: `1px solid ${ACCENT}30` }}>
-            <div className="text-xs font-bold mb-1" style={{ color: ACCENT }}>ادخل عند</div>
-            <div className="text-lg font-black font-mono" style={{ color: '#BFDBFE' }}>${n(strat.entryBalanced)}</div>
-            <div className="text-xs font-mono mt-0.5" style={{ color: '#3B6CA8' }}>${strat.entryBalancedTotal} للعقد</div>
+            <div className="text-xs font-bold mb-1" style={{ color: ACCENT }}>دخول العقد</div>
+            <div className="text-lg font-black font-mono" style={{ color: '#BFDBFE' }}>${n(c.execution?.entryLow ?? c.bid)}–${n(c.execution?.entryHigh ?? c.ask)}</div>
           </div>
           <div className="rounded-xl p-3 text-center" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)' }}>
-            <div className="text-xs font-bold mb-1" style={{ color: '#10B981' }}>الهدف</div>
-            <div className="text-lg font-black font-mono" style={{ color: '#26D07C' }}>${n(strat.t1Price)}</div>
-            <div className="text-xs font-mono mt-0.5" style={{ color: '#10B981' }}>+${strat.t1Profit}</div>
+            <div className="text-xs font-bold mb-1" style={{ color: '#10B981' }}>هدف السهم الأول</div>
+            <div className="text-lg font-black font-mono" style={{ color: '#26D07C' }}>${n(detail.scenario.target1.value)}</div>
+          </div>
+          <div className="rounded-xl p-3 text-center" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)' }}>
+            <div className="text-xs font-bold mb-1" style={{ color: '#10B981' }}>هدف السهم الثاني</div>
+            <div className="text-lg font-black font-mono" style={{ color: '#26D07C' }}>${n(detail.scenario.target2.value)}</div>
           </div>
           <div className="rounded-xl p-3 text-center" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
-            <div className="text-xs font-bold mb-1" style={{ color: '#EF4444' }}>أوقف عند</div>
-            <div className="text-lg font-black font-mono" style={{ color: '#F87171' }}>${n(strat.stopPrice)}</div>
-            <div className="text-xs font-mono mt-0.5" style={{ color: '#EF4444' }}>${strat.stopLoss}</div>
+            <div className="text-xs font-bold mb-1" style={{ color: '#EF4444' }}>إلغاء السيناريو</div>
+            <div className="text-lg font-black font-mono" style={{ color: '#F87171' }}>${n(detail.scenario.invalidation.value)}</div>
           </div>
         </div>
       )}
@@ -698,7 +689,8 @@ function StockDetail({ detail }: { detail: DetailData }) {
           direction={direction}
           plan={{ entry, target1: firstTarget, target2: secondTarget, invalidation }}
           contractSymbol={c.symbol}
-          hardContractStop={strat?.stopPrice}
+          hardContractStop={c.execution?.hardProtectionPrice}
+          validUntil={detail.opportunityWindow?.validUntil}
           accent={ACCENT}
           defaultOpen
         />

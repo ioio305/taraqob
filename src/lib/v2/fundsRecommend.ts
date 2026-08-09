@@ -9,22 +9,23 @@
 // راجع docs/platforms.md و src/lib/v2/recommendCore.ts
 
 import {
-  collectBest, enrichContracts, STOCK_BANDS,
+  enrichContracts, STOCK_BANDS,
   type RecMode, type EnrichContext,
 } from './recommendCore'
-import { getStockQuote, getStockDailyBars } from './stockData'
+import { getStockQuote, getStockDailyBars, getStockIntradayBars } from './stockData'
+import { buildOpportunityWindow, buildUnderlyingScenario, type OpportunityWindow, type UnderlyingScenario } from './opportunityModel'
+import { selectContractsForScenario } from './scenarioContractSelector'
 import { fundsAdapter, fundDirectionFromBars, fundBySymbol } from './adapters/fundsAdapter'
 import { FUNDS_CALIBRATION } from './adapters/registry'
 import { getEtfGammaExposure, hasEtfGamma } from './fundsGamma'
 import { evaluateSessionQuality } from './sessionQuality'
 import { crashGuard } from './marketAnalysis'
-import { computeStraddleMove } from './optionsExpectedMove'
 import type { GammaExposure } from './gammaExposure'
 import type { NewsRiskDecision } from './newsRisk'
 import { getNewsResult } from '@/app/api/v2/news/route'
 
 export const NOT_CALIBRATED_NOTE =
-  'متوقفة مؤقتًا — المحتوى للتعلّم والمراقبة فقط.'
+  'لا تُعرض توصية حتى تكتمل المعايرة وتظهر فرصة ممتازة.'
 
 // ملخّص جاما مبسّط للعرض (SPY/QQQ فقط)
 export interface FundGamma {
@@ -57,15 +58,11 @@ export interface FundRecResult {
   expirations: string[]
   mode: RecMode
   notCalibratedNote: string
+  scenario: UnderlyingScenario | null
+  opportunityWindow: OpportunityWindow | null
 }
 
 // نطاق بحث الستريكات: ±20% حول السعر (mandatoryFilter يفرض «خارج المال» فعلياً)
-function searchRange(price: number, type: 'call' | 'put'): { searchLow: number; searchHigh: number } {
-  return type === 'call'
-    ? { searchLow: price, searchHigh: price * 1.2 }
-    : { searchLow: price * 0.8, searchHigh: price }
-}
-
 // التذبذب الضمني عند السعر (ATM) من السلسلة — بديل «مؤشر الخوف» للصندوق
 function atmIvPct(chain: any[], price: number): number | null {
   if (!chain.length || !price) return null
@@ -107,7 +104,7 @@ export async function recommendForFund(symbol: string, options: RecommendFundOpt
     gamma: null, sessionQuality: evaluateSessionQuality(),
     calibration: { validated: FUNDS_CALIBRATION.validated, note: FUNDS_CALIBRATION.note },
     watchMode: false, contracts: [], expiration: '', expirations: [], mode,
-    notCalibratedNote: NOT_CALIBRATED_NOTE,
+    notCalibratedNote: NOT_CALIBRATED_NOTE, scenario: null, opportunityWindow: null,
   })
 
   // 1) سعر + شموع (مرّة واحدة — تُستخدم للتذبذب وحارس الانهيار)
@@ -141,64 +138,66 @@ export async function recommendForFund(symbol: string, options: RecommendFundOpt
     direction: dir, signalStrength, gamma: summarizeGamma(gammaEx), sessionQuality,
     calibration: { validated: FUNDS_CALIBRATION.validated, note: FUNDS_CALIBRATION.note },
     expirations: expirations.slice(0, 8), mode, notCalibratedNote: NOT_CALIBRATED_NOTE,
+    scenario: null, opportunityWindow: null,
   }
 
   if (!expirations.length) {
     return { ...base, market: marketPayload(quote, rv, null), watchMode: false, contracts: [], expiration: '' }
   }
 
-  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-  const dteRanges = options.full
-    ? [{ min: 0, max: 2 }, { min: 2, max: 9 }, { min: 9, max: 21 }]
-    : [{ min: 2, max: 9 }, { min: 0, max: 2 }, { min: 9, max: 21 }]
+  const now = new Date()
+  const todayStr = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+  const dteOf = (expiration: string) => Math.round((new Date(expiration + 'T12:00:00Z').getTime() - new Date(todayStr + 'T12:00:00Z').getTime()) / 86400000)
+  const intradayBars = options.full ? await getStockIntradayBars(sym, '5min').catch(() => []) : []
+  const scenarioBars = intradayBars.length >= 5 ? intradayBars : bars
+  const dailyExpectedMove = Math.max(price * 0.0035, price * ((rv ?? 22) / 100) / Math.sqrt(252))
+  const scenario = contractType ? buildUnderlyingScenario({
+    direction: contractType, spot: price, expectedMove: dailyExpectedMove, bars: scenarioBars,
+    sessionHigh: quote.high, sessionLow: quote.low, previousClose: quote.prevClose,
+    liquidity: gammaEx ? {
+      upper: gammaEx.callWall, lower: gammaEx.putWall, flip: gammaEx.flipLevel,
+    } : null,
+  }) : null
+  const opportunityWindow = scenario ? buildOpportunityWindow({
+    scenario, bars: scenarioBars, style: 'day', minutesToClose: sessionQuality.minutesToClose, now,
+  }) : null
 
   let contracts: any[] = []
   let usedExp = ''
-  let effectiveEM: number | null = null
-  let emUpper: number | null = null
-  let emLower: number | null = null
-  let watchMode = false
+  const effectiveEM: number | null = dailyExpectedMove
+  const emUpper: number | null = Math.round((price + dailyExpectedMove) * 100) / 100
+  const emLower: number | null = Math.round((price - dailyExpectedMove) * 100) / 100
+  const watchMode = !contractType || !scenario || !opportunityWindow
 
-  for (const range of dteRanges) {
-    const exp = expirations.find(e => {
-      const dte = Math.round((new Date(e + 'T12:00:00Z').getTime() - new Date(todayStr + 'T12:00:00Z').getTime()) / 86400000)
-      return dte >= range.min && dte <= range.max
+  if (contractType && scenario && opportunityWindow) {
+    const candidateExps = [...expirations]
+      .filter(exp => dteOf(exp) >= opportunityWindow.minimumDte)
+      .sort((left, right) => Math.abs(dteOf(left) - opportunityWindow.recommendedDte) - Math.abs(dteOf(right) - opportunityWindow.recommendedDte))
+      .slice(0, options.full ? 3 : 1)
+    const fetched = await Promise.all(candidateExps.map(async expiration => ({
+      expiration,
+      options: await fundsAdapter.getChain(sym, expiration).catch(() => [] as any[]),
+    })))
+    const nonEmpty = fetched.filter(item => item.options.length)
+    const ivPct = nonEmpty.length ? (atmIvPct(nonEmpty[0].options, price) ?? rv ?? 25) : (rv ?? 25)
+    const selected = selectContractsForScenario({
+      chains: nonEmpty, direction: contractType, scenario, window: opportunityWindow,
+      referenceVolPct: rv, minutesToClose: sessionQuality.minutesToClose,
+      mode, bands: STOCK_BANDS, limit: 1, now,
     })
-    if (!exp) continue
-    const chain = await fundsAdapter.getChain(sym, exp).catch(() => [] as any[])
-    if (!chain.length) continue
-
-    // الحركة المتوقعة حتى الانتهاء من ATM straddle (أدق من التقدير)
-    const straddle = computeStraddleMove(chain as any, price, rv ? Math.round(price * (rv / 100) * Math.sqrt(1 / 252) * 100) / 100 : null)
-    effectiveEM = straddle.points
-    emUpper = effectiveEM ? Math.round((price + effectiveEM) * 100) / 100 : null
-    emLower = effectiveEM ? Math.round((price - effectiveEM) * 100) / 100 : null
-
-    // التذبذب الضمني عند السعر (لمحرك الاستراتيجية والعتبات)
-    const ivPct = atmIvPct(chain, price) ?? rv ?? 25
-
-    // جمع المرشّحات
-    let collected: any[] = []
-    if (!contractType) {
-      const bestCall = collectBest(chain as any, 'call', 1, { price, em: effectiveEM, mode, bands: STOCK_BANDS, todayStr, ...searchRange(price, 'call') })
-      const bestPut  = collectBest(chain as any, 'put',  1, { price, em: effectiveEM, mode, bands: STOCK_BANDS, todayStr, ...searchRange(price, 'put') })
-      collected = [...bestCall, ...bestPut]
-      if (collected.length) watchMode = true
-    } else {
-      collected = collectBest(chain as any, contractType, 6, { price, em: effectiveEM, mode, bands: STOCK_BANDS, todayStr, ...searchRange(price, contractType) })
+    if (selected.length) {
+      const selectedChain = nonEmpty.find(item => item.expiration === selected[0].expiration)?.options ?? []
+      const guard = crashGuard(bars as any, null)
+      const ctx = buildFundContext({
+        price, emUpper, emLower, changePct: quote.changePct, ivPct, recMode: mode,
+        chain: selectedChain, guard, sessionQuality, gammaEx, contractType, watchMode: false,
+        newsRisk: fetchedNews, scenario, opportunityWindow,
+      })
+      contracts = enrichContracts(selected, ctx)
+        .filter(contract => contract.status === 'execute' && contract.selection?.fitLabel === 'ممتاز')
+        .slice(0, 1)
+      usedExp = selected[0].expiration
     }
-    if (!collected.length) continue
-
-    const top = contractType ? collected.slice(0, 3) : collected
-    const guard = crashGuard(bars as any, null)
-    const ctx = buildFundContext({
-      price, emUpper: emUpper ?? Math.round(price + price * 0.03), emLower: emLower ?? Math.round(price - price * 0.03),
-      changePct: quote.changePct, ivPct, recMode: mode, chain,
-      guard, sessionQuality, gammaEx, contractType, watchMode, newsRisk: fetchedNews,
-    })
-    contracts = enrichContracts(top, ctx)
-    usedExp = exp
-    break
   }
 
   return {
@@ -207,6 +206,8 @@ export async function recommendForFund(symbol: string, options: RecommendFundOpt
     watchMode,
     contracts,
     expiration: usedExp,
+    scenario,
+    opportunityWindow,
   }
 }
 
@@ -216,6 +217,7 @@ function buildFundContext(a: {
   recMode: RecMode; chain: any[]; guard: { active: boolean; reasons: string[] }
   sessionQuality: ReturnType<typeof evaluateSessionQuality>; gammaEx: GammaExposure | null
   contractType: 'call' | 'put' | null; watchMode: boolean; newsRisk: NewsRiskDecision | null
+  scenario: UnderlyingScenario | null; opportunityWindow: OpportunityWindow | null
 }): EnrichContext {
   const sessionBlocked = a.sessionQuality.action === 'block'
   const newsBlocked = a.newsRisk?.action === 'block'
@@ -250,6 +252,8 @@ function buildFundContext(a: {
     newsRisk: a.newsRisk,
     marketReaction: null,
     session: a.sessionQuality,
+    scenario: a.scenario,
+    opportunityWindow: a.opportunityWindow,
   }
 }
 

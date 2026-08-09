@@ -14,7 +14,9 @@ interface Row {
   summary_ar: string | null
   spx_at_signal: number | null
   target_level: number | null
+  target2_level: number | null
   stop_loss_level: number | null
+  scenario_stage: string | null
 }
 
 const STATUS_AR: Record<string, { label: string; color: string }> = {
@@ -42,7 +44,7 @@ export default async function PublicTrackPage() {
     const sb = createServiceClient()
     const { data } = await sb
       .from('v2_signals')
-      .select('created_at, contract_symbol, contract_type, strike, status, summary_ar, spx_at_signal, target_level, stop_loss_level')
+      .select('*')
       .order('created_at', { ascending: false })
       .limit(200)
     rows = ((data ?? []) as Row[]).filter(r => !r.contract_symbol?.startsWith('TEST_'))
@@ -71,8 +73,8 @@ export default async function PublicTrackPage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { label: 'نسبة الربح', value: winRate != null ? `${winRate}%` : '—', sub: `من ${decided} إشارة محسومة`, color: winRate != null && winRate >= 50 ? '#26D07C' : '#E8D5A3' },
-            { label: 'ربحت', value: String(wins), sub: 'وصلت هدفها', color: '#26D07C' },
-            { label: 'خسرت', value: String(losses), sub: 'ضربت وقفها', color: '#F0435A' },
+            { label: 'ربحت', value: String(wins), sub: 'اكتملت حركتها', color: '#26D07C' },
+            { label: 'خسرت', value: String(losses), sub: 'فقد السيناريو صلاحيته', color: '#F0435A' },
             { label: 'نشطة الآن', value: String(active), sub: 'تحت التقييم', color: '#60A5FA' },
           ].map(x => (
             <div key={x.label} className="rounded-xl p-4 text-center"
@@ -92,7 +94,7 @@ export default async function PublicTrackPage() {
                 <th className="py-3 px-3 text-right">التاريخ</th>
                 <th className="py-3 px-3 text-right">العقد</th>
                 <th className="py-3 px-3 text-center">التصنيف</th>
-                <th className="py-3 px-3 text-center">الهدف / الوقف</th>
+                <th className="py-3 px-3 text-center">أهداف الأصل / الإلغاء</th>
                 <th className="py-3 px-3 text-center">النتيجة</th>
               </tr>
             </thead>
@@ -114,7 +116,7 @@ export default async function PublicTrackPage() {
                       </span>
                     </td>
                     <td className="py-2.5 px-3 text-center text-xs font-mono text-gray-400">
-                      {r.target_level ?? '—'} / {r.stop_loss_level ?? '—'}
+                      {r.target_level ?? '—'} / {r.target2_level ?? '—'} / {r.stop_loss_level ?? '—'}
                     </td>
                     <td className="py-2.5 px-3 text-center">
                       <span className="text-xs font-bold" style={{ color: st.color }}>{st.label}</span>

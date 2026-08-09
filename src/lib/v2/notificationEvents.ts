@@ -21,6 +21,13 @@ export type EntryNotificationInput = {
   mid?: number | null
   ask?: number | null
   strategy?: StrategySnapshot | null
+  execution?: { entryLow?: number | null; entryHigh?: number | null } | null
+  scenario?: {
+    target1?: { value?: number | null } | null
+    target2?: { value?: number | null } | null
+    invalidation?: { value?: number | null } | null
+  } | null
+  opportunityWindow?: { label?: string | null } | null
 }
 
 export type ExitNotificationInput = {
@@ -73,19 +80,20 @@ export function buildEntryNotification(
   now = new Date(),
 ): BellNotification {
   const name = contractName(contract.type)
-  const entry = contract.strategy?.entryBalanced ?? contract.mid ?? contract.ask
-  const target1 = contract.strategy?.t1Price
-  const target2 = contract.strategy?.t2Price
-  const stop = contract.strategy?.stopPrice
+  const entry = contract.execution?.entryHigh ?? contract.strategy?.entryBalanced ?? contract.mid ?? contract.ask
+  const target1 = contract.scenario?.target1?.value
+  const target2 = contract.scenario?.target2?.value
+  const stop = contract.scenario?.invalidation?.value
 
   return {
     type: 'signal',
     title: `فرصة دخول ${contract.grade ?? ''} — ${name} ${contract.strike}`.replace('  ', ' ').trim(),
     body: [
       `الدخول ${money(entry)}`,
-      `الهدف الأول ${money(target1)}`,
-      `الهدف الثاني ${money(target2)}`,
-      `الوقف ${money(stop)}`,
+      `هدف الأصل الأول ${target1 == null ? '—' : target1.toLocaleString('en-US')}`,
+      `هدف الأصل الثاني ${target2 == null ? '—' : target2.toLocaleString('en-US')}`,
+      `إلغاء السيناريو ${stop == null ? '—' : stop.toLocaleString('en-US')}`,
+      `نافذة الفرصة ${contract.opportunityWindow?.label ?? '—'}`,
       `الانتهاء ${expiryLabel(contract.expiration)}`,
       `صدرت ${riyadhDateTime(now)} بتوقيت الرياض`,
     ].join(' · '),

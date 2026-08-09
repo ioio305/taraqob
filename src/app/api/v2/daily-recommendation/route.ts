@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
   // فرص اليوم القوية من السجل نفسه
   const { data: sigData } = await sb
     .from('v2_signals')
-    .select('created_at, contract_type, strike, total_score, entry_price, target_level, stop_loss_level, spx_at_signal, status, summary_ar, contract_symbol')
+    .select('*')
     .gte('created_at', nyToday + 'T00:00:00')
     .order('total_score', { ascending: false })
     .limit(20)
@@ -82,8 +82,10 @@ export async function GET(req: NextRequest) {
           <table style="width:100%; border-collapse:collapse;">
             ${row('توقيت الظهور', timeNY(s.created_at) + ' (نيويورك)')}
             ${s.entry_price != null ? row('الدخول (سعر العقد)', '$' + s.entry_price) : ''}
-            ${s.target_level != null ? row('الهدف (مستوى المؤشر)', String(Math.round(s.target_level)), '#26D07C') : ''}
-            ${s.stop_loss_level != null ? row('الوقف (مستوى المؤشر)', String(Math.round(s.stop_loss_level)), '#F0435A') : ''}
+            ${s.target_level != null ? row('هدف الأصل الأول', String(Math.round(s.target_level)), '#26D07C') : ''}
+            ${s.target2_level != null ? row('هدف الأصل الثاني', String(Math.round(s.target2_level)), '#26D07C') : ''}
+            ${s.stop_loss_level != null ? row('إلغاء السيناريو عند', String(Math.round(s.stop_loss_level)), '#F0435A') : ''}
+            ${s.valid_until ? row('صلاحية السيناريو حتى', timeNY(s.valid_until) + ' (نيويورك)', '#60A5FA') : ''}
             ${s.spx_at_signal != null ? row('SPX عند الإشارة', String(Math.round(s.spx_at_signal)), '#B8C4D4') : ''}
           </table>
           ${s.summary_ar ? `<p style="margin:8px 0 0; color:#8595A5; font-size:12px; line-height:1.7;">${s.summary_ar}</p>` : ''}

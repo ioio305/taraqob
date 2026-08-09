@@ -28,8 +28,8 @@ type ScanRow = {
   best: null | {
     strike: number; type: string; expiration: string; mid: number; reason: string
     ranking: {
-      score: number; expectedProfit: number; expectedReturnPct: number
-      riskReward: number; spreadPct: number; relativeStrengthPct: number; reasons: string[]
+      score: number; expectedMovePoints: number; expectedMovePct: number
+      riskReward: number; spreadPct: number; relativeStrengthPct: number; timeDecayBurdenPct: number; reasons: string[]
     }
   }
 }
@@ -137,13 +137,16 @@ export default function StocksDecisionRoom() {
     return () => clearInterval(id)
   }, [load])
 
-  const platformPick = scanRows.find(row => row.best && row.dataQuality?.status !== 'blocked') ?? null
+  const platformPick = useMemo(
+    () => scanRows.find(row => row.best && row.dataQuality?.status !== 'blocked') ?? null,
+    [scanRows],
+  )
   const basePrimary = searched ?? platformPick
   const symbol = basePrimary?.symbol ?? ''
   const { quote: liveQuote } = useLiveQuote(symbol)
-  const primary = basePrimary && liveQuote
+  const primary = useMemo(() => basePrimary && liveQuote
     ? { ...basePrimary, price: liveQuote.price, changePct: liveQuote.changePct, source: liveQuote.source }
-    : basePrimary
+    : basePrimary, [basePrimary, liveQuote])
   const radar = radarRows.find(row => row.symbol === symbol) ?? null
   const matchingFlows = flows.filter(flow => flow.symbol === symbol)
   const supportingFlow = matchingFlows.find(flow => flow.type === primary?.direction.type) ?? null
@@ -317,8 +320,8 @@ export default function StocksDecisionRoom() {
               <>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-6">
                   <Metric label="قوة الفرصة" value={`${primary.best.ranking.score}/100`} />
-                  <Metric label="الربح المستهدف" value={`$${primary.best.ranking.expectedProfit}`} />
-                  <Metric label="العائد المتوقع" value={`${primary.best.ranking.expectedReturnPct}%`} />
+                  <Metric label="حركة السهم المستهدفة" value={`${primary.best.ranking.expectedMovePoints} نقطة`} />
+                  <Metric label="نسبة حركة السهم" value={`${primary.best.ranking.expectedMovePct}%`} />
                   <Metric label="عائد/مخاطرة" value={`${primary.best.ranking.riskReward}`} />
                 </div>
                 <div className="mt-4 rounded-xl p-4 text-sm leading-7"

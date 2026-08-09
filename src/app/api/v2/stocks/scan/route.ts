@@ -51,6 +51,8 @@ interface ScanRow {
     asOf: string | null
   } | null
   dayPlan?: import('@/lib/v2/dayTrading').DayPlan | null
+  scenario?: import('@/lib/v2/opportunityModel').UnderlyingScenario | null
+  opportunityWindow?: import('@/lib/v2/opportunityModel').OpportunityWindow | null
   error?: string
 }
 
@@ -115,9 +117,11 @@ export async function GET(request: NextRequest) {
               ask: b.ask,
               mid: b.mid,
               probItmPct: b.probItmPct,
-              entryTotal: b.strategy?.entryBalancedTotal,
-              targetProfit: b.strategy?.t1Profit,
-              stopLoss: b.strategy?.stopLoss,
+              underlyingEntry: rec.scenario?.entry,
+              underlyingTarget: rec.scenario?.target1.value,
+              underlyingInvalidation: rec.scenario?.invalidation.value,
+              selectionFit: b.selection?.fitScore,
+              timeDecayBurdenPct: b.selection?.timeDecayBurdenPct,
               stockChangePct: quote.changePct,
               marketChangePct: marketQuote?.changePct,
               direction: b.type,
@@ -127,6 +131,8 @@ export async function GET(request: NextRequest) {
           } : null,
           watchMode: rec.watchMode,
           dayPlan: rec.dayPlan ?? null,
+          scenario: rec.scenario,
+          opportunityWindow: rec.opportunityWindow,
           dataQuality: rec.dataQuality ? {
             status: rec.dataQuality.status,
             label: rec.dataQuality.label,

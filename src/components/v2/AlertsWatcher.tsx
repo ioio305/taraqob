@@ -16,7 +16,7 @@ import {
   type BellNotification,
 } from '@/lib/v2/notificationEvents'
 
-const POLL_MS = 90_000   // كل 90 ثانية أثناء السوق
+const POLL_MS = 15_000   // متابعة قريبة من اللحظة أثناء السوق
 const BELL_SENT_KEY = 'taraqob_bell_alerted_v1'
 const SIGNAL_LOGGED_KEY = 'taraqob_signal_logged_v1'
 const RECOMMENDED_POSITIONS_KEY = 'taraqob_recommended_positions_v1'
@@ -135,7 +135,7 @@ async function saveBellOnce(key: string, notice: BellNotification) {
   } catch { /* يعاد تلقائياً في الدورة القادمة */ }
 }
 
-async function logSignalOnce(key: string, contract: any, market: any) {
+async function logSignalOnce(key: string, contract: any, market: any, scenario?: any, opportunityWindow?: any) {
   const fullKey = dailyKey(key)
   if (hasBeenSent(SIGNAL_LOGGED_KEY, fullKey)) return
 
@@ -153,15 +153,18 @@ async function logSignalOnce(key: string, contract: any, market: any) {
         entry_price: contract.strategy?.entryBalanced ?? contract.mid ?? contract.ask ?? null,
         entry_bid: contract.bid ?? null,
         entry_ask: contract.ask ?? null,
-        contract_stop_price: contract.strategy?.stopPrice ?? null,
-        contract_target_price: contract.strategy?.t1Price ?? null,
-        stop_loss_level: contract.strategy?.stopSpxLevel ?? null,
-        target_level: contract.strategy?.t1SpxLevel ?? null,
-        risk_reward_ratio: contract.strategy?.stopLoss
-          ? Math.abs((contract.strategy?.t1Profit ?? 0) / contract.strategy.stopLoss)
+        contract_stop_price: contract.execution?.hardProtectionPrice ?? null,
+        contract_target_price: null,
+        stop_loss_level: scenario?.invalidation?.value ?? null,
+        target_level: scenario?.target1?.value ?? null,
+        target2_level: scenario?.target2?.value ?? null,
+        opportunity_window: opportunityWindow?.label ?? null,
+        valid_until: opportunityWindow?.validUntil ?? null,
+        risk_reward_ratio: scenario
+          ? Math.abs((scenario.target1.value - scenario.entry) / (scenario.entry - scenario.invalidation.value))
           : null,
         spx_at_signal: market?.spx?.price ?? null,
-        reason: contract.reason,
+        reason: `${contract.reason ?? ''}${opportunityWindow?.label ? ` — نافذة الفرصة: ${opportunityWindow.label}` : ''}`,
       }),
     })
     if (!response.ok) return
@@ -198,8 +201,8 @@ export function AlertsWatcher() {
             `🚨 فرصة ${c.grade} — ترقب`,
             `${typeAr} ${c.strike} بسعر ~$${c.mid ?? c.ask} — افتح المنصة للتفاصيل`)
           watchRecommendation(c, idx)
-          void saveBellOnce(`sig-${c.symbol}`, buildEntryNotification(c))
-          void logSignalOnce(`sig-${c.symbol}`, c, marketNorm)
+          void saveBellOnce(`sig-${c.symbol}`, buildEntryNotification({ ...c, scenario: rec?.scenario, opportunityWindow: rec?.opportunityWindow }))
+          void logSignalOnce(`sig-${c.symbol}`, c, marketNorm, rec?.scenario, rec?.opportunityWindow)
         }
       } catch { /* تجاهل */ }
 

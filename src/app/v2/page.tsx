@@ -8,6 +8,8 @@ import { DisciplineBar } from '@/components/v2/PositionSizing'
 import { IndexSwitcher } from '@/components/v2/IndexSwitcher'
 import { UnderlyingTradeManager } from '@/components/v2/UnderlyingTradeManager'
 import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
+import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
+import type { ContractScenarioFit } from '@/lib/v2/scenarioContractSelector'
 
 type Market = {
   spx: { price: number; prevClose?: number; changePct: number; high: number; low: number }
@@ -45,6 +47,8 @@ type LockedPlan = {
   spxAtLock:   number
   scoreAtLock: number
   strategy:    ContractStrategy
+  scenario:    UnderlyingScenario | null
+  opportunityWindow: OpportunityWindow | null
 }
 type LiveSnap = {
   mid: number; bid: number; ask: number
@@ -68,6 +72,11 @@ type Contract  = {
   } | null
   wallNote?: string | null
   strategy: ContractStrategy
+  selection?: ContractScenarioFit
+  execution?: {
+    entryLow: number; entryHigh: number; hardProtectionPrice: number
+    exitBasis: 'underlying'; hasContractPriceTarget: false
+  }
   focus?: {
     action: 'enter' | 'wait' | 'avoid'
     label: string
@@ -88,6 +97,8 @@ type Data = {
   issuedAt?: string
   marketClosed?: boolean; marketStatus?: string
   watchMode?: boolean
+  scenario?: UnderlyingScenario | null
+  opportunityWindow?: OpportunityWindow | null
   market: Market; sessions: Sessions; direction: Direction
   contracts: Contract[]; shortlist: ShortlistItem[]
   expiration: string; expirations: string[]
@@ -214,6 +225,8 @@ export default function V2Dashboard() {
             spxAtLock:   json.market?.spx?.price ?? 0,
             scoreAtLock: c.score,
             strategy:    c.strategy,
+            scenario:    json.scenario ?? null,
+            opportunityWindow: json.opportunityWindow ?? null,
           })
         }
         liveSnaps.current.set(c.symbol, {
@@ -251,14 +264,19 @@ export default function V2Dashboard() {
       body: JSON.stringify({
         contract_symbol: c.symbol, contract_type: c.type, strike: c.strike, expiry: c.expiration,
         total_score: c.score, grade: c.grade,
-        entry_price: c.strategy?.entryBalanced ?? null,
+        entry_price: c.execution?.entryHigh ?? c.mid ?? null,
         entry_bid: c.bid ?? null,
         entry_ask: c.ask ?? null,
-        contract_stop_price: c.strategy?.stopPrice ?? null,
-        contract_target_price: c.strategy?.t1Price ?? null,
-        stop_loss_level: c.strategy?.stopSpxLevel ?? null,
-        target_level: c.strategy?.t1SpxLevel ?? null,
-        risk_reward_ratio: c.strategy?.stopLoss ? Math.abs((c.strategy.t1Profit ?? 0) / c.strategy.stopLoss) : null,
+        contract_stop_price: c.execution?.hardProtectionPrice ?? null,
+        contract_target_price: null,
+        stop_loss_level: data?.scenario?.invalidation.value ?? null,
+        target_level: data?.scenario?.target1.value ?? null,
+        target2_level: data?.scenario?.target2.value ?? null,
+        opportunity_window: data?.opportunityWindow?.label ?? null,
+        valid_until: data?.opportunityWindow?.validUntil ?? null,
+        risk_reward_ratio: data?.scenario
+          ? data.scenario.movementMin / Math.max(0.01, Math.abs(data.scenario.entry - data.scenario.invalidation.value))
+          : null,
         spx_at_signal: data?.market?.spx?.price ?? null,
         reason: c.reason,
       }),
@@ -321,7 +339,7 @@ export default function V2Dashboard() {
       {data?.issuedAt && (
         <div className="text-xs px-3 py-2 rounded-lg text-center" style={{ color: '#94A3B8', background: 'rgba(255,255,255,.035)' }}>
           آخر تحليل: {new Date(data.issuedAt).toLocaleTimeString('ar-SA', { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit' })} بتوقيت الرياض
-          {' · '}{hasExecute ? 'الفرصة صالحة الآن بالسعر المحدد فقط' : 'لا توجد فرصة دخول صالحة الآن'}
+          {' · '}{hasExecute ? 'الفرصة صالحة ضمن نافذتها الزمنية الحالية' : 'لا توجد فرصة دخول صالحة الآن'}
         </div>
       )}
 
@@ -464,14 +482,24 @@ export default function V2Dashboard() {
             const live  = liveSnaps.current.get(c.symbol)
             const directQuote = liveQuotes[c.symbol]
             const strat = plan?.strategy ?? c.strategy        // always frozen
+            const tradeScenario = plan?.scenario ?? data?.scenario ?? null
+            const tradeWindow = plan?.opportunityWindow ?? data?.opportunityWindow ?? null
             const liveMid    = directQuote?.mid ?? directQuote?.price ?? live?.mid ?? c.mid
             const liveScore  = live?.score  ?? c.score
             const liveStatus = live?.status ?? c.status
 
             // ── Trade status relative to frozen levels ─────────────────────
-            const t2Hit   = strat && liveMid >= strat.t2Price
-            const t1Hit   = strat && !t2Hit && liveMid >= strat.t1Price
-            const stopHit = strat && liveMid <= strat.stopPrice
+            const underlyingNow = spx?.price ?? tradeScenario?.entry ?? 0
+            const t2Hit = tradeScenario
+              ? (isCall ? underlyingNow >= tradeScenario.target2.value : underlyingNow <= tradeScenario.target2.value)
+              : false
+            const t1Hit = tradeScenario && !t2Hit
+              ? (isCall ? underlyingNow >= tradeScenario.target1.value : underlyingNow <= tradeScenario.target1.value)
+              : false
+            const scenarioStopped = tradeScenario
+              ? (isCall ? underlyingNow <= tradeScenario.invalidation.value : underlyingNow >= tradeScenario.invalidation.value)
+              : false
+            const stopHit = scenarioStopped
             const isStale = plan && liveScore < plan.scoreAtLock - 15
 
             const tradeStatus = t2Hit   ? { label: 'هدف ٢ تحقق', color: '#60A5FA' }
@@ -479,7 +507,7 @@ export default function V2Dashboard() {
               : stopHit ? { label: 'وقف الخسارة', color: '#EF4444' }
               :           { label: 'فعّالة',        color: '#C9943A' }
 
-            const livePnL  = strat ? Math.round((liveMid - strat.entryConservative) * 100) : null
+            const livePnL  = strat ? Math.round((liveMid - (c.execution?.entryHigh ?? strat.entryBalanced)) * 100) : null
             const pnlColor = livePnL == null ? '#7C8A99' : livePnL >= 0 ? '#10B981' : '#EF4444'
             const lockedTimeStr = plan
               ? new Date(plan.lockedAt).toLocaleTimeString('en-US',
@@ -544,9 +572,9 @@ export default function V2Dashboard() {
                     {/* خطة مصغّرة — كي تُقرأ كتوصية كاملة بلا توسيع */}
                     {strat && (
                       <div className="flex items-center gap-4 text-xs font-mono pr-0.5" style={{ color: '#8A97A6' }}>
-                        <span>ادخل <span style={{ color: '#E8D5A3' }}>${n(strat.entryBalanced)}</span></span>
-                        <span>الهدف <span style={{ color: '#26D07C' }}>${n(strat.t1Price)}</span></span>
-                        <span>الوقف <span style={{ color: '#F87171' }}>${n(strat.stopPrice)}</span></span>
+                        <span>سعره الآن <span style={{ color: '#E8D5A3' }}>${n(liveMid)}</span></span>
+                        {tradeScenario ? <span>هدف الأصل <span style={{ color: '#26D07C' }}>{n(tradeScenario.target1.value)}</span></span> : null}
+                        {tradeWindow ? <span>النافذة <span style={{ color: '#60A5FA' }}>{tradeWindow.label}</span></span> : null}
                       </div>
                     )}
                   </button>
@@ -674,30 +702,47 @@ export default function V2Dashboard() {
                     </div>
                   )}
 
-                  {/* ═══ الخطة: ثلاثة أرقام واضحة — اشترِ · الهدف · الوقف ═══ */}
-                  {strat && (
-                    <div className="grid grid-cols-3 gap-2">
+                  {/* ═══ الخطة: الأصل يحدد الأهداف، والعقد أداة تنفيذ فقط ═══ */}
+                  {strat && tradeScenario && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       <div className="rounded-xl p-2.5 text-center"
                            style={{ background: 'rgba(201,148,58,0.08)', border: '1px solid rgba(201,148,58,0.25)' }}>
-                        <div className="text-xs font-bold mb-1" style={{ color: '#C9943A' }}>اشترِ بسعر</div>
-                        <div className="text-xl font-black font-mono" style={{ color: '#E8D5A3' }}>${n(strat.entryBalanced)}</div>
-                        <div className="text-xs font-mono mt-0.5" style={{ color: '#8F6415' }}>تكلفة العقد ${strat.entryBalancedTotal.toLocaleString()}</div>
+                        <div className="text-xs font-bold mb-1" style={{ color: '#C9943A' }}>نطاق تنفيذ العقد</div>
+                        <div className="text-lg font-black font-mono" style={{ color: '#E8D5A3' }}>
+                          ${n(c.execution?.entryLow ?? c.bid)} — ${n(c.execution?.entryHigh ?? c.ask)}
+                        </div>
+                        <div className="text-xs mt-0.5" style={{ color: '#8F6415' }}>لا يوجد هدف سعري للعقد</div>
                       </div>
                       <div className="rounded-xl p-2.5 text-center"
                            style={{ background: t1Hit || t2Hit ? 'rgba(16,185,129,0.16)' : 'rgba(16,185,129,0.08)', border: `1px solid ${t1Hit || t2Hit ? '#10B981' : 'rgba(16,185,129,0.25)'}` }}>
-                        <div className="text-xs font-bold mb-1" style={{ color: '#10B981' }}>{t1Hit || t2Hit ? '✓ بِع عند' : 'بِع عند (الهدف)'}</div>
-                        <div className="text-xl font-black font-mono" style={{ color: '#26D07C' }}>${n(strat.t1Price)}</div>
-                        <div className="text-xs font-mono mt-0.5" style={{ color: '#10B981' }}>الربح +${strat.t1Profit.toLocaleString()}
-                          {strat.t1SpxLevel ? <span style={{ color: '#4E7D68' }}> · المؤشر {strat.t1SpxLevel.toLocaleString()}</span> : null}
-                        </div>
+                        <div className="text-xs font-bold mb-1" style={{ color: '#10B981' }}>{t1Hit || t2Hit ? '✓ تحقق الهدف الأول' : 'هدف الأصل الأول'}</div>
+                        <div className="text-xl font-black font-mono" style={{ color: '#26D07C' }}>{n(tradeScenario.target1.value)}</div>
+                        <div className="text-xs mt-0.5" style={{ color: '#4E7D68' }}>{tradeScenario.target1.source}</div>
+                      </div>
+                      <div className="rounded-xl p-2.5 text-center"
+                           style={{ background: t2Hit ? 'rgba(96,165,250,0.16)' : 'rgba(96,165,250,0.08)', border: `1px solid ${t2Hit ? '#60A5FA' : 'rgba(96,165,250,0.25)'}` }}>
+                        <div className="text-xs font-bold mb-1" style={{ color: '#60A5FA' }}>{t2Hit ? '✓ اكتملت الحركة' : 'هدف الأصل الثاني'}</div>
+                        <div className="text-xl font-black font-mono" style={{ color: '#93C5FD' }}>{n(tradeScenario.target2.value)}</div>
+                        <div className="text-xs mt-0.5" style={{ color: '#4E6D91' }}>{tradeScenario.target2.source}</div>
                       </div>
                       <div className="rounded-xl p-2.5 text-center"
                            style={{ background: stopHit ? 'rgba(239,68,68,0.16)' : 'rgba(239,68,68,0.08)', border: `1px solid ${stopHit ? '#EF4444' : 'rgba(239,68,68,0.25)'}` }}>
-                        <div className="text-xs font-bold mb-1" style={{ color: '#EF4444' }}>{stopHit ? '✓ بِع (الوقف)' : 'بِع لو نزل إلى'}</div>
-                        <div className="text-xl font-black font-mono" style={{ color: '#F87171' }}>${n(strat.stopPrice)}</div>
-                        <div className="text-xs font-mono mt-0.5" style={{ color: '#EF4444' }}>الخسارة −${Math.abs(strat.stopLoss).toLocaleString()}
-                          {strat.stopSpxLevel ? <span style={{ color: '#8A5050' }}> · المؤشر {strat.stopSpxLevel.toLocaleString()}</span> : null}
-                        </div>
+                        <div className="text-xs font-bold mb-1" style={{ color: '#EF4444' }}>{stopHit ? '✓ انتهى السيناريو' : 'إلغاء السيناريو'}</div>
+                        <div className="text-xl font-black font-mono" style={{ color: '#F87171' }}>{n(tradeScenario.invalidation.value)}</div>
+                        <div className="text-xs mt-0.5" style={{ color: '#8A5050' }}>{tradeScenario.invalidation.source}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {tradeWindow && (
+                    <div className="rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3"
+                         style={{ background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.20)' }}>
+                      <div>
+                        <div className="text-xs font-bold" style={{ color: '#93C5FD' }}>النافذة الزمنية للفرصة: {tradeWindow.label}</div>
+                        <div className="text-xs mt-1" style={{ color: '#718196' }}>{tradeWindow.reason}</div>
+                      </div>
+                      <div className="text-xs font-bold" style={{ color: '#BFDBFE' }}>
+                        الانتهاء الأنسب: {tradeWindow.recommendedDte === 0 ? 'اليوم' : `${tradeWindow.recommendedDte} يوم`}
                       </div>
                     </div>
                   )}
@@ -712,7 +757,7 @@ export default function V2Dashboard() {
                           <div className="text-base font-bold font-mono text-white">${n(liveMid)}</div>
                         </div>
                         <div>
-                          <div className="text-xs font-mono" style={{ color: '#7C8A99' }}>ربحك الآن</div>
+                          <div className="text-xs font-mono" style={{ color: '#7C8A99' }}>تغير العقد منذ الاختيار</div>
                           <div className="text-base font-bold font-mono" style={{ color: pnlColor }}>
                             {livePnL == null ? '—' : (livePnL >= 0 ? '+' : '−') + '$' + Math.abs(livePnL)}
                           </div>
@@ -730,21 +775,22 @@ export default function V2Dashboard() {
                     </div>
                   )}
 
-                  {isPrimary && strat?.t1SpxLevel && strat?.t2SpxLevel && strat?.stopSpxLevel && (
+                  {isPrimary && tradeScenario && tradeWindow && (
                     <UnderlyingTradeManager
                       key={`spx-${c.symbol}-${plan?.lockedAt ?? 0}`}
                       platform="options"
                       symbol="SPX"
                       direction={isCall ? 'bullish' : 'bearish'}
                       plan={{
-                        entry: plan?.spxAtLock ?? spx?.price ?? 0,
-                        target1: strat.t1SpxLevel,
-                        target2: strat.t2SpxLevel,
-                        invalidation: strat.stopSpxLevel,
+                        entry: tradeScenario.entry,
+                        target1: tradeScenario.target1.value,
+                        target2: tradeScenario.target2.value,
+                        invalidation: tradeScenario.invalidation.value,
                       }}
                       contractSymbol={c.symbol}
                       hardContractStop={strat.stopPrice}
                       startedAt={plan ? new Date(plan.lockedAt).toISOString() : data?.issuedAt}
+                      validUntil={tradeWindow.validUntil}
                       accent={lc}
                       defaultOpen
                     />
@@ -755,56 +801,49 @@ export default function V2Dashboard() {
                     <button onClick={() => toggleExpand(c.symbol)}
                             className="w-full text-xs font-semibold py-1.5 rounded-lg transition-all"
                             style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', color: '#64748B' }}>
-                      {isOpen ? '▲ إخفاء التفاصيل' : '▼ تفاصيل أكثر (دخول أأمن · أهداف إضافية · خطة محدودة الخسارة)'}
+                      {isOpen ? '▲ إخفاء التفاصيل' : '▼ لماذا اختير العقد؟ · الزمن · التذبذب · الحماية'}
                     </button>
                   )}
 
                   {isOpen && strat && (
                     <div className="space-y-2.5">
-                      {/* الدخولان */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="rounded-lg p-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                          <div className="text-xs font-mono mb-1" style={{ color: '#7C8A99' }}>دخول محافظ (أضمن)</div>
-                          <div className="text-lg font-bold font-mono text-white">${n(strat.entryConservative)}</div>
-                          <div className="text-xs font-mono mt-0.5" style={{ color: '#6B7B8D' }}>× 100 = <span className="text-white">${strat.entryConservativeTotal}</span></div>
-                        </div>
-                        <div className="rounded-lg p-3" style={{ background: 'rgba(201,148,58,0.07)', border: '1px solid rgba(201,148,58,0.22)' }}>
-                          <div className="text-xs font-mono mb-1" style={{ color: '#C9943A88' }}>دخول متوازن (الموصى به)</div>
-                          <div className="text-lg font-bold font-mono" style={{ color: '#C9943A' }}>${n(strat.entryBalanced)}</div>
-                          <div className="text-xs font-mono mt-0.5" style={{ color: '#8F6415' }}>× 100 = <span style={{ color: '#C9943A' }}>${strat.entryBalancedTotal}</span></div>
-                        </div>
-                      </div>
-
-                      {/* كل الأهداف + الوقف بالمستويات */}
-                      <div className="space-y-1.5">
-                        {[
-                          { label: `هدف ١ — ${(strat.t1Pct*100).toFixed(0)}%`, price: strat.t1Price, total: strat.t1Total, profit: strat.t1Profit, spx: strat.t1SpxLevel, inEM: strat.t1InEM, color: '#10B981', bg: 'rgba(16,185,129,0.07)', border: 'rgba(16,185,129,0.2)', icon: '◎', hit: t1Hit || t2Hit },
-                          { label: `هدف ٢ — ${(strat.t2Pct*100).toFixed(0)}%`, price: strat.t2Price, total: strat.t2Total, profit: strat.t2Profit, spx: strat.t2SpxLevel, inEM: strat.t2InEM, color: '#60A5FA', bg: 'rgba(96,165,250,0.07)', border: 'rgba(96,165,250,0.2)', icon: '◎', hit: t2Hit },
-                          ...(strat.t3Price ? [{ label: `هدف ٣ — ${((strat.t3Pct??0)*100).toFixed(0)}%`, price: strat.t3Price, total: strat.t3Total??0, profit: strat.t3Profit??0, spx: strat.t3SpxLevel, inEM: strat.t3InEM??false, color: '#A78BFA', bg: 'rgba(167,139,250,0.07)', border: 'rgba(167,139,250,0.2)', icon: '◎', hit: false }] : []),
-                          { label: `وقف الخسارة — ${(strat.stopPct*100).toFixed(0)}%`, price: strat.stopPrice, total: strat.stopTotal, profit: strat.stopLoss, spx: strat.stopSpxLevel, inEM: null, color: '#EF4444', bg: 'rgba(239,68,68,0.07)', border: 'rgba(239,68,68,0.2)', icon: '⊘', hit: stopHit },
-                        ].map(row => (
-                          <div key={row.label} className="rounded-lg px-3 py-2"
-                               style={{ background: row.hit ? `${row.color}18` : row.bg, border: `1px solid ${row.hit ? row.color : row.border}` }}>
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs font-semibold shrink-0" style={{ color: row.color }}>
-                                {row.hit && '✓ '}{row.icon} {row.label}
-                                {row.inEM === false && <span className="mr-1 text-xs font-mono" style={{ color: '#F59E0B' }}>⚠ خارج الحركة المتوقعة</span>}
-                              </span>
-                              <div className="flex items-center gap-3 font-mono text-xs text-left">
-                                <span className="font-bold" style={{ color: row.color }}>${n(row.price)}</span>
-                                <span style={{ color: '#7C8A99' }}>(×100 = ${row.total})</span>
-                                <span className="font-semibold" style={{ color: row.profit >= 0 ? '#10B981' : '#EF4444' }}>
-                                  {row.profit >= 0 ? '+' : ''}${row.profit}
-                                </span>
-                              </div>
-                            </div>
-                            {row.spx && (
-                              <div className="text-xs font-mono mt-0.5" style={{ color: '#6B7B8D' }}>
-                                مستوى المؤشر المطلوب: <span style={{ color: '#94A3B8' }}>{row.spx.toLocaleString()}</span>
-                              </div>
-                            )}
+                      {c.selection && (
+                        <div className="rounded-xl p-3" style={{ background: 'rgba(96,165,250,0.05)', border: '1px solid rgba(96,165,250,0.20)' }}>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-xs font-bold" style={{ color: '#93C5FD' }}>لماذا اختير هذا العقد؟</span>
+                            <span className="text-sm font-black" style={{ color: c.selection.fitLabel === 'ممتاز' ? '#34D399' : '#FBBF24' }}>
+                              ملاءمة {c.selection.fitScore}/100
+                            </span>
                           </div>
-                        ))}
+                          <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">
+                            {[
+                              ['الانتهاء', c.selection.timeFit],
+                              ['سعر التنفيذ', c.selection.strikeFit],
+                              ['الاستجابة', c.selection.sensitivityFit],
+                              ['تآكل الوقت', `${c.selection.timeDecayBurdenPct}% خلال النافذة`],
+                            ].map(([label, value]) => (
+                              <div key={label} className="rounded-lg p-2" style={{ background: 'rgba(255,255,255,0.025)' }}>
+                                <div className="text-[10px]" style={{ color: '#64748B' }}>{label}</div>
+                                <div className="text-xs font-bold mt-1" style={{ color: '#CBD5E1' }}>{value}</div>
+                              </div>
+                            ))}
+                          </div>
+                          {c.selection.warnings.map(warning => (
+                            <div key={warning} className="text-xs mt-2" style={{ color: '#FBBF24' }}>⚠ {warning}</div>
+                          ))}
+                        </div>
+                      )}
+
+                      {tradeScenario && (
+                        <div className="rounded-lg px-3 py-2 text-xs leading-6"
+                             style={{ background: 'rgba(52,211,153,0.05)', border: '1px solid rgba(52,211,153,0.18)', color: '#A7F3D0' }}>
+                          منطقة الانعكاس المحتملة عند <span className="font-black">{n(tradeScenario.reversalZone?.value)}</span>. الخروج يُحسم من اكتمال حركة الأصل أو تغيرها، وليس من قمة سعر العقد.
+                        </div>
+                      )}
+
+                      <div className="rounded-lg px-3 py-2 text-xs"
+                           style={{ background: 'rgba(251,113,133,0.05)', border: '1px solid rgba(251,113,133,0.18)', color: '#FCA5A5' }}>
+                        حماية طارئة لرأس المال فقط: إذا انهار سعر العقد إلى ${n(c.execution?.hardProtectionPrice ?? strat.stopPrice)} يخرج النظام دون انتظار. هذا ليس وقف السيناريو الأساسي.
                       </div>
 
                       {/* نسخة السبريد — مخاطرة محددة السقف */}
@@ -832,11 +871,6 @@ export default function V2Dashboard() {
                         </div>
                       )}
 
-                      {/* الإجراء بعد الهدف الأول */}
-                      <div className="flex items-start gap-1.5">
-                        <span className="shrink-0 mt-0.5 text-xs" style={{ color: '#F59E0B' }}>↑</span>
-                        <div className="text-xs leading-snug" style={{ color: '#64748B' }}>{strat.postT1Action}</div>
-                      </div>
                     </div>
                   )}
 
@@ -954,7 +988,7 @@ export default function V2Dashboard() {
             <div className="flex flex-wrap gap-2 items-center">
               {data?.otmRange && (
                 <div className="rounded-xl px-4 py-2.5 text-xs font-mono flex-1" style={{ background: `${dirColor}08`, border: `1px solid ${dirColor}20`, color: dirColor }}>
-                  نطاق العقود خارج المال: {data.otmRange.note}
+                  نطاق اختيار العقد: {data.otmRange.note}
                 </div>
               )}
               {data?.pricing && (

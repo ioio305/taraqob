@@ -19,6 +19,9 @@ type Signal = {
   entry_price: number | null
   stop_loss_level: number | null
   target_level: number | null
+  target2_level: number | null
+  scenario_stage: string | null
+  valid_until: string | null
   risk_reward_ratio: number | null
   summary_ar: string | null
   spx_at_signal: number | null
@@ -205,6 +208,7 @@ export default function SignalsPage() {
           <div className="space-y-3">
             {filtered.map((s) => {
               const st = statusMap[s.status] ?? { ar: s.status, cls: 'border-navy-700 text-surface-400' }
+              const stageLabel = s.scenario_stage === 'target_one' ? 'الهدف الأول تحقق' : st.ar
               const dec = decisionMap[s.decision] ?? { ar: s.decision, cls: 'text-surface-400' }
               return (
                 <div key={s.id} className="bg-navy-900 border border-navy-700 rounded-xl p-4">
@@ -222,7 +226,7 @@ export default function SignalsPage() {
                         <span className="text-xs text-surface-500">
                           انتهاء {new Date(s.expiry + 'T12:00:00Z').toLocaleDateString('ar-SA', { day: 'numeric', month: 'long' })}
                         </span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full border ${st.cls}`}>{st.ar}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${st.cls}`}>{stageLabel}</span>
                       </div>
                       <div className="text-xs mt-1 font-mono cursor-help" style={{ color: '#6B7B8D' }}
                         title="رمز العقد الرسمي في البورصة — تحتاجه فقط عند البحث عن العقد في منصة وسيطك">
@@ -235,18 +239,22 @@ export default function SignalsPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
                     <div>
                       <div className="text-surface-600 mb-0.5">دخول</div>
                       <div className="font-medium tabular-nums">{fmt(s.entry_price, 2)}</div>
                     </div>
                     <div>
-                      <div className="text-surface-600 mb-0.5">وقف</div>
+                      <div className="text-surface-600 mb-0.5">إلغاء السيناريو</div>
                       <div className="font-medium tabular-nums text-red-400">{fmt(s.stop_loss_level, 0)}</div>
                     </div>
                     <div>
-                      <div className="text-surface-600 mb-0.5">هدف</div>
+                      <div className="text-surface-600 mb-0.5">الهدف الأول</div>
                       <div className="font-medium tabular-nums text-emerald-400">{fmt(s.target_level, 0)}</div>
+                    </div>
+                    <div>
+                      <div className="text-surface-600 mb-0.5">الهدف الثاني</div>
+                      <div className="font-medium tabular-nums text-emerald-300">{fmt(s.target2_level, 0)}</div>
                     </div>
                     <div>
                       <div className="text-surface-600 mb-0.5">R:R</div>
@@ -263,6 +271,7 @@ export default function SignalsPage() {
                   )}
                   <div className="mt-2 text-[11px] text-surface-500">
                     صدرت {signalTime(s.created_at)} بتوقيت الرياض
+                    {s.valid_until ? ` · صلاحية السيناريو حتى ${signalTime(s.valid_until)}` : ''}
                   </div>
                 </div>
               )

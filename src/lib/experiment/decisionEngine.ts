@@ -2,6 +2,8 @@ import type { GammaExposure } from '../v2/gammaExposure'
 import { getIntradayFreshness } from '../v2/marketFreshness'
 import type { MdBar } from '../v2/marketData'
 import type { TrackedScenario } from './scenarioState'
+import type { ContractScenarioFit } from '../v2/scenarioContractSelector'
+import type { OpportunityWindow, UnderlyingScenario } from '../v2/opportunityModel'
 
 type Direction = 'call' | 'put'
 
@@ -32,6 +34,14 @@ export type ExperimentalContract = {
   grade?: string
   edgeCount?: number
   strategy?: ContractStrategy
+  selection?: ContractScenarioFit
+  execution?: {
+    entryLow: number
+    entryHigh: number
+    hardProtectionPrice: number
+    exitBasis: 'underlying'
+    hasContractPriceTarget: false
+  }
 }
 
 export type CurrentRecommendation = {
@@ -58,6 +68,8 @@ export type CurrentRecommendation = {
     minutesToClose?: number | null
   }
   watchMode?: boolean
+  scenario?: UnderlyingScenario | null
+  opportunityWindow?: OpportunityWindow | null
   contracts?: ExperimentalContract[]
 }
 
@@ -99,6 +111,7 @@ export type ReadyDecision = {
     currentExecutable: number
     experimentalCandidates: 1
   }
+  opportunityWindow: OpportunityWindow
 }
 
 export type NoOpportunityDecision = {
@@ -176,7 +189,7 @@ function pivotLevels(bars: MdBar[]): { highs: number[]; lows: number[] } {
   return { highs, lows }
 }
 
-function reviewContract(contract: ExperimentalContract, direction: Direction, minimumScore: number): CandidateReview {
+function reviewContract(contract: ExperimentalContract, direction: Direction, minimumScore: number, underlyingRewardRisk: number): CandidateReview {
   const reasons: string[] = []
   const mid = numberOr(contract.mid)
   const bid = numberOr(contract.bid)
@@ -186,7 +199,9 @@ function reviewContract(contract: ExperimentalContract, direction: Direction, mi
   const spreadCost = Math.max(0, ask - bid) * 100
   const firstProfit = Math.abs(numberOr(contract.strategy?.t1Profit))
   const stopLoss = Math.abs(numberOr(contract.strategy?.stopLoss))
-  const rewardRisk = stopLoss + spreadCost > 0 ? (firstProfit - spreadCost) / (stopLoss + spreadCost) : 0
+  const rewardRisk = contract.selection
+    ? underlyingRewardRisk
+    : stopLoss + spreadCost > 0 ? (firstProfit - spreadCost) / (stopLoss + spreadCost) : 0
 
   if (contract.type !== direction) reasons.push('العقد لا يطابق اتجاه السوق')
   if (contract.status !== 'execute') reasons.push('العقد لم يصل إلى درجة التنفيذ')
@@ -197,11 +212,14 @@ function reviewContract(contract: ExperimentalContract, direction: Direction, mi
   if (absDelta < 0.25 || absDelta > 0.45) reasons.push('استجابة العقد ليست ضمن النطاق الأفضل')
   if (numberOr(contract.volume) < 25 && numberOr(contract.openInterest) < 100) reasons.push('سيولة العقد غير كافية')
   if (!contract.strategy || numberOr(contract.strategy.stopPrice) <= 0) reasons.push('حد حماية العقد غير مكتمل')
+  if (!contract.selection || contract.selection.fitLabel !== 'ممتاز') reasons.push('العقد غير مكتمل الملاءمة للحركة والزمن')
+  if ((contract.selection?.timeDecayBurdenPct ?? 100) > 12) reasons.push('تآكل الوقت مرتفع خلال نافذة الحركة')
   if (rewardRisk < 1.5) reasons.push('العائد بعد تكلفة التنفيذ لا يكفي أمام الخطر')
 
   const deltaFit = Math.max(0, 1 - Math.abs(absDelta - 0.35) / 0.15)
   const liquidity = Math.min(1, (numberOr(contract.volume) + numberOr(contract.openInterest) / 4) / 1000)
-  const controlScore = numberOr(contract.score) + deltaFit * 6 + liquidity * 4 - spreadPct * 35 + rewardRisk * 2
+  const controlScore = numberOr(contract.selection?.fitScore, numberOr(contract.score))
+    + deltaFit * 5 + liquidity * 3 - spreadPct * 25 + Math.min(4, rewardRisk)
 
   return {
     contract,
@@ -365,16 +383,24 @@ export function buildExperimentalDecision(input: DecisionInput): ExperimentalDec
     || rec.newsRisk?.action === 'caution'
     || rec.marketReaction?.action === 'caution'
   const minimumScore = heightenedCaution ? 92 : 88
+  const recommendationRisk = rec.scenario
+    ? rec.scenario.movementMin / Math.max(0.01, Math.abs(rec.scenario.entry - rec.scenario.invalidation.value))
+    : 0
   const reviews = direction
-    ? contracts.map(contract => reviewContract(contract, direction, minimumScore))
+    ? contracts.map(contract => reviewContract(contract, direction, minimumScore, recommendationRisk))
     : []
   const best = reviews.filter(review => review.valid).sort((a, b) => b.controlScore - a.controlScore)[0] ?? null
   addCheck('يوجد عقد ممتاز يمكن التحكم به', !!best, reviews.length ? uniqueReasons(reviews.flatMap(review => review.reasons))[0] : 'لا يوجد عقد صالح للتنفيذ')
 
-  const targets = direction && input.gamma ? buildTargets(rec, input.bars, input.gamma, direction) : null
+  const targets = rec.scenario ? {
+    first: rec.scenario.target1,
+    second: rec.scenario.target2,
+    invalidation: rec.scenario.invalidation,
+  } : direction && input.gamma ? buildTargets(rec, input.bars, input.gamma, direction) : null
   addCheck('الأهداف مبنية على مستويات السوق', !!targets, 'لا توجد أهداف سوقية واضحة الآن')
+  addCheck('النافذة الزمنية محددة', !!rec.opportunityWindow, 'زمن الحركة المتوقع غير محدد')
 
-  if (!best || !targets || !direction) {
+  if (!best || !targets || !direction || !rec.opportunityWindow) {
     return {
       state: 'no-opportunity',
       generatedAt,
@@ -420,9 +446,9 @@ export function buildExperimentalDecision(input: DecisionInput): ExperimentalDec
   const entryValidMinutes = best.contract.dte === 0 ? 20 : 35
   const entryValidUntil = new Date(now.getTime() + entryValidMinutes * 60_000).toISOString()
   const minutesToClose = Math.max(5, numberOr(rec.sessionQuality?.minutesToClose, 60))
-  const validUntil = new Date(now.getTime() + minutesToClose * 60_000).toISOString()
-  const hardContractStop = round(numberOr(best.contract.strategy?.stopPrice), 2)
-  const entryPrice = round(numberOr(best.contract.strategy?.entryBalanced, best.contract.ask), 2)
+  const validUntil = rec.opportunityWindow.validUntil
+  const hardContractStop = round(numberOr(best.contract.execution?.hardProtectionPrice, best.contract.strategy?.stopPrice), 2)
+  const entryPrice = round(numberOr(best.contract.execution?.entryHigh, best.contract.strategy?.entryBalanced ?? best.contract.ask), 2)
   const id = `${localDateKey(now)}-${best.contract.symbol}-${direction}`
 
   return {
@@ -459,6 +485,7 @@ export function buildExperimentalDecision(input: DecisionInput): ExperimentalDec
       underlyingSecondRewardRisk: round(secondRisk, 2),
       maxLossPerContract: Math.max(0, Math.round((entryPrice - hardContractStop) * 100)),
     },
+    opportunityWindow: rec.opportunityWindow,
     comparison: { ...comparisonBase, experimentalCandidates: 1 },
   }
 }

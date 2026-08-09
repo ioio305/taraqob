@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
 
   // أعد محاولة الإشارات التي سُجلت ولم تصل. التسجيل ليس دليلاً على الإرسال.
   const { data: pending } = await sb.from('v2_signals')
-    .select('id, summary_ar, contract_symbol, contract_type, strike, expiry, dte, entry_price, entry_bid, entry_ask, contract_stop_price, contract_target_price, stop_loss_level, target_level, spx_at_signal, telegram_attempts, max_entry_price, valid_until, risk_budget_pct')
+    .select('*')
     .in('telegram_status', ['pending', 'failed'])
     .lt('telegram_attempts', 5)
     .or(`valid_until.is.null,valid_until.gt.${new Date().toISOString()}`)
@@ -94,6 +94,7 @@ export async function GET(req: NextRequest) {
       expiry: s.expiry, dte: s.dte, bid: s.entry_bid, ask: s.entry_ask,
       contract_stop_price: s.contract_stop_price, max_entry_price: s.max_entry_price,
       contract_target_price: s.contract_target_price,
+      target2_level: s.target2_level,
       valid_until: s.valid_until, risk_budget_pct: s.risk_budget_pct,
     }))
     await sb.from('v2_signals').update({
@@ -112,8 +113,9 @@ export async function GET(req: NextRequest) {
   const rankedCandidates = rankCorrelatedCandidates(results.flatMap(({ idx, json }) => {
     const marketPrice: number | null = json?.market?.spx?.price ?? json?.market?.price ?? null
     return (json?.contracts ?? [])
-      .filter((c: any) => (c.grade === 'A+' || c.grade === 'A') && c.status === 'execute' && c.symbol && c.strike)
-      .map((contract: any) => ({ index: idx, contract, marketPrice }))
+      .filter((c: any) => (c.grade === 'A+' || c.grade === 'A') && c.status === 'execute' && c.symbol && c.strike
+        && json?.scenario?.target1?.value && json?.scenario?.invalidation?.value && json?.opportunityWindow?.validUntil)
+      .map((contract: any) => ({ index: idx, contract, marketPrice, scenario: json?.scenario, opportunityWindow: json?.opportunityWindow }))
   }))
 
   // القناة مرآة لقرار المنصة: إذا اعتمد محرك التوصية فرصة A+/A قابلة
@@ -135,7 +137,7 @@ export async function GET(req: NextRequest) {
   const activeGroups = new Set((activeCorrelated ?? []).map((s: any) => correlationGroup(s.contract_symbol)))
   const availableCandidates = candidates.filter(({ contract }) => !activeGroups.has(correlationGroup(contract.symbol)))
   {
-    for (const { contract: c, marketPrice } of availableCandidates) {
+    for (const { contract: c, marketPrice, scenario, opportunityWindow } of availableCandidates) {
 
       // تفادي التكرار العالمي: نفس العقد في نفس اليوم (مطابق لمنطق /api/v2/signals/log)
       const { data: existing } = await sb
@@ -149,17 +151,17 @@ export async function GET(req: NextRequest) {
         continue
       }
 
-      const entryPrice = c.strategy?.entryBalanced ?? c.mid ?? c.ask ?? null
-      const maxEntryPrice = entryPrice
-      const validUntil = new Date(Date.now() + 2 * 60_000).toISOString()
+      const entryPrice = c.execution?.entryHigh ?? c.mid ?? c.ask ?? null
+      const maxEntryPrice = c.execution?.entryHigh ?? entryPrice
+      const validUntil = opportunityWindow?.validUntil ?? new Date(Date.now() + 2 * 60_000).toISOString()
       const riskBudgetPct = c.grade === 'A+' ? 0.75 : 0.5
-      const stopLevel  = c.strategy?.stopSpxLevel ?? null
-      const targetLevel = c.strategy?.t1SpxLevel ?? null
-      const rr = c.strategy?.stopLoss
-        ? Math.abs((c.strategy?.t1Profit ?? 0) / c.strategy.stopLoss)
+      const stopLevel = scenario?.invalidation?.value ?? null
+      const targetLevel = scenario?.target1?.value ?? null
+      const rr = scenario
+        ? Math.abs((scenario.target1.value - scenario.entry) / Math.max(0.01, scenario.entry - scenario.invalidation.value))
         : null
 
-      const { data: inserted, error } = await sb.from('v2_signals').insert({
+      const signalRow = {
         user_id:           null,   // إشارة رصدها الخادم — لا مستخدم محدد
         signal_ref:        `${c.grade}-${c.strike}-${Date.now().toString(36)}`,
         contract_symbol:   c.symbol,
@@ -173,19 +175,29 @@ export async function GET(req: NextRequest) {
         entry_price:       entryPrice,
         entry_bid:         c.bid ?? null,
         entry_ask:         c.ask ?? null,
-        contract_stop_price: c.strategy?.stopPrice ?? null,
-        contract_target_price: c.strategy?.t1Price ?? null,
+        contract_stop_price: c.execution?.hardProtectionPrice ?? null,
+        contract_target_price: null,
         stop_loss_level:   stopLevel,
         target_level:      targetLevel,
+        target2_level:     scenario?.target2?.value ?? null,
+        scenario_stage:    'active',
         risk_reward_ratio: rr,
-        summary_ar:        `[${c.grade}] ${c.reason ?? ''}`.trim(),
+        summary_ar:        `[${c.grade}] ${c.reason ?? ''}${opportunityWindow?.label ? ` — نافذة الفرصة ${opportunityWindow.label}` : ''}`.trim(),
         spx_at_signal:     marketPrice,
         signal_date:       today,
         telegram_status:   'pending',
         max_entry_price:   maxEntryPrice,
         valid_until:       validUntil,
         risk_budget_pct:   riskBudgetPct,
-      }).select('id').single()
+      }
+      let insertResult = await sb.from('v2_signals').insert(signalRow).select('id').single()
+      if (insertResult.error && /target2_level|scenario_stage/i.test(insertResult.error.message)) {
+        const compatibleRow: Record<string, unknown> = { ...signalRow }
+        delete compatibleRow.target2_level
+        delete compatibleRow.scenario_stage
+        insertResult = await sb.from('v2_signals').insert(compatibleRow).select('id').single()
+      }
+      const { data: inserted, error } = insertResult
       if (error) continue
 
       logged.push(c.symbol)
@@ -203,8 +215,10 @@ export async function GET(req: NextRequest) {
         dte:             c.dte ?? null,
         bid:             c.bid ?? null,
         ask:             c.ask ?? null,
-        contract_stop_price: c.strategy?.stopPrice ?? null,
-        contract_target_price: c.strategy?.t1Price ?? null,
+        contract_stop_price: c.execution?.hardProtectionPrice ?? null,
+        contract_target_price: null,
+        target2_level:    scenario?.target2?.value ?? null,
+        opportunity_window: opportunityWindow?.label ?? null,
         max_entry_price: maxEntryPrice,
         valid_until:     validUntil,
         risk_budget_pct: riskBudgetPct,
