@@ -193,7 +193,8 @@ export function AlertsWatcher() {
           ? rec.market
           : { spx: rec?.market ? { price: rec.market.price } : undefined }
         const [c] = (rec?.contracts ?? [])
-          .filter((contract: any) => (contract.grade === 'A+' || contract.grade === 'A') && contract.status === 'execute')
+          .filter((contract: any) => (contract.grade === 'A+' || contract.grade === 'A')
+            && contract.status === 'execute' && rec?.decisionCouncil?.action === contract.type)
           .sort((a: any, b: any) => (b.grade === 'A+' ? 1 : 0) - (a.grade === 'A+' ? 1 : 0) || Number(b.score ?? 0) - Number(a.score ?? 0))
         if (c) {
           const typeAr = c.type === 'put' ? 'بوت' : 'كول'

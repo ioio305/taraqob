@@ -53,6 +53,7 @@ interface ScanRow {
   dayPlan?: import('@/lib/v2/dayTrading').DayPlan | null
   scenario?: import('@/lib/v2/opportunityModel').UnderlyingScenario | null
   opportunityWindow?: import('@/lib/v2/opportunityModel').OpportunityWindow | null
+  decisionCouncil?: import('@/lib/v2/decisionCouncil').DecisionCouncil | null
   error?: string
 }
 
@@ -133,6 +134,7 @@ export async function GET(request: NextRequest) {
           dayPlan: rec.dayPlan ?? null,
           scenario: rec.scenario,
           opportunityWindow: rec.opportunityWindow,
+          decisionCouncil: rec.decisionCouncil,
           dataQuality: rec.dataQuality ? {
             status: rec.dataQuality.status,
             label: rec.dataQuality.label,

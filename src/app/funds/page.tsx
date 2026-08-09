@@ -2,8 +2,11 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { UnderlyingTradeManager } from '@/components/v2/UnderlyingTradeManager'
+import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
 import { addPaper } from './paperStore'
 import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
+import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
+import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
 
 // ── توصية اليوم — صيغة موحدة لكل فرصة (مستند التصور المعتمد) ─────────────────
 type Plan = {
@@ -26,13 +29,24 @@ type Verdict = {
   plan: Plan | null
   vetoes: string[]
 }
-type Card = { symbol: string; nameAr: string; price: number; changePct: number | null; verdict: Verdict; validUntil: string | null }
+type Card = {
+  symbol: string
+  nameAr: string
+  price: number
+  changePct: number | null
+  verdict: Verdict
+  validUntil: string | null
+  decisionCouncil: DecisionCouncil
+  scenario: UnderlyingScenario | null
+  opportunityWindow: OpportunityWindow | null
+}
 type Data = {
   success: boolean; error?: string
   asOfNy?: string; asOfRiyadh?: string
   econNote?: string | null
   opportunities?: Card[]; watchlist?: Card[]
   noOpportunity?: boolean
+  leadingDecision?: Card | null
   stats?: { scanned: number; breadthPct: number | null }
 }
 
@@ -275,6 +289,14 @@ export default function FundsToday() {
         <div className="rounded-xl border border-amber-400/25 px-4 py-2.5 text-xs text-amber-200" style={{ background: 'rgba(245,158,11,.07)' }}>
           ⏰ {data.econNote}
         </div>
+      ) : null}
+
+      {data.leadingDecision ? (
+        <DecisionCouncilCard
+          council={data.leadingDecision.decisionCouncil}
+          scenario={data.leadingDecision.scenario}
+          window={data.leadingDecision.opportunityWindow}
+        />
       ) : null}
 
       {/* التوصية الأولى — بطل الصفحة */}

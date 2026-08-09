@@ -15,6 +15,7 @@ import {
 import { getStockQuote, getStockDailyBars, getStockIntradayBars } from './stockData'
 import { buildOpportunityWindow, buildUnderlyingScenario, type OpportunityWindow, type UnderlyingScenario } from './opportunityModel'
 import { selectContractsForScenario } from './scenarioContractSelector'
+import { runDecisionCouncil, type DecisionCouncil } from './decisionCouncil'
 import { fundsAdapter, fundDirectionFromBars, fundBySymbol } from './adapters/fundsAdapter'
 import { FUNDS_CALIBRATION } from './adapters/registry'
 import { getEtfGammaExposure, hasEtfGamma } from './fundsGamma'
@@ -60,6 +61,7 @@ export interface FundRecResult {
   notCalibratedNote: string
   scenario: UnderlyingScenario | null
   opportunityWindow: OpportunityWindow | null
+  decisionCouncil: DecisionCouncil | null
 }
 
 // نطاق بحث الستريكات: ±20% حول السعر (mandatoryFilter يفرض «خارج المال» فعلياً)
@@ -104,7 +106,7 @@ export async function recommendForFund(symbol: string, options: RecommendFundOpt
     gamma: null, sessionQuality: evaluateSessionQuality(),
     calibration: { validated: FUNDS_CALIBRATION.validated, note: FUNDS_CALIBRATION.note },
     watchMode: false, contracts: [], expiration: '', expirations: [], mode,
-    notCalibratedNote: NOT_CALIBRATED_NOTE, scenario: null, opportunityWindow: null,
+    notCalibratedNote: NOT_CALIBRATED_NOTE, scenario: null, opportunityWindow: null, decisionCouncil: null,
   })
 
   // 1) سعر + شموع (مرّة واحدة — تُستخدم للتذبذب وحارس الانهيار)
@@ -118,27 +120,37 @@ export async function recommendForFund(symbol: string, options: RecommendFundOpt
   const rv = closes.length >= 10 ? realizedVol(closes) : null
 
   // 2) انتهاءات + جاما (SPY/QQQ فقط) بالتوازي
-  const [expirations, gammaEx, fetchedNews] = await Promise.all([
+  const [expirations, gammaEx, fetchedNews, intradayBars] = await Promise.all([
     fundsAdapter.getExpirations(sym).catch(() => [] as string[]),
     hasEtfGamma(sym) ? getEtfGammaExposure(sym).catch(() => null) : Promise.resolve(null),
     options.newsDecision !== undefined
       ? Promise.resolve(options.newsDecision)
       : getNewsResult().then(result => result.decision).catch(() => null),
+    options.full ? getStockIntradayBars(sym, '5min').catch(() => []) : Promise.resolve([]),
   ])
   const sessionQuality = evaluateSessionQuality()
+  const scenarioBars = intradayBars.length >= 5 ? intradayBars : bars
+  const dailyExpectedMove = Math.max(price * 0.0035, price * ((rv ?? 22) / 100) / Math.sqrt(252))
   const measuredDirection = fundDirectionFromBars(quote.changePct, bars)
-  const dir = options.forceType
-    ? { type: options.forceType, label: options.forceType === 'call' ? '▲ شراء CALL' : '▼ شراء PUT', color: options.forceType === 'call' ? '#10B981' : '#EF4444', reason: 'اخترت الاتجاه يدوياً' }
-    : measuredDirection
-  const signalStrength = options.forceType ? 100 : measuredDirection.strength
-  const contractType = (options.forceType ?? dir.type) as 'call' | 'put' | null
+  const preliminaryCouncil = runDecisionCouncil({
+    asset: 'fund', bars: scenarioBars, spot: price, changePct: quote.changePct,
+    expectedMove: dailyExpectedMove, preferredDirection: options.forceType ?? measuredDirection.type,
+    volatilityPct: rv, baselineVolatilityPct: 24, gamma: gammaEx,
+    newsRisk: fetchedNews, session: sessionQuality,
+    dataQuality: { ready: price > 0 && scenarioBars.length >= 20, reason: 'بيانات الصندوق غير كافية لصناعة قرار موثوق' },
+  })
+  const contractType = (options.forceType ?? preliminaryCouncil.direction) as 'call' | 'put' | null
+  const dir = contractType
+    ? { type: contractType, label: contractType === 'call' ? '▲ اتجاه صاعد مرجح' : '▼ اتجاه هابط مرجح', color: contractType === 'call' ? '#10B981' : '#EF4444', reason: preliminaryCouncil.explanation }
+    : { type: null, label: '↔ لا توجد أفضلية واضحة', color: '#F59E0B', reason: preliminaryCouncil.explanation }
+  const signalStrength = preliminaryCouncil.opportunityScore
 
   const base: Omit<FundRecResult, 'contracts' | 'expiration' | 'market' | 'watchMode'> = {
     success: true, symbol: sym, name: uniName,
     direction: dir, signalStrength, gamma: summarizeGamma(gammaEx), sessionQuality,
     calibration: { validated: FUNDS_CALIBRATION.validated, note: FUNDS_CALIBRATION.note },
     expirations: expirations.slice(0, 8), mode, notCalibratedNote: NOT_CALIBRATED_NOTE,
-    scenario: null, opportunityWindow: null,
+    scenario: null, opportunityWindow: null, decisionCouncil: preliminaryCouncil,
   }
 
   if (!expirations.length) {
@@ -148,9 +160,6 @@ export async function recommendForFund(symbol: string, options: RecommendFundOpt
   const now = new Date()
   const todayStr = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
   const dteOf = (expiration: string) => Math.round((new Date(expiration + 'T12:00:00Z').getTime() - new Date(todayStr + 'T12:00:00Z').getTime()) / 86400000)
-  const intradayBars = options.full ? await getStockIntradayBars(sym, '5min').catch(() => []) : []
-  const scenarioBars = intradayBars.length >= 5 ? intradayBars : bars
-  const dailyExpectedMove = Math.max(price * 0.0035, price * ((rv ?? 22) / 100) / Math.sqrt(252))
   const scenario = contractType ? buildUnderlyingScenario({
     direction: contractType, spot: price, expectedMove: dailyExpectedMove, bars: scenarioBars,
     sessionHigh: quote.high, sessionLow: quote.low, previousClose: quote.prevClose,
@@ -167,7 +176,8 @@ export async function recommendForFund(symbol: string, options: RecommendFundOpt
   const effectiveEM: number | null = dailyExpectedMove
   const emUpper: number | null = Math.round((price + dailyExpectedMove) * 100) / 100
   const emLower: number | null = Math.round((price - dailyExpectedMove) * 100) / 100
-  const watchMode = !contractType || !scenario || !opportunityWindow
+  let watchMode = !contractType || !scenario || !opportunityWindow
+  let decisionCouncil = preliminaryCouncil
 
   if (contractType && scenario && opportunityWindow) {
     const candidateExps = [...expirations]
@@ -193,11 +203,37 @@ export async function recommendForFund(symbol: string, options: RecommendFundOpt
         chain: selectedChain, guard, sessionQuality, gammaEx, contractType, watchMode: false,
         newsRisk: fetchedNews, scenario, opportunityWindow,
       })
+      decisionCouncil = runDecisionCouncil({
+        asset: 'fund', bars: scenarioBars, spot: price, changePct: quote.changePct,
+        expectedMove: dailyExpectedMove, preferredDirection: contractType, scenario, window: opportunityWindow,
+        volatilityPct: rv, baselineVolatilityPct: 24, gamma: gammaEx,
+        newsRisk: fetchedNews, session: sessionQuality,
+        dataQuality: { ready: price > 0 && scenarioBars.length >= 20, reason: 'بيانات الصندوق غير كافية لصناعة قرار موثوق' },
+        contractFitScore: FUNDS_CALIBRATION.validated ? selected[0].selection.fitScore : 0,
+        contractFitLabel: FUNDS_CALIBRATION.validated ? selected[0].selection.fitLabel : 'لم تكتمل المعايرة',
+      })
+      watchMode = decisionCouncil.action === 'wait'
+      ctx.blocked = watchMode
+      ctx.blockedReason = decisionCouncil.explanation
+      ctx.watchMode = watchMode
       contracts = enrichContracts(selected, ctx)
         .filter(contract => contract.status === 'execute' && contract.selection?.fitLabel === 'ممتاز')
+        .filter(() => decisionCouncil.action === contractType)
         .slice(0, 1)
       usedExp = selected[0].expiration
     }
+  }
+
+  if (!decisionCouncil.advisors.some(advisor => advisor.key === 'contract')) {
+    decisionCouncil = runDecisionCouncil({
+      asset: 'fund', bars: scenarioBars, spot: price, changePct: quote.changePct,
+      expectedMove: dailyExpectedMove, preferredDirection: contractType, scenario, window: opportunityWindow,
+      volatilityPct: rv, baselineVolatilityPct: 24, gamma: gammaEx,
+      newsRisk: fetchedNews, session: sessionQuality,
+      dataQuality: { ready: price > 0 && scenarioBars.length >= 20, reason: 'بيانات الصندوق غير كافية لصناعة قرار موثوق' },
+      contractFitScore: 0, contractFitLabel: 'لا يوجد عقد مناسب',
+    })
+    watchMode = true
   }
 
   return {
@@ -208,6 +244,7 @@ export async function recommendForFund(symbol: string, options: RecommendFundOpt
     expiration: usedExp,
     scenario,
     opportunityWindow,
+    decisionCouncil,
   }
 }
 

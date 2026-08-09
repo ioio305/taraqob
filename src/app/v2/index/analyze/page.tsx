@@ -7,8 +7,11 @@ import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { RefreshCw } from 'lucide-react'
 import { IndexSwitcher } from '@/components/v2/IndexSwitcher'
+import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
 import { getSelectedIndex, indexMeta, type IndexId } from '@/lib/v2/indexSelection'
 import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
+import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
+import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
 
 const GOLD = '#C9943A'
 
@@ -52,8 +55,9 @@ type Result = {
     targetPrice: number; stopPrice: number
     notesAr: string[]
   } | null
-  scenario: { entry: number; target1: { value: number; source: string }; target2: { value: number; source: string }; invalidation: { value: number; source: string } }
-  opportunityWindow: { label: string; validUntil: string; reason: string }
+  scenario?: UnderlyingScenario | null
+  opportunityWindow?: OpportunityWindow | null
+  decisionCouncil?: DecisionCouncil | null
 }
 
 export default function IndexAnalyzePage() {
@@ -161,12 +165,16 @@ function Inner() {
       {loading && !data ? (
         <div className="h-56 animate-pulse rounded-3xl" style={{ background: 'rgba(255,255,255,0.03)' }} />
       ) : data && !data.success ? (
-        <section className="rounded-3xl p-10 text-center text-sm"
-                 style={{ background: '#0C1219', border: '1px solid rgba(255,255,255,0.07)', color: '#F87171' }}>
-          {data.error}
-        </section>
+        <div className="space-y-3">
+          {data.decisionCouncil ? <DecisionCouncilCard council={data.decisionCouncil} scenario={data.scenario} window={data.opportunityWindow} /> : null}
+          <section className="rounded-3xl p-6 text-center text-sm"
+                   style={{ background: '#0C1219', border: '1px solid rgba(255,255,255,0.07)', color: '#F87171' }}>
+            {data.error}
+          </section>
+        </div>
       ) : data && c ? (
         <>
+          {data.decisionCouncil ? <DecisionCouncilCard council={data.decisionCouncil} scenario={data.scenario} window={data.opportunityWindow} /> : null}
           <section className="rounded-3xl p-5 space-y-4" style={{ background: '#0C1219', border: '1px solid rgba(255,255,255,0.07)' }}>
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-2 flex-wrap">
@@ -201,9 +209,9 @@ function Inner() {
                 </div>
                 <div className="rounded-xl p-4 text-sm leading-7"
                      style={{ color: '#94A3B8', background: 'rgba(201,148,58,0.06)', border: '1px solid rgba(201,148,58,0.18)' }}>
-                  نافذة الفرصة: <b>{data.opportunityWindow.label}</b> — لا يوجد هدف ثابت لسعر العقد؛ الخروج من اكتمال حركة الأصل أو تغيرها.
+                  نافذة الفرصة: <b>{data.opportunityWindow?.label ?? 'قيد التقدير'}</b> — لا يوجد هدف ثابت لسعر العقد؛ الخروج من اكتمال حركة الأصل أو تغيرها.
                 </div>
-                <div className="text-xs" style={{ color: '#7C8A99' }}>{data.opportunityWindow.reason}</div>
+                <div className="text-xs" style={{ color: '#7C8A99' }}>{data.opportunityWindow?.reason}</div>
               </>
             ) : null}
           </section>

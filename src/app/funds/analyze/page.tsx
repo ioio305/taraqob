@@ -6,6 +6,9 @@ import { Search } from 'lucide-react'
 import { FundBrief } from '../FundBrief'
 import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 import { UnderlyingTradeManager } from '@/components/v2/UnderlyingTradeManager'
+import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
+import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
+import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
 
 type Detail = {
   success: boolean
@@ -18,8 +21,9 @@ type Detail = {
     execution?: { entryLow: number; entryHigh: number; hardProtectionPrice: number }
     selection?: { fitScore: number; fitLabel: string; timeDecayBurdenPct: number }
   }>
-  scenario?: { entry: number; target1: { value: number; source: string }; target2: { value: number; source: string }; invalidation: { value: number; source: string } } | null
-  opportunityWindow?: { label: string; validUntil: string; reason: string } | null
+  scenario?: UnderlyingScenario | null
+  opportunityWindow?: OpportunityWindow | null
+  decisionCouncil?: DecisionCouncil | null
   error?: string
 }
 
@@ -59,6 +63,9 @@ export default function FundAnalyzePage() {
       {loading ? <div className="h-56 animate-pulse rounded-2xl bg-white/[.03]" /> : null}
       {!loading && data ? (
         <>
+        {data.decisionCouncil ? (
+          <DecisionCouncilCard council={data.decisionCouncil} scenario={data.scenario} window={data.opportunityWindow} />
+        ) : null}
         <section className="rounded-3xl border border-white/[.06] bg-[#0B1B15] p-5 md:p-7">
           {data.success && contract ? (
             <>

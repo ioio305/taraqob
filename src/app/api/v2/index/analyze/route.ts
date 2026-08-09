@@ -24,6 +24,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         success: false,
         error: result.error ?? 'لا توجد فرصة مكتملة وعقد مناسب الآن',
+        decisionCouncil: result.decisionCouncil,
+        scenario: result.scenario,
+        opportunityWindow: result.opportunityWindow,
       }, { headers: NO_STORE })
     }
 
@@ -41,6 +44,7 @@ export async function GET(request: NextRequest) {
       contract,
       scenario: result.scenario,
       opportunityWindow: result.opportunityWindow,
+      decisionCouncil: result.decisionCouncil,
       updatedAt: new Date().toISOString(),
     }, { headers: NO_STORE })
   } catch (error: any) {

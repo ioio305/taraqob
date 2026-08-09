@@ -7,9 +7,11 @@ import { NewsImpactBadge, useNews } from '@/components/v2/NewsBar'
 import { DisciplineBar } from '@/components/v2/PositionSizing'
 import { IndexSwitcher } from '@/components/v2/IndexSwitcher'
 import { UnderlyingTradeManager } from '@/components/v2/UnderlyingTradeManager'
+import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
 import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
 import type { ContractScenarioFit } from '@/lib/v2/scenarioContractSelector'
+import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
 
 type Market = {
   spx: { price: number; prevClose?: number; changePct: number; high: number; low: number }
@@ -99,6 +101,7 @@ type Data = {
   watchMode?: boolean
   scenario?: UnderlyingScenario | null
   opportunityWindow?: OpportunityWindow | null
+  decisionCouncil?: DecisionCouncil | null
   market: Market; sessions: Sessions; direction: Direction
   contracts: Contract[]; shortlist: ShortlistItem[]
   expiration: string; expirations: string[]
@@ -345,6 +348,10 @@ export default function V2Dashboard() {
 
       {/* ── محوّل المؤشرات: SPX صفحته هنا · الباقي على نفس المحرك ── */}
       <IndexSwitcher active="SPX" />
+
+      {data?.decisionCouncil ? (
+        <DecisionCouncilCard council={data.decisionCouncil} scenario={data.scenario} window={data.opportunityWindow} />
+      ) : null}
 
       {/* ── تحذير حدث اقتصادي كبير اليوم/غداً (معلومة لا منع) ── */}
       {data?.econ?.warning && (

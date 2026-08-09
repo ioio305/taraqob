@@ -114,8 +114,14 @@ export async function GET(req: NextRequest) {
     const marketPrice: number | null = json?.market?.spx?.price ?? json?.market?.price ?? null
     return (json?.contracts ?? [])
       .filter((c: any) => (c.grade === 'A+' || c.grade === 'A') && c.status === 'execute' && c.symbol && c.strike
+        && json?.decisionCouncil?.action === c.type
         && json?.scenario?.target1?.value && json?.scenario?.invalidation?.value && json?.opportunityWindow?.validUntil)
-      .map((contract: any) => ({ index: idx, contract, marketPrice, scenario: json?.scenario, opportunityWindow: json?.opportunityWindow }))
+      .map((contract: any) => ({
+        index: idx, contract, marketPrice,
+        scenario: json?.scenario,
+        opportunityWindow: json?.opportunityWindow,
+        decisionCouncil: json?.decisionCouncil,
+      }))
   }))
 
   // القناة مرآة لقرار المنصة: إذا اعتمد محرك التوصية فرصة A+/A قابلة
@@ -137,7 +143,7 @@ export async function GET(req: NextRequest) {
   const activeGroups = new Set((activeCorrelated ?? []).map((s: any) => correlationGroup(s.contract_symbol)))
   const availableCandidates = candidates.filter(({ contract }) => !activeGroups.has(correlationGroup(contract.symbol)))
   {
-    for (const { contract: c, marketPrice, scenario, opportunityWindow } of availableCandidates) {
+    for (const { contract: c, marketPrice, scenario, opportunityWindow, decisionCouncil } of availableCandidates) {
 
       // تفادي التكرار العالمي: نفس العقد في نفس اليوم (مطابق لمنطق /api/v2/signals/log)
       const { data: existing } = await sb
@@ -169,7 +175,7 @@ export async function GET(req: NextRequest) {
         strike:            c.strike,
         expiry:            c.expiration ?? null,
         dte:               c.dte ?? null,
-        total_score:       c.score ?? null,
+        total_score:       decisionCouncil?.opportunityScore ?? c.score ?? null,
         decision:          c.grade === 'A+' ? 'strong_entry' : 'conditional',
         status:            'active',
         entry_price:       entryPrice,
@@ -182,7 +188,7 @@ export async function GET(req: NextRequest) {
         target2_level:     scenario?.target2?.value ?? null,
         scenario_stage:    'active',
         risk_reward_ratio: rr,
-        summary_ar:        `[${c.grade}] ${c.reason ?? ''}${opportunityWindow?.label ? ` — نافذة الفرصة ${opportunityWindow.label}` : ''}`.trim(),
+        summary_ar:        `[${c.grade}] ${decisionCouncil?.explanation ?? c.reason ?? ''}${opportunityWindow?.label ? ` — نافذة الفرصة ${opportunityWindow.label}` : ''}`.trim(),
         spx_at_signal:     marketPrice,
         signal_date:       today,
         telegram_status:   'pending',
@@ -210,7 +216,7 @@ export async function GET(req: NextRequest) {
         stop_loss_level: stopLevel,
         target_level:    targetLevel,
         spx_at_signal:   marketPrice,
-        reason:          c.reason,
+        reason:          decisionCouncil?.explanation ?? c.reason,
         expiry:          c.expiration ?? null,
         dte:             c.dte ?? null,
         bid:             c.bid ?? null,

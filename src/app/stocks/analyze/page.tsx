@@ -5,6 +5,9 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import StockChart, { type StockChartData } from '@/components/v2/StockChart'
 import { useLiveQuote } from '@/lib/v2/useLiveQuotes'
 import { UnderlyingTradeManager } from '@/components/v2/UnderlyingTradeManager'
+import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
+import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
+import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
 
 type NewsItem = { id: string; title: string; titleAr: string; source: string; publishedAt: string; url: string | null; sentiment: string | null; sentimentAr: string | null }
 
@@ -66,8 +69,9 @@ type Data = {
   expiration: string
   watchMode: boolean
   notCalibratedNote?: string
-  scenario?: { entry: number; target1: { value: number; source: string }; target2: { value: number; source: string }; invalidation: { value: number; source: string } } | null
-  opportunityWindow?: { label: string; validUntil: string; reason: string } | null
+  scenario?: UnderlyingScenario | null
+  opportunityWindow?: OpportunityWindow | null
+  decisionCouncil?: DecisionCouncil | null
 }
 
 function n(v: number | null | undefined, d = 2) {
@@ -256,6 +260,10 @@ function AnalyzeInner() {
               </div>
             )}
           </div>
+
+          {data.decisionCouncil ? (
+            <DecisionCouncilCard council={data.decisionCouncil} scenario={data.scenario} window={data.opportunityWindow} />
+          ) : null}
 
           {/* الشارت + التحليل الفني */}
           <StockChart symbol={data.symbol} onData={setChart} />

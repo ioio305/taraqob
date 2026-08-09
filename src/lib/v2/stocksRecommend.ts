@@ -12,6 +12,7 @@ import {
 import { getStockQuote, getStockDailyBars, getStockIntradayBars } from './stockData'
 import { buildOpportunityWindow, buildUnderlyingScenario, type OpportunityWindow, type UnderlyingScenario } from './opportunityModel'
 import { selectContractsForScenario } from './scenarioContractSelector'
+import { runDecisionCouncil, type DecisionCouncil } from './decisionCouncil'
 import { stocksAdapter, stockDirection } from './adapters/stocksAdapter'
 import { STOCKS_CALIBRATION } from './adapters/registry'
 import { evaluateSessionQuality } from './sessionQuality'
@@ -20,12 +21,10 @@ import type { EventRisk } from './adapters/types'
 import {
   evaluateStockDataQuality,
   isStockExpirationTradable,
-  reconcileStockDirection,
   type StockDataQuality,
 } from './stocksDecisionQuality'
 import { championEntryFor, championExclusionFor } from './championPlan'
 import { buildDayPlan, normalizeTradeStyle, type TradeStyle, type DayPlan } from './dayTrading'
-import { judgeVeto } from './vetoJudge'
 import { getStockNews } from './stockNews'
 
 export const NOT_CALIBRATED_NOTE =
@@ -58,6 +57,7 @@ export interface StockRecResult {
   dayPlan: DayPlan | null
   scenario: UnderlyingScenario | null
   opportunityWindow: OpportunityWindow | null
+  decisionCouncil: DecisionCouncil | null
 }
 
 // نطاق بحث الستريكات: ±20% حول السعر (mandatoryFilter يفرض «خارج المال» فعلياً)
@@ -103,7 +103,7 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
     notCalibratedNote: NOT_CALIBRATED_NOTE,
     dataQuality: null,
     champion: null,
-    tradeStyle, dayPlan: null, scenario: null, opportunityWindow: null,
+    tradeStyle, dayPlan: null, scenario: null, opportunityWindow: null, decisionCouncil: null,
   })
 
   // بوابة النظام البطل: الشركات المستبعدة تاريخيًا — مراقبة فقط، بلا عقود
@@ -123,24 +123,45 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
   const rv = closes.length >= 10 ? realizedVol(closes) : null
 
   // 2) اتجاه السهم + بوابة الأرباح + جودة الجلسة (بالتوازي)
-  const [eventRiskRaw, expirations, stockNews] = await Promise.all([
+  const [eventRiskRaw, expirations, stockNews, intradayBars] = await Promise.all([
     stocksAdapter.getEventRisk(sym).catch(() => null),
     stocksAdapter.getExpirations(sym).catch(() => [] as string[]),
     getStockNews(sym, 6).catch(() => []),
+    options.full ? getStockIntradayBars(sym, '5min').catch(() => []) : Promise.resolve([]),
   ])
   const sessionQuality = evaluateSessionQuality()
+  const dailyExpectedMove = Math.max(price * 0.004, price * ((rv ?? 35) / 100) / Math.sqrt(252))
+  const scenarioBars = intradayBars.length >= 5 ? intradayBars : bars
   const rawDir = options.forceType
     ? { type: options.forceType, label: options.forceType === 'call' ? '▲ شراء CALL' : '▼ شراء PUT', color: options.forceType === 'call' ? '#10B981' : '#EF4444', reason: 'اخترت الاتجاه يدوياً' }
     : stockDirection(quote.changePct)
-  const dir = options.forceType
-    ? { ...rawDir, intradayType: rawDir.type, dailyType: null, aligned: true }
-    : reconcileStockDirection(rawDir, bars)
-  const contractType = (options.forceType ?? dir.type) as 'call' | 'put' | null
   const dataQuality = evaluateStockDataQuality(quote, bars)
 
   // بوابة الأرباح: تأكيد المعرفة
   const eventRisk = eventRiskRaw
   const earningsKnown = eventRiskRaw != null
+  const newsSentiment = {
+    positive: stockNews.filter(item => item.sentiment === 'positive').length,
+    negative: stockNews.filter(item => item.sentiment === 'negative').length,
+    neutral: stockNews.filter(item => item.sentiment === 'neutral').length,
+  }
+  const preliminaryCouncil = runDecisionCouncil({
+    asset: 'stock', bars: scenarioBars, spot: price, changePct: quote.changePct,
+    expectedMove: dailyExpectedMove, preferredDirection: options.forceType ?? rawDir.type,
+    volatilityPct: rv, baselineVolatilityPct: 38, eventRisk, newsSentiment,
+    session: sessionQuality,
+    dataQuality: { ready: dataQuality.status !== 'blocked', reason: dataQuality.issues.join(' — ') },
+  })
+  const contractType = (options.forceType ?? preliminaryCouncil.direction) as 'call' | 'put' | null
+  const dir = contractType ? {
+    type: contractType,
+    label: contractType === 'call' ? '▲ اتجاه صاعد مرجح' : '▼ اتجاه هابط مرجح',
+    color: contractType === 'call' ? '#10B981' : '#EF4444',
+    reason: preliminaryCouncil.explanation,
+    intradayType: rawDir.type,
+    dailyType: null,
+    aligned: true,
+  } : { ...rawDir, type: null, label: '↔ لا توجد أفضلية واضحة', reason: preliminaryCouncil.explanation, intradayType: rawDir.type, dailyType: null, aligned: false }
 
   const dayPlan = tradeStyle === 'day'
     ? buildDayPlan(price, rv, (options.forceType ?? dir.type) as 'call' | 'put' | null)
@@ -154,7 +175,7 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
     mode, notCalibratedNote: NOT_CALIBRATED_NOTE, dataQuality,
     champion,
     tradeStyle, dayPlan,
-    scenario: null, opportunityWindow: null,
+    scenario: null, opportunityWindow: null, decisionCouncil: preliminaryCouncil,
   }
 
   if (!expirations.length) {
@@ -171,28 +192,10 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
     }
   }
 
-  const verdict = judgeVeto({
-    eventRisk, news: stockNews,
-    directionType: (options.forceType ?? dir.type) as 'call' | 'put' | null,
-  })
-  if (verdict.veto) {
-    return {
-      ...base,
-      market: marketPayload(quote, rv, null),
-      watchMode: true,
-      contracts: [],
-      expiration: '',
-      error: verdict.reasonAr ?? undefined,
-    }
-  }
-
   const now = new Date()
   const todayStr = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
   const tradableExpirations = expirations.filter(exp => isStockExpirationTradable(exp))
   const dteOf = (e: string) => Math.round((new Date(e + 'T12:00:00Z').getTime() - new Date(todayStr + 'T12:00:00Z').getTime()) / 86400000)
-  const intradayBars = options.full ? await getStockIntradayBars(sym, '5min').catch(() => []) : []
-  const scenarioBars = intradayBars.length >= 5 ? intradayBars : bars
-  const dailyExpectedMove = Math.max(price * 0.004, price * ((rv ?? 35) / 100) / Math.sqrt(252))
   const scenario = contractType ? buildUnderlyingScenario({
     direction: contractType, spot: price, expectedMove: dailyExpectedMove, bars: scenarioBars,
     sessionHigh: quote.high, sessionLow: quote.low, previousClose: quote.prevClose,
@@ -207,7 +210,8 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
   const effectiveEM: number | null = dailyExpectedMove
   const emUpper: number | null = Math.round((price + dailyExpectedMove) * 100) / 100
   const emLower: number | null = Math.round((price - dailyExpectedMove) * 100) / 100
-  const watchMode = !contractType || !scenario || !opportunityWindow
+  let watchMode = !contractType || !scenario || !opportunityWindow
+  let decisionCouncil = preliminaryCouncil
 
   if (contractType && scenario && opportunityWindow) {
     const requestedDte = Math.max(opportunityWindow.minimumDte, options.targetDte ?? opportunityWindow.recommendedDte)
@@ -234,11 +238,37 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
         chain: selectedChain, guard, sessionQuality, eventRisk, contractType, watchMode: false,
         dataQuality, scenario, opportunityWindow,
       })
+      decisionCouncil = runDecisionCouncil({
+        asset: 'stock', bars: scenarioBars, spot: price, changePct: quote.changePct,
+        expectedMove: dailyExpectedMove, preferredDirection: contractType, scenario, window: opportunityWindow,
+        volatilityPct: rv, baselineVolatilityPct: 38, eventRisk, newsSentiment,
+        session: sessionQuality,
+        dataQuality: { ready: true, reason: dataQuality.issues.join(' — ') },
+        contractFitScore: STOCKS_CALIBRATION.validated ? selected[0].selection.fitScore : 0,
+        contractFitLabel: STOCKS_CALIBRATION.validated ? selected[0].selection.fitLabel : 'لم تكتمل المعايرة',
+      })
+      watchMode = decisionCouncil.action === 'wait'
+      ctx.blocked = watchMode
+      ctx.blockedReason = decisionCouncil.explanation
+      ctx.watchMode = watchMode
       contracts = enrichContracts(selected, ctx)
         .filter(contract => contract.status === 'execute' && contract.selection?.fitLabel === 'ممتاز')
+        .filter(() => decisionCouncil.action === contractType)
         .slice(0, 1)
       usedExp = selected[0].expiration
     }
+  }
+
+  if (!decisionCouncil.advisors.some(advisor => advisor.key === 'contract')) {
+    decisionCouncil = runDecisionCouncil({
+      asset: 'stock', bars: scenarioBars, spot: price, changePct: quote.changePct,
+      expectedMove: dailyExpectedMove, preferredDirection: contractType, scenario, window: opportunityWindow,
+      volatilityPct: rv, baselineVolatilityPct: 38, eventRisk, newsSentiment,
+      session: sessionQuality,
+      dataQuality: { ready: true, reason: dataQuality.issues.join(' — ') },
+      contractFitScore: 0, contractFitLabel: 'لا يوجد عقد مناسب',
+    })
+    watchMode = true
   }
 
   return {
@@ -249,6 +279,7 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
     expiration: usedExp,
     scenario,
     opportunityWindow,
+    decisionCouncil,
   }
 }
 

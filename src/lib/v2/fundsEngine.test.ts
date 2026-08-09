@@ -58,6 +58,16 @@ describe('محرك الصناديق متعدد الطبقات', () => {
     expect(v.vetoes.length).toBeGreaterThan(0)
   })
 
+  it('في وضع المجلس يعدّل الحدث الدرجة ولا يملك الإلغاء وحده', () => {
+    const v = judgeFund({ ...baseInput(strongFund()), econBlock: true }, {
+      forcedSide: 1,
+      councilScore: 80,
+      councilMode: true,
+    })
+    expect(v.vetoes).toEqual([])
+    expect(v.plan).not.toBeNull()
+  })
+
   it('بيانات ناقصة: لا توصية', () => {
     const v = judgeFund(baseInput(uptrendBars(30)))
     expect(v.plan).toBeNull()

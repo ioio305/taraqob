@@ -13,6 +13,7 @@ import { getAdapter } from '@/lib/v2/adapters/registry'
 import { enrichContracts, SPX_BANDS, type RecMode, type EnrichContext } from '@/lib/v2/recommendCore'
 import { assessUnderlyingDirection, buildOpportunityWindow, buildUnderlyingScenario } from '@/lib/v2/opportunityModel'
 import { selectContractsForScenario } from '@/lib/v2/scenarioContractSelector'
+import { runDecisionCouncil } from '@/lib/v2/decisionCouncil'
 import { recommendForStock } from '@/lib/v2/stocksRecommend'
 import { recommendForFund } from '@/lib/v2/fundsRecommend'
 
@@ -255,16 +256,21 @@ export async function GET(request: NextRequest) {
       getHistoryBars('daily', 60).catch(() => []),
     ])
     const scenarioBars = intradayBars.length >= 5 ? intradayBars : dailyForGuard
-    if (!forceType) {
-      const assessment = assessUnderlyingDirection(intradayBars, spxChgPct)
-      contractType = assessment.direction
-      dir = assessment.direction ? {
-        type: assessment.direction,
-        label: assessment.direction === 'call' ? '▲ اتجاه صاعد مؤكد' : '▼ اتجاه هابط مؤكد',
-        color: assessment.direction === 'call' ? '#10B981' : '#EF4444',
-        reason: assessment.reason,
-      } : { type: null, label: '↔ انتظر اتجاهاً أوضح', color: '#F59E0B', reason: assessment.reason }
-    }
+    const assessment = assessUnderlyingDirection(intradayBars, spxChgPct)
+    const preliminaryCouncil = runDecisionCouncil({
+      asset: 'index', bars: scenarioBars, spot: spxPrice, changePct: spxChgPct,
+      expectedMove: em, preferredDirection: forceType ?? assessment.direction,
+      volatilityPct: vixPrice, baselineVolatilityPct: 20, gamma: gammaEx,
+      newsRisk: newsDecision, session: sessionQuality,
+      dataQuality: { ready: scenarioBars.length >= 5, reason: 'شموع الأصل غير كافية لصناعة قرار موثوق' },
+    })
+    contractType = forceType ?? preliminaryCouncil.direction
+    dir = contractType ? {
+      type: contractType,
+      label: contractType === 'call' ? '▲ اتجاه صاعد مرجح' : '▼ اتجاه هابط مرجح',
+      color: contractType === 'call' ? '#10B981' : '#EF4444',
+      reason: preliminaryCouncil.explanation,
+    } : { type: null, label: '↔ انتظر اتجاهاً أوضح', color: '#F59E0B', reason: preliminaryCouncil.explanation }
     let scenario = contractType && em
       ? buildUnderlyingScenario({
           direction: contractType,
@@ -297,7 +303,7 @@ export async function GET(request: NextRequest) {
     let shortlist: any[] = []
     let usedExp = ''
     let usedChain: any[] = []
-    const watchMode = !contractType
+    let watchMode = !contractType
     let straddleMove = computeStraddleMove([], spxPrice, em)
     const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
     const dteOf = (expiration: string) => Math.max(0, Math.round(
@@ -379,6 +385,17 @@ export async function GET(request: NextRequest) {
     // ── حارس الانهيارات: شموع يومية + مؤشر الخوف ──────────────────────────
     const guard = crashGuard(dailyForGuard, vixPrice)
 
+    const decisionCouncil = runDecisionCouncil({
+      asset: 'index', bars: scenarioBars, spot: spxPrice, changePct: spxChgPct,
+      expectedMove: em, preferredDirection: contractType, scenario, window: opportunityWindow,
+      volatilityPct: vixPrice, baselineVolatilityPct: 20, gamma: gammaEx,
+      newsRisk: newsDecision, session: sessionQuality,
+      dataQuality: { ready: scenarioBars.length >= 5, reason: 'شموع الأصل غير كافية لصناعة قرار موثوق' },
+      contractFitScore: top3[0]?.selection?.fitScore ?? 0,
+      contractFitLabel: top3[0]?.selection?.fitLabel ?? 'لا يوجد عقد مناسب',
+    })
+    watchMode = decisionCouncil.action === 'wait'
+
     // ── إثراء العقود عبر النواة المشتركة — سياق SPX يعيد السلوك السابق حرفياً ──
     const spxCtx: EnrichContext = {
       underlyingPrice: spxPrice,
@@ -394,10 +411,8 @@ export async function GET(request: NextRequest) {
       usedChain,
       gammaEx,
       guard,
-      blocked: newsBlocked || reactionBlocked || sessionBlocked,
-      blockedReason: newsBlocked ? (newsDecision?.reason ?? '')
-        : reactionBlocked ? marketReaction.reason
-        : sessionBlocked ? sessionQuality.reason : '',
+      blocked: watchMode,
+      blockedReason: decisionCouncil.explanation,
       closedWatchlist,
       watchMode,
       watchModeReason: 'السوق يتحرك بلا اتجاه واضح — راقب فقط، لا تشترِ الآن',
@@ -414,6 +429,7 @@ export async function GET(request: NextRequest) {
     }
     const enrichedTop3 = enrichContracts(top3, spxCtx)
       .filter(contract => contract.status === 'execute' && contract.selection?.fitLabel === 'ممتاز')
+      .filter(() => decisionCouncil.action === contractType)
       .slice(0, 1)
 
     const otmRange = scenario ? {
@@ -459,6 +475,7 @@ export async function GET(request: NextRequest) {
       watchMode,
       scenario,
       opportunityWindow,
+      decisionCouncil,
       contracts:   enrichedTop3,
       shortlist:   shortlist.map(({ _score, ...rest }) => rest),
       expiration:  usedExp,

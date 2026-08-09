@@ -117,7 +117,7 @@ const r2 = (x: number) => Math.round(x * 100) / 100
 export const FUNDS_ACTIVE = ['IWM','RSP','XLK','XLF','XLE','XLY','SMH','GLD','TLT','IEF','HYG','DBC']
 
 // ── المحرك ────────────────────────────────────────────────────────────────────
-export function judgeFund(input: EngineInput, opts?: { allowShort?: boolean }): FundVerdict {
+export function judgeFund(input: EngineInput, opts?: { allowShort?: boolean; forcedSide?: Side; councilScore?: number; councilMode?: boolean }): FundVerdict {
   const { symbol, bars, spyBars, econBlock } = input
   const closes = bars.map(b => b.close)
   const spyCloses = spyBars.map(b => b.close)
@@ -166,7 +166,8 @@ export function judgeFund(input: EngineInput, opts?: { allowShort?: boolean }): 
         : 0 },
   ]
   const net = votes.reduce((s, v) => s + v.vote, 0)
-  const side: Side = net >= 3 ? 1 : net <= -3 ? -1 : 0
+  const votedSide: Side = net >= 3 ? 1 : net <= -3 ? -1 : 0
+  const side: Side = opts?.forcedSide ?? votedSide
 
   // ── 2) درجة الجودة من 100 (باتجاه الصفقة) ────────────────────────────────
   const dir = side === 0 ? (net >= 0 ? 1 : -1) : side // للتقييم حتى بلا اتجاه
@@ -268,24 +269,29 @@ export function judgeFund(input: EngineInput, opts?: { allowShort?: boolean }): 
     add('rr', 'العائد إلى المخاطرة', s, 10)
   }
 
-  const score = parts.reduce((s, p) => s + p.score, 0)
-  const tier: Tier = score >= 90 ? 'exceptional' : score >= 80 ? 'strong' : score >= 70 ? 'watch' : 'none'
+  const legacyScore = parts.reduce((s, p) => s + p.score, 0)
+  const score = opts?.councilMode && opts.councilScore != null
+    ? Math.max(0, Math.min(100, Math.round(opts.councilScore)))
+    : legacyScore
+  const tier: Tier = opts?.councilMode
+    ? score >= 85 ? 'exceptional' : score >= 62 ? 'strong' : 'none'
+    : score >= 90 ? 'exceptional' : score >= 80 ? 'strong' : score >= 70 ? 'watch' : 'none'
 
   // ── 3) شروط المنع (فيتو مستقل) ───────────────────────────────────────────
   const vetoes: string[] = []
-  if (econBlock) vetoes.push('حدث اقتصادي ثقيل اليوم')
+  if (!opts?.councilMode && econBlock) vetoes.push('حدث اقتصادي ثقيل اليوم')
   // فجوة افتتاح كبيرة
   const gap = Math.abs(bars[i].open - bars[i - 1].close)
-  if (gap > 1.5 * atr) vetoes.push('فجوة سعرية كبيرة')
+  if (!opts?.councilMode && gap > 1.5 * atr) vetoes.push('فجوة سعرية كبيرة')
   // انفجار تقلب: مدى اليوم أكبر من ضعفي المعدل
-  if (bars[i].high - bars[i].low > 2 * atr) vetoes.push('تقلب غير طبيعي')
+  if (!opts?.councilMode && bars[i].high - bars[i].low > 2 * atr) vetoes.push('تقلب غير طبيعي')
   // تعارض الاتجاه اليومي مع الأسبوعي
-  if (side !== 0 && ma200 != null) {
+  if (!opts?.councilMode && side !== 0 && ma200 != null) {
     if (side === 1 && ma50 < ma200) vetoes.push('الاتجاه الأسبوعي يعارض الصفقة')
     if (side === -1 && ma50 > ma200) vetoes.push('الاتجاه الأسبوعي يعارض الصفقة')
   }
   // العائد إلى المخاطرة من مستويات السوق الفعلية
-  if (rr < 1.5) vetoes.push('العائد إلى المخاطرة ضعيف')
+  if (!opts?.councilMode && rr < 1.5) vetoes.push('العائد إلى المخاطرة ضعيف')
 
   // ── 4) صياغة التوصية ─────────────────────────────────────────────────────
   if (side === 0) return none(vetoes, votes, parts, score, 0)
@@ -314,9 +320,11 @@ export function judgeFund(input: EngineInput, opts?: { allowShort?: boolean }): 
     rv == null ? 'متوسط' : rv < 18 ? 'منخفض' : rv < 30 ? 'متوسط' : 'مرتفع'
 
   const topParts = parts.filter(p => p.score >= p.max * 0.8).map(p => p.labelAr)
-  const reasonAr = topParts.length
-    ? `اتفاق ${Math.abs(net)} من 6 استراتيجيات؛ نقاط القوة: ${topParts.slice(0, 4).join('، ')}`
-    : `اتفاق ${Math.abs(net)} من 6 استراتيجيات`
+  const reasonAr = opts?.councilMode
+    ? `اعتمد محرك القرار المركزي السيناريو بعد وزن الاتجاه والزخم والسيولة والحركة والزمن؛ نقاط القوة: ${topParts.slice(0, 4).join('، ') || 'اتفاق الأدلة الأساسية'}`
+    : topParts.length
+      ? `اتفاق ${Math.abs(net)} من 6 استراتيجيات؛ نقاط القوة: ${topParts.slice(0, 4).join('، ')}`
+      : `اتفاق ${Math.abs(net)} من 6 استراتيجيات`
   const cancelAr = side === 1
     ? `إغلاق يومي أسفل ${r2(ma20)} (متوسط 20 يومًا)`
     : `إغلاق يومي أعلى ${r2(ma20)} (متوسط 20 يومًا)`

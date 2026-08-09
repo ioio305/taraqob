@@ -3,8 +3,11 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { UnderlyingTradeManager } from '@/components/v2/UnderlyingTradeManager'
+import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
 import { useStocksTier } from './StocksTierContext'
 import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
+import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
+import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
 
 // ── أنواع الماسح ──────────────────────────────────────────────────────────────
 type Best = {
@@ -33,8 +36,9 @@ type ScanRow = {
   dayPlan?: {
     targetPrice: number; stopPrice: number; targetPct: number; stopPct: number
   } | null
-  scenario?: { entry: number; target1: { value: number }; target2: { value: number }; invalidation: { value: number } } | null
-  opportunityWindow?: { label: string; validUntil: string } | null
+  scenario?: UnderlyingScenario | null
+  opportunityWindow?: OpportunityWindow | null
+  decisionCouncil?: DecisionCouncil | null
   error?: string
 }
 type ScanData = {
@@ -90,8 +94,9 @@ type DetailData = {
     targetPrice: number; stopPrice: number; targetPct: number; stopPct: number
     notesAr: string[]
   } | null
-  scenario?: { entry: number; target1: { value: number; source: string }; target2: { value: number; source: string }; invalidation: { value: number; source: string } } | null
-  opportunityWindow?: { label: string; validUntil: string; reason: string } | null
+  scenario?: UnderlyingScenario | null
+  opportunityWindow?: OpportunityWindow | null
+  decisionCouncil?: DecisionCouncil | null
 }
 
 const ACCENT = '#60A5FA'   // لون هوية منصة الشركات
@@ -194,6 +199,9 @@ export default function StocksScanner() {
     return live ? { ...row, price: live.price, changePct: live.changePct, source: live.source } : row
   })
   const topOpportunity = results.find(row => row.best && row.dataQuality?.status !== 'blocked') ?? null
+  const topDecision = [...results]
+    .filter(row => row.decisionCouncil && row.dataQuality?.status !== 'blocked')
+    .sort((left, right) => (right.decisionCouncil?.opportunityScore ?? 0) - (left.decisionCouncil?.opportunityScore ?? 0))[0] ?? null
   const tierRank = isStaff ? 99 : (({ radar: 1, signal: 2, edge: 3, alpha: 4 } as Record<string, number>)[tier] ?? 1)
 
   return (
@@ -237,6 +245,10 @@ export default function StocksScanner() {
           )
         })}
       </div>
+
+      {topDecision?.decisionCouncil ? (
+        <DecisionCouncilCard council={topDecision.decisionCouncil} scenario={topDecision.scenario} window={topDecision.opportunityWindow} />
+      ) : null}
 
       {/* القرار أولاً: هذه أول معلومة يبحث عنها المتداول عند الدخول. */}
       <section className="rounded-3xl overflow-hidden"
@@ -536,10 +548,15 @@ export default function StocksScanner() {
 // ── بطاقة تفصيل السهم (أفضل عقد + الخطة + لماذا) ──────────────────────────────
 function StockDetail({ detail }: { detail: DetailData }) {
   const c = detail.contracts[0]
+  const councilCard = detail.decisionCouncil ? (
+    <DecisionCouncilCard council={detail.decisionCouncil} scenario={detail.scenario} window={detail.opportunityWindow} compact />
+  ) : null
   if (!c) {
-    if (!detail.dataQuality || detail.dataQuality.status === 'ready') return null
+    if (!detail.dataQuality || detail.dataQuality.status === 'ready') return councilCard
     return (
-      <div className="rounded-lg px-3 py-2.5 mt-2"
+      <div className="space-y-2 mt-2">
+      {councilCard}
+      <div className="rounded-lg px-3 py-2.5"
            style={{
              background: detail.dataQuality.status === 'blocked' ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)',
              border: `1px solid ${detail.dataQuality.status === 'blocked' ? 'rgba(239,68,68,0.35)' : 'rgba(245,158,11,0.35)'}`,
@@ -548,6 +565,7 @@ function StockDetail({ detail }: { detail: DetailData }) {
           {detail.dataQuality.label}
         </div>
         <div className="text-xs mt-1" style={{ color: '#94A3B8' }}>{detail.dataQuality.issues.join(' — ')}</div>
+      </div>
       </div>
     )
   }
@@ -573,6 +591,7 @@ function StockDetail({ detail }: { detail: DetailData }) {
 
   return (
     <div className="space-y-3 mt-2">
+      {councilCard}
       {detail.opportunityWindow && (
         <div className="rounded-xl px-4 py-3"
              style={{ background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.35)' }}>
