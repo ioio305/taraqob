@@ -6,6 +6,7 @@
 // بدون المتغيرين، الدالة تتجاهل الإرسال بصمت — لا تكسر شيئاً.
 
 import { underlyingFromContract } from './underlying'
+import type { AlertLifecycleEvent } from './alertLifecycle'
 
 export async function sendTelegram(text: string): Promise<boolean> {
   const token = process.env.TELEGRAM_BOT_TOKEN
@@ -83,5 +84,34 @@ export function formatSignalMessage(s: {
     lines.push('', `${RLM}💡 <b>لماذا هذه الفرصة؟</b>`, `${RLM}<blockquote>${s.reason}</blockquote>`)
   }
   lines.push(`${RLM}${DIV}`, `${RLM}⚠️ <i>راجع المنصة قبل الدخول — القرار قرارك</i>`)
+  return lines.join('\n')
+}
+
+export function formatLifecycleMessage(input: {
+  underlying: string
+  contractType: 'call' | 'put'
+  strike: number
+  price?: number | null
+  score?: number | null
+  target1?: number | null
+  target2?: number | null
+  invalidation?: number | null
+  events: AlertLifecycleEvent[]
+}): string {
+  const typeAr = input.contractType === 'put' ? 'بوت' : 'كول'
+  const lines = [
+    `${RLM}🔔 <b>تحديث مهم — ترقّب</b>`,
+    `${RLM}━━━━━━━━━━━━`,
+    `${RLM}<b>${ltr(input.underlying)}</b> · ${typeAr} ${ltr(input.strike)}`,
+  ]
+  for (const event of input.events) {
+    lines.push(`${RLM}• <b>${event.title}:</b> ${event.detail}`)
+  }
+  if (input.price != null) lines.push(`${RLM}📍 <b>الأصل الآن:</b> ${ltr(input.price.toFixed(2))}`)
+  if (input.score != null) lines.push(`${RLM}🎯 <b>درجة الفرصة:</b> ${ltr(input.score + '/100')}`)
+  if (input.target1 != null) lines.push(`${RLM}① <b>الهدف الأول:</b> ${ltr(input.target1)}`)
+  if (input.target2 != null) lines.push(`${RLM}② <b>الهدف الثاني:</b> ${ltr(input.target2)}`)
+  if (input.invalidation != null) lines.push(`${RLM}🛑 <b>إلغاء السيناريو:</b> ${ltr(input.invalidation)}`)
+  lines.push(`${RLM}━━━━━━━━━━━━`, `${RLM}⚠️ <i>راجع المنصة قبل اتخاذ القرار.</i>`)
   return lines.join('\n')
 }

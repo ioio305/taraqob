@@ -13,12 +13,24 @@ on:
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 7
+    concurrency:
+      group: telegram-watch-live
+      cancel-in-progress: true
     steps:
-      - name: نداء مراقب تليجرام
+      - name: متابعة مستمرة أثناء الجلسة
         run: |
-          code=$(curl -sS -o /tmp/tw.json -w "%{http_code}" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "https://trqob.com/api/v2/telegram-watch")
-          echo "HTTP $code"
-          cat /tmp/tw.json
+          for i in $(seq 1 18); do
+            started=$(date +%s)
+            code=$(curl -sS -o /tmp/tw.json -w "%{http_code}" \
+              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+              "https://trqob.com/api/v2/telegram-watch")
+            echo "pulse=$i http=$code"
+            cat /tmp/tw.json
+            if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+              exit 1
+            fi
+            elapsed=$(($(date +%s) - started))
+            remaining=$((15 - elapsed))
+            if [ "$i" -lt 18 ] && [ "$remaining" -gt 0 ]; then sleep "$remaining"; fi
+          done

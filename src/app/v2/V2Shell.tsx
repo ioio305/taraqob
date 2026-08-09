@@ -13,6 +13,7 @@ import { MarketClock } from '@/components/v2/MarketClock'
 import { DecisionCouncilStrip } from '@/components/v2/DecisionCouncilStrip'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
 import { getSelectedIndex, indexMeta, type IndexId } from '@/lib/v2/indexSelection'
+import { showBrowserNotificationOnce } from '@/lib/v2/browserNotifications'
 
 const ROLE_LABEL_MAP: Record<string, string>  = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
 const ROLE_COLOR_MAP: Record<string, string>  = { admin: '#C9943A', moderator: '#60A5FA', user: '#7C8A99' }
@@ -219,6 +220,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [bellOpen, setBellOpen]           = useState(false)
   const bellRef                           = useRef<HTMLDivElement>(null)
+  const seenNotificationIds               = useRef<Set<string> | null>(null)
 
   // ── Security: ALWAYS from DB prop ─────────────────────────
   const isAdmin = userRole === 'admin'
@@ -239,22 +241,74 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
   // ── Fetch notifications ────────────────────────────────────
   const fetchNotifications = useCallback(async () => {
     try {
-      const res  = await fetch('/api/v2/notifications')
+      const res  = await fetch('/api/v2/notifications', { cache: 'no-store' })
       const data = await res.json()
-      if (Array.isArray(data.notifications)) setNotifications(data.notifications)
+      if (!Array.isArray(data.notifications)) return
+
+      const incoming = data.notifications as Notification[]
+      if (seenNotificationIds.current === null) {
+        seenNotificationIds.current = new Set(incoming.map(item => item.id))
+      } else {
+        for (const item of incoming) {
+          if (!seenNotificationIds.current.has(item.id)) {
+            seenNotificationIds.current.add(item.id)
+            if (!item.is_read) showBrowserNotificationOnce(item.title, item.body ?? '')
+          }
+        }
+      }
+      setNotifications(incoming)
     } catch { /* silent */ }
   }, [])
 
   useEffect(() => {
     void fetchNotifications()
-    const id = setInterval(fetchNotifications, 60_000)
+    const id = setInterval(fetchNotifications, 15_000)
     const refreshNow = () => { void fetchNotifications() }
+    const refreshVisible = () => { if (document.visibilityState === 'visible') void fetchNotifications() }
     window.addEventListener('taraqob:notifications-changed', refreshNow)
+    window.addEventListener('focus', refreshNow)
+    document.addEventListener('visibilitychange', refreshVisible)
     return () => {
       clearInterval(id)
       window.removeEventListener('taraqob:notifications-changed', refreshNow)
+      window.removeEventListener('focus', refreshNow)
+      document.removeEventListener('visibilitychange', refreshVisible)
     }
   }, [fetchNotifications])
+
+  // وصول فوري عند إضافة إشعار خادمي، مع بقاء الفحص الدوري كمسار احتياطي.
+  useEffect(() => {
+    const supabase = createClient()
+    let active = true
+    let channel: ReturnType<typeof supabase.channel> | null = null
+
+    void supabase.auth.getUser().then(({ data }) => {
+      if (!active || !data.user) return
+      channel = supabase
+        .channel(`notifications:${data.user.id}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${data.user.id}` },
+          payload => {
+            const item = payload.new as Notification
+            if (!item?.id) return
+            const seen = seenNotificationIds.current ?? new Set<string>()
+            seenNotificationIds.current = seen
+            if (!seen.has(item.id)) {
+              seen.add(item.id)
+              showBrowserNotificationOnce(item.title, item.body ?? '')
+            }
+            setNotifications(current => [item, ...current.filter(existing => existing.id !== item.id)].slice(0, 30))
+          },
+        )
+        .subscribe()
+    })
+
+    return () => {
+      active = false
+      if (channel) void supabase.removeChannel(channel)
+    }
+  }, [])
 
   // Close bell on outside click
   useEffect(() => {

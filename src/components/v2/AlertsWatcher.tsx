@@ -15,6 +15,7 @@ import {
   riyadhDateTime,
   type BellNotification,
 } from '@/lib/v2/notificationEvents'
+import { showBrowserNotificationOnce } from '@/lib/v2/browserNotifications'
 
 const POLL_MS = 15_000   // متابعة قريبة من اللحظة أثناء السوق
 const BELL_SENT_KEY = 'taraqob_bell_alerted_v1'
@@ -90,9 +91,7 @@ function notifyOnce(key: string, title: string, body: string) {
     // نحتفظ بآخر 100 مفتاح فقط
     localStorage.setItem('taraqob_alerted', JSON.stringify([...sent.slice(-99), fullKey]))
   } catch { /* تجاهل */ }
-  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-    try { new Notification(title, { body, icon: '/favicon.ico', dir: 'rtl', lang: 'ar' }) } catch { /* تجاهل */ }
-  }
+  showBrowserNotificationOnce(title, body)
 }
 
 function dailyKey(key: string): string {

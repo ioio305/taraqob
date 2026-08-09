@@ -1,9 +1,16 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendTelegram, formatSignalMessage } from '@/lib/v2/telegram'
+import { sendTelegram, formatSignalMessage, formatLifecycleMessage } from '@/lib/v2/telegram'
 import { rankCorrelatedCandidates } from '@/lib/v2/correlatedSignalRank'
 import { underlyingFromContract } from '@/lib/v2/underlying'
+import {
+  deriveAlertLifecycle,
+  type AlertLifecycleEvent,
+  type AlertLifecycleState,
+} from '@/lib/v2/alertLifecycle'
+import { deliverAlertEvent, type DeliverableAlert } from '@/lib/v2/alertDelivery'
+import { buildEntryNotification, riyadhDateTime } from '@/lib/v2/notificationEvents'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -17,6 +24,69 @@ export const maxDuration = 60
 const INDICES = ['SPX', 'NDX', 'SPY', 'QQQ'] as const
 const STOCKS = ['AAPL', 'NVDA', 'TSLA', 'MSFT', 'AMZN', 'GOOGL', 'AMD', 'NFLX', 'AVGO', 'COIN', 'PLTR'] as const
 const FUNDS = ['IWM', 'DIA', 'XLF', 'XLE', 'XLK', 'XLV', 'XLI', 'XLY', 'XLP', 'XLU', 'SMH', 'GLD'] as const
+const EVENT_PRIORITY: Record<string, number> = {
+  exit: 1,
+  target_two: 2,
+  target_one: 3,
+  scenario_changed: 4,
+  reduce: 5,
+  weakening: 6,
+  direction_changed: 7,
+  market_changed: 8,
+  score_up: 9,
+  next_target_near: 10,
+}
+const ALERT_STATE_PREFIX = '@alert-state:'
+
+type PendingAlert = DeliverableAlert & {
+  eventKey: string
+  events: AlertLifecycleEvent[]
+  nextState: AlertLifecycleState
+  signalUpdate: Record<string, unknown>
+  reason: string | null
+  telegramSent: boolean
+  bellSent: boolean
+}
+
+type StoredAlertEnvelope = {
+  version: 1
+  state: AlertLifecycleState
+  reason?: string | null
+  pending?: PendingAlert | null
+}
+
+function initialAlertState(signal: any): AlertLifecycleState {
+  const score = Number.isFinite(Number(signal.total_score)) ? Number(signal.total_score) : null
+  return {
+    score,
+    notifiedScore: score,
+    direction: signal.contract_type === 'put' ? 'put' : 'call',
+    marketState: null,
+    managementStatus: null,
+    targetOneHit: signal.scenario_stage === 'target_one',
+    targetTwoHit: false,
+    scenarioValid: true,
+    timeExpired: false,
+    updatedAt: signal.created_at ?? new Date().toISOString(),
+  }
+}
+
+function readAlertEnvelope(signal: any): StoredAlertEnvelope {
+  const raw = typeof signal.outcome_reason === 'string' ? signal.outcome_reason : ''
+  if (raw.startsWith(ALERT_STATE_PREFIX)) {
+    try {
+      const parsed = JSON.parse(raw.slice(ALERT_STATE_PREFIX.length)) as StoredAlertEnvelope
+      if (parsed?.version === 1 && parsed.state) return parsed
+    } catch {
+      // نبدأ من حالة محافظة إذا كان السجل القديم غير مكتمل.
+    }
+  }
+  return { version: 1, state: initialAlertState(signal), reason: raw || null }
+}
+
+function writeAlertEnvelope(envelope: StoredAlertEnvelope): string {
+  return `${ALERT_STATE_PREFIX}${JSON.stringify(envelope)}`
+}
 
 // نفس شرط جلسة نيويورك المستخدم في AlertsWatcher: إثنين–جمعة 9:30–16:00
 function marketOpenNow(): boolean {
@@ -24,6 +94,202 @@ function marketOpenNow(): boolean {
   const day = ny.getDay()
   const t = ny.getHours() * 60 + ny.getMinutes()
   return day >= 1 && day <= 5 && t >= 9 * 60 + 30 && t < 16 * 60
+}
+
+function pageForUnderlying(underlying: string): string {
+  if (INDICES.includes(underlying as (typeof INDICES)[number])) return '/v2'
+  if (STOCKS.includes(underlying as (typeof STOCKS)[number])) return `/stocks/analyze?symbol=${encodeURIComponent(underlying)}`
+  return `/funds/analyze?symbol=${encodeURIComponent(underlying)}`
+}
+
+function eventKey(signalId: string, date: string, events: { kind: string }[], state: AlertLifecycleState): string {
+  const kinds = events.map(event => event.kind).sort().join('+')
+  const scorePart = events.some(event => event.kind === 'score_up') ? `:${state.notifiedScore ?? ''}` : ''
+  const directionPart = events.some(event => event.kind === 'direction_changed') ? `:${state.direction ?? ''}` : ''
+  const marketPart = events.some(event => event.kind === 'market_changed') ? `:${state.marketState ?? ''}` : ''
+  return `${signalId}:${date}:${kinds}${scorePart}${directionPart}${marketPart}`
+}
+
+async function monitorActiveSignals(input: {
+  origin: string
+  secret: string
+  today: string
+  supabase: ReturnType<typeof createServiceClient>
+  recommendationResults: { idx: string; asset: string; json: any }[]
+}) {
+  const { origin, secret, today, supabase, recommendationResults } = input
+  const { data: activeSignals } = await supabase
+    .from('v2_signals')
+    .select('*')
+    .is('user_id', null)
+    .eq('status', 'active')
+    .order('created_at', { ascending: true })
+    .limit(30)
+
+  if (!activeSignals?.length) return { monitored: 0, events: 0 }
+
+  const recommendationByUnderlying = new Map(recommendationResults.map(result => [result.idx, result.json]))
+  let monitored = 0
+  let queuedEvents = 0
+
+  await Promise.all(activeSignals.map(async (signal: any) => {
+    const underlying = underlyingFromContract(signal.contract_symbol)
+    const entry = Number(signal.spx_at_signal)
+    const target1 = Number(signal.target_level)
+    const target2 = Number(signal.target2_level)
+    const invalidation = Number(signal.stop_loss_level)
+    if (![entry, target1, target2, invalidation].every(value => Number.isFinite(value) && value > 0)) return
+
+    const direction = signal.contract_type === 'put' ? 'bearish' : 'bullish'
+    const platform = underlying === 'SPX' ? 'options' : STOCKS.includes(underlying as any) ? 'stocks' : 'funds'
+    const query = new URLSearchParams({
+      platform,
+      symbol: underlying,
+      direction,
+      entry: String(entry),
+      target1: String(target1),
+      target2: String(target2),
+      invalidation: String(invalidation),
+      startedAt: signal.created_at,
+      ...(signal.valid_until ? { validUntil: signal.valid_until } : {}),
+    })
+
+    try {
+      const response = await fetch(`${origin}/api/v2/trade-management?${query.toString()}`, {
+        cache: 'no-store',
+        headers: { authorization: `Bearer ${secret}` },
+      })
+      const management = await response.json()
+      if (!response.ok || !management?.success || !management?.result) return
+      monitored++
+
+      const council = recommendationByUnderlying.get(underlying)?.decisionCouncil
+      const envelope = readAlertEnvelope(signal)
+
+      // إذا توقف إرسال سابق في منتصف الطريق، نكمله أولاً من دون إعادة إنشاء الحدث.
+      if (envelope.pending) {
+        const delivered = await deliverAlertEvent(supabase, envelope.pending, envelope.pending)
+        if (!delivered.telegramSent || !delivered.bellSent) {
+          await supabase.from('v2_signals').update({
+            outcome_reason: writeAlertEnvelope({
+              ...envelope,
+              pending: { ...envelope.pending, ...delivered },
+            }),
+          }).eq('id', signal.id)
+          return
+        }
+
+        const completedUpdate = { ...envelope.pending.signalUpdate }
+        completedUpdate.outcome_reason = completedUpdate.status && completedUpdate.status !== 'active'
+          ? envelope.pending.reason
+          : writeAlertEnvelope({ version: 1, state: envelope.pending.nextState, reason: envelope.pending.reason })
+        await supabase.from('v2_signals').update(completedUpdate).eq('id', signal.id)
+        queuedEvents++
+        return
+      }
+
+      const lifecycle = deriveAlertLifecycle(envelope.state, {
+        score: Number.isFinite(Number(council?.opportunityScore))
+          ? Number(council.opportunityScore)
+          : envelope.state.score,
+        direction: council?.direction === 'call' || council?.direction === 'put'
+          ? council.direction
+          : envelope.state.direction,
+        marketState: council?.marketState?.key ?? envelope.state.marketState,
+        managementStatus: management.result.status,
+        targetOneHit: Boolean(management.result.targetOneHit),
+        targetTwoHit: Boolean(management.result.targetTwoHit),
+        scenarioValid: Boolean(management.result.scenarioValid),
+        timeExpired: Boolean(management.result.timeExpired),
+      })
+
+      const signalUpdate: Record<string, unknown> = {}
+      let reason: string | null = envelope.reason ?? null
+      if (management.result.targetTwoHit) {
+        signalUpdate.status = 'closed_win'
+        signalUpdate.scenario_stage = 'completed'
+        reason = 'اكتملت حركة الأصل حتى الهدف الثاني'
+        signalUpdate.outcome_at = new Date().toISOString()
+      } else if (!management.result.scenarioValid || management.result.status === 'exit') {
+        const favorable = signal.contract_type === 'call'
+          ? management.result.currentPrice >= entry
+          : management.result.currentPrice <= entry
+        signalUpdate.status = favorable || management.result.targetOneHit ? 'closed_win' : 'closed_loss'
+        signalUpdate.scenario_stage = 'invalidated'
+        reason = management.result.title
+        signalUpdate.outcome_at = new Date().toISOString()
+      } else if (management.result.timeExpired) {
+        signalUpdate.status = management.result.targetOneHit ? 'closed_win' : 'expired'
+        signalUpdate.scenario_stage = 'expired'
+        reason = 'انتهت النافذة الزمنية للفرصة'
+        signalUpdate.outcome_at = new Date().toISOString()
+      } else if (management.result.targetOneHit && signal.scenario_stage !== 'target_one') {
+        signalUpdate.scenario_stage = 'target_one'
+        reason = 'تحقق الهدف الأول؛ متابعة الهدف الثاني'
+      }
+
+      if (lifecycle.events.length) {
+        const events = [...lifecycle.events].sort((left, right) => (EVENT_PRIORITY[left.kind] ?? 99) - (EVENT_PRIORITY[right.kind] ?? 99))
+        const title = events[0].title
+        const body = [
+          `${underlying} · ${signal.contract_type === 'put' ? 'بوت' : 'كول'} ${signal.strike}`,
+          ...events.map(event => `${event.title}: ${event.detail}`),
+          `الأصل الآن ${Number(management.result.currentPrice).toFixed(2)}`,
+          `${riyadhDateTime()} بتوقيت الرياض`,
+        ].join(' · ')
+        const pending: PendingAlert = {
+          eventKey: eventKey(signal.id, today, events, lifecycle.state),
+          events,
+          title,
+          body,
+          url: pageForUnderlying(underlying),
+          telegramText: formatLifecycleMessage({
+            underlying,
+            contractType: signal.contract_type === 'put' ? 'put' : 'call',
+            strike: Number(signal.strike),
+            price: Number(management.result.currentPrice),
+            score: lifecycle.state.score,
+            target1,
+            target2,
+            invalidation,
+            events,
+          }),
+          nextState: lifecycle.state,
+          signalUpdate,
+          reason,
+          telegramSent: false,
+          bellSent: false,
+        }
+
+        // نحفظ الحدث قبل الإرسال حتى يمكن إكمال أي قناة تتعثر من دون تكرار الأخرى.
+        const saved = await supabase.from('v2_signals').update({
+          outcome_reason: writeAlertEnvelope({ ...envelope, pending }),
+        }).eq('id', signal.id)
+        if (saved.error) return
+
+        const delivered = await deliverAlertEvent(supabase, pending)
+        if (!delivered.telegramSent || !delivered.bellSent) {
+          await supabase.from('v2_signals').update({
+            outcome_reason: writeAlertEnvelope({
+              ...envelope,
+              pending: { ...pending, ...delivered },
+            }),
+          }).eq('id', signal.id)
+          return
+        }
+        queuedEvents++
+      }
+
+      signalUpdate.outcome_reason = signalUpdate.status && signalUpdate.status !== 'active'
+        ? reason
+        : writeAlertEnvelope({ version: 1, state: lifecycle.state, reason })
+      await supabase.from('v2_signals').update(signalUpdate).eq('id', signal.id)
+    } catch {
+      // لا يصدر تنبيه عند غياب قراءة موثوقة، ويعاد الفحص في النبضة التالية.
+    }
+  }))
+
+  return { monitored, events: queuedEvents }
 }
 
 export async function GET(req: NextRequest) {
@@ -50,11 +316,15 @@ export async function GET(req: NextRequest) {
   // الاستجابة سريعة من دون ضغط زائد على مزودي الأسعار أو الاستضافة.
   const tickSlot = Math.floor(Date.now() / 15_000)
   const secondaryIndices = INDICES.filter(idx => idx !== 'SPX')
+  const rotatingBatch = <T,>(items: readonly T[], size: number): T[] => Array.from(
+    { length: Math.min(size, items.length) },
+    (_, offset) => items[(tickSlot * size + offset) % items.length],
+  )
   const targets = [
     { idx: 'SPX' as const, asset: 'indices' as const },
     { idx: secondaryIndices[tickSlot % secondaryIndices.length], asset: 'indices' as const },
-    { idx: STOCKS[tickSlot % STOCKS.length], asset: 'stocks' as const },
-    { idx: FUNDS[tickSlot % FUNDS.length], asset: 'funds' as const },
+    ...rotatingBatch(STOCKS, 6).map(idx => ({ idx, asset: 'stocks' as const })),
+    ...rotatingBatch(FUNDS, 6).map(idx => ({ idx, asset: 'funds' as const })),
   ]
 
   const results = await Promise.all(
@@ -79,6 +349,7 @@ export async function GET(req: NextRequest) {
   // أعد محاولة الإشارات التي سُجلت ولم تصل. التسجيل ليس دليلاً على الإرسال.
   const { data: pending } = await sb.from('v2_signals')
     .select('*')
+    .not('user_id', 'is', null)
     .in('telegram_status', ['pending', 'failed'])
     .lt('telegram_attempts', 5)
     .or(`valid_until.is.null,valid_until.gt.${new Date().toISOString()}`)
@@ -108,6 +379,8 @@ export async function GET(req: NextRequest) {
 
   const logged: string[] = []
   const telegramSent: string[] = []
+  let bellSent = 0
+  let deliveryFailed = 0
   const duplicates: string[] = []
 
   const rankedCandidates = rankCorrelatedCandidates(results.flatMap(({ idx, json }) => {
@@ -166,6 +439,18 @@ export async function GET(req: NextRequest) {
       const rr = scenario
         ? Math.abs((scenario.target1.value - scenario.entry) / Math.max(0.01, scenario.entry - scenario.invalidation.value))
         : null
+      const initialState: AlertLifecycleState = {
+        score: decisionCouncil?.opportunityScore ?? c.score ?? null,
+        notifiedScore: decisionCouncil?.opportunityScore ?? c.score ?? null,
+        direction: decisionCouncil?.direction ?? c.type ?? null,
+        marketState: decisionCouncil?.marketState?.key ?? null,
+        managementStatus: null,
+        targetOneHit: false,
+        targetTwoHit: false,
+        scenarioValid: true,
+        timeExpired: false,
+        updatedAt: new Date().toISOString(),
+      }
 
       const signalRow = {
         user_id:           null,   // إشارة رصدها الخادم — لا مستخدم محدد
@@ -195,6 +480,7 @@ export async function GET(req: NextRequest) {
         max_entry_price:   maxEntryPrice,
         valid_until:       validUntil,
         risk_budget_pct:   riskBudgetPct,
+        outcome_reason:    writeAlertEnvelope({ version: 1, state: initialState }),
       }
       let insertResult = await sb.from('v2_signals').insert(signalRow).select('id').single()
       if (insertResult.error && /target2_level|scenario_stage/i.test(insertResult.error.message)) {
@@ -207,7 +493,7 @@ export async function GET(req: NextRequest) {
       if (error) continue
 
       logged.push(c.symbol)
-      const sent = await sendTelegram(formatSignalMessage({
+      const telegramText = formatSignalMessage({
         grade:           c.grade,
         contract_symbol: c.symbol,
         contract_type:   c.type,
@@ -228,23 +514,71 @@ export async function GET(req: NextRequest) {
         max_entry_price: maxEntryPrice,
         valid_until:     validUntil,
         risk_budget_pct: riskBudgetPct,
-      }))
-      await sb.from('v2_signals').update({
-        telegram_status: sent ? 'sent' : 'failed',
-        telegram_attempts: 1,
-        telegram_last_attempt_at: new Date().toISOString(),
-        telegram_sent_at: sent ? new Date().toISOString() : null,
+      })
+      const notice = buildEntryNotification({
+        ...c,
+        scenario,
+        opportunityWindow,
+      })
+      const pending: PendingAlert = {
+        eventKey: `${inserted.id}:entry`,
+        events: [],
+        title: notice.title,
+        body: notice.body,
+        url: notice.url,
+        telegramText,
+        nextState: initialState,
+        signalUpdate: {
+          telegram_status: 'sent',
+          telegram_attempts: 1,
+          telegram_last_attempt_at: new Date().toISOString(),
+          telegram_sent_at: new Date().toISOString(),
+        },
+        reason: null,
+        telegramSent: false,
+        bellSent: false,
+      }
+      const saved = await sb.from('v2_signals').update({
+        outcome_reason: writeAlertEnvelope({ version: 1, state: initialState, pending }),
       }).eq('id', inserted.id)
-      if (sent) telegramSent.push(c.symbol)
+      if (!saved.error) {
+        const delivered = await deliverAlertEvent(sb, pending)
+        if (delivered.telegramSent) telegramSent.push(c.symbol)
+        if (delivered.bellSent) bellSent++
+        if (!delivered.telegramSent || !delivered.bellSent) deliveryFailed++
+        await sb.from('v2_signals').update(delivered.telegramSent && delivered.bellSent
+          ? {
+              ...pending.signalUpdate,
+              outcome_reason: writeAlertEnvelope({ version: 1, state: initialState }),
+            }
+          : {
+              outcome_reason: writeAlertEnvelope({
+                version: 1,
+                state: initialState,
+                pending: { ...pending, ...delivered },
+              }),
+            }).eq('id', inserted.id)
+      }
       break
     }
   }
+
+  const lifecycle = await monitorActiveSignals({
+    origin,
+    secret,
+    today,
+    supabase: sb,
+    recommendationResults: results,
+  })
 
   return NextResponse.json({
     ok: true,
       scanned: targets.length,
     logged: logged.length,
     telegramSent: telegramSent.length,
+    bellSent,
+    deliveryFailed,
+    lifecycle,
     duplicates: duplicates.length,
     retried,
     correlatedCandidates: candidates.length,

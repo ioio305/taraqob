@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { showBrowserNotificationOnce } from '@/lib/v2/browserNotifications'
 
 const SENT_KEY = 'taraqob_stocks_alerted_v1'
 
@@ -24,8 +25,7 @@ function markSent(key: string) {
 }
 
 function browserNotice(title: string, body: string) {
-  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
-  try { new Notification(title, { body, icon: '/favicon.ico', dir: 'rtl', lang: 'ar' }) } catch { /* تجاهل */ }
+  showBrowserNotificationOnce(title, body)
 }
 
 async function saveBell(key: string, title: string, body: string, symbol: string) {
