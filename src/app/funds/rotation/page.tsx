@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { RefreshCw } from 'lucide-react'
+import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 
 type Rotation = { symbol: string; nameAr: string; changePct: number }
 
@@ -17,7 +18,9 @@ export default function FundsRotationPage() {
     } finally { setLoading(false) }
   }, [])
   useEffect(() => { void load() }, [load])
-  const max = Math.max(...items.map(item => Math.abs(item.changePct)), 1)
+  const { quotes } = useLiveQuotes(items.map(item => item.symbol))
+  const liveItems = items.map(item => ({ ...item, changePct: quotes[item.symbol]?.changePct ?? item.changePct }))
+  const max = Math.max(...liveItems.map(item => Math.abs(item.changePct)), 1)
 
   return (
     <div className="mx-auto min-h-full max-w-4xl space-y-4 p-4 pb-12" dir="rtl">
@@ -32,7 +35,7 @@ export default function FundsRotationPage() {
       </section>
       <section className="rounded-2xl border border-white/[.06] bg-[#0B1B15] p-4">
         <div className="space-y-3">
-          {items.map(item => {
+          {liveItems.map(item => {
             const up = item.changePct >= 0
             return (
               <Link key={item.symbol} href={`/funds/analyze?symbol=${item.symbol}`} className="grid grid-cols-[55px_130px_1fr_70px] items-center gap-3">

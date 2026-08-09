@@ -8,6 +8,7 @@ import { useSearchParams } from 'next/navigation'
 import { RefreshCw } from 'lucide-react'
 import { IndexSwitcher } from '@/components/v2/IndexSwitcher'
 import { getSelectedIndex, indexMeta, type IndexId } from '@/lib/v2/indexSelection'
+import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 
 const GOLD = '#C9943A'
 
@@ -121,6 +122,11 @@ function Inner() {
 
   const meta = indexMeta(idx)
   const c = data?.contract
+  const { quotes } = useLiveQuotes([idx, c?.symbol ?? ''])
+  const liveContract = c ? quotes[c.symbol] : null
+  const liveMid = liveContract?.mid ?? liveContract?.price ?? c?.mid
+  const liveBid = liveContract?.bid ?? c?.bid
+  const liveAsk = liveContract?.ask ?? c?.ask
   const st = data?.strategy
   const dp = data?.dayPlan
 
@@ -198,8 +204,8 @@ function Inner() {
             {data.nearestNote ? <div className="text-xs font-bold" style={{ color: '#FBBF24' }}>{data.nearestNote}</div> : null}
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <Metric label="سعر العقد" value={`$${c.mid.toFixed(2)}`} />
-              <Metric label="شراء / بيع" value={`${c.bid.toFixed(2)} / ${c.ask.toFixed(2)}`} />
+              <Metric label="سعر العقد" value={`$${liveMid?.toFixed(2)}`} />
+              <Metric label="شراء / بيع" value={`${liveBid?.toFixed(2)} / ${liveAsk?.toFixed(2)}`} />
               <Metric label="سرعة التفاعل" value={c.delta != null ? c.delta.toFixed(2) : '—'} />
               <Metric label="تذبذب العقد" value={`${c.ivPct.toFixed(0)}%`} />
             </div>

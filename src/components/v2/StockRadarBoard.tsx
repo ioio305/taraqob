@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowDown, ArrowUp, Crosshair, RefreshCw, RadioTower } from 'lucide-react'
+import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 
 export type RadarRow = {
   symbol: string; name: string; price: number; changePct: number; volumeRatio: number
@@ -36,7 +37,13 @@ export function useStockRadar() {
     return () => clearInterval(id)
   }, [load])
 
-  return { rows, loading, error, load }
+  const { quotes: liveQuotes } = useLiveQuotes(rows.map(row => row.symbol))
+  const liveRows = rows.map(row => {
+    const live = liveQuotes[row.symbol]
+    return live ? { ...row, price: live.price, changePct: live.changePct, source: live.source, asOf: live.asOf } : row
+  })
+
+  return { rows: liveRows, loading, error, load }
 }
 
 const signed = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`

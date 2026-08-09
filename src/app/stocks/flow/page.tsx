@@ -2,11 +2,18 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
+import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 
 const ACCENT = '#60A5FA'
 
 type Anomaly = { symbol: string; name: string; type: 'call' | 'put'; strike: number; expiration: string; volume: number; oi: number; ratio: number; mid: number; moneyM: number; noteAr: string }
 type Data = { success: boolean; asOf?: string; callMoneyM?: number; putMoneyM?: number; callShare?: number; summaryAr?: string; count?: number; anomalies: Anomaly[]; honestyAr?: string; error?: string }
+
+function optionSymbol(item: Anomaly): string {
+  const [year, month, day] = item.expiration.split('-')
+  const side = item.type === 'call' ? 'C' : 'P'
+  return `${item.symbol}${year.slice(2)}${month}${day}${side}${String(Math.round(item.strike * 1000)).padStart(8, '0')}`
+}
 
 export default function StockFlowRadar() {
   const [data, setData] = useState<Data | null>(null)
@@ -21,6 +28,17 @@ export default function StockFlowRadar() {
   useEffect(() => { load(); const t = setInterval(load, 120000); return () => clearInterval(t) }, [load])
 
   const callShare = data?.callShare ?? 50
+  const rawAnomalies = data?.anomalies ?? []
+  const { quotes: liveQuotes } = useLiveQuotes(rawAnomalies.map(optionSymbol))
+  const anomalies = rawAnomalies.map(item => {
+    const live = liveQuotes[optionSymbol(item)]
+    if (!live?.price) return item
+    return {
+      ...item,
+      mid: live.mid ?? live.price,
+      moneyM: +((item.volume * (live.mid ?? live.price) * 100) / 1_000_000).toFixed(1),
+    }
+  })
 
   return (
     <div className="min-h-full p-4 pb-10 space-y-4 max-w-3xl mx-auto" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }} dir="rtl">
@@ -57,16 +75,16 @@ export default function StockFlowRadar() {
 
       {loading && !data && <div className="rounded-2xl h-40 animate-pulse" style={{ background: 'rgba(255,255,255,0.04)' }} />}
 
-      {!loading && data && (!data.anomalies || data.anomalies.length === 0) && (
+      {!loading && data && anomalies.length === 0 && (
         <div className="py-12 text-center">
           <div className="text-4xl mb-3 opacity-25">🔍</div>
           <div className="text-sm" style={{ color: '#5E6E7F' }}>{data.error ?? 'لا تدفقات غير معتادة الآن — السوق هادئ أو مغلق.'}</div>
         </div>
       )}
 
-      {data?.anomalies && data.anomalies.length > 0 && (
+      {anomalies.length > 0 && (
         <div className="space-y-2">
-          {data.anomalies.map((a, i) => {
+          {anomalies.map((a, i) => {
             const isCall = a.type === 'call'
             return (
               <Link key={`${a.symbol}-${a.strike}-${a.type}-${i}`} href={`/stocks/analyze?symbol=${a.symbol}`}

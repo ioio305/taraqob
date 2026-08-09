@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -132,6 +133,8 @@ export default function StrategyPage() {
 
   const cm  = data ? conditionMeta(data.condition) : null
   const st  = data?.strategy ?? null
+  const { quotes } = useLiveQuotes(['SPX', ...(st?.legs ?? []).map(leg => leg.symbol ?? '')])
+  const liveSpx = quotes.SPX
   const dm  = st  ? decisionMeta(st.decision) : null
 
   return (
@@ -171,9 +174,9 @@ export default function StrategyPage() {
               <span className={`w-2 h-2 rounded-full shrink-0 ${data.market_open ? 'bg-emerald-400 animate-pulse' : 'bg-gray-500'}`} />
               <span className="text-gray-400">{data.market_open ? 'السوق مفتوح' : 'السوق مغلق'}</span>
               <div className="flex flex-wrap gap-4 text-xs font-mono mr-auto">
-                <span>SPX <span className="text-white font-bold">{data.spx_price.toFixed(1)}</span>
-                  <span className={data.spx_change_pct >= 0 ? ' text-emerald-400' : ' text-red-400'}>
-                    {' '}{data.spx_change_pct >= 0 ? '+' : ''}{data.spx_change_pct.toFixed(2)}%
+                <span>SPX <span className="text-white font-bold">{(liveSpx?.price ?? data.spx_price).toFixed(1)}</span>
+                  <span className={(liveSpx?.changePct ?? data.spx_change_pct) >= 0 ? ' text-emerald-400' : ' text-red-400'}>
+                    {' '}{(liveSpx?.changePct ?? data.spx_change_pct) >= 0 ? '+' : ''}{(liveSpx?.changePct ?? data.spx_change_pct).toFixed(2)}%
                   </span>
                 </span>
                 <span>VIX <span className={`font-bold ${data.vix > 25 ? 'text-orange-400' : data.vix > 20 ? 'text-yellow-400' : 'text-emerald-400'}`}>{data.vix.toFixed(1)}</span></span>
@@ -301,9 +304,9 @@ export default function StrategyPage() {
                               </span>
                             </td>
                             <td className="p-2.5 text-center font-mono text-white font-bold">{leg.strike.toLocaleString()}</td>
-                            <td className="p-2.5 text-center text-gray-300">{leg.bid != null ? `$${leg.bid.toFixed(2)}` : '—'}</td>
-                            <td className="p-2.5 text-center text-gray-300">{leg.ask != null ? `$${leg.ask.toFixed(2)}` : '—'}</td>
-                            <td className="p-2.5 text-center text-[#C9943A] font-bold">{leg.mid != null ? `$${leg.mid.toFixed(2)}` : '—'}</td>
+                            <td className="p-2.5 text-center text-gray-300">{((leg.symbol ? quotes[leg.symbol]?.bid : null) ?? leg.bid) != null ? `$${((leg.symbol ? quotes[leg.symbol]?.bid : null) ?? leg.bid)!.toFixed(2)}` : '—'}</td>
+                            <td className="p-2.5 text-center text-gray-300">{((leg.symbol ? quotes[leg.symbol]?.ask : null) ?? leg.ask) != null ? `$${((leg.symbol ? quotes[leg.symbol]?.ask : null) ?? leg.ask)!.toFixed(2)}` : '—'}</td>
+                            <td className="p-2.5 text-center text-[#C9943A] font-bold">{((leg.symbol ? quotes[leg.symbol]?.mid ?? quotes[leg.symbol]?.price : null) ?? leg.mid) != null ? `$${((leg.symbol ? quotes[leg.symbol]?.mid ?? quotes[leg.symbol]?.price : null) ?? leg.mid)!.toFixed(2)}` : '—'}</td>
                             <td className="p-2.5 text-center text-blue-300">{fmt(leg.delta, 3)}</td>
                             <td className="p-2.5 text-center text-gray-400">{leg.iv != null ? `${(leg.iv * 100).toFixed(1)}%` : '—'}</td>
                             <td className="p-2.5 text-center text-gray-400">{leg.volume.toLocaleString()}</td>

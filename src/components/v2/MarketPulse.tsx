@@ -42,7 +42,7 @@ export function MarketPulse() {
       .catch(() => {})
       .finally(() => { if (alive) setLoading(false) })
     load()
-    const t = setInterval(load, 15_000)   // تحديث صامت كل 15 ثانية — سرعة المصدر نفسها
+    const t = setInterval(load, 2_000)    // تحديث مباشر
     return () => { alive = false; clearInterval(t) }
   }, [])
 

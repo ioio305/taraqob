@@ -274,13 +274,13 @@ function AnalyzeContent() {
   // ── Frozen plan: locked on first analysis, never auto-updated ────────────
   const [frozenPlan, setFrozenPlan] = useState<FrozenPlan | null>(null)
   // ── Live mode toggle: OFF by default (plan is frozen until user enables) ─
-  const [liveMode, setLiveMode] = useState(false)
+  const [liveMode, setLiveMode] = useState(true)
 
   function clearCurrentResult() {
     setAnalysis(null)
     setLiveUrl(null)
     setFrozenPlan(null)
-    setLiveMode(false)
+    setLiveMode(true)
     setRefreshing(false)
   }
 
@@ -347,10 +347,10 @@ function AnalyzeContent() {
         }
       } catch {}
       setRefreshing(false)
-      if (!cancelled) liveTimerRef.current = setTimeout(poll, 3000)
+      if (!cancelled) liveTimerRef.current = setTimeout(poll, 2000)
     }
 
-    liveTimerRef.current = setTimeout(poll, 3000)
+    liveTimerRef.current = setTimeout(poll, 2000)
     return () => {
       cancelled = true
       if (liveTimerRef.current) clearTimeout(liveTimerRef.current)
@@ -504,7 +504,7 @@ function AnalyzeContent() {
                 }}>
                 <span className={liveMode ? 'animate-pulse' : ''}>◉</span>
                 تحديث أسعار السوق
-                <span className="font-mono text-[10px] opacity-60">{liveMode ? 'مفعّل' : 'مغلق'}</span>
+                    <span className="font-mono text-[10px] opacity-60">{liveMode ? 'مفعّل' : 'مغلق'}</span>
               </button>
             )}
             {frozenPlan && (
@@ -733,7 +733,7 @@ function AnalyzeContent() {
                     style={{ background: refreshing ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.08)', color: '#10B981', border: '1px solid rgba(16,185,129,0.3)' }}>
                     <span className={`inline-block w-1.5 h-1.5 rounded-full ${refreshing ? 'animate-ping' : 'animate-pulse'}`}
                           style={{ background: '#10B981' }} />
-                    يتحدث كل 3 ثوانٍ
+                    يتحدث كل ثانيتين
                   </span>
                 )}
                 {!liveMode && (

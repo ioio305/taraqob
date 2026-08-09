@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { getSelectedIndex, indexMeta, type IndexId } from '@/lib/v2/indexSelection'
+import { useLiveQuote, useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 import {
   Activity,
   ArrowLeft,
@@ -143,6 +144,7 @@ export default function SpxDecisionRoomPage() {
   const [flow, setFlow] = useState<Flow | null>(null)
   const [news, setNews] = useState<News | null>(null)
   const [idx, setIdx] = useState<IndexId>('SPX')
+  const { quote: liveQuote } = useLiveQuote(idx)
 
   useEffect(() => {
     setIdx(getSelectedIndex())
@@ -212,6 +214,10 @@ export default function SpxDecisionRoomPage() {
   }, [load])
 
   const contract = recommendation?.contracts?.[0] ?? null
+  const { quotes: contractQuotes } = useLiveQuotes(contract?.symbol ? [contract.symbol] : [])
+  const contractMid = contract
+    ? contractQuotes[contract.symbol]?.mid ?? contractQuotes[contract.symbol]?.price ?? contract.mid
+    : null
   const direction = recommendation?.direction?.type ?? null
   const flowSupports = direction === 'call'
     ? (flow?.callShare ?? 50) >= 55
@@ -275,8 +281,8 @@ export default function SpxDecisionRoomPage() {
       ? { label: contract?.status === 'execute' ? 'جاهزة للتنفيذ' : 'قريبة من التنفيذ', color: '#34D399', action: contract?.focus?.nextStep ?? 'التزم بسعر الدخول والوقف.' }
       : { label: 'انتظار التأكيد', color: '#FBBF24', action: contract?.focus?.nextStep ?? 'لا تطارد الحركة.' }
 
-  const spot = recommendation?.market?.spx?.price
-  const change = recommendation?.market?.spx?.changePct
+  const spot = liveQuote?.price ?? recommendation?.market?.spx?.price
+  const change = liveQuote?.changePct ?? recommendation?.market?.spx?.changePct
   const strategy = contract?.strategy
   const gamma = pulse?.gamma ?? plan?.gamma
 
@@ -349,7 +355,7 @@ export default function SpxDecisionRoomPage() {
                 <div className="mt-6 grid grid-cols-2 gap-2 md:grid-cols-4">
                   <Metric label="العقد" value={`${contract.type.toUpperCase()} ${number(contract.strike, 0)}`} />
                   <Metric label="القوة" value={`${contract.score}/100`} />
-                  <Metric label="السعر" value={`$${number(contract.mid)}`} />
+                  <Metric label="السعر" value={`$${number(contractMid)}`} />
                   <Metric label="الاحتمال" value={contract.probItmPct ? `${contract.probItmPct}%` : '—'} />
                 </div>
                 <div className="mt-4 rounded-xl border p-4 text-sm font-bold"

@@ -10,6 +10,7 @@ import {
   ColorType, CrosshairMode, IChartApi, Time,
 } from 'lightweight-charts'
 import type { AnalysisResult } from '@/lib/v2/marketAnalysis'
+import { useLiveQuote } from '@/lib/v2/useLiveQuotes'
 
 const ACCENT = '#60A5FA'
 const TFS = [{ id: '15m', label: '١٥ دقيقة' }, { id: '1h', label: 'ساعة' }, { id: '1d', label: 'يومي' }] as const
@@ -33,6 +34,7 @@ export default function StockChart({ symbol, onData }: { symbol: string; onData?
   const [candles, setCandles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
+  const { quote: liveQuote } = useLiveQuote(symbol)
 
   const wrapRef = useRef<HTMLDivElement>(null)
   const apiRef = useRef<IChartApi | null>(null)
@@ -111,6 +113,18 @@ export default function StockChart({ symbol, onData }: { symbol: string; onData?
 
     if (!fittedRef.current) { requestAnimationFrame(() => { try { chart.timeScale().fitContent() } catch { /* */ } }); fittedRef.current = true }
   }, [candles, tf])
+
+  useEffect(() => {
+    if (tf === '1d' || !liveQuote?.price || !candles.length || !csRef.current) return
+    const last = candles[candles.length - 1]
+    csRef.current.update({
+      time: toTime(last.time),
+      open: last.open,
+      high: Math.max(last.high, liveQuote.price),
+      low: Math.min(last.low, liveQuote.price),
+      close: liveQuote.price,
+    })
+  }, [candles, liveQuote?.price, tf])
 
   useEffect(() => () => {
     if (apiRef.current) { try { (apiRef.current as any)._ro?.disconnect() } catch { /* */ } ; try { apiRef.current.remove() } catch { /* */ } }

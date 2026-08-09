@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 
 // ── رادار الأموال — أين تدخل السيولة وأين تخرج، في نظرة واحدة ────────────────
 type Fund = {
@@ -23,6 +24,8 @@ function signed(v: number) { return (v >= 0 ? '+' : '') + n(v) + '%' }
 export default function FundsRadar() {
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
+  const baseFunds = data?.funds ?? []
+  const { quotes } = useLiveQuotes(baseFunds.map(fund => fund.symbol))
 
   useEffect(() => {
     const load = () => fetch('/api/v2/funds/radar').then(r => r.json()).then(setData).catch(() => {}).finally(() => setLoading(false))
@@ -34,7 +37,10 @@ export default function FundsRadar() {
   if (loading) return <div className="flex h-64 items-center justify-center text-sm text-slate-500">يرصد تدفق الأموال…</div>
   if (!data?.success) return <div className="flex h-64 items-center justify-center text-sm text-slate-500">{data?.error ?? 'تعذر التحميل'}</div>
 
-  const funds = data.funds ?? []
+  const funds = baseFunds.map(fund => {
+    const quote = quotes[fund.symbol]
+    return quote ? { ...fund, price: quote.price, changePct: quote.changePct } : fund
+  })
   const inCount = funds.filter(f => f.flow === 'in-strong' || f.flow === 'in').length
 
   return (

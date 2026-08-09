@@ -122,6 +122,21 @@ export default function ExitPage() {
     finally { setLoading(false) }
   }
 
+  // بعد ظهور القرار يبقى سعر العقد وقرار الخروج متجددين تلقائياً.
+  const planExpiration = plan?.contract.expiration ?? ''
+  useEffect(() => {
+    if (!planExpiration || !strike || !entry) return
+    let active = true
+    const refresh = async () => {
+      try {
+        const next = await fetchExitPlan(strike, type, entry, planExpiration, idx)
+        if (active && !next.error) setPlan(next)
+      } catch { /* أبقِ آخر قراءة سليمة */ }
+    }
+    const timer = setInterval(() => { void refresh() }, 2_000)
+    return () => { active = false; clearInterval(timer) }
+  }, [planExpiration, strike, type, entry, idx])
+
   const vs = plan ? VERDICT_STYLE[plan.verdict] : null
 
   return (

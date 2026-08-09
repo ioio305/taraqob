@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import StockChart, { type StockChartData } from '@/components/v2/StockChart'
+import { useLiveQuote } from '@/lib/v2/useLiveQuotes'
 
 type NewsItem = { id: string; title: string; titleAr: string; source: string; publishedAt: string; url: string | null; sentiment: string | null; sentimentAr: string | null }
 
@@ -90,6 +91,7 @@ function AnalyzeInner() {
   const [chart, setChart] = useState<StockChartData | null>(null)
   const [news, setNews] = useState<NewsItem[] | null>(null)
   const [dte, setDte] = useState<number | null>(null)
+  const { quote: liveQuote } = useLiveQuote(symbol)
 
   useEffect(() => {
     try {
@@ -130,7 +132,17 @@ function AnalyzeInner() {
     try { localStorage.setItem('taraqob_rec_mode', m) } catch { /* تجاهل */ }
   }
 
-  const mk = data?.market
+  const baseMarket = data?.market
+  const mk = baseMarket && liveQuote
+    ? {
+        ...baseMarket,
+        price: liveQuote.price,
+        prevClose: liveQuote.prevClose,
+        changePct: liveQuote.changePct,
+        high: liveQuote.high || baseMarket.high,
+        low: liveQuote.low || baseMarket.low,
+      }
+    : baseMarket
   const dir = data?.direction
   const isCall = dir?.type === 'call'
 

@@ -461,7 +461,7 @@ export default function ChartPage() {
 
   useEffect(() => {
     void fetchData(tf)
-    const refreshMs = ['1d', '1w', '1M'].includes(tf) ? 120_000 : 15_000
+    const refreshMs = ['1d', '1w', '1M'].includes(tf) ? 60_000 : 2_000
     let stopped = false
     let timer: number | undefined
     const schedule = () => {
@@ -496,7 +496,7 @@ export default function ChartPage() {
       } catch { /* يبقى آخر سعر ناجح ظاهراً */ }
     }
     void loadSupport()
-    const timer = window.setInterval(() => { void loadSupport() }, 15_000)
+    const timer = window.setInterval(() => { void loadSupport() }, 2_000)
     return () => {
       active = false
       window.clearInterval(timer)
@@ -1015,7 +1015,7 @@ export default function ChartPage() {
             >
               {loading ? 'جارٍ التحديث…' : 'تحديث الآن'}
             </button>
-            {lastRefresh && <span className="text-[10px] text-gray-600">تلقائي كل {intraday ? '15 ثانية' : 'دقيقتين'}</span>}
+            {lastRefresh && <span className="text-[10px] text-gray-600">تلقائي كل {intraday ? 'ثانيتين' : 'دقيقة'}</span>}
           </div>
 
         </div>
@@ -1027,7 +1027,7 @@ export default function ChartPage() {
         )}
 
         <div className="text-[11px] text-gray-500">
-          السعر والمؤشرات المحسوبة تتجدد كل 15 ثانية · الأخبار كل دقيقتين · تموضع العقود قد يتأخر حسب المصدر
+          السعر والمؤشرات المحسوبة تتجدد كل ثانيتين · الأخبار كل دقيقتين · لا نعرض تموضع العقود المتأخر كأنه مباشر
         </div>
 
         {/* Strike input row */}

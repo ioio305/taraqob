@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { fetchMarketSnapshot } from '@/lib/v2/actions'
+import { useLiveQuote } from '@/lib/v2/useLiveQuotes'
 
 type Snap = Awaited<ReturnType<typeof fetchMarketSnapshot>>
 
@@ -23,6 +24,7 @@ const ENV: Record<string, { ar: string; en: string; color: string; bg: string; d
 export default function MarketRegimePage() {
   const [snap, setSnap]   = useState<Snap | null>(null)
   const [loading, setLoad] = useState(true)
+  const { quote: liveSpx } = useLiveQuote('SPX')
 
   useEffect(() => {
     fetchMarketSnapshot().then(s => { setSnap(s); setLoad(false) })
@@ -30,13 +32,17 @@ export default function MarketRegimePage() {
 
   const env = ENV[snap?.market_environment ?? 'unclear'] ?? ENV.unclear
   const vix = snap?.vix_price ?? 0
+  const spxPrice = liveSpx?.price ?? snap?.spx_price
+  const spxChangePct = liveSpx?.changePct ?? snap?.spx_change_percent
+  const spxHigh = liveSpx?.high ?? snap?.spx_high
+  const spxLow = liveSpx?.low ?? snap?.spx_low
 
   const indicators = [
     {
       label: 'حركة SPX اليوم',
-      value: snap?.spx_change_percent != null ? (snap.spx_change_percent >= 0 ? '+' : '') + n(snap.spx_change_percent) + '%' : '—',
-      status: (snap?.spx_change_percent ?? 0) > 0.3 ? 'إيجابي' : (snap?.spx_change_percent ?? 0) < -0.3 ? 'سلبي' : 'محايد',
-      color: (snap?.spx_change_percent ?? 0) > 0 ? '#10B981' : (snap?.spx_change_percent ?? 0) < 0 ? '#EF4444' : '#F59E0B',
+      value: spxChangePct != null ? (spxChangePct >= 0 ? '+' : '') + n(spxChangePct) + '%' : '—',
+      status: (spxChangePct ?? 0) > 0.3 ? 'إيجابي' : (spxChangePct ?? 0) < -0.3 ? 'سلبي' : 'محايد',
+      color: (spxChangePct ?? 0) > 0 ? '#10B981' : (spxChangePct ?? 0) < 0 ? '#EF4444' : '#F59E0B',
     },
     {
       label: 'مستوى VIX',
@@ -46,7 +52,7 @@ export default function MarketRegimePage() {
     },
     {
       label: 'النطاق اليومي',
-      value: snap?.spx_high && snap?.spx_low ? `${n(snap.spx_low, 0)} — ${n(snap.spx_high, 0)}` : '—',
+      value: spxHigh && spxLow ? `${n(spxLow, 0)} — ${n(spxHigh, 0)}` : '—',
       status: 'معلومة',
       color: '#C9943A',
     },
@@ -84,7 +90,7 @@ export default function MarketRegimePage() {
               </div>
               <div className="text-left">
                 <div className="text-3xl font-bold text-white" style={{ fontFamily: '"IBM Plex Mono", monospace' }}>
-                  {n(snap?.spx_price)}
+                  {n(spxPrice)}
                 </div>
                 <div className="text-xs mt-0.5" style={{ color: '#7C8A99' }}>SPX الآن</div>
               </div>

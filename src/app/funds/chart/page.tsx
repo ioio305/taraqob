@@ -6,12 +6,14 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createChart, CandlestickSeries, HistogramSeries, ColorType, CrosshairMode, type IChartApi, type Time } from 'lightweight-charts'
+import { useLiveQuote } from '@/lib/v2/useLiveQuotes'
 
 const ACCENT = '#26D07C'
 
 type Plan = { entryLow: number; entryHigh: number; stop: number; t1: number; t2: number; horizonAr: string; reasonAr: string; cancelAr: string; riskLevel: string }
 type VerdictInfo = { score: number; tierLabelAr: string; side: 1 | -1 | 0; votes: { labelAr: string; vote: 1 | -1 | 0 }[]; plan: Plan | null }
 type Bar = { time: string; open: number; high: number; low: number; close: number; volume: number }
+type ChartBar = { time: Time; open: number; high: number; low: number; close: number }
 
 const NAME_OVERRIDES: Record<string, string> = {
   RSP: 'السوق الأمريكي بالتساوي', SMH: 'أشباه الموصلات', GLD: 'الذهب',
@@ -32,6 +34,8 @@ export default function FundsChart() {
   const apiRef = useRef<IChartApi | null>(null)
   const csRef = useRef<any>(null)
   const volRef = useRef<any>(null)
+  const lastBarRef = useRef<ChartBar | null>(null)
+  const { quote: liveQuote } = useLiveQuote(symbol)
 
   // خلاصات المحرك لكل الصناديق
   useEffect(() => {
@@ -66,7 +70,9 @@ export default function FundsChart() {
         upColor: '#26D07C', downColor: '#EF4444', wickUpColor: '#26D07C', wickDownColor: '#EF4444', borderVisible: false,
       })
       csRef.current = cs
-      cs.setData(bars.map(b => ({ time: toTime(b.time), open: b.open, high: b.high, low: b.low, close: b.close })))
+      const candleBars = bars.map(b => ({ time: toTime(b.time), open: b.open, high: b.high, low: b.low, close: b.close }))
+      cs.setData(candleBars)
+      lastBarRef.current = candleBars.at(-1) ?? null
       const vol = chart.addSeries(HistogramSeries, { priceScaleId: 'vol', priceFormat: { type: 'volume' } })
       volRef.current = vol
       chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } })
@@ -97,13 +103,29 @@ export default function FundsChart() {
     return () => { cleanup(); window.removeEventListener('resize', onResize) }
   }, [load])
 
+  useEffect(() => {
+    const last = lastBarRef.current
+    if (!last || !csRef.current || !liveQuote?.price) return
+    const next = {
+      ...last,
+      high: Math.max(last.high, liveQuote.price),
+      low: Math.min(last.low, liveQuote.price),
+      close: liveQuote.price,
+    }
+    csRef.current.update(next)
+    lastBarRef.current = next
+  }, [liveQuote?.price, symbol])
+
   const v = verdicts[symbol]
   const voteIcon = (vote: number) => vote === 1 ? '<span style="color:#10B981">▲</span>' : vote === -1 ? '<span style="color:#EF4444">▼</span>' : '<span style="color:#64748B">—</span>'
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 p-4 pb-24">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-lg font-black text-white">الشارت الذكي</h1>
+        <div>
+          <h1 className="text-lg font-black text-white">الشارت الذكي</h1>
+          {liveQuote ? <div className="mt-1 text-xs text-emerald-300">السعر الآن {liveQuote.price.toFixed(2)}</div> : null}
+        </div>
         <select value={symbol} onChange={e => setSymbol(e.target.value)}
           className="rounded-lg border border-white/10 bg-[#0A1F16] px-3 py-1.5 text-sm font-bold text-white">
           {SYMBOLS.map(s => <option key={s} value={s}>{names[s] ?? s} ({s})</option>)}

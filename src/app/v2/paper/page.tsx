@@ -5,6 +5,7 @@
 // بنفس طريقة الحساب الحقيقي. حين تقتنع بنتائجك هنا — ابدأ صغيراً هناك.
 
 import { useState, useEffect, useCallback } from 'react'
+import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 
 const START_BALANCE = 10_000
 
@@ -43,6 +44,7 @@ export default function PaperPage() {
   const [contracts, setContracts] = useState('1')
   const [suggestions, setSuggestions] = useState<any[]>([])
   const [msg, setMsg] = useState('')
+  const { quotes: suggestionQuotes } = useLiveQuotes(suggestions.map(item => item.symbol))
 
   useEffect(() => { setState(load()) }, [])
 
@@ -67,7 +69,10 @@ export default function PaperPage() {
   }, [])
 
   useEffect(() => {
-    if (state.open.length > 0) refreshPrices(state.open)
+    if (state.open.length === 0) return
+    void refreshPrices(state.open)
+    const timer = setInterval(() => { void refreshPrices(state.open) }, 2_000)
+    return () => clearInterval(timer)
   }, [state.open, refreshPrices])
 
   function openPosition(t: 'call' | 'put', k: number, price: number, n: number, expiry?: string) {
@@ -146,18 +151,19 @@ export default function PaperPage() {
         <div className="bg-[#0a1929] border border-[#1e3a50] rounded-2xl p-4">
           <div className="text-sm font-bold text-[#E8D5A3] mb-2">مرشّحات ترقب الآن — جرّبها بضغطة</div>
           <div className="flex flex-wrap gap-2">
-            {suggestions.map((c: any) => (
-              <button key={c.symbol}
-                onClick={() => openPosition(c.type, c.strike, c.mid ?? c.ask, 1, c.expiration)}
+            {suggestions.map((c: any) => {
+              const livePrice = suggestionQuotes[c.symbol]?.mid ?? suggestionQuotes[c.symbol]?.price ?? c.mid ?? c.ask
+              return <button key={c.symbol}
+                onClick={() => openPosition(c.type, c.strike, livePrice, 1, c.expiration)}
                 className="text-xs font-mono px-3 py-2 rounded-xl"
                 style={{
                   background: 'rgba(255,255,255,0.04)',
                   border: `1px solid ${c.type === 'call' ? 'rgba(38,208,124,0.35)' : 'rgba(240,67,90,0.35)'}`,
                   color: c.type === 'call' ? '#26D07C' : '#F0435A',
                 }}>
-                {c.type === 'call' ? '▲ كول' : '▼ بوت'} {c.strike} — ${c.mid ?? c.ask} {c.grade ? `(${c.grade})` : ''}
+                {c.type === 'call' ? '▲ كول' : '▼ بوت'} {c.strike} — ${livePrice} {c.grade ? `(${c.grade})` : ''}
               </button>
-            ))}
+            })}
           </div>
           <p className="text-xs text-gray-600 mt-2">الدخول بعقد واحد بسعر السوق الحالي</p>
         </div>

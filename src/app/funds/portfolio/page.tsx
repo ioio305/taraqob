@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { loadPaper, syncPaperCloud, updatePaper, closePaper, removePaper, type PaperPosition } from '../paperStore'
+import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 
 // ── المحفظة التجريبية — تتدرب بأموال افتراضية قبل الحقيقية ───────────────────
 type Prices = Record<string, { price: number; changePct: number | null }>
@@ -18,6 +19,7 @@ export default function FundsPaper() {
   const [positions, setPositions] = useState<PaperPosition[]>([])
   const [prices, setPrices] = useState<Prices>({})
   const [ready, setReady] = useState(false)
+  const { quotes } = useLiveQuotes(positions.filter(position => !position.closed).map(position => position.symbol))
 
   const refreshPrices = useCallback(async () => {
     try {
@@ -40,9 +42,10 @@ export default function FundsPaper() {
 
   const open = positions.filter(p => !p.closed)
   const closed = positions.filter(p => p.closed)
+  const currentPrice = (symbol: string) => quotes[symbol]?.price ?? prices[symbol]?.price
 
   const openPnl = open.reduce((s, p) => {
-    const px = prices[p.symbol]?.price
+    const px = currentPrice(p.symbol)
     return px != null ? s + (px - p.entry) * p.units : s
   }, 0)
   const closedPnl = closed.reduce((s, p) => s + (p.closed!.exit - p.entry) * p.units, 0)
@@ -73,7 +76,7 @@ export default function FundsPaper() {
       {/* المفتوحة */}
       <div className="space-y-2">
         {open.map(p => {
-          const px = prices[p.symbol]?.price
+          const px = currentPrice(p.symbol)
           const pnl = px != null ? (px - p.entry) * p.units : null
           const hitStop = px != null && px <= p.stop
           const hitT1 = px != null && px >= p.t1

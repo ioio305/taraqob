@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { CheckCircle2, Clock3, RefreshCw, Route, ShieldX } from 'lucide-react'
+import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 
 type Row = {
   symbol: string; name: string; price: number | null
@@ -18,6 +19,8 @@ type Row = {
 export default function RecommendationTrackingPage() {
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
+  const { quotes } = useLiveQuotes(rows.map(row => row.symbol))
+  const liveRows = rows.map(row => ({ ...row, price: quotes[row.symbol]?.price ?? row.price }))
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -55,7 +58,7 @@ export default function RecommendationTrackingPage() {
       {loading && rows.length === 0 ? <div className="h-48 rounded-2xl animate-pulse bg-white/[.03]" /> : null}
 
       <section className="space-y-3">
-        {rows.map((row, index) => {
+        {liveRows.map((row, index) => {
           const blocked = row.dataQuality?.status === 'blocked' || row.eventRisk?.active
           const stateColor = blocked ? '#F87171' : '#FBBF24'
           return (

@@ -27,7 +27,7 @@ export default function RadarPage() {
       .then(d => d.success ? setData(d) : setErr(d.error ?? 'تعذر التحميل'))
       .catch(() => setErr('فشل الاتصال'))
     load()
-    const t = setInterval(load, 30_000)    // كل ٣٠ ثانية — تحديث صامت
+    const t = setInterval(load, 2_000)     // تحديث مباشر
     return () => clearInterval(t)
   }, [])
 

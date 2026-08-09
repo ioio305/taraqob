@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Search } from 'lucide-react'
 import { FundBrief } from '../FundBrief'
+import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 
 type Detail = {
   success: boolean
@@ -32,6 +33,12 @@ export default function FundAnalyzePage() {
   }, [symbol])
   useEffect(() => { void analyze(symbol) }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const contract = data?.contracts?.[0]
+  const contractSymbol = data?.success && contract
+    ? `${data.symbol}${contract.expiration.replaceAll('-', '').slice(2)}${contract.type === 'call' ? 'C' : 'P'}${Math.round(contract.strike * 1_000).toString().padStart(8, '0')}`
+    : ''
+  const { quotes } = useLiveQuotes([data?.symbol ?? '', contractSymbol])
+  const marketPrice = data?.symbol ? quotes[data.symbol]?.price ?? data.market?.price : data?.market?.price
+  const contractMid = quotes[contractSymbol]?.mid ?? quotes[contractSymbol]?.price ?? contract?.mid
 
   return (
     <div className="mx-auto min-h-full max-w-3xl space-y-4 p-4 pb-12" dir="rtl">
@@ -54,13 +61,13 @@ export default function FundAnalyzePage() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="font-mono text-4xl font-black text-white">{data.symbol}</div>
-                  <div className="mt-1 text-sm text-slate-500">{data.name} · ${data.market?.price?.toFixed(2)}</div>
+                  <div className="mt-1 text-sm text-slate-500">{data.name} · ${marketPrice?.toFixed(2)}</div>
                 </div>
                 <div className="text-left font-black" style={{ color: data.direction?.color }}>{data.direction?.label}</div>
               </div>
               <div className="mt-6 grid grid-cols-2 gap-2 md:grid-cols-4">
                 <Metric label="العقد" value={`${contract.type.toUpperCase()} ${contract.strike}`} />
-                <Metric label="السعر" value={`$${contract.mid.toFixed(2)}`} />
+                <Metric label="السعر" value={`$${contractMid?.toFixed(2)}`} />
                 <Metric label="القوة" value={`${contract.score}/100`} />
                 <Metric label="الحالة" value={contract.status === 'execute' ? 'جاهز' : 'راقب'} />
               </div>

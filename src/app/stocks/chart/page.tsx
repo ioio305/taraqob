@@ -5,7 +5,8 @@
 // الهدفان — ولوحة جانبية بالاتجاه والقرار وسببه وشرط الإلغاء.
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { createChart, CandlestickSeries, HistogramSeries, ColorType, CrosshairMode, type IChartApi, type Time } from 'lightweight-charts'
+import { createChart, CandlestickSeries, HistogramSeries, ColorType, CrosshairMode, type IChartApi, type ISeriesApi, type Time } from 'lightweight-charts'
+import { useLiveQuote } from '@/lib/v2/useLiveQuotes'
 
 const ACCENT = '#60A5FA'
 
@@ -55,9 +56,12 @@ export default function StocksChart() {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [price, setPrice] = useState<{ price: number; changePct: number } | null>(null)
   const [loading, setLoading] = useState(true)
+  const { quote: liveQuote } = useLiveQuote(symbol)
 
   const wrapRef = useRef<HTMLDivElement>(null)
   const apiRef = useRef<IChartApi | null>(null)
+  const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
+  const lastBarRef = useRef<any | null>(null)
 
   const load = useCallback(() => {
     let alive = true
@@ -81,6 +85,8 @@ export default function StocksChart() {
       const cs = chart.addSeries(CandlestickSeries, {
         upColor: ACCENT, downColor: '#EF4444', wickUpColor: ACCENT, wickDownColor: '#EF4444', borderVisible: false,
       })
+      candleRef.current = cs
+      lastBarRef.current = bars[bars.length - 1] ?? null
       cs.setData(bars.map((b: any) => ({ time: toTime(b.time), open: b.open, high: b.high, low: b.low, close: b.close })))
       const vol = chart.addSeries(HistogramSeries, { priceScaleId: 'vol', priceFormat: { type: 'volume' } })
       chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } })
@@ -112,6 +118,18 @@ export default function StocksChart() {
     return () => { cleanup(); clearInterval(id); window.removeEventListener('resize', onResize) }
   }, [load])
 
+  useEffect(() => {
+    const bar = lastBarRef.current
+    if (!liveQuote?.price || !bar || !candleRef.current || !INTRADAY.includes(tf)) return
+    candleRef.current.update({
+      time: toTime(bar.time),
+      open: bar.open,
+      high: Math.max(bar.high, liveQuote.price),
+      low: Math.min(bar.low, liveQuote.price),
+      close: liveQuote.price,
+    })
+  }, [liveQuote?.price, tf])
+
   const bm = summary ? BIAS_META[summary.bias] : null
   const cur = SYMBOLS.find(s => s.symbol === symbol)
 
@@ -120,10 +138,10 @@ export default function StocksChart() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-black text-white">الشارت الذكي</h1>
-          {price ? (
+          {price || liveQuote ? (
             <span className="text-xs text-slate-400">
-              {price.price.toLocaleString('en-US', { maximumFractionDigits: 2 })}
-              <span style={{ color: price.changePct >= 0 ? '#10B981' : '#EF4444' }}> ({price.changePct >= 0 ? '+' : ''}{price.changePct.toFixed(2)}%)</span>
+              {(liveQuote?.price ?? price!.price).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+              <span style={{ color: (liveQuote?.changePct ?? price!.changePct) >= 0 ? '#10B981' : '#EF4444' }}> ({(liveQuote?.changePct ?? price!.changePct) >= 0 ? '+' : ''}{(liveQuote?.changePct ?? price!.changePct).toFixed(2)}%)</span>
             </span>
           ) : null}
         </div>

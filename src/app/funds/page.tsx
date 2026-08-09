@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { addPaper } from './paperStore'
+import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 
 // ── توصية اليوم — صيغة موحدة لكل فرصة (مستند التصور المعتمد) ─────────────────
 type Plan = {
@@ -167,6 +168,8 @@ export default function FundsToday() {
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
   const [added, setAdded] = useState('')
+  const symbols = [...(data?.opportunities ?? []), ...(data?.watchlist ?? [])].map(card => card.symbol)
+  const { quotes } = useLiveQuotes(symbols)
 
   function addToPaper(c: Card) {
     const p = c.verdict.plan
@@ -202,8 +205,12 @@ export default function FundsToday() {
     return <div className="flex h-64 items-center justify-center text-sm text-slate-500">{data?.error ?? 'تعذر التحميل'}</div>
   }
 
-  const opps = data.opportunities ?? []
-  const watch = data.watchlist ?? []
+  const withLivePrice = (card: Card): Card => {
+    const quote = quotes[card.symbol]
+    return quote ? { ...card, price: quote.price, changePct: quote.changePct } : card
+  }
+  const opps = (data.opportunities ?? []).map(withLivePrice)
+  const watch = (data.watchlist ?? []).map(withLivePrice)
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4 pb-24">

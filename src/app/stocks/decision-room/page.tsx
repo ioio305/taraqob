@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useLiveQuote } from '@/lib/v2/useLiveQuotes'
 import {
   Activity,
   ArrowLeft,
@@ -137,8 +138,12 @@ export default function StocksDecisionRoom() {
   }, [load])
 
   const platformPick = scanRows.find(row => row.best && row.dataQuality?.status !== 'blocked') ?? null
-  const primary = searched ?? platformPick
-  const symbol = primary?.symbol ?? ''
+  const basePrimary = searched ?? platformPick
+  const symbol = basePrimary?.symbol ?? ''
+  const { quote: liveQuote } = useLiveQuote(symbol)
+  const primary = basePrimary && liveQuote
+    ? { ...basePrimary, price: liveQuote.price, changePct: liveQuote.changePct, source: liveQuote.source }
+    : basePrimary
   const radar = radarRows.find(row => row.symbol === symbol) ?? null
   const matchingFlows = flows.filter(flow => flow.symbol === symbol)
   const supportingFlow = matchingFlows.find(flow => flow.type === primary?.direction.type) ?? null

@@ -3,6 +3,7 @@
 // ── خطة اليوم — ترقب يتخذ موقفاً واحداً واضحاً كل صباح ──────────────────────
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useLiveQuote } from '@/lib/v2/useLiveQuotes'
 
 interface Plan {
   success: boolean; error?: string
@@ -29,6 +30,7 @@ const TONE = { res: '#F0435A', mid: '#C9943A', sup: '#26D07C' }
 export default function PlanPage() {
   const [plan, setPlan] = useState<Plan | null>(null)
   const [err, setErr] = useState('')
+  const { quote: liveSpx } = useLiveQuote('SPX')
 
   useEffect(() => {
     fetch('/api/v2/gameplan').then(r => r.json())
@@ -78,7 +80,7 @@ export default function PlanPage() {
                 style={{ background: 'rgba(255,255,255,0.05)', color: '#94A3B8' }}>
                 الدرجة {plan.score}/100
               </span>
-              <span className="text-xs font-mono text-gray-500">SPX {plan.market.spx.toFixed(0)} · خوف {plan.market.vix.toFixed(1)}</span>
+              <span className="text-xs font-mono text-gray-500">SPX {(liveSpx?.price ?? plan.market.spx).toFixed(0)} · خوف {plan.market.vix.toFixed(1)}</span>
             </div>
             <p className="text-base leading-relaxed text-white font-semibold">{plan.stance}</p>
             <div className="mt-3 text-sm" style={{ color: '#E8D5A3' }}>{plan.entryZone}</div>

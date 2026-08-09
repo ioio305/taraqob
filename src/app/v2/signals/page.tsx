@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import type { RealtimeChannel } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/client'
 import { underlyingFromContract } from '@/lib/v2/underlying'
 
 type Signal = {
@@ -60,20 +62,38 @@ export default function SignalsPage() {
   const [underlying, setUnderlying] = useState<string>('all')
 
   useEffect(() => {
+    let active = true
+    let refreshTimer: ReturnType<typeof setInterval> | null = null
+    let realtime: RealtimeChannel | null = null
+    const client = createClient()
+
     async function load() {
       try {
-        const { createClient } = await import('@/lib/supabase/client')
-        const supabase = createClient()
-        const { data } = await supabase
+        const { data } = await client
           .from('v2_signals')
           .select('*')
           .order('created_at', { ascending: false })
           .limit(100)
-        setSignals(data ?? [])
-      } catch { setSignals([]) }
-      setLoading(false)
+        if (active) setSignals(data ?? [])
+      } catch { /* أبقِ آخر بيانات سليمة */ }
+      if (active) setLoading(false)
     }
-    load()
+
+    void (async () => {
+      await load()
+      if (!active) return
+      realtime = client
+        .channel('v2-signals-live')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'v2_signals' }, () => { void load() })
+        .subscribe()
+      refreshTimer = setInterval(() => { void load() }, 2_000)
+    })()
+
+    return () => {
+      active = false
+      if (refreshTimer) clearInterval(refreshTimer)
+      if (realtime) void client.removeChannel(realtime)
+    }
   }, [])
 
   const underlyings = Array.from(new Set(signals.map(s => underlyingFromContract(s.contract_symbol)))).sort()

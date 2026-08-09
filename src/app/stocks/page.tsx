@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useStocksTier } from './StocksTierContext'
+import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 
 // ── أنواع الماسح ──────────────────────────────────────────────────────────────
 type Best = {
@@ -175,7 +176,12 @@ export default function StocksScanner() {
     setSelected(null); setDetail(null)
   }
 
-  const results = data?.results ?? []
+  const rawResults = data?.results ?? []
+  const { quotes: liveQuotes } = useLiveQuotes(rawResults.map(row => row.symbol))
+  const results = rawResults.map(row => {
+    const live = liveQuotes[row.symbol]
+    return live ? { ...row, price: live.price, changePct: live.changePct, source: live.source } : row
+  })
   const topOpportunity = results.find(row => row.best && row.dataQuality?.status !== 'blocked') ?? null
   const tierRank = isStaff ? 99 : (({ radar: 1, signal: 2, edge: 3, alpha: 4 } as Record<string, number>)[tier] ?? 1)
 

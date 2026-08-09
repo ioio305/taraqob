@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { NewsImpactBadge, useNews } from '@/components/v2/NewsBar'
 import { DisciplineBar } from '@/components/v2/PositionSizing'
 import { IndexSwitcher } from '@/components/v2/IndexSwitcher'
+import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 
 type Market = {
   spx: { price: number; prevClose?: number; changePct: number; high: number; low: number }
@@ -152,6 +153,8 @@ export default function V2Dashboard() {
   const [countdown, setCd]  = useState(REFRESH_SEC)
   const [strike, setStrike] = useState('')
   const [ctype, setCtype]   = useState<'auto' | 'call' | 'put'>('auto')
+  const trackedSymbols = ['SPX', ...(data?.contracts ?? []).map(contract => contract.symbol)]
+  const { quotes: liveQuotes } = useLiveQuotes(trackedSymbols)
   // «المزيد»: تفاصيل السوق مطويّة افتراضياً — الداشبورد توصية أولاً
   const [showMore, setShowMore] = useState(false)
   // تفاصيل الخطة الكاملة لكل توصية — مطويّة، تُفتح بالطلب
@@ -279,7 +282,17 @@ export default function V2Dashboard() {
     window.location.href = `/v2/analyze?${p.toString()}`
   }
 
-  const spx      = data?.market?.spx
+  const baseSpx  = data?.market?.spx
+  const spx      = baseSpx && liveQuotes.SPX
+    ? {
+        ...baseSpx,
+        price: liveQuotes.SPX.price,
+        prevClose: liveQuotes.SPX.prevClose,
+        changePct: liveQuotes.SPX.changePct,
+        high: liveQuotes.SPX.high || baseSpx.high,
+        low: liveQuotes.SPX.low || baseSpx.low,
+      }
+    : baseSpx
   const vix      = data?.market?.vix?.price ?? 0
   const em       = data?.market?.expectedMove
   const emUpper  = data?.market?.emUpper
@@ -448,8 +461,9 @@ export default function V2Dashboard() {
             // ── Frozen plan + live snapshot ────────────────────────────────
             const plan  = lockedPlans.current.get(c.symbol)
             const live  = liveSnaps.current.get(c.symbol)
+            const directQuote = liveQuotes[c.symbol]
             const strat = plan?.strategy ?? c.strategy        // always frozen
-            const liveMid    = live?.mid    ?? c.mid
+            const liveMid    = directQuote?.mid ?? directQuote?.price ?? live?.mid ?? c.mid
             const liveScore  = live?.score  ?? c.score
             const liveStatus = live?.status ?? c.status
 

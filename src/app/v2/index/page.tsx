@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { RefreshCw } from 'lucide-react'
 import { IndexSwitcher } from '@/components/v2/IndexSwitcher'
 import { getSelectedIndex, setSelectedIndex, indexMeta, type IndexId } from '@/lib/v2/indexSelection'
+import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 
 export default function IndexPage() {
   return (
@@ -77,9 +78,15 @@ function IndexPageInner() {
 
   const dir = data?.direction
   const contracts = data?.contracts ?? []
+  const { quotes } = useLiveQuotes([symbol, ...contracts.map(contract => contract.symbol)])
+  const liveQuote = quotes[symbol]
   const best = (dir?.type ? contracts.find(c => c.type === dir.type) : null) ?? contracts[0] ?? null
+  const bestMid = best ? quotes[best.symbol]?.mid ?? quotes[best.symbol]?.price ?? best.mid : null
   const st = best?.strategy
   const mk = data?.market
+  const liveMarket = mk && liveQuote
+    ? { ...mk, price: liveQuote.price, changePct: liveQuote.changePct }
+    : mk
 
   const statusMeta = best
     ? best.status === 'execute'
@@ -111,10 +118,10 @@ function IndexPageInner() {
             <div className="text-[11px] font-bold" style={{ color: '#7C8A99' }}>{current.name}</div>
             <div className="flex items-baseline gap-3 mt-1">
               <span className="text-4xl font-black font-mono text-white">{current.id}</span>
-              {mk ? (
-                <span className="text-xl font-black font-mono" style={{ color: (mk.changePct ?? 0) >= 0 ? '#10B981' : '#EF4444' }}>
-                  {mk.price?.toLocaleString('en-US', { maximumFractionDigits: 2 })}
-                  <span className="text-sm mr-2">{(mk.changePct ?? 0) >= 0 ? '▲' : '▼'} {Math.abs(mk.changePct ?? 0).toFixed(2)}%</span>
+              {liveMarket ? (
+                <span className="text-xl font-black font-mono" style={{ color: (liveMarket.changePct ?? 0) >= 0 ? '#10B981' : '#EF4444' }}>
+                  {liveMarket.price?.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                  <span className="text-sm mr-2">{(liveMarket.changePct ?? 0) >= 0 ? '▲' : '▼'} {Math.abs(liveMarket.changePct ?? 0).toFixed(2)}%</span>
                 </span>
               ) : null}
             </div>
@@ -156,7 +163,7 @@ function IndexPageInner() {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <Metric label="سعر العقد" value={`$${best.mid.toFixed(2)}`} />
+            <Metric label="سعر العقد" value={`$${bestMid?.toFixed(2)}`} />
             <Metric label="قوة الفرصة" value={`${best.score}/100`} />
             <Metric label="الانتهاء" value={best.expiration} />
             <Metric label="الخطة" value={st?.strategyLabel ?? '—'} gold />
@@ -197,7 +204,7 @@ function IndexPageInner() {
                 <span className="text-sm font-black font-mono" style={{ color: c.type === 'call' ? '#10B981' : '#EF4444' }}>
                   {c.type === 'call' ? '▲' : '▼'} {c.strike}
                 </span>
-                <span className="text-xs font-mono" style={{ color: '#7C8A99' }}>${c.mid.toFixed(2)} · قوة {c.score}</span>
+                <span className="text-xs font-mono" style={{ color: '#7C8A99' }}>${(quotes[c.symbol]?.mid ?? quotes[c.symbol]?.price ?? c.mid).toFixed(2)} · قوة {c.score}</span>
                 <span className="text-xs font-mono" style={{ color: '#55657A' }}>ينتهي {c.expiration}</span>
               </div>
               {c.strategy ? (

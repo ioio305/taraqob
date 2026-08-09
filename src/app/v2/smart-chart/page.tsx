@@ -16,6 +16,7 @@ import { ShareCard } from '@/components/v2/ShareCard'
 import { CountUp } from '@/components/v2/CountUp'
 import { IndexSwitcher } from '@/components/v2/IndexSwitcher'
 import { getSelectedIndex, type IndexId } from '@/lib/v2/indexSelection'
+import { useLiveQuote } from '@/lib/v2/useLiveQuotes'
 
 interface Candle {
   time: string; open: number; high: number; low: number; close: number; volume: number
@@ -74,6 +75,7 @@ export default function SmartChartPage() {
   const [strikeInput, setStrikeInput] = useState('')   // سترايك يدوي لجسر التحليل
   // المؤشر المختار — يقلب الشارت عليه (SPX افتراضي بلا أي تغيير)
   const [idx, setIdx] = useState<IndexId>('SPX')
+  const { quote: liveQuote } = useLiveQuote(idx)
   useEffect(() => {
     setIdx(getSelectedIndex())
     const onCustom = (e: Event) => setIdx((e as CustomEvent<IndexId>).detail)
@@ -158,7 +160,7 @@ export default function SmartChartPage() {
   const verdict = useMemo(() => {
     if (!data || !candles.length) return null
     const s = data.analysis.summary
-    const spot = candles[candles.length - 1].close
+    const spot = liveQuote?.price ?? candles[candles.length - 1].close
     let lastKind: 'gold' | 'purple' | null = null
     for (const c of candles) { const p = confShown.get(c.time); if (p) lastKind = p.kind }
     const dir: 'call' | 'put' | null =
@@ -180,7 +182,7 @@ export default function SmartChartPage() {
       bias: s.bias, score: s.score, decisionCode: s.decisionCode, decisionText: s.decisionText, reason: s.reason,
       entry: Math.round(entryLvl), target: target != null ? Math.round(target) : null, stop: stop != null ? Math.round(stop) : null,
     }
-  }, [data, candles, confShown])
+  }, [data, candles, confShown, liveQuote?.price])
 
   // نعبّئ حقل السترايك تلقائياً بالسترايك المقترح (يبقى قابلاً للتعديل)
   useEffect(() => {
@@ -274,6 +276,19 @@ export default function SmartChartPage() {
     if (roRef.current) roRef.current.disconnect()
     if (apiRef.current) { try { apiRef.current.remove() } catch {} ; apiRef.current = null }
   }, [])
+
+  // السعر الحي يحدّث آخر شمعة في مكانها دون إعادة بناء الشارت أو تحريك عرض المستخدم.
+  useEffect(() => {
+    if (!intraday || !liveQuote?.price || !candleRef.current || !candles.length) return
+    const last = candles[candles.length - 1]
+    candleRef.current.update({
+      time: toTime(last.time, true),
+      open: last.open,
+      high: Math.max(last.high, liveQuote.price),
+      low: Math.min(last.low, liveQuote.price),
+      close: liveQuote.price,
+    })
+  }, [candles, intraday, liveQuote?.price])
 
   const dirColor = verdict?.dir === 'call' ? '#26D07C' : verdict?.dir === 'put' ? '#A78BFA' : '#8A97A6'
   const decClr = verdict?.decisionCode === 'execute' ? '#26D07C' : verdict?.decisionCode === 'conditional' ? '#C9943A' : verdict?.decisionCode === 'watch' ? '#60A5FA' : '#F0435A'
