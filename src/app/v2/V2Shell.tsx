@@ -31,6 +31,7 @@ function tierAllows(userTier: string, required: string): boolean {
 // قرار اليوم — الداشبورد (التوصية) أولاً، ثم بقية القرار (للجميع)
 const NAV_DECISION = [
   { href: '/v2',             label: 'الداشبورد',    icon: '◈', exact: true,  requiredTier: 'radar' },
+  { href: '/v2/experiment',  label: 'القرار الجديد', icon: '✦', exact: false, requiredTier: 'radar' },
   { href: '/v2/plan',        label: 'خطة اليوم',    icon: '📋', exact: false, requiredTier: 'radar' },
   { href: '/v2/smart-chart', label: 'الشارت الذكي ✦', icon: '✨', exact: false, requiredTier: 'radar' },
   { href: '/v2/analyze',     label: 'تحليل العقد',  icon: '⬡', exact: false, requiredTier: 'radar' },
