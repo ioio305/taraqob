@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
+import { UnderlyingTradeManager } from '@/components/v2/UnderlyingTradeManager'
 import { useStocksTier } from './StocksTierContext'
 import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 
@@ -46,8 +47,9 @@ type ScanData = {
 // ── تفصيل سهم واحد ────────────────────────────────────────────────────────────
 type Strategy = {
   entryBalanced: number; entryBalancedTotal: number
-  t1Price: number; t1Profit: number
+  t1Price: number; t1Profit: number; t2Price: number
   stopPrice: number; stopLoss: number
+  stopSpxLevel: number | null; t1SpxLevel: number | null; t2SpxLevel: number | null
   postT1Action: string
 }
 type DetailContract = {
@@ -61,7 +63,10 @@ type DetailContract = {
 }
 type DetailData = {
   success: boolean; error?: string; symbol: string; name: string
-  market: { price: number; changePct: number; volMeasure: number | null; volLabel: string; expectedMove: number | null } | null
+  market: {
+    price: number; changePct: number; volMeasure: number | null; volLabel: string; expectedMove: number | null
+    emUpper: number | null; emLower: number | null
+  } | null
   direction: { type: string | null; label: string; color: string; reason: string }
   eventRisk: { active: boolean; nameAr: string; when: string; advice: string; impact: string } | null
   earningsKnown: boolean
@@ -544,6 +549,25 @@ function StockDetail({ detail }: { detail: DetailData }) {
   const sm = statusMeta(c.status)
   const strat = c.strategy
   const okEdges = (c.edges ?? []).filter(e => e.ok)
+  const direction = isCall ? 'bullish' as const : 'bearish' as const
+  const entry = detail.market?.price ?? 0
+  const firstTarget = detail.tradeStyle === 'day' && detail.dayPlan
+    ? detail.dayPlan.targetPrice
+    : strat?.t1SpxLevel ?? 0
+  const fallbackDistance = Math.max(Math.abs(firstTarget - entry), entry * 0.01)
+  const suggestedSecondTarget = strat?.t2SpxLevel
+    ?? (isCall ? detail.market?.emUpper : detail.market?.emLower)
+    ?? 0
+  const secondTarget = isCall
+    ? (suggestedSecondTarget > firstTarget ? suggestedSecondTarget : firstTarget + fallbackDistance)
+    : (suggestedSecondTarget < firstTarget ? suggestedSecondTarget : firstTarget - fallbackDistance)
+  const invalidation = detail.tradeStyle === 'day' && detail.dayPlan
+    ? detail.dayPlan.stopPrice
+    : strat?.stopSpxLevel ?? 0
+  const managementReady = entry > 0 && firstTarget > 0 && secondTarget > 0 && invalidation > 0
+    && (isCall
+      ? invalidation < entry && entry < firstTarget && firstTarget < secondTarget
+      : invalidation > entry && entry > firstTarget && firstTarget > secondTarget)
 
   return (
     <div className="space-y-3 mt-2">
@@ -664,6 +688,20 @@ function StockDetail({ detail }: { detail: DetailData }) {
             <div className="text-xs font-mono mt-0.5" style={{ color: '#EF4444' }}>${strat.stopLoss}</div>
           </div>
         </div>
+      )}
+
+      {managementReady && (
+        <UnderlyingTradeManager
+          key={`${detail.symbol}-${c.symbol}-${entry}-${firstTarget}`}
+          platform="stocks"
+          symbol={detail.symbol}
+          direction={direction}
+          plan={{ entry, target1: firstTarget, target2: secondTarget, invalidation }}
+          contractSymbol={c.symbol}
+          hardContractStop={strat?.stopPrice}
+          accent={ACCENT}
+          defaultOpen
+        />
       )}
 
       {strat?.postT1Action && (

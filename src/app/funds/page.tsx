@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { UnderlyingTradeManager } from '@/components/v2/UnderlyingTradeManager'
 import { addPaper } from './paperStore'
 import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 
@@ -115,6 +116,22 @@ function OpportunityCard({ c, onAdd }: { c: Card; onAdd: (c: Card) => void }) {
           <span className="text-slate-300">{p.cancelAr}</span>
         </div>
       </div>
+
+      <div className="mt-4">
+        <UnderlyingTradeManager
+          key={`${c.symbol}-${p.entryLow}-${p.entryHigh}`}
+          platform="funds"
+          symbol={c.symbol}
+          direction={p.side === 1 ? 'bullish' : 'bearish'}
+          plan={{
+            entry: p.side === 1 ? p.entryHigh : p.entryLow,
+            target1: p.t1,
+            target2: p.t2,
+            invalidation: p.stop,
+          }}
+          accent={tm.color}
+        />
+      </div>
     </div>
   )
 }
@@ -159,6 +176,22 @@ function HeroCard({ c, onAdd }: { c: Card; onAdd: (c: Card) => void }) {
           </button>
         </div>
         <ScoreRing score={c.verdict.score} color={tm.color} />
+      </div>
+      <div className="mt-5">
+        <UnderlyingTradeManager
+          key={`${c.symbol}-${p.entryLow}-${p.entryHigh}`}
+          platform="funds"
+          symbol={c.symbol}
+          direction={p.side === 1 ? 'bullish' : 'bearish'}
+          plan={{
+            entry: p.side === 1 ? p.entryHigh : p.entryLow,
+            target1: p.t1,
+            target2: p.t2,
+            invalidation: p.stop,
+          }}
+          accent={tm.color}
+          defaultOpen
+        />
       </div>
     </div>
   )

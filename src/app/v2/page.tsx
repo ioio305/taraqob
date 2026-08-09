@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { NewsImpactBadge, useNews } from '@/components/v2/NewsBar'
 import { DisciplineBar } from '@/components/v2/PositionSizing'
 import { IndexSwitcher } from '@/components/v2/IndexSwitcher'
+import { UnderlyingTradeManager } from '@/components/v2/UnderlyingTradeManager'
 import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 
 type Market = {
@@ -727,6 +728,26 @@ export default function V2Dashboard() {
                         {tradeStatus.label}
                       </span>
                     </div>
+                  )}
+
+                  {isPrimary && strat?.t1SpxLevel && strat?.t2SpxLevel && strat?.stopSpxLevel && (
+                    <UnderlyingTradeManager
+                      key={`spx-${c.symbol}-${plan?.lockedAt ?? 0}`}
+                      platform="options"
+                      symbol="SPX"
+                      direction={isCall ? 'bullish' : 'bearish'}
+                      plan={{
+                        entry: plan?.spxAtLock ?? spx?.price ?? 0,
+                        target1: strat.t1SpxLevel,
+                        target2: strat.t2SpxLevel,
+                        invalidation: strat.stopSpxLevel,
+                      }}
+                      contractSymbol={c.symbol}
+                      hardContractStop={strat.stopPrice}
+                      startedAt={plan ? new Date(plan.lockedAt).toISOString() : data?.issuedAt}
+                      accent={lc}
+                      defaultOpen
+                    />
                   )}
 
                   {/* ── تفاصيل أكثر (مطويّة): الدخول المحافظ · بقية الأهداف · السبريد ── */}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { UnderlyingTradeManager } from '@/components/v2/UnderlyingTradeManager'
 import type { ExperimentalDecision, ReadyDecision } from '@/lib/experiment/decisionEngine'
 import { evaluateScenarioState, type ScenarioEvaluation } from '@/lib/experiment/scenarioState'
 import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
@@ -278,6 +279,26 @@ export default function ExperimentalDecisionPage() {
                   ) : null}
                 </div>
               ) : null}
+
+              <div className="mt-5">
+                <UnderlyingTradeManager
+                  key={`${visibleDecision.id}-${visibleDecision.scenario.entrySpot}`}
+                  platform="options"
+                  symbol="SPX"
+                  direction={visibleDecision.direction === 'call' ? 'bullish' : 'bearish'}
+                  plan={{
+                    entry: visibleDecision.scenario.entrySpot,
+                    target1: visibleDecision.scenario.firstTarget,
+                    target2: visibleDecision.scenario.secondTarget,
+                    invalidation: visibleDecision.scenario.invalidation,
+                  }}
+                  contractSymbol={visibleDecision.contract.symbol}
+                  hardContractStop={visibleDecision.scenario.hardContractStop}
+                  startedAt={visibleDecision.generatedAt}
+                  accent={visibleDecision.direction === 'call' ? '#34D399' : '#F87171'}
+                  defaultOpen
+                />
+              </div>
             </section>
 
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
