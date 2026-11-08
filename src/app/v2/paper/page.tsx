@@ -4,8 +4,9 @@
 // 10,000$ افتراضية. تدخل بأسعار السوق الحقيقية وتخرج بها، والنتيجة تُحسب
 // بنفس طريقة الحساب الحقيقي. حين تقتنع بنتائجك هنا — ابدأ صغيراً هناك.
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
+import { executableOptionQuote } from '@/lib/v2/quoteQuality'
 
 const START_BALANCE = 10_000
 
@@ -14,6 +15,7 @@ interface PaperPosition {
   type: 'call' | 'put'
   strike: number
   expiry?: string
+  symbol?: string
   entry: number        // سعر الدخول لكل سهم
   contracts: number
   cost: number         // التكلفة الإجمالية (سالبة من الرصيد)
@@ -37,14 +39,19 @@ function persist(s: PaperState) {
 
 export default function PaperPage() {
   const [state, setState] = useState<PaperState>(FRESH)
-  const [prices, setPrices] = useState<Record<string, number>>({})  // أسعار حية للمراكز المفتوحة
   const [strike, setStrike] = useState('')
   const [type, setType] = useState<'call' | 'put'>('call')
   const [entry, setEntry] = useState('')
   const [contracts, setContracts] = useState('1')
+  const [expiry, setExpiry] = useState('')
   const [suggestions, setSuggestions] = useState<any[]>([])
   const [msg, setMsg] = useState('')
-  const { quotes: suggestionQuotes } = useLiveQuotes(suggestions.map(item => item.symbol))
+  const { quotes: suggestionQuotes } = useLiveQuotes([...suggestions.map(item => item.symbol), ...state.open.map(p => p.symbol).filter((s): s is string => !!s)])
+  const prices: Record<string, number> = {}
+  for (const position of state.open) {
+    const quote = position.symbol ? suggestionQuotes[position.symbol] : null
+    if (executableOptionQuote(quote)) prices[position.id] = quote!.bid!
+  }
 
   useEffect(() => { setState(load()) }, [])
 
@@ -55,35 +62,17 @@ export default function PaperPage() {
     }).catch(() => {})
   }, [])
 
-  // أسعار حية للمراكز المفتوحة
-  const refreshPrices = useCallback(async (positions: PaperPosition[]) => {
-    const next: Record<string, number> = {}
-    for (const p of positions.slice(0, 6)) {
-      try {
-        const q = `strike=${p.strike}&type=${p.type}&entry=${p.entry}${p.expiry ? `&expiry=${p.expiry}` : ''}`
-        const d = await fetch(`/api/v2/exit?${q}`).then(r => r.json())
-        if (d?.contract?.mid > 0) next[p.id] = d.contract.mid
-      } catch { /* تجاهل */ }
-    }
-    setPrices(prev => ({ ...prev, ...next }))
-  }, [])
-
-  useEffect(() => {
-    if (state.open.length === 0) return
-    void refreshPrices(state.open)
-    const timer = setInterval(() => { void refreshPrices(state.open) }, 2_000)
-    return () => clearInterval(timer)
-  }, [state.open, refreshPrices])
-
-  function openPosition(t: 'call' | 'put', k: number, price: number, n: number, expiry?: string) {
-    if (!k || !price || !n) { setMsg('أكمل البيانات: ستريك وسعر وعدد عقود'); return }
+  function openPosition(t: 'call' | 'put', k: number, price: number, n: number, expiry?: string, providedSymbol?: string) {
+    if (![k, price, n].every(Number.isFinite) || k <= 0 || price <= 0 || !Number.isInteger(n) || n <= 0) { setMsg('أدخل الستريك والسعر والعدد بشكل صحيح'); return }
+    if (!expiry || !/^\d{4}-\d{2}-\d{2}$/.test(expiry) || !Number.isFinite(Date.parse(expiry)) || new Date(expiry).toISOString().slice(0,10) !== expiry) { setMsg('حدد تاريخ انتهاء العقد'); return }
+    const symbol = providedSymbol ?? `SPXW${expiry.slice(2).replace(/-/g, '')}${t === 'call' ? 'C' : 'P'}${Math.round(k * 1000).toString().padStart(8, '0')}`
     const cost = Math.round(price * 100 * n * 100) / 100
     if (cost > state.balance) { setMsg(`التكلفة $${cost.toFixed(0)} أكبر من رصيدك التجريبي $${state.balance.toFixed(0)}`); return }
     const next: PaperState = {
       ...state,
       balance: Math.round((state.balance - cost) * 100) / 100,
       open: [...state.open, {
-        id: Date.now().toString(36), type: t, strike: k, expiry,
+        id: Date.now().toString(36), type: t, strike: k, expiry, symbol,
         entry: price, contracts: n, cost, openedAt: new Date().toISOString(),
       }],
     }
@@ -91,10 +80,7 @@ export default function PaperPage() {
   }
 
   function closePosition(p: PaperPosition) {
-    // عقد انتهى تاريخه: يُغلق بسعره الحي إن وُجد، وإلا بقيمة صفر (انتهى بلا قيمة)
-    const todayStr = new Date().toISOString().slice(0, 10)
-    const isExpired = !!p.expiry && p.expiry < todayStr
-    const exitPrice = prices[p.id] ?? (isExpired ? 0 : undefined)
+    const exitPrice = prices[p.id]
     if (exitPrice == null) { setMsg('لم يصل سعر حي بعد لهذا العقد — انتظر لحظات'); return }
     const proceeds = Math.round(exitPrice * 100 * p.contracts * 100) / 100
     const pnl = Math.round((proceeds - p.cost) * 100) / 100
@@ -124,7 +110,7 @@ export default function PaperPage() {
       <div className="flex items-start justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-xl font-bold text-[#E8D5A3]">🎮 المحفظة التجريبية</h1>
-          <p className="text-sm text-gray-500 mt-0.5">مال وهمي، أسعار حقيقية، دروس مجانية. اقتنع بالنتائج قبل أن تخاطر بريال واحد.</p>
+          <p className="text-sm text-gray-500 mt-0.5">محاكاة بأموال افتراضية. الدخول اليدوي بسعر تحدده؛ سعر الإغلاق الآلي يحتاج عرض بيع حديثًا. النتائج قبل الرسوم.</p>
         </div>
         <button onClick={resetAll} className="text-xs px-3 py-1.5 rounded-lg text-gray-500"
           style={{ border: '1px solid rgba(255,255,255,0.1)' }}>↺ ابدأ من جديد</button>
@@ -152,9 +138,11 @@ export default function PaperPage() {
           <div className="text-sm font-bold text-[#E8D5A3] mb-2">مرشّحات ترقب الآن — جرّبها بضغطة</div>
           <div className="flex flex-wrap gap-2">
             {suggestions.map((c: any) => {
-              const livePrice = suggestionQuotes[c.symbol]?.mid ?? suggestionQuotes[c.symbol]?.price ?? c.mid ?? c.ask
+              const quote = suggestionQuotes[c.symbol]
+              const validQuote = executableOptionQuote(quote)
+              const livePrice = validQuote ? quote!.ask! : null
               return <button key={c.symbol}
-                onClick={() => openPosition(c.type, c.strike, livePrice, 1, c.expiration)}
+                disabled={!validQuote} onClick={() => { if (livePrice != null) openPosition(c.type, c.strike, livePrice, 1, c.expiration, c.symbol) }}
                 className="text-xs font-mono px-3 py-2 rounded-xl"
                 style={{
                   background: 'rgba(255,255,255,0.04)',
@@ -194,7 +182,8 @@ export default function PaperPage() {
               className="block w-20 rounded-lg px-2 py-2 mt-1 text-sm text-white outline-none font-mono"
               style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }} />
           </label>
-          <button onClick={() => openPosition(type, parseFloat(strike), parseFloat(entry), Math.max(1, parseInt(contracts) || 1))}
+          <label className="text-xs text-gray-500">انتهاء عقد SPXW<input type="date" value={expiry} onChange={e => setExpiry(e.target.value)} className="block mt-1 rounded-lg bg-white/5 p-2 text-sm text-white" /></label>
+          <button onClick={() => openPosition(type, Number(strike), Number(entry), Number(contracts), expiry)}
             className="px-5 py-2.5 rounded-xl text-sm font-bold"
             style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
             ادخل تجريبياً
@@ -227,13 +216,13 @@ export default function PaperPage() {
                           الآن ${now} ({(pnl ?? 0) >= 0 ? '+' : ''}${(pnl ?? 0).toFixed(0)})
                         </span>
                       : (p.expiry && p.expiry < new Date().toISOString().slice(0, 10))
-                      ? <span style={{ color: '#F0435A' }}>انتهى العقد — أغلقه لتسجيل النتيجة</span>
+                      ? <span style={{ color: '#F0435A' }}>انتهى العقد — لا تتوفر قيمة تسوية موثوقة</span>
                       : <span className="text-gray-600">جارٍ جلب السعر…</span>}
                   </div>
                   <button onClick={() => closePosition(p)}
-                    className="text-xs font-bold px-3 py-1.5 rounded-lg"
+                    disabled={now == null} className="text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-30"
                     style={{ background: 'rgba(240,67,90,0.1)', border: '1px solid rgba(240,67,90,0.35)', color: '#F0435A' }}>
-                    أغلق بسعر السوق
+                    أغلق بالعرض الحالي
                   </button>
                 </div>
               )
