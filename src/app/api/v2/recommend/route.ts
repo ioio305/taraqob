@@ -18,6 +18,8 @@ import { horizonSpec } from '@/lib/v2/traderHorizon'
 import { runDecisionCouncil } from '@/lib/v2/decisionCouncil'
 import { recommendForStock } from '@/lib/v2/stocksRecommend'
 import { recommendForFund } from '@/lib/v2/fundsRecommend'
+import { getVerifiedMarketOpen, getVerifiedQuotes } from '@/lib/v2/quoteFeed'
+import { entryGate } from '@/lib/v2/executionTicket'
 
 export const dynamic = 'force-dynamic'
 
@@ -323,7 +325,7 @@ export async function GET(request: NextRequest) {
       const candidateExpirations = expirations
         .filter(expiration => {
           const dte = dteOf(expiration)
-          return dte >= opportunityWindow!.minimumDte && (dte >= 1 || !afterClose)
+          return withinHorizon(dte) && dte >= opportunityWindow!.minimumDte && (dte >= 1 || !afterClose)
         })
         .sort((left, right) => {
           // أولاً المطابق لمدى الأفق المختار، ثم الأقرب إلى الهدف الزمني
@@ -337,13 +339,13 @@ export async function GET(request: NextRequest) {
       const fetchedChains = (await Promise.all(candidateExpirations.map(async expiration => {
         try {
           const chain = await getOptionsChain(expiration, spxPrice, vixPrice)
-          return { expiration, options: chain.options, estimated: chain.estimated }
+          return { expiration, options: chain.options, estimated: chain.estimated, source: chain.source }
         } catch {
-          return { expiration, options: [] as any[], estimated: false }
+          return { expiration, options: [] as any[], estimated: false, source: 'unavailable' }
         }
       }))).filter(chain => chain.options.length > 0)
 
-      chainEstimated = fetchedChains.some(chain => chain.estimated)
+      chainEstimated = fetchedChains.some(chain => chain.estimated || chain.source !== 'tradier_realtime')
       if (fetchedChains[0]) straddleMove = computeStraddleMove(fetchedChains[0].options, spxPrice, em)
 
       // إعادة التقدير بعد اكتمال صورة الأصل، دون استخدام سعر العقد كهدف.
@@ -463,9 +465,26 @@ export async function GET(request: NextRequest) {
         })
       : null
 
+    const issuedAt = new Date().toISOString()
+    const [verifiedQuotes, marketOpen] = await Promise.all([
+      getVerifiedQuotes(['SPX', ...enrichedTop3.map(c => c.symbol)]),
+      getVerifiedMarketOpen(),
+    ])
+    const candidate = enrichedTop3[0]
+    const executionGate = entryGate({
+      marketOpen, marketClosed: marketClosedPhase, estimated: chainEstimated,
+      contract: candidate, scenario, validUntil: opportunityWindow?.validUntil, issuedAt,
+      underlying: verifiedQuotes.SPX, option: candidate ? verifiedQuotes[candidate.symbol] : null,
+    })
+
     return NextResponse.json({
       success: true,
-      issuedAt: new Date().toISOString(),
+      issuedAt,
+      executionGate,
+      verifiedQuotes,
+      marketOpen,
+      marketClosed: marketClosedPhase,
+      marketStatus: sessionQuality.label,
       market: {
         spx:          { price: spxPrice, prevClose: spxPrev, changePct: spxChgPct, high: spxHigh, low: spxLow },
         vix:          { price: vixPrice, estimated: vixEstimated },
@@ -486,10 +505,10 @@ export async function GET(request: NextRequest) {
       // وعي تسعير الخوف — معلومة توجيهية فقط، لا تمنع أي دخول
       pricing:
         vixPrice < 14
-          ? { level: 'رخيص', color: '#26D07C', advice: 'أسعار العقود رخيصة الآن — وقت ممتاز للشراء' }
+          ? { level: 'منخفض', color: '#26D07C', advice: 'مستوى التذبذب منخفض؛ الدخول مرتبط بخطة الصفقة وصحة الأسعار.' }
           : vixPrice <= 20
-          ? { level: 'عادل', color: '#60A5FA', advice: 'أسعار العقود طبيعية — اشترِ بخطتك المعتادة' }
-          : { level: 'غالٍ', color: '#F59E0B', advice: `أسعار العقود مرتفعة بسبب توتر السوق (${vixPrice.toFixed(0)}) — صغّر حجم صفقتك أو اختر عقداً أقرب انتهاءً` },
+          ? { level: 'متوسط', color: '#60A5FA', advice: 'مستوى التذبذب متوسط؛ ليس إشارة دخول مستقلة.' }
+          : { level: 'مرتفع', color: '#F59E0B', advice: `التذبذب مرتفع (${vixPrice.toFixed(0)})؛ لا تتجاوز حد الخسارة المحدد في خطتك.` },
       sessions: {
         london: sessions.london,
         tokyo:  sessions.tokyo,
@@ -498,11 +517,14 @@ export async function GET(request: NextRequest) {
       newsRisk:    newsDecision,
       marketReaction,
       sessionQuality,
-      watchMode,
+      watchMode: watchMode || !executionGate.ready,
       scenario,
       opportunityWindow,
-      decisionCouncil,
-      contracts:   enrichedTop3,
+      decisionCouncil: executionGate.ready ? decisionCouncil : {
+        ...decisionCouncil, action: 'wait', scenarioStatus: 'waiting',
+        explanation: executionGate.reason, vetoes: [...decisionCouncil.vetoes, executionGate.reason],
+      },
+      contracts:   executionGate.ready ? enrichedTop3 : [],
       shortlist:   shortlist.map(({ _score, ...rest }) => rest),
       expiration:  usedExp,
       expirations: expirations.slice(0, 8),

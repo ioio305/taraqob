@@ -27,6 +27,7 @@ export async function tradierGet(path: string): Promise<any> {
   const res = await fetch(`${TRADIER_BASE}${path}`, {
     headers: { Authorization: `Bearer ${process.env.TRADIER_API_KEY}`, Accept: 'application/json' },
     cache: 'no-store',
+    signal: AbortSignal.timeout(8_000),
   })
   if (!res.ok) throw new Error(`Tradier ${res.status}`)
   return res.json()

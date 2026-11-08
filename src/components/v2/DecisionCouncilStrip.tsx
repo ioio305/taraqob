@@ -91,7 +91,7 @@ export const DecisionCouncilStrip = memo(function DecisionCouncilStrip({ platfor
         scenario: row.scenario ?? null,
         window: row.opportunityWindow ?? null,
       } : null)
-    } catch { /* نحتفظ بآخر قرار صحيح */ } finally {
+    } catch { setDecision(null) } finally {
       setRefreshing(false)
     }
   }, [index, platform])

@@ -1,22 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-
-export type LiveQuote = {
-  symbol: string
-  price: number
-  prevClose: number
-  high: number
-  low: number
-  changePct: number
-  source: string
-  asOf: string | null
-  status: 'live' | 'fallback'
-  bid?: number | null
-  ask?: number | null
-  mid?: number | null
-  last?: number | null
-}
+import type { LiveQuote } from './quoteQuality'
+export type { LiveQuote } from './quoteQuality'
 
 type LiveQuotesState = {
   quotes: Record<string, LiveQuote | null>
@@ -42,9 +28,9 @@ export function useLiveQuotes(symbols: string[], pollMs = 2_000): LiveQuotesStat
       const data = await response.json()
       if (response.ok && data?.success) {
         setState({ quotes: data.quotes ?? {}, generatedAt: data.generatedAt ?? null, loading: false })
-      }
+      } else setState({ quotes: {}, generatedAt: null, loading: false })
     } catch {
-      setState(current => ({ ...current, loading: false }))
+      setState({ quotes: {}, generatedAt: null, loading: false })
     }
   }, [symbolsKey])
 

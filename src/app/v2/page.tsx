@@ -15,6 +15,8 @@ import type { ContractScenarioFit } from '@/lib/v2/scenarioContractSelector'
 import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
 import type { MoneynessLadder as MoneynessLadderData } from '@/lib/v2/moneynessLadder'
 import type { HorizonSpec } from '@/lib/v2/traderHorizon'
+import { ExecutionTicket } from '@/components/v2/ExecutionTicket'
+import { entryGate, type EntryGate } from '@/lib/v2/executionTicket'
 
 type Market = {
   spx: { price: number; prevClose?: number; changePct: number; high: number; low: number }
@@ -100,6 +102,8 @@ type ShortlistItem = {
 type Data = {
   success: boolean; error?: string
   issuedAt?: string
+  executionGate?: EntryGate
+  marketOpen?: boolean
   marketClosed?: boolean; marketStatus?: string
   watchMode?: boolean
   scenario?: UnderlyingScenario | null
@@ -172,6 +176,8 @@ export default function V2Dashboard() {
   const [ts, setTs]         = useState<Date | null>(null)
   const [countdown, setCd]  = useState(REFRESH_SEC)
   const [strike, setStrike] = useState('')
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const requestVersion = useRef(0)
   const [ctype, setCtype]   = useState<'auto' | 'call' | 'put'>('auto')
   const trackedSymbols = ['SPX', ...(data?.contracts ?? []).map(contract => contract.symbol)]
   const { quotes: liveQuotes } = useLiveQuotes(trackedSymbols)
@@ -208,6 +214,9 @@ export default function V2Dashboard() {
     } catch { /* تجاهل */ }
   }, [])
   function switchHorizon(h: Horizon) {
+    requestVersion.current++
+    setData(null)
+    setLoad(true)
     setHorizon(h)
     try { localStorage.setItem('taraqob_horizon', h) } catch { /* تجاهل */ }
     lockedPlans.current.clear(); liveSnaps.current.clear()   // عقود المدى الآخر مختلفة
@@ -220,12 +229,16 @@ export default function V2Dashboard() {
   const liveSnaps    = useRef<Map<string, LiveSnap>>(new Map())
 
   const load = useCallback(async () => {
+    const version = ++requestVersion.current
     // لا نعيد الهياكل العظمية في التحديث الدوري — أول تحميل فقط.
     // البيانات القديمة تبقى ظاهرة حتى تصل الجديدة، فيصير التحديث صامتاً بلا وميض.
     setCd(REFRESH_SEC)
     try {
       const res  = await fetch(`/api/v2/recommend?mode=${recMode}&horizon=${horizon}`)
       const json = await res.json()
+      if (version !== requestVersion.current) return
+      if (!res.ok || !json.success) throw new Error('تعذر تحديث التوصية')
+      setLoadError(null)
       // ── Freeze plan on first sight; update live snap every poll ──────────
       const contracts: Contract[] = json.contracts ?? []
       for (const c of contracts) {
@@ -246,8 +259,13 @@ export default function V2Dashboard() {
       }
       setData(json)
       setTs(new Date())
-    } catch {}
-    setLoad(false)
+    } catch {
+      if (version === requestVersion.current) {
+        setLoadError('تعذر تحديث التوصية')
+        setData(null)
+      }
+    }
+    if (version === requestVersion.current) setLoad(false)
   }, [horizon])
 
   // Re-analyze: clears the frozen plan so next poll locks a fresh one
@@ -334,7 +352,13 @@ export default function V2Dashboard() {
     : null
   const dirColor = dir?.color ?? '#7C8A99'
   const allContracts = data?.contracts ?? []
-  const contracts = councilDirection
+  const primary = allContracts[0]
+  const currentGate = data?.executionGate?.ready ? entryGate({
+    marketOpen: data.marketOpen === true, marketClosed: data.marketClosed,
+    contract: primary, scenario: data.scenario, validUntil: data.opportunityWindow?.validUntil,
+    issuedAt: data.issuedAt, underlying: liveQuotes.SPX, option: primary ? liveQuotes[primary.symbol] : null,
+  }) : data?.executionGate
+  const contracts = councilDirection && currentGate?.ready && !loadError
     ? allContracts.filter(c => c.status === 'execute' && c.type === councilDirection)
     : []
   const hasExecute = contracts.length > 0
@@ -349,22 +373,22 @@ export default function V2Dashboard() {
     <div className="min-h-full p-4 pb-10 space-y-4 max-w-4xl mx-auto"
          style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }} dir="rtl">
 
-      {/* ── الانضباط: حد الخسارة اليومي/الأسبوعي ── */}
-      <DisciplineBar />
-
-      {data?.issuedAt && (
-        <div className="text-xs px-3 py-2 rounded-lg text-center" style={{ color: '#94A3B8', background: 'rgba(255,255,255,.035)' }}>
-          آخر تحليل: {new Date(data.issuedAt).toLocaleTimeString('ar-SA', { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit' })} بتوقيت الرياض
-          {' · '}{hasExecute ? 'الفرصة صالحة ضمن نافذتها الزمنية الحالية' : 'لا توجد فرصة دخول صالحة الآن'}
-        </div>
-      )}
-
       {/* ── محوّل المؤشرات: SPX صفحته هنا · الباقي على نفس المحرك ── */}
       <IndexSwitcher active="SPX" />
 
-      {data?.decisionCouncil ? (
-        <DecisionCouncilCard council={data.decisionCouncil} scenario={data.scenario} window={data.opportunityWindow} />
-      ) : null}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <label className="flex items-center gap-2 text-xs text-slate-400">انتهاء العقد
+          <select aria-label="انتهاء العقد" value={horizon} onChange={e => switchHorizon(e.target.value as Horizon)}
+            className="rounded-lg border border-white/10 bg-[#0D1B2A] px-3 py-2 text-sm text-white">
+            <option value="aggressive">0–1 يوم</option><option value="moderate">2–5 أيام</option><option value="conservative">7–45 يومًا</option>
+          </select>
+        </label>
+        <button onClick={() => void load()} disabled={loading} className="rounded-lg border border-white/10 px-3 py-2 text-xs text-amber-200 disabled:opacity-40">تحديث التوصية · {countdown}ث</button>
+      </div>
+
+      <ExecutionTicket loading={loading} error={loadError} contract={primary} scenario={data?.scenario}
+        validUntil={data?.opportunityWindow?.validUntil} issuedAt={data?.issuedAt} gate={data?.executionGate}
+        marketOpen={data?.marketOpen} marketClosed={data?.marketClosed} quotes={liveQuotes} now={Date.now()} />
 
       {/* ── تحذير حدث اقتصادي كبير اليوم/غداً (معلومة لا منع) ── */}
       {data?.econ?.warning && (
@@ -391,6 +415,10 @@ export default function V2Dashboard() {
       {/* ═══════════════════════════════════════════════════════════════ */}
       {/* ══  توصية اليوم — القلب: كبيرة، واضحة، أولاً                  ══ */}
       {/* ═══════════════════════════════════════════════════════════════ */}
+      <details className="rounded-2xl border border-white/10">
+      <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-slate-400">تفاصيل التوصية والسوق</summary>
+      {data?.decisionCouncil ? <DecisionCouncilCard council={data.decisionCouncil} scenario={data.scenario} window={data.opportunityWindow} /> : null}
+      <DisciplineBar />
       <section className="rounded-2xl overflow-hidden"
                style={{ background: 'rgba(13,27,42,0.82)', border: '1px solid rgba(201,148,58,0.18)' }}>
 
@@ -1176,6 +1204,7 @@ export default function V2Dashboard() {
         )}
       </div>
 
+      </details>
       {/* ── Compliance Disclaimer ── */}
       <div className="rounded-xl px-4 py-3 text-xs leading-relaxed font-mono" dir="rtl"
         style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)', color: '#6B7B8D' }}>
