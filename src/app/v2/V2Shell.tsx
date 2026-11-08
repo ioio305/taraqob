@@ -16,7 +16,7 @@ import { SidebarPlanCard } from '@/components/v2/SidebarPlanCard'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
 import { getSelectedIndex, indexMeta, type IndexId } from '@/lib/v2/indexSelection'
 import { showBrowserNotificationOnce } from '@/lib/v2/browserNotifications'
-import { SHOW_CONTRACT_ANALYSIS } from '@/lib/v2/featureFlags'
+import { SHOW_CONTRACT_ANALYSIS, SHOW_STRATEGY_LAB } from '@/lib/v2/featureFlags'
 
 const ROLE_LABEL_MAP: Record<string, string>  = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
 const ROLE_COLOR_MAP: Record<string, string>  = { admin: '#C9943A', moderator: '#60A5FA', user: '#7C8A99' }
@@ -60,6 +60,8 @@ const NAV_TOOLS = [
 const NAV_PREMIUM = [
   { href: '/v2/decision-room', label: 'غرفة القرار', icon: '✦', exact: false, requiredTier: 'alpha' },
   { href: '/v2/chart', label: 'الشارت المتقدم', icon: '📈', exact: false, requiredTier: 'edge' },
+  // «مختبر الاستراتيجيات» — اختبار تاريخي عبر LEAN (إيدج/ألفا). الحماية على الخادم أيضاً.
+  ...(SHOW_STRATEGY_LAB ? [{ href: '/v2/lab', label: 'مختبر الاستراتيجيات', icon: '🧪', exact: false, requiredTier: 'edge' }] : []),
 ]
 
 // روابط خفيفة أسفل القائمة — بلا أيقونات صاخبة

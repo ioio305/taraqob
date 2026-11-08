@@ -1,0 +1,8 @@
+{
+  "algorithm-language": "Python",
+  "parameters": {},
+  "description": "Taraqob SPX OTM Long Option — تطبّق قواعد ترقّب لخيارات SPX خارج المال داخل محرك LEAN. القواعد من strategy_spec.json وإعدادات التشغيل من run_config.json.",
+  "local-id": "taraqob-spx-otm",
+  "cloud-id": null,
+  "main-py": "main.py"
+}

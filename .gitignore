@@ -34,3 +34,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .claude/
+
+# strategy lab (مختبر الاستراتيجيات) — تشغيلات محلية + مخرجات LEAN + بيانات مدفوعة
+/lab-runs/
+/lean/data/
+/lean/taraqob_spx_otm/backtests/
+/lean/taraqob_spx_otm/run_config.json

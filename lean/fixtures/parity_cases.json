@@ -1,0 +1,16 @@
+{
+  "_comment": "حالات تطابق مشتركة لبوابة الدخول (خارج المال + نطاق سعر الطلب المتوازن + نطاق DTE حسب الأفق). يستهلكها طرفان من مصدر واحد: الاختبار TS (strategySpec.test.ts عبر recommendCore.mandatoryFilter) والاختبار Python (test_parity.py عبر strategy_spec.json). السعر التمثيلي للمؤشر ~6000.",
+  "underlyingPrice": 6000,
+  "mode": "balanced",
+  "cases": [
+    { "id": "otm-call-in-range-moderate",   "type": "call", "strike": 6050, "bid": 5.0,  "ask": 6.0,  "dte": 3,  "horizon": "moderate",     "expectedEligible": true,  "note": "خارج المال، السعر ضمن النطاق، DTE داخل أفق متوسط" },
+    { "id": "itm-call",                      "type": "call", "strike": 5950, "bid": 60.0, "ask": 62.0, "dte": 3,  "horizon": "moderate",     "expectedEligible": false, "note": "داخل المال — مرفوض مطلقًا" },
+    { "id": "otm-call-ask-too-low",          "type": "call", "strike": 6100, "bid": 0.5,  "ask": 1.0,  "dte": 3,  "horizon": "moderate",     "expectedEligible": false, "note": "خارج المال لكن سعر الطلب 1.0 < 2.0 (حد المتوازن)" },
+    { "id": "otm-put-in-range-aggressive",   "type": "put",  "strike": 5950, "bid": 7.0,  "ask": 8.0,  "dte": 0,  "horizon": "aggressive",   "expectedEligible": true,  "note": "خارج المال بوت، DTE=0 داخل أفق مغامر" },
+    { "id": "itm-put",                       "type": "put",  "strike": 6050, "bid": 55.0, "ask": 57.0, "dte": 0,  "horizon": "aggressive",   "expectedEligible": false, "note": "داخل المال بوت — مرفوض" },
+    { "id": "otm-call-dte-out-of-band",      "type": "call", "strike": 6050, "bid": 5.0,  "ask": 6.0,  "dte": 20, "horizon": "moderate",     "expectedEligible": false, "note": "DTE=20 خارج نطاق متوسط (2–5)" },
+    { "id": "otm-call-dte-in-conservative",  "type": "call", "strike": 6050, "bid": 5.0,  "ask": 6.0,  "dte": 20, "horizon": "conservative", "expectedEligible": true,  "note": "DTE=20 داخل نطاق محافظ (7–45)" },
+    { "id": "invalid-quote-ask-le-bid",      "type": "call", "strike": 6050, "bid": 8.0,  "ask": 7.0,  "dte": 3,  "horizon": "moderate",     "expectedEligible": false, "note": "تسعير فاسد: ask <= bid" },
+    { "id": "otm-call-ask-too-high",         "type": "call", "strike": 6400, "bid": 45.0, "ask": 48.0, "dte": 10, "horizon": "conservative", "expectedEligible": false, "note": "سعر الطلب 48 > 40 (سقف المتوازن)" }
+  ]
+}
