@@ -14,7 +14,7 @@ interface Plan {
   market: { spx: number; vix: number; source: string; priorClose: number; priorHigh: number; priorLow: number }
   bias: string; score: number; decision: string
   stance: string; entryZone: string
-  targets: { t1: number | null; t2: number | null }
+  targets: { t1: number | null; t2: number | null; t1Eta?: string | null; t2Eta?: string | null }
   stop: number | null
   cancel: string
   expectedMove: { points: number; upper: number; lower: number }

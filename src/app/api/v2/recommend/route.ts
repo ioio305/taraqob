@@ -13,6 +13,8 @@ import { getAdapter } from '@/lib/v2/adapters/registry'
 import { enrichContracts, SPX_BANDS, type RecMode, type EnrichContext } from '@/lib/v2/recommendCore'
 import { assessUnderlyingDirection, buildOpportunityWindow, buildUnderlyingScenario } from '@/lib/v2/opportunityModel'
 import { selectContractsForScenario } from '@/lib/v2/scenarioContractSelector'
+import { buildMoneynessLadder } from '@/lib/v2/moneynessLadder'
+import { horizonSpec } from '@/lib/v2/traderHorizon'
 import { runDecisionCouncil } from '@/lib/v2/decisionCouncil'
 import { recommendForStock } from '@/lib/v2/stocksRecommend'
 import { recommendForFund } from '@/lib/v2/fundsRecommend'
@@ -168,6 +170,10 @@ export async function GET(request: NextRequest) {
     rawMode === 'safe' ? 'safe'
     : (rawMode === 'bold' || rawMode === 'cheap') ? 'bold'
     : 'balanced'
+  // أفق المضارب (المدى الزمني): aggressive(يوم) · moderate(٢–٥) · conservative(أسبوع+)
+  // يحيّز اختيار تاريخ الانتهاء فقط — لا يمنع شيئاً. غيابه = السلوك الافتراضي الكامل.
+  const horizonParam = searchParams.get('horizon')
+  const horizon = horizonParam ? horizonSpec(horizonParam) : null
 
   // ── توجيه فئة الأصول (رؤية 3 منصات) — الافتراضي spx (توافق خلفي كامل) ──────
   const asset = (searchParams.get('asset') ?? 'spx').toLowerCase()
@@ -311,13 +317,21 @@ export async function GET(request: NextRequest) {
     ))
 
     if (contractType && scenario && opportunityWindow && expirations.length) {
+      // الهدف الزمني: أفق المضارب إن اختير، وإلا توصية النافذة (السلوك الأصلي)
+      const targetDte = horizon ? horizon.dte.target : opportunityWindow!.recommendedDte
+      const withinHorizon = (dte: number) => !horizon || (dte >= horizon.dte.min && dte <= horizon.dte.max)
       const candidateExpirations = expirations
         .filter(expiration => {
           const dte = dteOf(expiration)
           return dte >= opportunityWindow!.minimumDte && (dte >= 1 || !afterClose)
         })
-        .sort((left, right) => Math.abs(dteOf(left) - opportunityWindow!.recommendedDte)
-          - Math.abs(dteOf(right) - opportunityWindow!.recommendedDte))
+        .sort((left, right) => {
+          // أولاً المطابق لمدى الأفق المختار، ثم الأقرب إلى الهدف الزمني
+          const lw = withinHorizon(dteOf(left)) ? 0 : 1
+          const rw = withinHorizon(dteOf(right)) ? 0 : 1
+          if (lw !== rw) return lw - rw
+          return Math.abs(dteOf(left) - targetDte) - Math.abs(dteOf(right) - targetDte)
+        })
         .slice(0, 3)
 
       const fetchedChains = (await Promise.all(candidateExpirations.map(async expiration => {
@@ -438,8 +452,20 @@ export async function GET(request: NextRequest) {
       note: `اختيار قريب من السعر وداخل حركة الأصل المتوقعة حتى ${scenario.target2.value.toLocaleString()}`,
     } : null
 
+    // ── سلّم الجرأة (داخل/عند/خارج السعر) لنفس الفكرة — إضافي، لا يمسّ التسجيل ──
+    // «خارج السعر» = اختيار المحرك المُعاير (نفّذ محتمل)؛ «داخل/عند السعر» راقب فقط.
+    const moneynessLadder = contractType && usedChain.length
+      ? buildMoneynessLadder({
+          chain: usedChain,
+          spot: spxPrice,
+          direction: contractType,
+          chosenOtmStrike: Number((top3[0] as any)?.strike) || null,
+        })
+      : null
+
     return NextResponse.json({
       success: true,
+      issuedAt: new Date().toISOString(),
       market: {
         spx:          { price: spxPrice, prevClose: spxPrev, changePct: spxChgPct, high: spxHigh, low: spxLow },
         vix:          { price: vixPrice, estimated: vixEstimated },
@@ -481,6 +507,8 @@ export async function GET(request: NextRequest) {
       expiration:  usedExp,
       expirations: expirations.slice(0, 8),
       otmRange,
+      moneynessLadder,
+      horizon: horizon ?? horizonSpec('aggressive'),
     })
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message, contracts: [] }, { status: 200 })

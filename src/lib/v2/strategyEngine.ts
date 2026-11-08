@@ -146,8 +146,9 @@ export function computeStrategy(inp: StrategyInput): StrategyResult {
 
   if (isFast) {
     strategy      = 'fast'
-    stopPct       = 0.22
-    t1Pct         = 0.25
+    // خطة 0DTE: وقف قريب وهدف أول يساوي ضعفي المخاطرة.
+    stopPct       = 0.15
+    t1Pct         = 0.30
     t2Pct         = 0.50
     t3Pct         = null
     strategyLabel = 'سريعة'

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { normalizeBundlePlatforms, subscriptionBundle } from './subscriptionBundles'
 
 describe('subscription bundles', () => {
-  it('grants all platforms to Radar and Alpha', () => {
-    expect(normalizeBundlePlatforms('radar', ['stocks'])).toEqual(['spx', 'stocks', 'funds'])
+  it('limits Radar to one platform and grants all platforms to Alpha', () => {
+    expect(normalizeBundlePlatforms('radar', ['stocks'])).toEqual(['stocks'])
     expect(normalizeBundlePlatforms('alpha', [])).toEqual(['spx', 'stocks', 'funds'])
   })
 

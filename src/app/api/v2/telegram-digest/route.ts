@@ -18,6 +18,7 @@ const STATUS_AR: Record<string, string> = {
   closed_win:  '✅ ربحت',
   closed_loss: '❌ خسرت',
   expired:     '⏳ انتهت',
+  invalidated: '⚪ غير محسومة',
   cancelled:   '⛔ أُلغيت',
 }
 
@@ -94,7 +95,7 @@ export async function GET(req: NextRequest) {
     const tally: string[] = []
     if (wins)   tally.push(`✅ ربحت ${wins}`)
     if (losses) tally.push(`❌ خسرت ${losses}`)
-    const open = sigs.length - wins - losses
+    const open = sigs.filter((s: any) => s.status === 'active' || s.status === 'watching').length
     if (open) tally.push(`🔵 بلا نتيجة بعد ${open}`)
     lines.push(`الحصيلة: ${tally.join(' · ')}`)
     lines.push('', '⚠️ راجع المنصة للتفاصيل الكاملة — القرار قرارك')

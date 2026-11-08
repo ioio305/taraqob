@@ -11,6 +11,8 @@ import { AssistantWidget } from '@/components/v2/AssistantWidget'
 import { NewsTicker } from '@/components/v2/NewsTicker'
 import { MarketClock } from '@/components/v2/MarketClock'
 import { DecisionCouncilStrip } from '@/components/v2/DecisionCouncilStrip'
+import { PlatformSwitcher } from '@/components/v2/PlatformSwitcher'
+import { SidebarPlanCard } from '@/components/v2/SidebarPlanCard'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
 import { getSelectedIndex, indexMeta, type IndexId } from '@/lib/v2/indexSelection'
 import { showBrowserNotificationOnce } from '@/lib/v2/browserNotifications'
@@ -113,61 +115,6 @@ function SectionTitle({ children, color = '#7C8A99' }: { children: string; color
     <div className="px-3 pb-1 pt-1 text-xs font-mono font-semibold tracking-widest uppercase"
       style={{ color, letterSpacing: '0.18em' }}>
       {children}
-    </div>
-  )
-}
-
-// ── محوّل المنصّات (رؤية 3 منصات) — نواة واحدة، محوّلات متعددة ─────────────────
-type PlatformLink = {
-  href: string; match: string; label: string; icon: string; color: string
-  status: 'available' | 'soon'
-}
-const PLATFORM_LINKS: PlatformLink[] = [
-  { href: '/v2',     match: '/v2',     label: 'المؤشرات', icon: '📈', color: '#C9943A', status: 'available' },
-  { href: '/stocks', match: '/stocks', label: 'الشركات',    icon: '🏢', color: '#60A5FA', status: 'available' },
-  { href: '/funds',  match: '/funds',  label: 'الصناديق',   icon: '🧺', color: '#26D07C', status: 'available' },
-]
-
-function PlatformSwitcher({ access }: { access: PlatformAccess }) {
-  const pathname = usePathname()
-  const [idx, setIdx] = useState<IndexId>('SPX')
-  useEffect(() => {
-    setIdx(getSelectedIndex())
-    const onCustom = (e: Event) => setIdx((e as CustomEvent<IndexId>).detail)
-    window.addEventListener('taraqob:index', onCustom)
-    return () => window.removeEventListener('taraqob:index', onCustom)
-  }, [])
-  return (
-    <div className="px-3 pt-3 pb-1">
-      <SectionTitle>منصّات ترقّب</SectionTitle>
-      <div className="grid grid-cols-3 gap-1.5 mt-1">
-        {PLATFORM_LINKS.map(p => {
-          const key = p.match === '/v2' ? 'spx' : p.match.slice(1) as keyof PlatformAccess
-          const href = p.match === '/v2' ? indexMeta(idx).href : p.href
-          const allowed = access[key]
-          const active = p.status === 'available' && (p.match === '/v2' ? pathname === '/v2' || pathname.startsWith('/v2/') : pathname.startsWith(p.match))
-          const soon = p.status === 'soon'
-          const inner = (
-            <div className="flex flex-col items-center gap-1 py-2 rounded-lg transition-all"
-                 style={{
-                   background: active ? `${p.color}18` : 'rgba(255,255,255,0.02)',
-                   border: `1px solid ${active ? `${p.color}55` : 'rgba(255,255,255,0.05)'}`,
-                   opacity: soon || !allowed ? 0.42 : 1,
-                 }}>
-              <span className="text-base leading-none">{p.icon}</span>
-              <span className="text-[11px] font-bold" style={{ color: active ? p.color : '#8A97A6' }}>{p.label}</span>
-              {p.match === '/v2' && idx !== 'SPX' ? (
-                <span className="text-[9px] font-black font-mono px-1.5 py-0.5 rounded"
-                      style={{ color: '#C9943A', background: 'rgba(201,148,58,0.12)', border: '1px solid rgba(201,148,58,0.35)' }}>{idx}</span>
-              ) : null}
-              {soon ? <span className="text-[9px] font-mono" style={{ color: '#55657A' }}>قريباً</span>
-                : !allowed ? <span className="text-[9px] font-mono" style={{ color: '#7C8A99' }}>مقفلة</span> : null}
-            </div>
-          )
-          if (soon) return <div key={p.label} title="قريباً">{inner}</div>
-          return <Link key={p.label} prefetch={false} href={allowed ? href : `/v2/upgrade?platform=${key}`}>{inner}</Link>
-        })}
-      </div>
     </div>
   )
 }
@@ -377,12 +324,15 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
 
   // ── Tier-aware nav renderer ────────────────────────────────
   function renderNavItem(item: { href: string; label: string; icon: string; exact: boolean; requiredTier?: string }, accent?: string) {
-    const required = item.requiredTier ?? 'radar'
-    if (!isStaff && !tierAllows(subscriptionTier, required)) {
-      return <LockedNavLink key={item.href} label={item.label} icon={item.icon} requiredTier={required} />
-    }
     return <NavLink key={item.href} {...item} exact={item.exact} accent={accent} />
   }
+
+  function visibleItems<T extends { requiredTier?: string }>(items: T[]) {
+    return items.filter(item => isStaff || tierAllows(subscriptionTier, item.requiredTier ?? 'radar'))
+  }
+
+  const visibleSignals = visibleItems(NAV_SIGNALS)
+  const visiblePremium = visibleItems(NAV_PREMIUM)
 
   // ── Sidebar content ──────────────────────────────────────────
   const Sidebar = (
@@ -449,12 +399,10 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
         </div>
 
         {/* ── الرصد والإشارات ── */}
-        <div className="px-3 pt-1 pb-1">
+        {visibleSignals.length > 0 && <div className="px-3 pt-1 pb-1">
           <SectionTitle>الرصد والإشارات</SectionTitle>
-          <div className="space-y-0.5 mt-1">
-            {NAV_SIGNALS.map(item => renderNavItem(item, showAdminNav ? '#60A5FA' : '#C9943A'))}
-          </div>
-        </div>
+          <div className="space-y-0.5 mt-1">{visibleSignals.map(item => renderNavItem(item, showAdminNav ? '#60A5FA' : '#C9943A'))}</div>
+        </div>}
 
         {/* ── أدواتك ── */}
         <div className="px-3 pt-1 pb-1">
@@ -465,12 +413,12 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
         </div>
 
         {/* ── مميّز (إيدج/VIP) ── */}
-        <div className="px-3 pt-1 pb-2">
+        {visiblePremium.length > 0 && <div className="px-3 pt-1 pb-2">
           <SectionTitle color="#C9943A">⭐ مميّز</SectionTitle>
-          <div className="space-y-0.5 mt-1">
-            {NAV_PREMIUM.map(item => renderNavItem(item, showAdminNav ? '#60A5FA' : '#C9943A'))}
-          </div>
-        </div>
+          <div className="space-y-0.5 mt-1">{visiblePremium.map(item => renderNavItem(item, showAdminNav ? '#60A5FA' : '#C9943A'))}</div>
+        </div>}
+
+        {!isStaff && <SidebarPlanCard tier={subscriptionTier} platform="spx" />}
 
         {/* روابط هادئة */}
         <div className="px-5 pt-1 pb-3 flex items-center gap-3">

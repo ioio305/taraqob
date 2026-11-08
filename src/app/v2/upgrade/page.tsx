@@ -5,12 +5,9 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { SUBSCRIPTION_BUNDLES, normalizeBundlePlatforms } from '@/lib/v2/subscriptionBundles'
 import type { PlatformKey } from '@/lib/v2/accessRules'
+import { PLATFORM_CATALOG } from '@/lib/v2/productCatalog'
 
-const PLATFORMS: Array<{ key: PlatformKey; label: string; color: string }> = [
-  { key: 'spx', label: 'خيارات SPX', color: '#C9943A' },
-  { key: 'stocks', label: 'الشركات', color: '#60A5FA' },
-  { key: 'funds', label: 'الصناديق', color: '#26D07C' },
-]
+const PLATFORMS: Array<{ key: PlatformKey; label: string; color: string }> = PLATFORM_CATALOG
 
 function ReferralCard() {
   const [data, setData] = useState<{ link: string; referredCount: number; earnedDays: number } | null>(null)
@@ -42,8 +39,8 @@ export default function UpgradePage() {
   }
 
   function choosePlatform(platform: PlatformKey) {
-    if (plan === 'radar' || plan === 'alpha') return
-    if (plan === 'signal') { setPlatforms([platform]); return }
+    if (plan === 'alpha') return
+    if (plan === 'radar' || plan === 'signal') { setPlatforms([platform]); return }
     if (platforms.includes(platform)) return
     setPlatforms([platforms[1], platform])
   }
@@ -71,6 +68,9 @@ export default function UpgradePage() {
                 {bundle.platformCount === 3 ? 'المنصات الثلاث' : bundle.platformCount === 2 ? 'أي منصتين' : 'منصة واحدة'}
               </div>
               <div className="mt-2 min-h-[48px] text-xs leading-5 text-slate-500">{bundle.description}</div>
+              <ul className="mt-4 min-h-[72px] space-y-1.5 text-[11px] text-slate-400">
+                {bundle.features.map(feature => <li key={feature}>✓ {feature}</li>)}
+              </ul>
               <div className="mt-4 text-xs font-black" style={{ color: bundle.color }}>{selected ? 'محددة ✓' : 'اختيار'}</div>
             </button>
           )

@@ -2,20 +2,32 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { PLATFORM_CATALOG, ROLE_CATALOG, TIER_CATALOG } from '@/lib/v2/productCatalog'
+import { normalizeBundlePlatforms, subscriptionBundle } from '@/lib/v2/subscriptionBundles'
+import type { PlatformKey } from '@/lib/v2/accessRules'
 
 type User = {
   id: string; full_name: string | null; full_name_ar: string | null; email: string
   role: string; is_active: boolean; created_at: string
   preferences?: Record<string, unknown>; subscription_tier?: string
+  platform_subscriptions?: Array<{ platform: PlatformKey; tier: string; status: string; current_period_end?: string | null }>
 }
 
 const ROLES = ['user', 'moderator', 'admin'] as const
-const ROLE_AR: Record<string, string>    = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
-const ROLE_COLOR: Record<string, string> = { admin: '#C9943A', moderator: '#60A5FA', user: '#7C8A99' }
+const ROLE_AR: Record<string, string>    = Object.fromEntries(Object.entries(ROLE_CATALOG).map(([key, value]) => [key, value.label]))
+const ROLE_COLOR: Record<string, string> = Object.fromEntries(Object.entries(ROLE_CATALOG).map(([key, value]) => [key, value.color]))
 
 const TIERS      = ['radar', 'signal', 'edge', 'alpha'] as const
-const TIER_LABEL: Record<string, string> = { radar: 'رادار', signal: 'سيجنال', edge: 'إيدج', alpha: 'ألفا' }
-const TIER_COLOR: Record<string, string> = { radar: '#7C8A99', signal: '#60A5FA', edge: '#C9943A', alpha: '#A78BFA' }
+const TIER_LABEL: Record<string, string> = Object.fromEntries(Object.entries(TIER_CATALOG).map(([key, value]) => [key, value.label]))
+const TIER_COLOR: Record<string, string> = Object.fromEntries(Object.entries(TIER_CATALOG).map(([key, value]) => [key, value.color]))
+
+function activePlatformSubscriptions(user: User) {
+  const now = Date.now()
+  return (user.platform_subscriptions ?? []).filter(subscription => {
+    const periodEnd = subscription.current_period_end ? Date.parse(subscription.current_period_end) : NaN
+    return subscription.status === 'active' && (!Number.isFinite(periodEnd) || periodEnd > now)
+  })
+}
 
 // ── Edit Modal ──────────────────────────────────────────────────────────────
 function EditModal({ user, onClose, onSaved }: {
@@ -32,6 +44,10 @@ function EditModal({ user, onClose, onSaved }: {
   const [role, setRole]         = useState(user.role)
   const [isActive, setIsActive] = useState(user.is_active !== false)
   const [tier, setTier]         = useState(user.subscription_tier ?? 'radar')
+  const currentPlatforms = activePlatformSubscriptions(user).map(subscription => subscription.platform)
+  const [platforms, setPlatforms] = useState<PlatformKey[]>(() =>
+    normalizeBundlePlatforms((user.subscription_tier ?? 'radar') as typeof TIERS[number], currentPlatforms),
+  )
 
   const [notifType,  setNotifType]  = useState('info')
   const [notifTitle, setNotifTitle] = useState('')
@@ -65,6 +81,7 @@ function EditModal({ user, onClose, onSaved }: {
     }
     if (tab === 'tier') {
       payload.subscription_tier = tier
+      payload.platforms = platforms
     }
     if (tab === 'password') {
       payload.action   = pwMode === 'link' ? 'reset_password_link' : 'set_password'
@@ -199,26 +216,50 @@ function EditModal({ user, onClose, onSaved }: {
 
           {/* Tier Tab */}
           {tab === 'tier' && (
-            <Field label="الباقة الحالية">
+            <Field label="الباقة والمنصات">
+              <p className="mb-3 rounded-lg px-3 py-2 text-xs leading-5" style={{ color: '#94A3B8', background: 'rgba(96,165,250,.06)', border: '1px solid rgba(96,165,250,.12)' }}>
+                الدور يحدد صلاحيات الإدارة، أما الباقة فتحدد الأدوات والمنصات المتاحة للحساب.
+              </p>
               <div className="grid grid-cols-2 gap-2">
                 {TIERS.map(t => {
                   const tc = TIER_COLOR[t]
                   return (
-                    <button key={t} onClick={() => setTier(t)}
+                    <button key={t} onClick={() => {
+                              setTier(t)
+                              setPlatforms(current => normalizeBundlePlatforms(t, current))
+                            }}
                             className="py-3 rounded-xl text-sm font-bold font-mono transition-all"
                             style={{
                               background: tier === t ? `${tc}18` : 'rgba(255,255,255,0.03)',
                               color:      tier === t ? tc : '#6B7B8D',
                               border:     `1px solid ${tier === t ? tc + '50' : 'rgba(255,255,255,0.06)'}`,
                             }}>
-                      {TIER_LABEL[t]}
+                      <span className="block">{TIER_LABEL[t]}</span>
+                      <span className="mt-1 block text-[10px] font-normal opacity-70">{subscriptionBundle(t).platformCount === 1 ? 'منصة واحدة' : subscriptionBundle(t).platformCount === 2 ? 'منصتان' : '3 منصات'}</span>
                     </button>
                   )
                 })}
               </div>
-              <p className="text-xs mt-2 font-mono" style={{ color: '#55657A' }}>
-                الباقة الحالية: {TIER_LABEL[user.subscription_tier ?? 'radar']}
-              </p>
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                {PLATFORM_CATALOG.map(platform => {
+                  const selected = platforms.includes(platform.key)
+                  const max = subscriptionBundle(tier).platformCount
+                  return (
+                    <button key={platform.key} type="button" onClick={() => {
+                              if (tier === 'alpha') return
+                              if (max === 1) { setPlatforms([platform.key]); return }
+                              setPlatforms(current => selected
+                                ? current
+                                : normalizeBundlePlatforms(tier as typeof TIERS[number], [...current.slice(1), platform.key]))
+                            }}
+                            className="rounded-lg border px-2 py-2 text-[11px] font-bold"
+                            style={{ color: selected ? platform.color : '#64748B', borderColor: selected ? `${platform.color}55` : 'rgba(255,255,255,.06)', background: selected ? `${platform.color}10` : 'rgba(255,255,255,.02)' }}>
+                      {selected ? '✓ ' : ''}{platform.label}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="text-xs mt-3 leading-5" style={{ color: '#64748B' }}>{TIER_CATALOG[tier as keyof typeof TIER_CATALOG]?.description}</p>
             </Field>
           )}
 
@@ -752,6 +793,9 @@ export default function UsersPage() {
                                 style={{ background: `${tc}12`, color: tc, border: `1px solid ${tc}25` }}>
                             {TIER_LABEL[u.subscription_tier ?? 'radar']}
                           </span>
+                          <div className="mt-1 text-[10px]" style={{ color: '#64748B' }}>
+                            {activePlatformSubscriptions(u).map(subscription => PLATFORM_CATALOG.find(platform => platform.key === subscription.platform)?.label).filter(Boolean).join(' · ') || 'لا توجد منصة فعالة'}
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           <span className="text-xs font-mono px-2 py-1 rounded"

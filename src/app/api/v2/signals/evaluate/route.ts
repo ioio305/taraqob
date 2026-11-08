@@ -4,10 +4,13 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { getHistoryBars, getIntradayBars, type MdBar } from '@/lib/v2/marketData'
 import { getStockDailyBars, getStockIntradayBars } from '@/lib/v2/stockData'
 import { underlyingFromContract } from '@/lib/v2/underlying'
+import { getOptionIntradayBars } from '@/lib/v2/optionHistory'
+import { evaluateSignalBars } from '@/lib/v2/signalEvaluation'
+import { sendTelegram } from '@/lib/v2/telegram'
 
 export const dynamic = 'force-dynamic'
 
-// يقيّم الإشارات المفتوحة: هل لمس SPX الهدف (ربح) أو الوقف (خسارة) قبل الانتهاء؟
+// يقيّم الإشارات الجديدة بسعر العقد نفسه متى توفر، وإلا بسعر الأصل بتسلسل محافظ.
 export async function GET(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET
   const authorization = request.headers.get('authorization')
@@ -24,18 +27,9 @@ export async function GET(request: NextRequest) {
   }
 
   const sb = createServiceClient()
-  const updateSignal = async (id: string, values: Record<string, unknown>) => {
-    let result = await sb.from('v2_signals').update(values).eq('id', id)
-    if (result.error && /scenario_stage/i.test(result.error.message)) {
-      const compatibleValues = { ...values }
-      delete compatibleValues.scenario_stage
-      result = await sb.from('v2_signals').update(compatibleValues).eq('id', id)
-    }
-    return result
-  }
   const { data: signals } = await sb
     .from('v2_signals')
-    .select('*')
+    .select('id, user_id, contract_symbol, contract_type, target_level, stop_loss_level, spx_at_signal, expiry, created_at, status, entry_price, contract_stop_price, contract_target_price')
     .eq('status', 'active')
     .limit(200)
 
@@ -63,66 +57,99 @@ export async function GET(request: NextRequest) {
     }
   }))
 
+  // بيانات دقيقة واحدة للعقد الفعلي. التزامن محدود لحماية حصة مزود البيانات.
+  const optionBars = new Map<string, MdBar[]>()
+  const symbols = [...new Set((signals as any[]).map(s => String(s.contract_symbol)))]
+  for (let i = 0; i < symbols.length; i += 6) {
+    await Promise.all(symbols.slice(i, i + 6).map(async symbol => {
+      optionBars.set(symbol, await getOptionIntradayBars(symbol, 7))
+    }))
+  }
+
   const todayStr = new Date().toISOString().slice(0, 10)
-  let win = 0, loss = 0, expired = 0, advanced = 0
+  let win = 0, loss = 0, expired = 0, invalidated = 0
 
   for (const s of signals as any[]) {
     if (s.target_level == null || s.stop_loss_level == null) continue
     const { daily, intraday } = barsByUnderlying.get(underlyingFromContract(s.contract_symbol)) ?? { daily: [], intraday: [] }
-    if (daily.length === 0 && intraday.length === 0) continue
     const createdIso = String(s.created_at)
     const fromDate = createdIso.slice(0, 10)
     // نافذة حياة الإشارة فقط: من الإنشاء حتى نهاية يوم الانتهاء (0DTE = يوم واحد)
     const expiryDate = s.expiry ? String(s.expiry).slice(0, 10) : fromDate
     const isCall = s.contract_type === 'call'
-    const target = Number(s.target_level), target2 = Number(s.target2_level ?? s.target_level), stop = Number(s.stop_loss_level)
-    const validUntil = s.valid_until ? new Date(s.valid_until).toISOString() : `${expiryDate}T21:00:00.000Z`
-    let stage: 'active' | 'target_one' = s.scenario_stage === 'target_one' ? 'target_one' : 'active'
+    const target = s.target_level as number, stop = s.stop_loss_level as number
 
-    // نتتبع السيناريو بالترتيب الزمني. عند غموض شمعة واحدة نأخذ النتيجة المحافظة.
-    const followScenario = (priceBars: { time: string; high: number; low: number }[], intradaySeq: boolean) => {
-      for (const b of priceBars) {
-        const d = b.time.slice(0, 10)
-        if (d < fromDate || d > expiryDate) continue
-        if (intradaySeq && b.time < createdIso) continue   // بعد لحظة الإشارة فقط
-        if (b.time > validUntil) break
-        const hitFirst = isCall ? b.high >= target : b.low <= target
-        const hitSecond = isCall ? b.high >= target2 : b.low <= target2
-        const hitStop = isCall ? b.low <= stop : b.high >= stop
-        if (hitStop && (stage === 'active' || !hitSecond)) return stage === 'target_one' ? 'protected_after_target' as const : 'invalidated' as const
-        if (hitSecond) return 'completed' as const
-        if (hitFirst) stage = 'target_one'
+    const contractBars = optionBars.get(String(s.contract_symbol)) ?? []
+    const canUseContract = contractBars.length > 0 && s.contract_target_price != null && s.contract_stop_price != null
+    const evaluationMethod = canUseContract ? 'option_1m' : intraday.length > 0 ? 'underlying_5m' : 'underlying_daily'
+    const evaluation = canUseContract
+      ? evaluateSignalBars({
+          bars: contractBars,
+          createdAt: createdIso,
+          expiresOn: expiryDate,
+          direction: 'up',
+          entry: s.entry_price == null ? null : Number(s.entry_price),
+          target: Number(s.contract_target_price),
+          stop: Number(s.contract_stop_price),
+        })
+      : evaluateSignalBars({
+          bars: intraday.length > 0 ? intraday : daily,
+          createdAt: createdIso,
+          expiresOn: expiryDate,
+          direction: isCall ? 'up' : 'down',
+          entry: s.spx_at_signal == null ? null : Number(s.spx_at_signal),
+          target,
+          stop,
+        })
+
+    let outcome: 'closed_win' | 'closed_loss' | 'invalidated' | 'expired' | null = evaluation.outcome
+
+    // مضى الانتهاء دون لمس أيّهما
+    if (!outcome && todayStr > expiryDate) outcome = 'expired'
+
+    if (outcome) {
+      const entry = canUseContract ? Number(s.entry_price) : Number(s.spx_at_signal)
+      const risk = canUseContract
+        ? Math.abs(entry - Number(s.contract_stop_price))
+        : Math.abs(entry - stop)
+      const realizedR = outcome === 'closed_loss' ? -1
+        : outcome === 'closed_win' && risk > 0 && evaluation.exitPrice != null
+          ? Math.abs(evaluation.exitPrice - entry) / risk
+          : null
+      await sb.from('v2_signals').update({
+        status: outcome,
+        evaluation_version: 'v2-conservative',
+        evaluation_method: evaluationMethod,
+        outcome_reason: evaluation.reason ?? (outcome === 'expired' ? 'expiry' : null),
+        outcome_at: evaluation.touchedAt,
+        outcome_price: evaluation.exitPrice,
+        mfe: evaluation.mfe,
+        mae: evaluation.mae,
+        realized_r: realizedR,
+      }).eq('id', s.id)
+      if (s.user_id == null && (outcome === 'closed_win' || outcome === 'closed_loss')) {
+        const won = outcome === 'closed_win'
+        await sendTelegram([
+          won ? '✅ <b>تحقق الهدف الأول — اخرج بنصف العقود</b>' : '🛑 <b>ضُرب وقف الخسارة — اخرج الآن</b>',
+          `<code>${s.contract_symbol}</code>`,
+          won
+            ? `سعر هدف العقد: <b>$${s.contract_target_price ?? evaluation.exitPrice ?? '—'}</b> · ارفع وقف الباقي إلى سعر الدخول`
+            : `سعر وقف العقد: <b>$${s.contract_stop_price ?? evaluation.exitPrice ?? '—'}</b>`,
+        ].join('\n'))
       }
-      return null
-    }
-
-    let event = followScenario(intraday, true)
-    if (!event && (intraday.length === 0 || intraday[0].time > createdIso)) event = followScenario(daily, false)
-    const timeExpired = Date.now() > Date.parse(validUntil) || todayStr > expiryDate
-
-    if (event === 'completed') {
-      await updateSignal(s.id, { status: 'closed_win', scenario_stage: 'completed', outcome_reason: 'اكتملت حركة الأصل حتى الهدف الثاني', outcome_at: new Date().toISOString() })
-      win++
-    } else if (event === 'invalidated') {
-      await updateSignal(s.id, { status: 'closed_loss', scenario_stage: 'invalidated', outcome_reason: 'فقد سيناريو الأصل صلاحيته قبل الهدف الأول', outcome_at: new Date().toISOString() })
-      loss++
-    } else if (event === 'protected_after_target') {
-      await updateSignal(s.id, { status: 'closed_win', scenario_stage: 'completed', outcome_reason: 'تحقق الهدف الأول ثم انتهى السيناريو', outcome_at: new Date().toISOString() })
-      win++
-    } else if (timeExpired) {
-      const reachedFirst = stage === 'target_one'
-      await updateSignal(s.id, {
-        status: reachedFirst ? 'closed_win' : 'expired',
-        scenario_stage: 'expired',
-        outcome_reason: reachedFirst ? 'تحقق الهدف الأول وانتهت نافذة الفرصة' : 'انتهت نافذة الفرصة قبل اكتمال الحركة',
-        outcome_at: new Date().toISOString(),
-      })
-      if (reachedFirst) win++; else expired++
-    } else if (stage === 'target_one' && s.scenario_stage !== 'target_one') {
-      await updateSignal(s.id, { scenario_stage: 'target_one', outcome_reason: 'تحقق الهدف الأول؛ متابعة الهدف الثاني' })
-      advanced++
+      if (outcome === 'closed_win') win++
+      else if (outcome === 'closed_loss') loss++
+      else if (outcome === 'invalidated') invalidated++
+      else expired++
+    } else if (evaluation.mfe != null || evaluation.mae != null) {
+      await sb.from('v2_signals').update({
+        evaluation_version: 'v2-conservative',
+        evaluation_method: evaluationMethod,
+        mfe: evaluation.mfe,
+        mae: evaluation.mae,
+      }).eq('id', s.id)
     }
   }
 
-  return NextResponse.json({ ok: true, evaluated: win + loss + expired + advanced, win, loss, expired, advanced })
+  return NextResponse.json({ ok: true, evaluated: win + loss + invalidated + expired, win, loss, invalidated, expired })
 }

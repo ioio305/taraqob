@@ -108,9 +108,11 @@ export async function GET() {
       target2 = null
     }
 
-    // قص عام: لا يتجاوز أي هدف مدى اليوم الواقعي (1.5 × مدى الحركة)
-    if (target1 != null) target1 = Math.max(Math.round(spot - maxDist), Math.min(Math.round(spot + maxDist), target1))
-    if (target2 != null) target2 = Math.max(Math.round(spot - maxDist), Math.min(Math.round(spot + maxDist), target2))
+    // أهداف يومية واقعية: الأول داخل 60% من الحركة المتوقعة، والثاني داخل كامل المدى.
+    const t1MaxDist = Math.max(5, em * 0.60)
+    const t2MaxDist = Math.max(8, em)
+    if (target1 != null) target1 = Math.max(Math.round(spot - t1MaxDist), Math.min(Math.round(spot + t1MaxDist), target1))
+    if (target2 != null) target2 = Math.max(Math.round(spot - t2MaxDist), Math.min(Math.round(spot + t2MaxDist), target2))
     if (target1 != null && target2 != null && Math.abs(target2 - spot) < Math.abs(target1 - spot)) {
       const t = target1; target1 = target2; target2 = t
     }
@@ -131,7 +133,11 @@ export async function GET() {
       bias, score: a.summary.score,
       decision: a.summary.decisionCode,
       stance, entryZone,
-      targets: { t1: target1, t2: target2 },
+      targets: {
+        t1: target1, t2: target2,
+        t1Eta: target1 == null ? null : Math.abs(target1 - spot) <= em * 0.35 ? 'خلال 1–3 ساعات' : 'خلال جلسة اليوم',
+        t2Eta: target2 == null ? null : 'حتى نهاية الجلسة؛ وإلا يُلغى الهدف',
+      },
       stop: a.summary.stopLevel,
       cancel,
       expectedMove: { points: em, upper: Math.round(spot + em), lower: Math.round(spot - em) },

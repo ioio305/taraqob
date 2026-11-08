@@ -386,6 +386,15 @@ export function enrichContracts(top3: ScoredContract[], ctx: EnrichContext): any
       vixPrice: volValue,
     })
 
+    // تكلفة العقد المناسبة للمستخدمين: 300–1000 دولار.
+    const premiumTotal = strat.entryBalancedTotal
+    if (status === 'execute' && (premiumTotal < 300 || premiumTotal > 1000)) {
+      status = 'watch'
+      capReason = premiumTotal > 1000
+        ? `تكلفة العقد $${premiumTotal} أعلى من النطاق المعتمد ($300–$1000) — لا تشترِ`
+        : `تكلفة العقد $${premiumTotal} أقل من النطاق المعتمد وقد تعكس عقداً بعيداً وضعيف الاحتمال — راقب فقط`
+    }
+
     // ── معيار واعٍ بالتكلفة: لا «نفّذ» إلا إذا بقيت الحافة موجبة بعد فرق السوق ──
     const absDelta = Math.abs(o.delta ?? 0)
     const scenarioRisk = ctx.scenario

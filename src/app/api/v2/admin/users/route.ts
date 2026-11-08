@@ -1,18 +1,14 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { createInvitationToken } from '@/lib/security/tokens'
+import { normalizeRole } from '@/lib/v2/productCatalog'
+import { TIER_RANK, type SubscriptionTier } from '@/lib/v2/accessRules'
 
 export const dynamic = 'force-dynamic'
 
 // DB enum values that map to the "user" role in the UI
-const USER_LIKE_ROLES = ['free', 'pro', 'quant', 'beta_user', 'analyst']
-
-// Normalize DB role → UI role (collapse all non-staff roles to 'user')
-function normalizeRole(role: string): string {
-  if (role === 'admin' || role === 'moderator') return role
-  return 'user'
-}
+const USER_LIKE_ROLES = ['user', 'free', 'pro', 'quant', 'beta_user', 'analyst']
 
 // Normalize UI role → DB role.
 function dbRole(role: string): string {
@@ -22,6 +18,7 @@ function dbRole(role: string): string {
 // GET — قائمة المستخدمين مع فلترة
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
+  const serviceClient = createServiceClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -57,7 +54,39 @@ export async function GET(request: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Normalize roles in response so UI always sees admin | moderator | user
-  const users = (data ?? []).map(u => ({ ...u, role: normalizeRole(u.role) }))
+  const ids = (data ?? []).map(userProfile => userProfile.id)
+  const { data: subscriptions } = ids.length
+    ? await serviceClient
+        .from('platform_subscriptions')
+        .select('user_id, platform, tier, status, current_period_end')
+        .in('user_id', ids)
+    : { data: [] }
+  const subscriptionsByUser = new Map<string, typeof subscriptions>()
+  for (const subscription of subscriptions ?? []) {
+    const rows = subscriptionsByUser.get(subscription.user_id) ?? []
+    rows.push(subscription)
+    subscriptionsByUser.set(subscription.user_id, rows)
+  }
+
+  const users = (data ?? []).map(userProfile => {
+    const platformSubscriptions = subscriptionsByUser.get(userProfile.id) ?? []
+    const now = Date.now()
+    const activeSubscriptions = platformSubscriptions.filter(subscription => {
+      const periodEnd = subscription.current_period_end ? Date.parse(subscription.current_period_end) : NaN
+      return subscription.status === 'active' && (!Number.isFinite(periodEnd) || periodEnd > now)
+    })
+    const effectiveTier = activeSubscriptions
+      .map(subscription => subscription.tier as SubscriptionTier)
+      .filter(tier => tier in TIER_RANK)
+      .sort((a, b) => TIER_RANK[b] - TIER_RANK[a])[0]
+      ?? (platformSubscriptions.length ? 'radar' : userProfile.subscription_tier)
+    return {
+      ...userProfile,
+      role: normalizeRole(userProfile.role),
+      subscription_tier: effectiveTier,
+      platform_subscriptions: platformSubscriptions,
+    }
+  })
 
   return NextResponse.json({ users, total: count ?? 0, page, limit })
 }

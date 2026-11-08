@@ -5,7 +5,7 @@ import { enrichContracts, type ScoredContract, type EnrichContext } from './reco
 function qualifyingContract(): ScoredContract {
   return {
     symbol: 'TEST', type: 'call', strike: 6020, expiration: '2026-07-31', dte: 5,
-    bid: 9.95, ask: 10.05, mid: 10, last: 10, volume: 1500, openInterest: 1500,
+    bid: 9.90, ask: 10.00, mid: 9.95, last: 9.95, volume: 1500, openInterest: 1500,
     delta: 0.35, gamma: 0.001, theta: -0.1, vega: 0.2, iv: 0.15, _score: 95,
   }
 }
@@ -54,5 +54,18 @@ describe('recommendCore.enrichContracts', () => {
   it('السوق المغلق: قائمة استعداد «راقب» لا «لا تدخل»', () => {
     const [c] = enrichContracts([qualifyingContract()], baseContext({ closedWatchlist: true }))
     expect(c.status).toBe('watch')
+  })
+
+  it('يبقي 0DTE متاحاً عندما يجتاز الجودة والتكلفة والعائد مقابل المخاطرة', () => {
+    const [c] = enrichContracts([{ ...qualifyingContract(), dte: 0 }], baseContext({ validated: true }))
+    expect(c.status).toBe('execute')
+    expect(c.strategy.stopPct).toBe(0.15)
+    expect(c.strategy.t1Pct).toBe(0.30)
+  })
+
+  it('يمنع العقد الأغلى من 1000 دولار', () => {
+    const [c] = enrichContracts([{ ...qualifyingContract(), bid: 11.9, ask: 12.1, mid: 12 }], baseContext({ validated: true }))
+    expect(c.status).toBe('watch')
+    expect(c.reason).toContain('$1000')
   })
 })

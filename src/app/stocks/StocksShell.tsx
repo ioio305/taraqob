@@ -11,6 +11,8 @@ import { MarketClock } from '@/components/v2/MarketClock'
 import { StocksDecisionTicker } from '@/components/v2/StocksDecisionTicker'
 import { DecisionCouncilStrip } from '@/components/v2/DecisionCouncilStrip'
 import { StocksWatcher } from '@/components/v2/StocksWatcher'
+import { PlatformSwitcher } from '@/components/v2/PlatformSwitcher'
+import { SidebarPlanCard } from '@/components/v2/SidebarPlanCard'
 
 // ══════════════════════════════════════════════════════════════════════════
 // قوقعة منصة الشركات — مستقلة تماماً عن منصة المؤشر (SPX)
@@ -57,55 +59,8 @@ const NAV_ALPHA: NavItem[] = [
   { href: '/stocks/performance', label: 'سجل الأداء', icon: '◈', exact: false, requiredTier: 'alpha' },
 ]
 
-const PLATFORMS: Array<{
-  href: string
-  label: string
-  icon: string
-  color: string
-  match: string
-  status: 'available' | 'soon'
-}> = [
-  { href: '/v2',     label: 'المؤشر SPX', icon: '📈', color: '#C9943A', match: '/v2',     status: 'available' as const },
-  { href: '/stocks', label: 'الشركات',    icon: '🏢', color: ACCENT,    match: '/stocks', status: 'available' as const },
-  { href: '/funds',  label: 'الصناديق',   icon: '🧺', color: '#26D07C', match: '/funds',   status: 'available' as const },
-]
-
 function isActive(pathname: string, href: string, exact: boolean) {
   return exact ? pathname === href : pathname.startsWith(href)
-}
-
-function PlatformSwitcher({ access }: { access: PlatformAccess }) {
-  const pathname = usePathname()
-  return (
-    <div className="px-3 pt-3 pb-1">
-      <div className="px-2 pb-1.5 text-[11px] font-mono font-semibold tracking-widest" style={{ color: '#5E6E7F', letterSpacing: '0.16em' }}>
-        منصّات ترقّب
-      </div>
-      <div className="grid grid-cols-3 gap-1.5">
-        {PLATFORMS.map(p => {
-          const key = p.match === '/v2' ? 'spx' : p.match === '/stocks' ? 'stocks' : 'funds'
-          const allowed = access[key]
-          const active = p.status === 'available' && pathname.startsWith(p.match)
-          const soon = p.status === 'soon'
-          const inner = (
-            <div className="flex flex-col items-center gap-1 py-2 rounded-lg transition-all"
-                 style={{
-                   background: active ? `${p.color}18` : 'rgba(255,255,255,0.02)',
-                   border: `1px solid ${active ? `${p.color}55` : 'rgba(255,255,255,0.05)'}`,
-                   opacity: soon || !allowed ? 0.42 : 1,
-                 }}>
-              <span className="text-base leading-none">{p.icon}</span>
-              <span className="text-[11px] font-bold" style={{ color: active ? p.color : '#8A97A6' }}>{p.label}</span>
-              {soon ? <span className="text-[9px] font-mono" style={{ color: '#55657A' }}>قريباً</span>
-                : !allowed ? <span className="text-[9px] font-mono" style={{ color: '#7C8A99' }}>مقفلة</span> : null}
-            </div>
-          )
-          if (soon) return <div key={p.label} title="قريباً">{inner}</div>
-          return <Link key={p.label} prefetch={false} href={allowed ? p.href : `/v2/upgrade?platform=${key}`}>{inner}</Link>
-        })}
-      </div>
-    </div>
-  )
 }
 
 function NavLink({ href, label, icon, exact, onClick }: { href: string; label: string; icon: string; exact: boolean; onClick?: () => void }) {
@@ -177,11 +132,13 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
 
   // الموظّفون يرون كل الأقسام؛ غيرهم حسب باقة الشركات.
   function renderNav(item: NavItem) {
-    if (!isStaff && !tierAllows(tier, item.requiredTier)) {
-      return <LockedNavLink key={item.href} label={item.label} icon={item.icon} requiredTier={item.requiredTier} />
-    }
     return <NavLink key={item.href} href={item.href} label={item.label} icon={item.icon} exact={item.exact} onClick={() => setMobileOpen(false)} />
   }
+
+  const visible = (items: NavItem[]) => items.filter(item => isStaff || tierAllows(tier, item.requiredTier))
+  const visibleTools = visible([...NAV_ANALYSIS, ...NAV_EVENTS, NAV_PREMIUM[0]])
+  const visibleTracking = visible(NAV_PREMIUM.slice(1))
+  const visibleAlpha = visible(NAV_ALPHA)
 
   const Sidebar = (
     <div className="flex flex-col h-full select-none" style={{ background: '#08101A' }}>
@@ -208,24 +165,22 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
               <SectionTitle>الرئيسية</SectionTitle>
               <div className="space-y-0.5">{NAV_DECISION.map(renderNav)}</div>
             </div>
-            <div>
+            {visibleTools.length > 0 && <div>
               <SectionTitle>الأدوات</SectionTitle>
-              <div className="space-y-0.5">
-                {NAV_ANALYSIS.map(renderNav)}
-                {NAV_EVENTS.map(renderNav)}
-                {NAV_PREMIUM.slice(0, 1).map(renderNav)}
-              </div>
-            </div>
-            <div>
+              <div className="space-y-0.5">{visibleTools.map(renderNav)}</div>
+            </div>}
+            {visibleTracking.length > 0 && <div>
               <SectionTitle>المتابعة</SectionTitle>
-              <div className="space-y-0.5">{NAV_PREMIUM.slice(1).map(renderNav)}</div>
-            </div>
-            <div>
+              <div className="space-y-0.5">{visibleTracking.map(renderNav)}</div>
+            </div>}
+            {visibleAlpha.length > 0 && <div>
               <SectionTitle>الاحتراف</SectionTitle>
-              <div className="space-y-0.5">{NAV_ALPHA.map(renderNav)}</div>
-            </div>
+              <div className="space-y-0.5">{visibleAlpha.map(renderNav)}</div>
+            </div>}
           </div>
         </div>
+
+        {!isStaff && <SidebarPlanCard tier={tier} platform="stocks" />}
 
         <div className="px-5 pt-1 pb-3">
           <Link href="/track" className="text-xs transition-colors hover:text-white" style={{ color: '#7C8A99' }}>السجل العام</Link>
@@ -277,7 +232,7 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
           <MarketClock accent={ACCENT} />
 
           <div className="flex items-center gap-2">
-            <Link href="/stocks/decision-room"
+            <Link href={isStaff || tierAllows(tier, 'alpha') ? '/stocks/decision-room' : '/v2/upgrade?platform=stocks&plan=alpha'}
                   className="flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-black text-slate-950 shadow-lg shadow-violet-500/20"
                   style={{ background: '#C4B5FD', border: '1px solid #DDD6FE' }}>
               <span className="text-base leading-none">✦</span>

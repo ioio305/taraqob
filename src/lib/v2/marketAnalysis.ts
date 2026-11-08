@@ -629,6 +629,14 @@ export function analyzeMarket(
     levelSource = 'atr'
   }
 
+  // لا نعرض خطة يكون وقفها أبعد من هدفها. الحد الأدنى للعائد/المخاطرة 1.5.
+  if (t1 !== null && stop !== null && bias !== 'محايد') {
+    const rewardDistance = Math.abs(t1 - close)
+    const maxRiskDistance = rewardDistance / 1.5
+    if (bias === 'صاعد' && close - stop > maxRiskDistance) stop = +(close - maxRiskDistance).toFixed(2)
+    if (bias === 'هابط' && stop - close > maxRiskDistance) stop = +(close + maxRiskDistance).toFixed(2)
+  }
+
   const srcNote = levelSource === 'structure' ? ' (من مناطق العرض/الطلب)' : ' (تقدير بمدى الحركة)'
   const bullishScenario = bias === 'هابط'
     ? `SPX يتراجع نحو ${t1!.toFixed(0)} ثم ${t2!.toFixed(0)}${srcNote}`

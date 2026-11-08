@@ -15,9 +15,9 @@ export type SubscriptionBundle = {
 
 export const SUBSCRIPTION_BUNDLES: SubscriptionBundle[] = [
   {
-    key: 'radar', label: 'رادار', tier: 'radar', platformCount: 3, color: '#7C8A99',
-    description: 'استكشف المنصات الثلاث بميزات محدودة.',
-    features: ['التوصية المختصرة', 'حالة السوق', 'معاينة الأدوات'],
+    key: 'radar', label: 'رادار', tier: 'radar', platformCount: 1, color: '#7C8A99',
+    description: 'ابدأ بمنصة واحدة وأدواتها الأساسية.',
+    features: ['منصة واحدة', 'التوصية المختصرة', 'حالة السوق'],
   },
   {
     key: 'signal', label: 'سيجنال', tier: 'signal', platformCount: 1, color: '#60A5FA',
@@ -46,7 +46,7 @@ export function normalizeBundlePlatforms(bundle: SubscriptionBundleKey, requeste
   const valid = [...new Set(requested)].filter((item): item is PlatformKey =>
     item === 'spx' || item === 'stocks' || item === 'funds',
   )
-  if (bundle === 'alpha' || bundle === 'radar') return ['spx', 'stocks', 'funds']
+  if (bundle === 'alpha') return ['spx', 'stocks', 'funds']
   const required = bundle === 'edge' ? 2 : 1
   const defaults: PlatformKey[] = ['spx', 'stocks', 'funds']
   for (const platform of defaults) if (valid.length < required && !valid.includes(platform)) valid.push(platform)

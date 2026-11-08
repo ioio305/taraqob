@@ -31,11 +31,8 @@ export function evaluateSessionQuality(now = new Date()): SessionQuality {
   if (t >= 12 * 60 && t < 13 * 60 + 30) {
     return { action: 'caution', phase: 'lunch', label: 'منتصف اليوم — حركة أبطأ', reason: 'منتصف اليوم قد تكون الحركة ضعيفة، خصوصاً للعقود التي تنتهي اليوم.', minutesFromOpen, minutesToClose }
   }
-  if (minutesToClose <= 45) {
-    return { action: 'caution', phase: 'power_hour', label: 'آخر 45 دقيقة — سريع وخطر', reason: 'آخر الجلسة سريع، الأهداف قد تتحقق بسرعة لكن الانعكاس أعنف.', minutesFromOpen, minutesToClose }
-  }
   if (t >= 14 * 60) {
-    return { action: 'caution', phase: 'afternoon', label: 'بعد 2:00 — ذوبان الوقت أسرع', reason: 'للعقود التي تنتهي اليوم، تتسارع خسارة قيمة العقد مع مرور الوقت بعد الساعة 2:00.', minutesFromOpen, minutesToClose }
+    return { action: 'block', phase: 'afternoon', label: 'توقف الدخول — بقي أقل من ساعتين', reason: 'انتهت نافذة إصدار التوصيات الجديدة. لا دخول بعد 2:00 مساءً بتوقيت نيويورك.', minutesFromOpen, minutesToClose }
   }
   return { action: 'allow', phase: 'morning', label: 'وقت مناسب نسبياً', reason: 'السيولة أوضح والمخاطرة الزمنية مقبولة نسبياً.', minutesFromOpen, minutesToClose }
 }

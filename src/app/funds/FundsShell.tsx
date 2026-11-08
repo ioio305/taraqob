@@ -9,6 +9,8 @@ import { MarketClock } from '@/components/v2/MarketClock'
 import { FundsWatcher } from '@/components/v2/FundsWatcher'
 import { NewsTicker } from '@/components/v2/NewsTicker'
 import { DecisionCouncilStrip } from '@/components/v2/DecisionCouncilStrip'
+import { PlatformSwitcher } from '@/components/v2/PlatformSwitcher'
+import { SidebarPlanCard } from '@/components/v2/SidebarPlanCard'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
 
 const ACCENT = '#26D07C'
@@ -54,19 +56,20 @@ export default function FundsShell({ children, userName, tier, isStaff, platform
   }
 
   function nav(item: NavItem) {
-    const accessible = isStaff || allowedTier(tier, item.tier)
     const active = item.exact ? pathname === item.href : pathname.startsWith(item.href)
     return (
-      <Link key={item.href} href={accessible ? item.href : `/v2/upgrade?platform=funds&tier=${item.tier}`}
+      <Link key={item.href} href={item.href}
         onClick={() => setMobileOpen(false)}
         className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm"
         style={{ color: active ? '#D1FAE5' : '#8A97A6', background: active ? 'rgba(38,208,124,.09)' : 'transparent', borderRight: `2px solid ${active ? ACCENT : 'transparent'}` }}>
         <span style={{ color: active ? ACCENT : '#64748B' }}>{item.icon}</span>
         <span className="font-bold">{item.label}</span>
-        {!accessible ? <span className="mr-auto text-[10px] text-slate-600">{TIER_LABEL[item.tier]}</span> : null}
       </Link>
     )
   }
+
+  const visibleTools = NAV_TOOLS.filter(item => isStaff || allowedTier(tier, item.tier))
+  const visibleAlpha = NAV_ALPHA.filter(item => isStaff || allowedTier(tier, item.tier))
 
   const Sidebar = (
     <div className="flex h-full flex-col select-none bg-[#07130F]">
@@ -81,29 +84,13 @@ export default function FundsShell({ children, userName, tier, isStaff, platform
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-3">
-        <div className="mb-4 grid grid-cols-3 gap-1.5">
-          {[
-            { href: '/v2', key: 'spx' as const, label: 'SPX', icon: '📈', color: '#C9943A' },
-            { href: '/stocks', key: 'stocks' as const, label: 'الشركات', icon: '🏢', color: '#60A5FA' },
-            { href: '/funds', key: 'funds' as const, label: 'الصناديق', icon: '🧺', color: ACCENT },
-          ].map(item => {
-            const active = pathname.startsWith(item.href)
-            return (
-              <Link key={item.key} prefetch={false} href={platformAccess[item.key] ? item.href : `/v2/upgrade?platform=${item.key}`}
-                className="flex flex-col items-center gap-1 rounded-lg border py-2"
-                style={{ opacity: platformAccess[item.key] ? 1 : .4, color: active ? item.color : '#7C8A99', background: active ? `${item.color}12` : 'rgba(255,255,255,.02)', borderColor: active ? `${item.color}45` : 'rgba(255,255,255,.05)' }}>
-                <span>{item.icon}</span><span className="text-[10px] font-bold">{item.label}</span>
-              </Link>
-            )
-          })}
-        </div>
+        <PlatformSwitcher access={platformAccess} />
 
         <div className="px-2 pb-1 text-[11px] font-bold text-slate-600">الرئيسية</div>
         <div className="space-y-0.5">{NAV_MAIN.map(nav)}</div>
-        <div className="mt-4 px-2 pb-1 text-[11px] font-bold text-slate-600">الأدوات</div>
-        <div className="space-y-0.5">{NAV_TOOLS.map(nav)}</div>
-        <div className="mt-4 px-2 pb-1 text-[11px] font-bold text-slate-600">الاحتراف</div>
-        <div className="space-y-0.5">{NAV_ALPHA.map(nav)}</div>
+        {visibleTools.length > 0 && <><div className="mt-4 px-2 pb-1 text-[11px] font-bold text-slate-600">الأدوات</div><div className="space-y-0.5">{visibleTools.map(nav)}</div></>}
+        {visibleAlpha.length > 0 && <><div className="mt-4 px-2 pb-1 text-[11px] font-bold text-slate-600">الاحتراف</div><div className="space-y-0.5">{visibleAlpha.map(nav)}</div></>}
+        {!isStaff && <div className="mt-4"><SidebarPlanCard tier={tier} platform="funds" /></div>}
       </div>
 
       <div className="border-t border-white/5 px-4 py-3">

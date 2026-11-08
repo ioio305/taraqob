@@ -8,10 +8,13 @@ import { DisciplineBar } from '@/components/v2/PositionSizing'
 import { IndexSwitcher } from '@/components/v2/IndexSwitcher'
 import { UnderlyingTradeManager } from '@/components/v2/UnderlyingTradeManager'
 import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
+import { MoneynessLadder } from '@/components/v2/MoneynessLadder'
 import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
 import type { ContractScenarioFit } from '@/lib/v2/scenarioContractSelector'
 import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
+import type { MoneynessLadder as MoneynessLadderData } from '@/lib/v2/moneynessLadder'
+import type { HorizonSpec } from '@/lib/v2/traderHorizon'
 
 type Market = {
   spx: { price: number; prevClose?: number; changePct: number; high: number; low: number }
@@ -106,6 +109,8 @@ type Data = {
   contracts: Contract[]; shortlist: ShortlistItem[]
   expiration: string; expirations: string[]
   otmRange: { low: number; high: number; note: string } | null
+  moneynessLadder?: MoneynessLadderData | null
+  horizon?: HorizonSpec
   mode?: 'safe' | 'balanced' | 'bold'
   pricing?: { level: string; color: string; advice: string }
   timing?: { zone: string; label: string; advice: string; color: string; icon: string }
@@ -190,20 +195,22 @@ export default function V2Dashboard() {
       return next
     })
   }
-  // فئة الترشيح: محافظ / متوسط (افتراضي) / مغامر — محفوظة محلياً
+  // تصنيف المضارب حسب المدى الزمني: مغامر(يوم) / متوسط(٢–٥) / محافظ(أسبوع+)
+  // يحيّز اختيار تاريخ الانتهاء فقط. فئة التسعير تبقى «متوازن» المُعاير داخلياً.
   type RecMode = 'safe' | 'balanced' | 'bold'
-  const [recMode, setRecMode] = useState<RecMode>('balanced')
+  const recMode: RecMode = 'balanced'
+  type Horizon = 'aggressive' | 'moderate' | 'conservative'
+  const [horizon, setHorizon] = useState<Horizon>('moderate')
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('taraqob_rec_mode')
-      if (saved === 'safe') setRecMode('safe')
-      else if (saved === 'bold' || saved === 'cheap') setRecMode('bold')   // ترحيل القيمة القديمة
+      const saved = localStorage.getItem('taraqob_horizon')
+      if (saved === 'aggressive' || saved === 'moderate' || saved === 'conservative') setHorizon(saved)
     } catch { /* تجاهل */ }
   }, [])
-  function switchMode(m: RecMode) {
-    setRecMode(m)
-    try { localStorage.setItem('taraqob_rec_mode', m) } catch { /* تجاهل */ }
-    lockedPlans.current.clear(); liveSnaps.current.clear()   // عقود الفئة الأخرى مختلفة
+  function switchHorizon(h: Horizon) {
+    setHorizon(h)
+    try { localStorage.setItem('taraqob_horizon', h) } catch { /* تجاهل */ }
+    lockedPlans.current.clear(); liveSnaps.current.clear()   // عقود المدى الآخر مختلفة
   }
   const { news } = useNews()
   const cdRef        = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -217,7 +224,7 @@ export default function V2Dashboard() {
     // البيانات القديمة تبقى ظاهرة حتى تصل الجديدة، فيصير التحديث صامتاً بلا وميض.
     setCd(REFRESH_SEC)
     try {
-      const res  = await fetch(`/api/v2/recommend?mode=${recMode}`)
+      const res  = await fetch(`/api/v2/recommend?mode=${recMode}&horizon=${horizon}`)
       const json = await res.json()
       // ── Freeze plan on first sight; update live snap every poll ──────────
       const contracts: Contract[] = json.contracts ?? []
@@ -241,7 +248,7 @@ export default function V2Dashboard() {
       setTs(new Date())
     } catch {}
     setLoad(false)
-  }, [recMode])
+  }, [horizon])
 
   // Re-analyze: clears the frozen plan so next poll locks a fresh one
   function reanalyze(symbol: string) {
@@ -403,18 +410,18 @@ export default function V2Dashboard() {
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            {/* فئة الترشيح — تغيّر الترتيب فقط، لا تمنع شيئاً */}
+            {/* تصنيف المضارب (المدى الزمني) — يحيّز اختيار الانتهاء فقط، لا يمنع شيئاً */}
             <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
               {([
-                { m: 'safe' as const,     label: '🟢 محافظ', tip: 'عقود أسرع تفاعلاً بأهداف قريبة وفرق ضيق — أعلى احتمال ربح، لكن الربح أهدأ' },
-                { m: 'balanced' as const, label: '🟡 متوسط', tip: 'التوازن المُثبت — المنطق الذي قِيست عليه نسبة النجاح 51%' },
-                { m: 'bold' as const,     label: '🔴 مغامر', tip: 'عقود رخيصة ($0.50-$5) — خسائر صغيرة متكررة وربحة نادرة كبيرة' },
+                { h: 'aggressive' as const,   label: '🔴 مغامر', tip: 'يوم واحد — انتهاء اليوم نفسه، حركة سريعة وتذبذب عالٍ' },
+                { h: 'moderate' as const,     label: '🟡 متوسط', tip: 'يومان إلى ٥ أيام — توازن بين الوقت والتكلفة' },
+                { h: 'conservative' as const, label: '🟢 محافظ', tip: 'أسبوع فأكثر — عقود أسبوعية، تذبذب أهدأ' },
               ]).map(x => (
-                <button key={x.m} onClick={() => switchMode(x.m)}
+                <button key={x.h} onClick={() => switchHorizon(x.h)}
                   className="text-xs px-2.5 py-1 font-bold"
                   style={{
-                    background: recMode === x.m ? 'rgba(201,148,58,0.2)' : 'transparent',
-                    color: recMode === x.m ? '#E8D5A3' : '#7C8A99',
+                    background: horizon === x.h ? 'rgba(201,148,58,0.2)' : 'transparent',
+                    color: horizon === x.h ? '#E8D5A3' : '#7C8A99',
                   }}
                   title={x.tip}>
                   {x.label}
@@ -444,6 +451,11 @@ export default function V2Dashboard() {
         </div>
 
         <div className="p-3 space-y-2.5">
+
+          {/* سلّم الجرأة: داخل/عند/خارج السعر لنفس الفكرة */}
+          {!loading && data?.moneynessLadder && (
+            <MoneynessLadder ladder={data.moneynessLadder} horizonLabel={data?.horizon?.labelAr} />
+          )}
 
           {/* Loading skeletons */}
           {loading && [...Array(2)].map((_, i) => (
@@ -1156,7 +1168,7 @@ export default function V2Dashboard() {
                   </table>
                 </div>
                 <div className="px-5 py-2 text-xs font-mono" style={{ color: '#55657A', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                  ★ أفضل 3 · {recMode === 'safe' ? 'المحافظ: عقود سريعة التفاعل بأهداف قريبة وفرق ضيق جداً' : recMode === 'balanced' ? 'المتوسط: توازن بين سرعة العقد وضيق الفرق' : 'المغامر: عقود رخيصة $0.50–$5'} · سعر الخروج = المؤشر الحالي ∓ 35% من الحركة المتوقعة · عقود خارج المال فقط
+                  ★ أفضل 3 عقود خارج السعر (المُعاير) · سعر الخروج = المؤشر الحالي ∓ 35% من الحركة المتوقعة
                 </div>
               </div>
             )}

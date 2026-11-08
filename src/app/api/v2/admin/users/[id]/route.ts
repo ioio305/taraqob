@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { normalizeBundlePlatforms, subscriptionBundle, type SubscriptionBundleKey } from '@/lib/v2/subscriptionBundles'
+import { PLATFORM_KEYS, type PlatformKey } from '@/lib/v2/accessRules'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,20 +62,30 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (typeof body.is_active === 'boolean') profileUpdates.is_active = body.is_active
 
   if (body.role) {
+    if (!['user', 'moderator', 'admin'].includes(body.role)) {
+      return NextResponse.json({ error: 'الدور غير صحيح' }, { status: 400 })
+    }
     if (me.role === 'moderator' && body.role === 'admin') {
       return NextResponse.json({ error: 'المشرف لا يمكنه منح صلاحية المدير' }, { status: 403 })
     }
-    // Map UI role 'user' → 'free' for DB enum compatibility
-    profileUpdates.role = body.role === 'user' ? 'free' : body.role
+    profileUpdates.role = body.role
   }
 
   if (typeof body.full_name === 'string')    profileUpdates.full_name    = body.full_name.trim()
   if (typeof body.full_name_ar === 'string') profileUpdates.full_name_ar = body.full_name_ar.trim()
 
-  const VALID_TIERS = ['radar', 'signal', 'edge', 'alpha']
-  if (typeof body.subscription_tier === 'string' && VALID_TIERS.includes(body.subscription_tier)) {
-    profileUpdates.subscription_tier = body.subscription_tier
-  }
+  const bundleRequested = typeof body.subscription_tier === 'string'
+    && ['radar', 'signal', 'edge', 'alpha'].includes(body.subscription_tier)
+  const selectedBundle = bundleRequested
+    ? subscriptionBundle(body.subscription_tier as SubscriptionBundleKey)
+    : null
+  const selectedPlatforms = selectedBundle
+    ? normalizeBundlePlatforms(
+        selectedBundle.key,
+        Array.isArray(body.platforms) ? body.platforms : ['spx'],
+      )
+    : null
+  if (selectedBundle) profileUpdates.subscription_tier = selectedBundle.tier
 
   // secondary_roles stored in preferences JSONB
   if (Array.isArray(body.secondary_roles)) {
@@ -89,7 +101,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     profileUpdates.email = body.email.trim().toLowerCase()
   }
 
-  if (Object.keys(profileUpdates).length === 0 && Object.keys(authUpdates).length === 0) {
+  if (Object.keys(profileUpdates).length === 0 && Object.keys(authUpdates).length === 0 && !selectedBundle) {
     return NextResponse.json({ error: 'لا توجد تغييرات' }, { status: 400 })
   }
 
@@ -105,13 +117,44 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  // الباقة والمنصات عملية واحدة من منظور لوحة الإدارة: فعّل المختار وألغِ البقية.
+  if (selectedBundle && selectedPlatforms) {
+    const now = new Date().toISOString()
+    const activeRows = selectedPlatforms.map((platform: PlatformKey) => ({
+      user_id: id,
+      platform,
+      tier: selectedBundle.tier,
+      status: 'active',
+      current_period_end: null,
+      updated_at: now,
+    }))
+    const { error: upsertError } = await serviceClient
+      .from('platform_subscriptions')
+      .upsert(activeRows, { onConflict: 'user_id,platform' })
+    if (upsertError) return NextResponse.json({ error: upsertError.message }, { status: 500 })
+
+    const disabledPlatforms = PLATFORM_KEYS.filter(platform => !selectedPlatforms.includes(platform))
+    if (disabledPlatforms.length) {
+      const { error: cancelError } = await serviceClient
+        .from('platform_subscriptions')
+        .update({ status: 'canceled', updated_at: now })
+        .eq('user_id', id)
+        .in('platform', disabledPlatforms)
+      if (cancelError) return NextResponse.json({ error: cancelError.message }, { status: 500 })
+    }
+  }
+
   await serviceClient.from('audit_logs').insert({
     actor_id:    user.id,
     actor_email: me.email ?? '',
     action:      'update_user',
     entity_type: 'user_profile',
     entity_id:   id,
-    new_values:  { ...profileUpdates, ...authUpdates },
+    new_values:  {
+      ...profileUpdates,
+      ...authUpdates,
+      ...(selectedPlatforms ? { platforms: selectedPlatforms } : {}),
+    },
   })
 
   return NextResponse.json({ success: true })
