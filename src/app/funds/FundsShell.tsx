@@ -19,20 +19,24 @@ const TIER_LABEL: Record<string, string> = { radar: 'رادار', signal: 'سي�
 
 type NavItem = { href: string; label: string; icon: string; exact: boolean; tier: string }
 
-const NAV_MAIN: NavItem[] = [
-  { href: '/funds', label: 'توصية اليوم', icon: '◎', exact: true, tier: 'radar' },
+// ── «التداول»: القائمة الأساسية الموحّدة — مطابقة للمؤشرات (أدوات تداول شخصية) ──
+const NAV_CORE: NavItem[] = [
+  { href: '/funds',           label: 'الداشبورد',         icon: '◈',  exact: true,  tier: 'radar' },
+  { href: '/funds/positions', label: 'متابعة صفقاتي',     icon: '↝',  exact: false, tier: 'radar' },
+  { href: '/funds/watch',     label: 'المراقبة المباشرة', icon: '◉',  exact: false, tier: 'radar' },
+  { href: '/funds/journal',   label: 'سجل الصفقات',       icon: '📔', exact: false, tier: 'radar' },
+  { href: '/funds/paper',     label: 'المحفظة التجريبية', icon: '🎮', exact: false, tier: 'radar' },
 ]
-const NAV_TOOLS: NavItem[] = [
-  { href: '/funds/chart', label: 'الشارت الذكي', icon: '📈', exact: false, tier: 'radar' },
-  { href: '/funds/radar', label: 'رادار الأموال', icon: '📡', exact: false, tier: 'radar' },
-  { href: '/funds/portfolio', label: 'المحفظة التجريبية', icon: '▤', exact: false, tier: 'radar' },
-  { href: '/funds/sizing', label: 'حاسبة المخاطرة', icon: '∑', exact: false, tier: 'radar' },
-  { href: '/funds/ledger', label: 'سجل الأداء', icon: '≣', exact: false, tier: 'radar' },
-  { href: '/funds/rotation', label: 'دوران القطاعات', icon: '↻', exact: false, tier: 'radar' },
-  { href: '/funds/analyze', label: 'تحليل صندوق', icon: '◇', exact: false, tier: 'signal' },
-]
-const NAV_ALPHA: NavItem[] = [
-  { href: '/funds/decision-room', label: 'غرفة القرار', icon: '✦', exact: false, tier: 'alpha' },
+// ── «⭐ أدوات مميزة»: أدوات الصناديق الخاصة ──
+const NAV_EXTRAS: NavItem[] = [
+  { href: '/funds/chart',         label: 'الشارت الذكي',  icon: '📈', exact: false, tier: 'radar' },
+  { href: '/funds/radar',         label: 'رادار الأموال', icon: '📡', exact: false, tier: 'radar' },
+  { href: '/funds/rotation',      label: 'دوران القطاعات', icon: '↻', exact: false, tier: 'radar' },
+  { href: '/funds/analyze',       label: 'تحليل صندوق',   icon: '◇', exact: false, tier: 'signal' },
+  { href: '/funds/sizing',        label: 'حاسبة المخاطرة', icon: '∑', exact: false, tier: 'radar' },
+  { href: '/funds/portfolio',     label: 'محفظة الوحدات', icon: '▤', exact: false, tier: 'radar' },
+  { href: '/funds/ledger',        label: 'سجل الأداء',    icon: '≣', exact: false, tier: 'radar' },
+  { href: '/funds/decision-room', label: 'غرفة القرار',   icon: '✦', exact: false, tier: 'alpha' },
 ]
 
 function allowedTier(current: string, required: string) {
@@ -68,9 +72,9 @@ export default function FundsShell({ children, userName, tier, isStaff, platform
     )
   }
 
-  // توحيد مع المؤشرات: قسمان فقط — «التداول» و«⭐ أدوات مميزة»
-  const visibleMain = [...NAV_MAIN, ...NAV_TOOLS].filter(item => isStaff || allowedTier(tier, item.tier))
-  const visibleAlpha = NAV_ALPHA.filter(item => isStaff || allowedTier(tier, item.tier))
+  // توحيد كامل مع المؤشرات: «التداول» أدوات شخصية مطابقة + «⭐ أدوات مميزة» أدوات الصناديق
+  const visibleMain = NAV_CORE.filter(item => isStaff || allowedTier(tier, item.tier))
+  const visibleExtras = NAV_EXTRAS.filter(item => isStaff || allowedTier(tier, item.tier))
 
   const Sidebar = (
     <div className="flex h-full flex-col select-none bg-[#07130F]">
@@ -89,7 +93,7 @@ export default function FundsShell({ children, userName, tier, isStaff, platform
 
         <div className="px-2 pb-1 text-[11px] font-bold text-slate-600">التداول</div>
         <div className="space-y-0.5">{visibleMain.map(nav)}</div>
-        {visibleAlpha.length > 0 && <><div className="mt-4 px-2 pb-1 text-[11px] font-bold text-slate-600">⭐ أدوات مميزة</div><div className="space-y-0.5">{visibleAlpha.map(nav)}</div></>}
+        {visibleExtras.length > 0 && <><div className="mt-4 px-2 pb-1 text-[11px] font-bold text-slate-600">⭐ أدوات مميزة</div><div className="space-y-0.5">{visibleExtras.map(nav)}</div></>}
         {!isStaff && <div className="mt-4"><SidebarPlanCard tier={tier} platform="funds" /></div>}
       </div>
 
@@ -132,7 +136,7 @@ export default function FundsShell({ children, userName, tier, isStaff, platform
         <FundsWatcher />
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
         <nav className="flex shrink-0 items-center justify-around border-t border-white/5 bg-[#07130F] px-2 py-2 lg:hidden">
-          {NAV_MAIN.map(item => (
+          {NAV_CORE.slice(0, 2).map(item => (
             <Link key={item.href} href={item.href} className="px-3 py-1.5 text-xs font-bold text-emerald-300">{item.label}</Link>
           ))}
           <Link href="/funds/rotation" className="px-3 py-1.5 text-xs font-bold text-slate-400">الدوران</Link>
