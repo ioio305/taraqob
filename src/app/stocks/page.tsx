@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { UnderlyingTradeManager } from '@/components/v2/UnderlyingTradeManager'
 import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
@@ -122,13 +122,11 @@ export default function StocksScanner() {
   const { tier, isStaff } = useStocksTier()
   const [data, setData] = useState<ScanData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [countdown, setCd] = useState(REFRESH_SEC)
   const [mode, setMode] = useState<'safe' | 'balanced' | 'bold'>('balanced')
   const [tradeStyle, setTradeStyle] = useState<'day' | 'swing'>('swing')
   const [selected, setSelected] = useState<string | null>(null)
   const [detail, setDetail] = useState<DetailData | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
-  const cdRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     try {
@@ -140,7 +138,6 @@ export default function StocksScanner() {
   }, [])
 
   const load = useCallback(async () => {
-    setCd(REFRESH_SEC)
     try {
       const res = await fetch(`/api/v2/stocks/scan?mode=${mode}&style=${tradeStyle}`)
       const json = await res.json()
@@ -154,12 +151,6 @@ export default function StocksScanner() {
     const t = setInterval(load, REFRESH_SEC * 1000)
     return () => clearInterval(t)
   }, [load])
-
-  useEffect(() => {
-    if (cdRef.current) clearInterval(cdRef.current)
-    cdRef.current = setInterval(() => setCd(p => (p <= 1 ? REFRESH_SEC : p - 1)), 1000)
-    return () => { if (cdRef.current) clearInterval(cdRef.current) }
-  }, [data])
 
   const openDetail = useCallback(async (symbol: string) => {
     if (selected === symbol) { setSelected(null); setDetail(null); return }
@@ -418,15 +409,6 @@ export default function StocksScanner() {
               ))}
             </div>
             <div className="flex items-center gap-2">
-              <div className="relative w-9 h-9">
-                <svg className="w-9 h-9 -rotate-90" viewBox="0 0 36 36">
-                  <circle cx="18" cy="18" r="15.9" fill="none" strokeWidth="2.5" stroke="rgba(255,255,255,0.05)" />
-                  <circle cx="18" cy="18" r="15.9" fill="none" strokeWidth="2.5" stroke={ACCENT} strokeOpacity="0.55"
-                          strokeDasharray={`${(countdown / REFRESH_SEC) * 100} 100`} strokeLinecap="round"
-                          style={{ transition: 'stroke-dasharray 1s linear' }} />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center text-xs font-mono" style={{ color: '#4A5568' }}>{countdown}</div>
-              </div>
               <button onClick={load} disabled={loading}
                       className="w-9 h-9 rounded-xl flex items-center justify-center disabled:opacity-30"
                       style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#64748B' }}>

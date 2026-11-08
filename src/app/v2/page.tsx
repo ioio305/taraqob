@@ -173,8 +173,6 @@ function UpgradeBanner() {
 export default function V2Dashboard() {
   const [data, setData]     = useState<Data | null>(null)
   const [loading, setLoad]  = useState(true)
-  const [ts, setTs]         = useState<Date | null>(null)
-  const [countdown, setCd]  = useState(REFRESH_SEC)
   const [strike, setStrike] = useState('')
   const [loadError, setLoadError] = useState<string | null>(null)
   const requestVersion = useRef(0)
@@ -222,7 +220,6 @@ export default function V2Dashboard() {
     lockedPlans.current.clear(); liveSnaps.current.clear()   // عقود المدى الآخر مختلفة
   }
   const { news } = useNews()
-  const cdRef        = useRef<ReturnType<typeof setInterval> | null>(null)
   // Frozen plans: locked when a contract is first seen — never auto-updated
   const lockedPlans  = useRef<Map<string, LockedPlan>>(new Map())
   // Live snapshots: updated every poll (price / score only)
@@ -232,7 +229,6 @@ export default function V2Dashboard() {
     const version = ++requestVersion.current
     // لا نعيد الهياكل العظمية في التحديث الدوري — أول تحميل فقط.
     // البيانات القديمة تبقى ظاهرة حتى تصل الجديدة، فيصير التحديث صامتاً بلا وميض.
-    setCd(REFRESH_SEC)
     try {
       const res  = await fetch(`/api/v2/recommend?mode=${recMode}&horizon=${horizon}`)
       const json = await res.json()
@@ -258,7 +254,6 @@ export default function V2Dashboard() {
         })
       }
       setData(json)
-      setTs(new Date())
     } catch {
       if (version === requestVersion.current) {
         setLoadError('تعذر تحديث التوصية')
@@ -312,13 +307,6 @@ export default function V2Dashboard() {
       }),
     }).catch(() => {})
   }, [data])
-
-  // 1-second countdown between refreshes
-  useEffect(() => {
-    if (cdRef.current) clearInterval(cdRef.current)
-    cdRef.current = setInterval(() => setCd(p => p <= 1 ? REFRESH_SEC : p - 1), 1000)
-    return () => { if (cdRef.current) clearInterval(cdRef.current) }
-  }, [ts])
 
   function goAnalyze() {
     const p = new URLSearchParams()
@@ -383,7 +371,7 @@ export default function V2Dashboard() {
             <option value="aggressive">0–1 يوم</option><option value="moderate">2–5 أيام</option><option value="conservative">7–45 يومًا</option>
           </select>
         </label>
-        <button onClick={() => void load()} disabled={loading} className="rounded-lg border border-white/10 px-3 py-2 text-xs text-amber-200 disabled:opacity-40">تحديث التوصية · {countdown}ث</button>
+        <button onClick={() => void load()} disabled={loading} className="rounded-lg border border-white/10 px-3 py-2 text-xs text-amber-200 disabled:opacity-40">تحديث التوصية</button>
       </div>
 
       {/* ── تحذير حدث اقتصادي كبير اليوم/غداً (معلومة لا منع) ── */}
@@ -449,18 +437,8 @@ export default function V2Dashboard() {
               ))}
             </div>
 
-            {/* حلقة العدّاد + زر تحديث */}
+            {/* زر تحديث يدوي — التحديث التلقائي صامت بلا عدّاد ظاهر */}
             <div className="flex items-center gap-2">
-              <div className="relative w-9 h-9">
-                <svg className="w-9 h-9 -rotate-90" viewBox="0 0 36 36">
-                  <circle cx="18" cy="18" r="15.9" fill="none" strokeWidth="2.5" stroke="rgba(255,255,255,0.05)" />
-                  <circle cx="18" cy="18" r="15.9" fill="none" strokeWidth="2.5"
-                          stroke="#C9943A" strokeOpacity="0.55"
-                          strokeDasharray={`${(countdown / REFRESH_SEC) * 100} 100`}
-                          strokeLinecap="round" style={{ transition: 'stroke-dasharray 1s linear' }} />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center text-xs font-mono" style={{ color: '#7C8A99' }}>{countdown}</div>
-              </div>
               <button onClick={load} disabled={loading}
                       className="w-9 h-9 rounded-xl flex items-center justify-center transition-all disabled:opacity-30"
                       style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#64748B' }}>
