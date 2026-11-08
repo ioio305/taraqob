@@ -1,65 +1,51 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getV2Viewer, hasMinimumTier } from '@/lib/v2/access'
-import { listRuns } from '@/lib/v2/lab/store'
-import { createRun, executeRun } from '@/lib/v2/lab/leanRunner'
-import { buildStrategySpec, DEFAULT_COST_MODEL } from '@/lib/v2/lab/strategySpec'
-import { horizonSpec, normalizeHorizon } from '@/lib/v2/traderHorizon'
-import { LAB_MIN_TIER, type RunConfig } from '@/lib/v2/lab/types'
-
+import { createClient } from '@/lib/supabase/server'
+import { labStore } from '@/lib/v2/lab/store'
+import { createRun, dispatchRun } from '@/lib/v2/lab/leanRunner'
+import { probeLabEnvironment } from '@/lib/v2/lab/environment'
+import { buildStrategySpec } from '@/lib/v2/lab/strategySpec'
+import { parseRunConfig } from '@/lib/v2/lab/config'
+import { LAB_MIN_TIER } from '@/lib/v2/lab/types'
 export const dynamic = 'force-dynamic'
-
-// بوابة مركزية: إيدج فأعلى، على الخادم وطبقة البيانات (403 + لا بيانات لمن دونها).
-async function gate() {
-  const viewer = await getV2Viewer()
-  if (!viewer || !viewer.profile) return { error: NextResponse.json({ error: 'غير مسجّل الدخول' }, { status: 401 }) }
-  if (!viewer.isStaff && !hasMinimumTier(viewer.effectiveTier, LAB_MIN_TIER)) {
-    return { error: NextResponse.json({ error: 'يتطلب باقة إيدج أو ألفا', requiredTier: LAB_MIN_TIER }, { status: 403 }) }
-  }
-  return { viewer }
-}
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
-
 export async function GET() {
-  const g = await gate()
-  if ('error' in g) return g.error
-  const runs = await listRuns(50)
-  // المواصفة تُعرض للجميع المصرّح لهم كي يروا القواعد والتكاليف ومتطلبات البيانات.
-  return NextResponse.json({ spec: buildStrategySpec(), runs })
+  const viewer = await getV2Viewer()
+  if (!viewer?.profile || viewer.profile.is_active === false) return NextResponse.json({ error: 'غير مسجّل الدخول' }, { status: 401 })
+  if (!viewer.isStaff && (!viewer.platformAccess.spx || !hasMinimumTier(viewer.platformTiers.spx, LAB_MIN_TIER))) {
+    return NextResponse.json({ error: 'يتطلب اشتراك المؤشرات إيدج أو ألفا' }, { status: 403 })
+  }
+  try {
+    const store = labStore(await createClient()), storageReady = await store.available()
+    const runs = storageReady ? await store.list(viewer.user.id) : []
+    return NextResponse.json({ spec: buildStrategySpec(), runs, storageReady }, { headers: { 'Cache-Control': 'no-store' } })
+  } catch { return NextResponse.json({ error: 'تعذّر تحميل سجل المختبر. أعد المحاولة.' }, { status: 503 }) }
 }
-
 export async function POST(req: NextRequest) {
-  const g = await gate()
-  if ('error' in g) return g.error
-
-  let body: Record<string, unknown> = {}
-  try { body = await req.json() } catch { /* جسم فارغ مقبول */ }
-
-  const horizon = normalizeHorizon(body.horizon)
-  const spec = horizonSpec(horizon)
-  const resolution = (['minute', 'hour', 'daily'] as const).includes(body.resolution as never)
-    ? (body.resolution as RunConfig['resolution']) : 'minute'
-
-  const from = typeof body.from === 'string' && ISO_DATE.test(body.from) ? body.from : '2023-01-01'
-  const to = typeof body.to === 'string' && ISO_DATE.test(body.to) ? body.to : '2023-06-30'
-  if (from >= to) {
-    return NextResponse.json({ error: 'تاريخ البداية يجب أن يسبق النهاية' }, { status: 400 })
+  const viewer = await getV2Viewer()
+  if (!viewer?.profile || viewer.profile.is_active === false) return NextResponse.json({ error: 'غير مسجّل الدخول' }, { status: 401 })
+  if (!viewer.isStaff && (!viewer.platformAccess.spx || !hasMinimumTier(viewer.platformTiers.spx, LAB_MIN_TIER))) {
+    return NextResponse.json({ error: 'يتطلب اشتراك المؤشرات إيدج أو ألفا' }, { status: 403 })
   }
-
-  const config: RunConfig = {
-    asset: 'spx',
-    strategyVersion: buildStrategySpec().version,
-    horizon,
-    dte: { min: spec.dte.min, max: spec.dte.max, target: spec.dte.target },
-    period: { from, to },
-    resolution,
-    costModel: DEFAULT_COST_MODEL,
-    benchmarkSymbol: 'SPX',
+  let config
+  try { config = parseRunConfig(await req.json()) } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'إعدادات غير صالحة' }, { status: 400 })
   }
-
-  // ينشئ التشغيل ثم يستدعي المحرك. بلا بيئة/بيانات → insufficient_data (صادق، لا تلفيق).
-  const run = createRun(config)
-  const finished = await executeRun(run)
-  return NextResponse.json({ run: finished })
+  try {
+    const store = labStore(await createClient())
+    const environment = await probeLabEnvironment(await store.available())
+    if (!environment.ready) return NextResponse.json({ error: 'التشغيل غير متاح قبل اكتمال الجاهزية.', environment }, { status: 503 })
+    const active = (await store.list(viewer.user.id)).find(r => r.status === 'pending' || r.status === 'running')
+    if (active) {
+      if (active.status === 'pending') { try { await dispatchRun(active) } catch { /* keep original job identity */ } }
+      return NextResponse.json({ run: active, warning: 'لديك طلب محفوظ قيد المعالجة؛ لن يُنشأ اختبار مكرر.' }, { status: 202 })
+    }
+    const run = createRun(config, viewer.user.id)
+    await store.insert(run)
+    try { await dispatchRun(run) } catch {
+      // A timed-out acknowledgement may still have reached the worker. Do not submit twice.
+      return NextResponse.json({ run, warning: 'حُفظ الطلب؛ تعذّر تأكيد استلام المحرك. تحقّق من حالة التشغيل قبل إعادة الإرسال.' }, { status: 202 })
+    }
+    return NextResponse.json({ run }, { status: 202 })
+  } catch { return NextResponse.json({ error: 'تعذّر حفظ الطلب؛ لم يبدأ اختبار جديد.' }, { status: 503 }) }
 }

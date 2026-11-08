@@ -40,3 +40,5 @@ next-env.d.ts
 /lean/data/
 /lean/taraqob_spx_otm/backtests/
 /lean/taraqob_spx_otm/run_config.json
+**/__pycache__/
+/lean/taraqob_spx_otm/replay_decisions.json

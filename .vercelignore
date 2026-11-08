@@ -1,0 +1,6 @@
+.codex-audit/
+reports/
+scripts/tmp/
+lab-runs/
+lean/data/
+**/__pycache__/

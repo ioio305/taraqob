@@ -53,7 +53,7 @@ describe('مواصفة الاستراتيجية — تطابق بوابة الد
     const spec = buildStrategySpec()
     expect(spec.version).toBe(STRATEGY_VERSION)
     expect(spec.askRange.balanced).toEqual(SPX_BANDS.askRange.balanced)
-    expect(spec.dteBands.length).toBe(3)
+    expect(spec.dteBands.length).toBe(4)
     const moderate = spec.dteBands.find((b) => b.horizon === 'moderate')!
     expect([moderate.min, moderate.max]).toEqual([HORIZONS.moderate.dte.min, HORIZONS.moderate.dte.max])
   })

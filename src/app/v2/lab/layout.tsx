@@ -8,7 +8,7 @@ export default async function StrategyLabLayout({ children }: { children: ReactN
   const viewer = await getV2Viewer()
   if (!viewer) redirect('/login?next=/v2/lab')
   if (!viewer.profile || viewer.profile.is_active === false) redirect('/login?error=inactive')
-  if (!viewer.isStaff && !hasMinimumTier(viewer.effectiveTier, LAB_MIN_TIER)) {
+  if (!viewer.isStaff && (!viewer.platformAccess.spx || !hasMinimumTier(viewer.platformTiers.spx, LAB_MIN_TIER))) {
     redirect('/v2/upgrade?tier=edge')
   }
   return children

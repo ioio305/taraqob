@@ -9,6 +9,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "lab:worker": "tsx scripts/lab/worker.ts",
+    "lab:archive": "tsx scripts/lab/build-archive.ts",
     "backtest:funds": "node scripts/backtest-funds.mjs funds",
     "backtest:stocks": "node scripts/backtest-funds.mjs stocks",
     "guard:core": "node scripts/verify-protected-files.mjs",
