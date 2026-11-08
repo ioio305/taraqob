@@ -33,30 +33,27 @@ function tierAllows(userTier: string, required: string): boolean {
 
 type NavItem = { href: string; label: string; icon: string; exact: boolean; requiredTier: string }
 
-// التوصية أولاً، ثم الأدلة والتحليل بحسب الباقة.
-const NAV_DECISION: NavItem[] = [
-  { href: '/stocks',         label: 'توصية اليوم', icon: '◎', exact: true,  requiredTier: 'radar' },
-  { href: '/stocks/chart',   label: 'الشارت الذكي', icon: '📈', exact: false, requiredTier: 'radar' },
-  { href: '/stocks/monitor', label: 'راصد الشركات', icon: '◉', exact: false, requiredTier: 'radar' },
+// ── «التداول»: القائمة الأساسية الموحّدة — مطابقة للمؤشرات (أدوات تداول شخصية) ──
+const NAV_CORE: NavItem[] = [
+  { href: '/stocks',           label: 'الداشبورد',         icon: '◈',  exact: true,  requiredTier: 'radar' },
+  { href: '/stocks/positions', label: 'متابعة صفقاتي',     icon: '↝',  exact: false, requiredTier: 'radar' },
+  { href: '/stocks/watch',     label: 'المراقبة المباشرة', icon: '◉',  exact: false, requiredTier: 'radar' },
+  { href: '/stocks/journal',   label: 'سجل الصفقات',       icon: '📔', exact: false, requiredTier: 'radar' },
+  { href: '/stocks/paper',     label: 'المحفظة التجريبية', icon: '🎮', exact: false, requiredTier: 'radar' },
 ]
-const NAV_ANALYSIS: NavItem[] = [
-  { href: '/stocks/price-radar', label: 'رادار الأسعار', icon: '⌁', exact: false, requiredTier: 'signal' },
-  { href: '/stocks/analyze', label: 'تحليل الشركة',   icon: '⬡', exact: false, requiredTier: 'signal' },
-  { href: '/stocks/watchlist', label: 'قائمة المراقبة', icon: '◇', exact: false, requiredTier: 'signal' },
-]
-// أخبار وأحداث — للمشترك (سيجنال)
-const NAV_EVENTS: NavItem[] = [
-  { href: '/stocks/news',     label: 'الأخبار العربية', icon: '≡', exact: false, requiredTier: 'signal' },
-  { href: '/stocks/earnings', label: 'تقويم الأرباح', icon: '◷', exact: false, requiredTier: 'signal' },
-]
-// مميّز — لإيدج فما فوق
-const NAV_PREMIUM: NavItem[] = [
-  { href: '/stocks/flow', label: 'رادار التدفقات', icon: '🛰', exact: false, requiredTier: 'edge' },
-  { href: '/stocks/tracking', label: 'متابعة التوصيات', icon: '↝', exact: false, requiredTier: 'edge' },
-]
-const NAV_ALPHA: NavItem[] = [
-  { href: '/stocks/decision-room', label: 'غرفة القرار', icon: '✦', exact: false, requiredTier: 'alpha' },
-  { href: '/stocks/performance', label: 'سجل الأداء', icon: '◈', exact: false, requiredTier: 'alpha' },
+// ── «⭐ أدوات مميزة»: أدوات الشركات الخاصة (تحليل/مسح/أحداث) ──
+const NAV_EXTRAS: NavItem[] = [
+  { href: '/stocks/chart',         label: 'الشارت الذكي',    icon: '📈', exact: false, requiredTier: 'radar' },
+  { href: '/stocks/monitor',       label: 'راصد الشركات',    icon: '◎',  exact: false, requiredTier: 'radar' },
+  { href: '/stocks/price-radar',   label: 'رادار الأسعار',   icon: '⌁',  exact: false, requiredTier: 'signal' },
+  { href: '/stocks/analyze',       label: 'تحليل الشركة',    icon: '⬡',  exact: false, requiredTier: 'signal' },
+  { href: '/stocks/watchlist',     label: 'قائمة المراقبة',  icon: '◇',  exact: false, requiredTier: 'signal' },
+  { href: '/stocks/news',          label: 'الأخبار العربية', icon: '≡',  exact: false, requiredTier: 'signal' },
+  { href: '/stocks/earnings',      label: 'تقويم الأرباح',   icon: '◷',  exact: false, requiredTier: 'signal' },
+  { href: '/stocks/flow',          label: 'رادار التدفقات',  icon: '🛰', exact: false, requiredTier: 'edge' },
+  { href: '/stocks/tracking',      label: 'متابعة التوصيات', icon: '⇲',  exact: false, requiredTier: 'edge' },
+  { href: '/stocks/performance',   label: 'سجل الأداء',      icon: '≣',  exact: false, requiredTier: 'alpha' },
+  { href: '/stocks/decision-room', label: 'غرفة القرار',     icon: '✦',  exact: false, requiredTier: 'alpha' },
 ]
 
 function isActive(pathname: string, href: string, exact: boolean) {
@@ -136,9 +133,9 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
   }
 
   const visible = (items: NavItem[]) => items.filter(item => isStaff || tierAllows(tier, item.requiredTier))
-  // توحيد مع المؤشرات: قسمان فقط — «التداول» و«⭐ أدوات مميزة»
-  const visibleMain = visible([...NAV_DECISION, ...NAV_ANALYSIS, ...NAV_EVENTS])
-  const visiblePremium = visible([...NAV_PREMIUM, ...NAV_ALPHA])
+  // توحيد كامل مع المؤشرات: «التداول» أدوات شخصية مطابقة + «⭐ أدوات مميزة» أدوات الشركات
+  const visibleMain = visible(NAV_CORE)
+  const visiblePremium = visible(NAV_EXTRAS)
 
   const Sidebar = (
     <div className="flex flex-col h-full select-none" style={{ background: '#08101A' }}>
@@ -254,7 +251,7 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
         {/* تنقّل سفلي (جوال) */}
         <nav className="lg:hidden shrink-0 flex items-center justify-around px-1 py-2"
              style={{ background: '#08101A', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-          {NAV_DECISION.map(item => <MobileTab key={item.href} {...item} />)}
+          {NAV_CORE.slice(0, 3).map(item => <MobileTab key={item.href} {...item} />)}
           <MobileTab href="/stocks/decision-room" icon="✦" label="غرفة القرار" exact={false} />
         </nav>
       </div>
