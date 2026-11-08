@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
+import { SHOW_CONTRACT_ANALYSIS } from '@/lib/v2/featureFlags'
 import {
   createChart,
   createSeriesMarkers,
@@ -1085,8 +1086,8 @@ export default function ChartPage() {
             </div>
           </div>
 
-          {/* Analyze button — only shows when strike is filled */}
-          {strike.length >= 3 && (
+          {/* Analyze button — only shows when strike is filled (مُخفى: راية SHOW_CONTRACT_ANALYSIS) */}
+          {SHOW_CONTRACT_ANALYSIS && strike.length >= 3 && (
             <Link
               href={`/v2/analyze?symbol=SPX&strike=${strike}&expiry=&type=${optionType}`}
               className="h-10 px-5 bg-[#C9943A] text-[#060D14] rounded-xl text-sm font-bold hover:bg-[#E8D5A3] transition-colors flex items-center gap-1.5"

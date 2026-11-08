@@ -16,6 +16,7 @@ import { SidebarPlanCard } from '@/components/v2/SidebarPlanCard'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
 import { getSelectedIndex, indexMeta, type IndexId } from '@/lib/v2/indexSelection'
 import { showBrowserNotificationOnce } from '@/lib/v2/browserNotifications'
+import { SHOW_CONTRACT_ANALYSIS } from '@/lib/v2/featureFlags'
 
 const ROLE_LABEL_MAP: Record<string, string>  = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
 const ROLE_COLOR_MAP: Record<string, string>  = { admin: '#C9943A', moderator: '#60A5FA', user: '#7C8A99' }
@@ -37,7 +38,8 @@ const NAV_DECISION = [
   { href: '/v2',             label: 'الداشبورد',    icon: '◈', exact: true,  requiredTier: 'radar' },
   { href: '/v2/plan',        label: 'خطة اليوم',    icon: '📋', exact: false, requiredTier: 'radar' },
   { href: '/v2/smart-chart', label: 'الشارت الذكي ✦', icon: '✨', exact: false, requiredTier: 'radar' },
-  { href: '/v2/analyze',     label: 'تحليل العقد',  icon: '⬡', exact: false, requiredTier: 'radar' },
+  // «تحليل العقد» مُخفى مؤقتاً — راية SHOW_CONTRACT_ANALYSIS (استعادة بتبديلها إلى true)
+  ...(SHOW_CONTRACT_ANALYSIS ? [{ href: '/v2/analyze', label: 'تحليل العقد', icon: '⬡', exact: false, requiredTier: 'radar' }] : []),
 ]
 
 // الرصد والإشارات — للمشترك المدفوع
@@ -669,7 +671,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
           {(showAdminNav ? [
             { href: '/v2/admin',   icon: '⊞', label: 'الإدارة',  exact: true  },
             { href: '/v2',         icon: '◈', label: 'التداول',  exact: true  },
-            { href: '/v2/analyze', icon: '⬡', label: 'التحليل', exact: false },
+            ...(SHOW_CONTRACT_ANALYSIS ? [{ href: '/v2/analyze', icon: '⬡', label: 'التحليل', exact: false }] : []),
             { href: '/v2/signals', icon: '◉', label: 'الإشارات', exact: false },
           ] : NAV_DECISION.slice(0, 4)).map(item => (
             <MobileTab key={item.href} {...item} />

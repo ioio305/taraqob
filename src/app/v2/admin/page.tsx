@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { SHOW_CONTRACT_ANALYSIS } from '@/lib/v2/featureFlags'
 
 type Stats = {
   users:  { total: number; active: number; inactive: number; byRole: Record<string, number> }
@@ -176,7 +177,8 @@ export default function AdminDashboard() {
                 {[
                   { href: '/v2/admin/users', icon: '◎', label: 'إدارة المستخدمين',     clr: '#C9943A' },
                   { href: '/v2/admin/audit', icon: '≡',  label: 'سجل الأحداث',          clr: '#60A5FA' },
-                  { href: '/v2/analyze',     icon: '⬡', label: 'تحليل عقد',            clr: '#A78BFA' },
+                  // «تحليل عقد» مُخفى مؤقتاً — راية SHOW_CONTRACT_ANALYSIS
+                  ...(SHOW_CONTRACT_ANALYSIS ? [{ href: '/v2/analyze', icon: '⬡', label: 'تحليل عقد', clr: '#A78BFA' }] : []),
                   { href: '/v2/market',      icon: '◐', label: 'Market Regime',         clr: '#10B981' },
                 ].map(a => (
                   <Link key={a.href} href={a.href}
