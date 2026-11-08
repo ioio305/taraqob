@@ -136,9 +136,9 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
   }
 
   const visible = (items: NavItem[]) => items.filter(item => isStaff || tierAllows(tier, item.requiredTier))
-  const visibleTools = visible([...NAV_ANALYSIS, ...NAV_EVENTS, NAV_PREMIUM[0]])
-  const visibleTracking = visible(NAV_PREMIUM.slice(1))
-  const visibleAlpha = visible(NAV_ALPHA)
+  // توحيد مع المؤشرات: قسمان فقط — «التداول» و«⭐ أدوات مميزة»
+  const visibleMain = visible([...NAV_DECISION, ...NAV_ANALYSIS, ...NAV_EVENTS])
+  const visiblePremium = visible([...NAV_PREMIUM, ...NAV_ALPHA])
 
   const Sidebar = (
     <div className="flex flex-col h-full select-none" style={{ background: '#08101A' }}>
@@ -162,20 +162,12 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
         <div className="px-3 pt-1 pb-2">
           <div className="space-y-2 mt-1">
             <div>
-              <SectionTitle>الرئيسية</SectionTitle>
-              <div className="space-y-0.5">{NAV_DECISION.map(renderNav)}</div>
+              <SectionTitle>التداول</SectionTitle>
+              <div className="space-y-0.5">{visibleMain.map(renderNav)}</div>
             </div>
-            {visibleTools.length > 0 && <div>
-              <SectionTitle>الأدوات</SectionTitle>
-              <div className="space-y-0.5">{visibleTools.map(renderNav)}</div>
-            </div>}
-            {visibleTracking.length > 0 && <div>
-              <SectionTitle>المتابعة</SectionTitle>
-              <div className="space-y-0.5">{visibleTracking.map(renderNav)}</div>
-            </div>}
-            {visibleAlpha.length > 0 && <div>
-              <SectionTitle>الاحتراف</SectionTitle>
-              <div className="space-y-0.5">{visibleAlpha.map(renderNav)}</div>
+            {visiblePremium.length > 0 && <div>
+              <SectionTitle>⭐ أدوات مميزة</SectionTitle>
+              <div className="space-y-0.5">{visiblePremium.map(renderNav)}</div>
             </div>}
           </div>
         </div>

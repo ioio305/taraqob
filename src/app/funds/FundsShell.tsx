@@ -68,7 +68,8 @@ export default function FundsShell({ children, userName, tier, isStaff, platform
     )
   }
 
-  const visibleTools = NAV_TOOLS.filter(item => isStaff || allowedTier(tier, item.tier))
+  // توحيد مع المؤشرات: قسمان فقط — «التداول» و«⭐ أدوات مميزة»
+  const visibleMain = [...NAV_MAIN, ...NAV_TOOLS].filter(item => isStaff || allowedTier(tier, item.tier))
   const visibleAlpha = NAV_ALPHA.filter(item => isStaff || allowedTier(tier, item.tier))
 
   const Sidebar = (
@@ -86,10 +87,9 @@ export default function FundsShell({ children, userName, tier, isStaff, platform
       <div className="flex-1 overflow-y-auto px-3 py-3">
         <PlatformSwitcher access={platformAccess} />
 
-        <div className="px-2 pb-1 text-[11px] font-bold text-slate-600">الرئيسية</div>
-        <div className="space-y-0.5">{NAV_MAIN.map(nav)}</div>
-        {visibleTools.length > 0 && <><div className="mt-4 px-2 pb-1 text-[11px] font-bold text-slate-600">الأدوات</div><div className="space-y-0.5">{visibleTools.map(nav)}</div></>}
-        {visibleAlpha.length > 0 && <><div className="mt-4 px-2 pb-1 text-[11px] font-bold text-slate-600">الاحتراف</div><div className="space-y-0.5">{visibleAlpha.map(nav)}</div></>}
+        <div className="px-2 pb-1 text-[11px] font-bold text-slate-600">التداول</div>
+        <div className="space-y-0.5">{visibleMain.map(nav)}</div>
+        {visibleAlpha.length > 0 && <><div className="mt-4 px-2 pb-1 text-[11px] font-bold text-slate-600">⭐ أدوات مميزة</div><div className="space-y-0.5">{visibleAlpha.map(nav)}</div></>}
         {!isStaff && <div className="mt-4"><SidebarPlanCard tier={tier} platform="funds" /></div>}
       </div>
 
