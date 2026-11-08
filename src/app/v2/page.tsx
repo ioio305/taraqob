@@ -181,8 +181,8 @@ export default function V2Dashboard() {
   const [ctype, setCtype]   = useState<'auto' | 'call' | 'put'>('auto')
   const trackedSymbols = ['SPX', ...(data?.contracts ?? []).map(contract => contract.symbol)]
   const { quotes: liveQuotes } = useLiveQuotes(trackedSymbols)
-  // «المزيد»: تفاصيل السوق مطويّة افتراضياً — الداشبورد توصية أولاً
-  const [showMore, setShowMore] = useState(false)
+  // تفاصيل التوصية والسوق ظاهرة افتراضياً ويمكن طيّها.
+  const [showMore, setShowMore] = useState(true)
   // تفاصيل الخطة الكاملة لكل توصية — مطويّة، تُفتح بالطلب
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   function toggleExpand(sym: string) {
@@ -386,10 +386,6 @@ export default function V2Dashboard() {
         <button onClick={() => void load()} disabled={loading} className="rounded-lg border border-white/10 px-3 py-2 text-xs text-amber-200 disabled:opacity-40">تحديث التوصية · {countdown}ث</button>
       </div>
 
-      <ExecutionTicket loading={loading} error={loadError} contract={primary} scenario={data?.scenario}
-        validUntil={data?.opportunityWindow?.validUntil} issuedAt={data?.issuedAt} gate={data?.executionGate}
-        marketOpen={data?.marketOpen} marketClosed={data?.marketClosed} quotes={liveQuotes} now={Date.now()} />
-
       {/* ── تحذير حدث اقتصادي كبير اليوم/غداً (معلومة لا منع) ── */}
       {data?.econ?.warning && (
         <div className="rounded-xl px-4 py-3 flex items-start gap-3"
@@ -415,11 +411,7 @@ export default function V2Dashboard() {
       {/* ═══════════════════════════════════════════════════════════════ */}
       {/* ══  توصية اليوم — القلب: كبيرة، واضحة، أولاً                  ══ */}
       {/* ═══════════════════════════════════════════════════════════════ */}
-      <details className="rounded-2xl border border-white/10">
-      <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-slate-400">تفاصيل التوصية والسوق</summary>
-      {data?.decisionCouncil ? <DecisionCouncilCard council={data.decisionCouncil} scenario={data.scenario} window={data.opportunityWindow} /> : null}
-      <DisciplineBar />
-      <section className="rounded-2xl overflow-hidden"
+      <section aria-label="توصية اليوم" className="rounded-2xl overflow-hidden"
                style={{ background: 'rgba(13,27,42,0.82)', border: '1px solid rgba(201,148,58,0.18)' }}>
 
         {/* رأس القسم: العنوان + فئة الترشيح + التحديث */}
@@ -958,25 +950,29 @@ export default function V2Dashboard() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* ══  المزيد — تفاصيل السوق (مطويّة)                           ══ */}
+      {/* ══  تفاصيل التوصية والسوق — ظاهرة وقابلة للطيّ                 ══ */}
       {/* ═══════════════════════════════════════════════════════════════ */}
       <div className="rounded-2xl overflow-hidden"
            style={{ background: 'rgba(13,27,42,0.6)', border: '1px solid rgba(255,255,255,0.06)' }}>
         <button onClick={() => setShowMore(v => !v)}
+                aria-expanded={showMore} aria-controls="recommendation-market-details"
                 className="w-full flex items-center justify-between px-5 py-3.5 transition-all">
           <div className="flex items-center gap-2.5">
-            <span className="text-sm font-bold" style={{ color: '#94A3B8' }}>المزيد — تفاصيل السوق</span>
+            <span className="text-sm font-bold" style={{ color: '#94A3B8' }}>تفاصيل التوصية والسوق</span>
             {!loading && spx?.price ? (
               <span className="text-xs font-mono" style={{ color: '#7C8A99' }}>
                 SPX {n(spx.price, 0)} · VIX {n(vix)} · الحركة ±{em ?? '—'}
               </span>
             ) : null}
           </div>
-          <span className="text-sm shrink-0" style={{ color: '#7C8A99' }}>{showMore ? '▲' : '▼'}</span>
+          <span className="text-xs shrink-0" style={{ color: '#7C8A99' }}>{showMore ? 'إخفاء ▲' : 'إظهار ▼'}</span>
         </button>
 
         {showMore && (
-          <div className="px-4 pb-4 space-y-4" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+          <div id="recommendation-market-details" className="px-4 pb-4 space-y-4" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+
+            {data?.decisionCouncil ? <DecisionCouncilCard council={data.decisionCouncil} scenario={data.scenario} window={data.opportunityWindow} /> : null}
+            <DisciplineBar />
 
             {/* Direction banner */}
             <div className="rounded-2xl px-5 py-4 flex items-center gap-3 mt-4"
@@ -1204,7 +1200,10 @@ export default function V2Dashboard() {
         )}
       </div>
 
-      </details>
+      <ExecutionTicket loading={loading} error={loadError} contract={primary} scenario={data?.scenario}
+        validUntil={data?.opportunityWindow?.validUntil} issuedAt={data?.issuedAt} gate={data?.executionGate}
+        marketOpen={data?.marketOpen} marketClosed={data?.marketClosed} quotes={liveQuotes} now={Date.now()} />
+
       {/* ── Compliance Disclaimer ── */}
       <div className="rounded-xl px-4 py-3 text-xs leading-relaxed font-mono" dir="rtl"
         style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)', color: '#6B7B8D' }}>
