@@ -252,7 +252,7 @@ export default function StocksScanner() {
                style={{ background: 'radial-gradient(circle at 10% 0%, rgba(96,165,250,.17), transparent 40%), #0D1B2A', border: `1px solid ${ACCENT}45` }}>
         <div className="px-5 py-4 flex items-center justify-between gap-3 border-b border-white/5">
           <div>
-            <div className="text-[11px] font-bold tracking-widest" style={{ color: ACCENT }}>توصية الشركات الآن</div>
+            <div className="text-[11px] font-bold tracking-widest" style={{ color: ACCENT }}>🎯 توصية اليوم</div>
           </div>
           <span className="rounded-full px-3 py-1 text-[11px] font-bold bg-blue-400/10 text-blue-300 border border-blue-400/20">
             باقتك: {tier === 'radar' ? 'رادار' : tier === 'signal' ? 'سيجنال' : tier === 'edge' ? 'إيدج' : 'ألفا'}

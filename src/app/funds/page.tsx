@@ -289,7 +289,7 @@ export default function FundsToday() {
     <div className="mx-auto max-w-3xl space-y-5 p-4 pb-24">
       {/* الترويسة */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-lg font-black text-white">توصية اليوم</h1>
+        <h1 className="text-lg font-black text-white">🎯 توصية اليوم</h1>
         <div className="text-left text-[10px] leading-4 text-slate-500">
           <div>الإصدار: {data.asOfRiyadh} (السعودية)</div>
           <div>{data.asOfNy} (نيويورك)</div>
