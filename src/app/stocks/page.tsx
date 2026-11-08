@@ -653,17 +653,21 @@ function StockDetail({ detail }: { detail: DetailData }) {
 
       {/* لماذا */}
       <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}>
-        <div className="text-xs font-bold mb-1.5" style={{ color: ACCENT }}>القرار</div>
+        <div className="text-xs font-bold mb-1.5" style={{ color: ACCENT }}>لماذا هذه التوصية؟</div>
         <div className="text-sm leading-relaxed" style={{ color: '#CBD5E1' }}>{c.focus?.primaryReason || c.reason}</div>
         {c.focus?.nextStep && (
-          <div className="text-xs mt-1.5 font-semibold" style={{ color: '#BFDBFE' }}>{c.focus.nextStep}</div>
+          <div className="text-xs mt-1.5 font-semibold" style={{ color: '#BFDBFE' }}>← الخطوة التالية: {c.focus.nextStep}</div>
         )}
-        {okEdges.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-2.5">
+        {(okEdges.length > 0 || c.focus) && (
+          <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
             {okEdges.map(e => (
               <span key={e.label} className="text-xs px-2 py-0.5 rounded-md"
                     style={{ background: 'rgba(38,208,124,0.1)', color: '#34D399', border: '1px solid rgba(38,208,124,0.25)' }}>✓ {e.label}</span>
             ))}
+            {c.focus && (
+              <span className="text-xs px-2 py-0.5 rounded-md font-mono"
+                    style={{ background: 'rgba(255,255,255,0.04)', color: '#94A3B8', border: '1px solid rgba(255,255,255,0.08)' }}>ثقة {c.focus.confidence}/100</span>
+            )}
           </div>
         )}
       </div>
