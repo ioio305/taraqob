@@ -61,6 +61,7 @@ export async function fetchTrades(): Promise<Trade[]> {
   await migrateLocalOnce(sb, user.id)
   const { data, error } = await sb
     .from('v2_trades').select('*')
+    .eq('user_id', user.id)
     .order('opened_at', { ascending: true })
   if (error) throw new Error('تعذر جلب الدفتر: ' + error.message)
   return (data ?? []).map(rowToTrade)
@@ -75,6 +76,7 @@ export async function addTradeDb(t: Omit<Trade, 'id'>): Promise<Trade> {
     contract_type: t.type, strike: t.strike, expiry: t.expiry ?? null,
     qty: t.qty, entry_price: t.entry,
     opened_at: t.openedAt,
+    note: t.note ?? null,
   }).select('*').single()
   if (error) throw new Error('تعذر التسجيل: ' + error.message)
   return rowToTrade(data)

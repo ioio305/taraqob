@@ -16,7 +16,8 @@ import { SidebarPlanCard } from '@/components/v2/SidebarPlanCard'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
 import { getSelectedIndex, indexMeta, type IndexId } from '@/lib/v2/indexSelection'
 import { showBrowserNotificationOnce } from '@/lib/v2/browserNotifications'
-import { SHOW_CONTRACT_ANALYSIS, SHOW_STRATEGY_LAB } from '@/lib/v2/featureFlags'
+import { SHOW_STRATEGY_LAB } from '@/lib/v2/featureFlags'
+import { TRADING_MAIN, visiblePremiumTools } from '@/lib/v2/tradingNavigation'
 
 const ROLE_LABEL_MAP: Record<string, string>  = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
 const ROLE_COLOR_MAP: Record<string, string>  = { admin: '#C9943A', moderator: '#60A5FA', user: '#7C8A99' }
@@ -30,45 +31,6 @@ const TIER_COLOR: Record<string, string> = { radar: '#7C8A99', signal: '#60A5FA'
 function tierAllows(userTier: string, required: string): boolean {
   return (TIER_RANK[userTier] ?? 1) >= (TIER_RANK[required] ?? 2)
 }
-
-// ── Nav definitions ────────────────────────────────────────────
-// ── التقسيم الهادئ: رحلة التداول اليومية أولاً، ثم أدوات التعمق ──
-// قرار اليوم — الداشبورد (التوصية) أولاً، ثم بقية القرار (للجميع)
-const NAV_DECISION = [
-  { href: '/v2',             label: 'الداشبورد',    icon: '◈', exact: true,  requiredTier: 'radar' },
-  { href: '/v2/plan',        label: 'خطة اليوم',    icon: '📋', exact: false, requiredTier: 'radar' },
-  { href: '/v2/smart-chart', label: 'الشارت الذكي ✦', icon: '✨', exact: false, requiredTier: 'radar' },
-  // «تحليل العقد» مُخفى مؤقتاً — راية SHOW_CONTRACT_ANALYSIS (استعادة بتبديلها إلى true)
-  ...(SHOW_CONTRACT_ANALYSIS ? [{ href: '/v2/analyze', label: 'تحليل العقد', icon: '⬡', exact: false, requiredTier: 'radar' }] : []),
-]
-
-// الرصد والإشارات — للمشترك المدفوع
-const NAV_SIGNALS = [
-  { href: '/v2/signals', label: 'الإشارات',     icon: '◉', exact: false, requiredTier: 'signal' },
-  { href: '/v2/radar',   label: 'رادار الأموال', icon: '📡', exact: false, requiredTier: 'signal' },
-  { href: '/v2/console', label: 'مرصد العقود',  icon: '🖥', exact: false, requiredTier: 'signal' },
-]
-
-// أدواتك — إدارة صفقاتك (للجميع)
-const NAV_TOOLS = [
-  { href: '/v2/paper',   label: 'محفظة تجريبية', icon: '🎮', exact: false, requiredTier: 'radar' },
-  { href: '/v2/journal', label: 'دفتر الصفقات',  icon: '📔', exact: false, requiredTier: 'radar' },
-  { href: '/v2/exit',    label: 'مساعد الخروج',  icon: '🚪', exact: false, requiredTier: 'radar' },
-]
-
-// مميّز — حصري لإيدج/VIP
-const NAV_PREMIUM = [
-  { href: '/v2/decision-room', label: 'غرفة القرار', icon: '✦', exact: false, requiredTier: 'alpha' },
-  { href: '/v2/chart', label: 'الشارت المتقدم', icon: '📈', exact: false, requiredTier: 'edge' },
-  // «مختبر الاستراتيجيات» — اختبار تاريخي عبر LEAN (إيدج/ألفا). الحماية على الخادم أيضاً.
-  ...(SHOW_STRATEGY_LAB ? [{ href: '/v2/lab', label: 'مختبر الاستراتيجيات', icon: '🧪', exact: false, requiredTier: 'edge' }] : []),
-]
-
-// روابط خفيفة أسفل القائمة — بلا أيقونات صاخبة
-const NAV_QUIET = [
-  { href: '/track',      label: 'السجل العام' },
-  { href: '/?preview=1', label: 'الصفحة التعريفية' },
-]
 
 const NAV_ADMIN = [
   { href: '/v2/admin',       label: 'نظرة عامة',   icon: '⊞', exact: true  },
@@ -150,7 +112,9 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
   platformAccess: PlatformAccess
 }) {
   const router = useRouter()
+  const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  useEffect(() => { setMobileOpen(false) }, [pathname])
 
   // ── الإحالة: عند أول دخول بعد التسجيل من رابط دعوة، نسجّل الداعي ونكافئه ──
   useEffect(() => {
@@ -331,12 +295,9 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
     return <NavLink key={item.href} {...item} exact={item.exact} accent={accent} />
   }
 
-  function visibleItems<T extends { requiredTier?: string }>(items: T[]) {
-    return items.filter(item => isStaff || tierAllows(subscriptionTier, item.requiredTier ?? 'radar'))
-  }
-
-  const visibleSignals = visibleItems(NAV_SIGNALS)
-  const visiblePremium = visibleItems(NAV_PREMIUM)
+  const staffNavigation = isStaff && effectiveRole !== 'user'
+  const visiblePremium = visiblePremiumTools(subscriptionTier, staffNavigation)
+    .filter(item => item.href !== '/v2/lab' || SHOW_STRATEGY_LAB)
 
   // ── Sidebar content ──────────────────────────────────────────
   const Sidebar = (
@@ -394,47 +355,22 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
           <div className="mx-4 my-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }} />
         )}
 
-        {/* ── قرار اليوم ── */}
         <div className="px-3 pt-1 pb-1">
-          <SectionTitle>قرار اليوم</SectionTitle>
+          <SectionTitle>التداول</SectionTitle>
           <div className="space-y-0.5 mt-1">
-            {NAV_DECISION.map(item => renderNavItem(item, showAdminNav ? '#60A5FA' : '#C9943A'))}
-          </div>
-        </div>
-
-        {/* ── الرصد والإشارات ── */}
-        {visibleSignals.length > 0 && <div className="px-3 pt-1 pb-1">
-          <SectionTitle>الرصد والإشارات</SectionTitle>
-          <div className="space-y-0.5 mt-1">{visibleSignals.map(item => renderNavItem(item, showAdminNav ? '#60A5FA' : '#C9943A'))}</div>
-        </div>}
-
-        {/* ── أدواتك ── */}
-        <div className="px-3 pt-1 pb-1">
-          <SectionTitle>أدواتك</SectionTitle>
-          <div className="space-y-0.5 mt-1">
-            {NAV_TOOLS.map(item => renderNavItem(item, showAdminNav ? '#60A5FA' : '#C9943A'))}
+            {TRADING_MAIN.map(item => renderNavItem(item, showAdminNav ? '#60A5FA' : '#C9943A'))}
           </div>
         </div>
 
         {/* ── مميّز (إيدج/VIP) ── */}
         {visiblePremium.length > 0 && <div className="px-3 pt-1 pb-2">
-          <SectionTitle color="#C9943A">⭐ مميّز</SectionTitle>
+          <SectionTitle color="#C9943A">⭐ أدوات مميزة</SectionTitle>
           <div className="space-y-0.5 mt-1">{visiblePremium.map(item => renderNavItem(item, showAdminNav ? '#60A5FA' : '#C9943A'))}</div>
         </div>}
 
         {!isStaff && <SidebarPlanCard tier={subscriptionTier} platform="spx" />}
 
-        {/* روابط هادئة */}
-        <div className="px-5 pt-1 pb-3 flex items-center gap-3">
-          {NAV_QUIET.map((q, i) => (
-            <span key={q.href} className="flex items-center gap-3">
-              {i > 0 && <span style={{ color: '#55657A' }}>·</span>}
-              <Link href={q.href} className="text-xs transition-colors hover:text-white" style={{ color: '#7C8A99' }}>
-                {q.label}
-              </Link>
-            </span>
-          ))}
-        </div>
+
       </div>
 
       {/* ── ذيل هادئ: الهوية فقط — الخروج انتقل إلى الهيدر ── */}
@@ -493,7 +429,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
 
           <MarketClock />
 
-          {!showAdminNav && (
+          {!showAdminNav && (staffNavigation || tierAllows(subscriptionTier, 'alpha')) && (
             <Link
               href={isStaff || tierAllows(subscriptionTier, 'alpha') ? '/v2/decision-room' : '/v2/upgrade?tier=alpha'}
               className="flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-black shadow-lg"
@@ -659,7 +595,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
         </main>
 
         {/* مراقب التنبيهات: فرص قوية + انقلاب جاما + قرارات خروج الصفقات المحفوظة */}
-        <AlertsWatcher />
+        <AlertsWatcher advancedTools={visiblePremium.some(item => item.href === '/v2/exit')} />
 
         {/* الجولة التعريفية (أول دخول) */}
         <BeginnerHelpers />
@@ -670,12 +606,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
         {/* Mobile bottom nav */}
         <nav className="lg:hidden shrink-0 flex items-center justify-around px-1 py-2"
           style={{ background: '#08101A', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-          {(showAdminNav ? [
-            { href: '/v2/admin',   icon: '⊞', label: 'الإدارة',  exact: true  },
-            { href: '/v2',         icon: '◈', label: 'التداول',  exact: true  },
-            ...(SHOW_CONTRACT_ANALYSIS ? [{ href: '/v2/analyze', icon: '⬡', label: 'التحليل', exact: false }] : []),
-            { href: '/v2/signals', icon: '◉', label: 'الإشارات', exact: false },
-          ] : NAV_DECISION.slice(0, 4)).map(item => (
+          {TRADING_MAIN.map(item => (
             <MobileTab key={item.href} {...item} />
           ))}
         </nav>

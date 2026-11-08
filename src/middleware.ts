@@ -3,11 +3,14 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { isAllowedMutationOrigin, isBodyTooLarge } from '@/lib/security/requestRules'
 import { STOCKS_FEATURE_TIER, stocksFeatureForPath, tierAllowsStocksFeature } from '@/lib/v2/stocksTierAccess'
+import { requiredTradingTier, tradingTierAllows } from '@/lib/v2/tradingNavigation'
+import { getTrialState } from '@/lib/v2/accessRules'
 
 type CookieToSet = { name: string; value: string; options: CookieOptions }
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const tradingFeatureTier = requiredTradingTier(pathname)
 
   // حماية الطلبات التي تغيّر البيانات من المواقع الخارجية والأحجام المبالغ فيها.
   const isMutation = !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
@@ -101,7 +104,7 @@ export async function middleware(request: NextRequest) {
 
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('role, is_active, subscription_tier')
+    .select('role, is_active, subscription_tier, referral_days')
     .eq('id', user.id)
     .single()
 
@@ -142,7 +145,7 @@ export async function middleware(request: NextRequest) {
   } else if (pathname === '/api/v2/recommend') {
     const asset = request.nextUrl.searchParams.get('asset')
     requestedPlatform = asset === 'stocks' ? 'stocks' : asset === 'funds' ? 'funds' : 'spx'
-  } else if (['/api/v2/analyze', '/api/v2/chart', '/api/v2/console', '/api/v2/gameplan'].includes(pathname)) {
+  } else if (tradingFeatureTier || pathname === '/api/v2/analyze') {
     requestedPlatform = 'spx'
   }
 
@@ -175,6 +178,21 @@ export async function middleware(request: NextRequest) {
       url.search = ''
       url.searchParams.set('locked', requestedPlatform)
       return NextResponse.redirect(url)
+    }
+
+    if (requestedPlatform === 'spx' && tradingFeatureTier) {
+      const storedTier = subscriptionActive ? subscription?.tier : profile.subscription_tier
+      const effectiveTier = getTrialState(storedTier, user.created_at, profile.referral_days ?? user.user_metadata?.referral_days).effectiveTier
+      if (!tradingTierAllows(effectiveTier, tradingFeatureTier)) {
+        if (pathname.startsWith('/api/')) return NextResponse.json(
+          { error: 'tier_upgrade_required', platform: 'spx', requiredTier: tradingFeatureTier }, { status: 403 },
+        )
+        const url = request.nextUrl.clone()
+        url.pathname = '/v2/upgrade'
+        url.search = ''
+        url.searchParams.set('tier', tradingFeatureTier)
+        return NextResponse.redirect(url)
+      }
     }
 
     const stocksFeature = requestedPlatform === 'stocks'

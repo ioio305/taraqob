@@ -173,7 +173,7 @@ async function logSignalOnce(key: string, contract: any, market: any, scenario?:
   } catch { /* يعاد تلقائياً في الدورة القادمة */ }
 }
 
-export function AlertsWatcher() {
+export function AlertsWatcher({ advancedTools = true }: { advancedTools?: boolean } = {}) {
   const [permission, setPermission] = useState<string>('default')
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -207,7 +207,7 @@ export function AlertsWatcher() {
       } catch { /* تجاهل */ }
 
       // ── 2. كسر نقطة انقلاب جاما (خاص بسباكس — مصدر الجاما) ──
-      if (idx === 'SPX') try {
+      if (advancedTools && idx === 'SPX') try {
         const g = await fetch('/api/v2/gamma').then(r => r.json())
         const gamma = g?.gamma
         if (gamma?.spot && gamma?.flipLevel) {
@@ -232,6 +232,7 @@ export function AlertsWatcher() {
       } catch { /* تجاهل */ }
 
       // ── 3. الصفقات المحفوظة: هل تحتاج قراراً؟ ──
+      if (!advancedTools) return
       const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
       const recommended = loadRecommendedPositions().filter(pos => !pos.expiry || pos.expiry >= todayStr)
       const combined = new Map<string, WatchedPosition>()
@@ -275,7 +276,7 @@ export function AlertsWatcher() {
     tick()
     timer.current = setInterval(tick, POLL_MS)
     return () => { if (timer.current) clearInterval(timer.current) }
-  }, [])
+  }, [advancedTools])
 
   // زر تفعيل الإشعارات (يظهر فقط إن لم تُفعّل بعد)
   if (permission !== 'default') return null
