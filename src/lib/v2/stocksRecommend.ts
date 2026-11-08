@@ -12,6 +12,7 @@ import {
 import { getStockQuote, getStockDailyBars, getStockIntradayBars } from './stockData'
 import { buildOpportunityWindow, buildUnderlyingScenario, type OpportunityWindow, type UnderlyingScenario } from './opportunityModel'
 import { selectContractsForScenario } from './scenarioContractSelector'
+import { buildMoneynessLadder, type MoneynessLadder } from './moneynessLadder'
 import { runDecisionCouncil, type DecisionCouncil } from './decisionCouncil'
 import { stocksAdapter, stockDirection } from './adapters/stocksAdapter'
 import { STOCKS_CALIBRATION } from './adapters/registry'
@@ -58,6 +59,8 @@ export interface StockRecResult {
   scenario: UnderlyingScenario | null
   opportunityWindow: OpportunityWindow | null
   decisionCouncil: DecisionCouncil | null
+  // سلّم الجرأة (داخل/عند/خارج السعر) — عرض فقط. كل الدرجات «راقب» (الشركات غير مُعايَرة).
+  moneynessLadder: MoneynessLadder | null
 }
 
 // نطاق بحث الستريكات: ±20% حول السعر (mandatoryFilter يفرض «خارج المال» فعلياً)
@@ -104,6 +107,7 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
     dataQuality: null,
     champion: null,
     tradeStyle, dayPlan: null, scenario: null, opportunityWindow: null, decisionCouncil: null,
+    moneynessLadder: null,
   })
 
   // بوابة النظام البطل: الشركات المستبعدة تاريخيًا — مراقبة فقط، بلا عقود
@@ -176,6 +180,7 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
     champion,
     tradeStyle, dayPlan,
     scenario: null, opportunityWindow: null, decisionCouncil: preliminaryCouncil,
+    moneynessLadder: null,
   }
 
   if (!expirations.length) {
@@ -212,6 +217,7 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
   const emLower: number | null = Math.round((price - dailyExpectedMove) * 100) / 100
   let watchMode = !contractType || !scenario || !opportunityWindow
   let decisionCouncil = preliminaryCouncil
+  let ladder: MoneynessLadder | null = null
 
   if (contractType && scenario && opportunityWindow) {
     const requestedDte = Math.max(opportunityWindow.minimumDte, options.targetDte ?? opportunityWindow.recommendedDte)
@@ -256,6 +262,9 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
         .filter(() => decisionCouncil.action === contractType)
         .slice(0, 1)
       usedExp = selected[0].expiration
+      const built = buildMoneynessLadder({ chain: selectedChain, spot: price, direction: contractType, chosenOtmStrike: selected[0].strike })
+      // الشركات غير مُعايَرة: اعرض الدرجات الثلاث كلها «راقب» (تحليل فقط، لا «نفّذ»)
+      ladder = built ? { ...built, rungs: built.rungs.map(r => ({ ...r, validated: false })) } : null
     }
   }
 
@@ -280,6 +289,7 @@ export async function recommendForStock(symbol: string, options: RecommendStockO
     scenario,
     opportunityWindow,
     decisionCouncil,
+    moneynessLadder: ladder,
   }
 }
 

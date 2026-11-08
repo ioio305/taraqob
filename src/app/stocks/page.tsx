@@ -4,10 +4,12 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { UnderlyingTradeManager } from '@/components/v2/UnderlyingTradeManager'
 import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
+import { MoneynessLadder } from '@/components/v2/MoneynessLadder'
 import { useStocksTier } from './StocksTierContext'
 import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
 import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
+import type { MoneynessLadder as MoneynessLadderData } from '@/lib/v2/moneynessLadder'
 
 // ── أنواع الماسح ──────────────────────────────────────────────────────────────
 type Best = {
@@ -97,6 +99,7 @@ type DetailData = {
   scenario?: UnderlyingScenario | null
   opportunityWindow?: OpportunityWindow | null
   decisionCouncil?: DecisionCouncil | null
+  moneynessLadder?: MoneynessLadderData | null
 }
 
 const ACCENT = '#60A5FA'   // لون هوية منصة الشركات
@@ -540,7 +543,10 @@ function StockDetail({ detail }: { detail: DetailData }) {
     ? detail.contracts.find(contract => contract.type === councilAction && contract.status === 'execute')
     : undefined
   const councilCard = detail.decisionCouncil ? (
-    <DecisionCouncilCard council={detail.decisionCouncil} scenario={detail.scenario} window={detail.opportunityWindow} compact />
+    <div className="space-y-2">
+      <DecisionCouncilCard council={detail.decisionCouncil} scenario={detail.scenario} window={detail.opportunityWindow} compact />
+      {detail.moneynessLadder && <MoneynessLadder ladder={detail.moneynessLadder} horizonLabel={detail.expiration ? `انتهاء ${detail.expiration}` : null} />}
+    </div>
   ) : null
   if (!c) {
     if (!detail.dataQuality || detail.dataQuality.status === 'ready') return councilCard
