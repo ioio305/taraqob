@@ -15,6 +15,7 @@ import {
 import { getStockQuote, getStockDailyBars, getStockIntradayBars } from './stockData'
 import { buildOpportunityWindow, buildUnderlyingScenario, type OpportunityWindow, type UnderlyingScenario } from './opportunityModel'
 import { selectContractsForScenario } from './scenarioContractSelector'
+import { buildMoneynessLadder, type MoneynessLadder } from './moneynessLadder'
 import { runDecisionCouncil, type DecisionCouncil } from './decisionCouncil'
 import { fundsAdapter, fundDirectionFromBars, fundBySymbol } from './adapters/fundsAdapter'
 import { FUNDS_CALIBRATION } from './adapters/registry'
@@ -62,6 +63,8 @@ export interface FundRecResult {
   scenario: UnderlyingScenario | null
   opportunityWindow: OpportunityWindow | null
   decisionCouncil: DecisionCouncil | null
+  // سلّم الجرأة (داخل/عند/خارج السعر) — عرض فقط. كل الدرجات «راقب» (الصناديق غير مُعايَرة).
+  moneynessLadder: MoneynessLadder | null
 }
 
 // نطاق بحث الستريكات: ±20% حول السعر (mandatoryFilter يفرض «خارج المال» فعلياً)
@@ -107,6 +110,7 @@ export async function recommendForFund(symbol: string, options: RecommendFundOpt
     calibration: { validated: FUNDS_CALIBRATION.validated, note: FUNDS_CALIBRATION.note },
     watchMode: false, contracts: [], expiration: '', expirations: [], mode,
     notCalibratedNote: NOT_CALIBRATED_NOTE, scenario: null, opportunityWindow: null, decisionCouncil: null,
+    moneynessLadder: null,
   })
 
   // 1) سعر + شموع (مرّة واحدة — تُستخدم للتذبذب وحارس الانهيار)
@@ -151,6 +155,7 @@ export async function recommendForFund(symbol: string, options: RecommendFundOpt
     calibration: { validated: FUNDS_CALIBRATION.validated, note: FUNDS_CALIBRATION.note },
     expirations: expirations.slice(0, 8), mode, notCalibratedNote: NOT_CALIBRATED_NOTE,
     scenario: null, opportunityWindow: null, decisionCouncil: preliminaryCouncil,
+    moneynessLadder: null,
   }
 
   if (!expirations.length) {
@@ -178,6 +183,7 @@ export async function recommendForFund(symbol: string, options: RecommendFundOpt
   const emLower: number | null = Math.round((price - dailyExpectedMove) * 100) / 100
   let watchMode = !contractType || !scenario || !opportunityWindow
   let decisionCouncil = preliminaryCouncil
+  let ladder: MoneynessLadder | null = null
 
   if (contractType && scenario && opportunityWindow) {
     const candidateExps = [...expirations]
@@ -221,6 +227,9 @@ export async function recommendForFund(symbol: string, options: RecommendFundOpt
         .filter(() => decisionCouncil.action === contractType)
         .slice(0, 1)
       usedExp = selected[0].expiration
+      const built = buildMoneynessLadder({ chain: selectedChain, spot: price, direction: contractType, chosenOtmStrike: selected[0].strike })
+      // الصناديق غير مُعايَرة: كل الدرجات «راقب» (تحليل فقط، لا «نفّذ»)
+      ladder = built ? { ...built, rungs: built.rungs.map(r => ({ ...r, validated: false })) } : null
     }
   }
 
@@ -245,6 +254,7 @@ export async function recommendForFund(symbol: string, options: RecommendFundOpt
     scenario,
     opportunityWindow,
     decisionCouncil,
+    moneynessLadder: ladder,
   }
 }
 

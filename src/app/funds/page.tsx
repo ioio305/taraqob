@@ -3,10 +3,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import { UnderlyingTradeManager } from '@/components/v2/UnderlyingTradeManager'
 import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
+import { MoneynessLadder } from '@/components/v2/MoneynessLadder'
 import { addPaper } from './paperStore'
 import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
 import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
+import type { MoneynessLadder as MoneynessLadderData } from '@/lib/v2/moneynessLadder'
 
 // ── توصية اليوم — صيغة موحدة لكل فرصة (مستند التصور المعتمد) ─────────────────
 type Plan = {
@@ -224,6 +226,7 @@ export default function FundsToday() {
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
   const [added, setAdded] = useState('')
+  const [optLadder, setOptLadder] = useState<MoneynessLadderData | null>(null)
   const symbols = [...(data?.opportunities ?? []), ...(data?.watchlist ?? [])].map(card => card.symbol)
   const { quotes } = useLiveQuotes(symbols)
 
@@ -248,6 +251,20 @@ export default function FundsToday() {
     const t = setInterval(load, REFRESH_SEC * 1000)
     return () => clearInterval(t)
   }, [load])
+
+  // سلّم الجرأة بالخيارات لتوصية اليوم الأولى، بنفس اتجاه الصندوق (توحيد لغة العقود)
+  const leadOpp = data?.opportunities?.[0] ?? null
+  const leadSym = leadOpp?.symbol ?? null
+  const leadDir: 'call' | 'put' | null = leadOpp?.verdict.plan ? (leadOpp.verdict.plan.side === 1 ? 'call' : 'put') : null
+  useEffect(() => {
+    if (!leadSym || !leadDir) { setOptLadder(null); return }
+    let cancelled = false
+    fetch(`/api/v2/recommend?asset=funds&symbol=${encodeURIComponent(leadSym)}&type=${leadDir}`)
+      .then(res => res.json())
+      .then(json => { if (!cancelled) setOptLadder((json?.moneynessLadder as MoneynessLadderData | null) ?? null) })
+      .catch(() => { if (!cancelled) setOptLadder(null) })
+    return () => { cancelled = true }
+  }, [leadSym, leadDir])
 
   if (loading && !data) {
     return (
@@ -301,6 +318,14 @@ export default function FundsToday() {
 
       {/* التوصية الأولى — بطل الصفحة */}
       {opps.length ? <HeroCard c={opps[0]} onAdd={addToPaper} /> : null}
+
+      {/* سلّم الجرأة بالخيارات — توحيد لغة العقود مع المؤشرات/الشركات (تحليل فقط) */}
+      {opps.length && optLadder ? (
+        <div className="rounded-2xl border border-white/10 p-4" style={{ background: 'rgba(255,255,255,.02)' }}>
+          <div className="mb-2 text-xs font-bold" style={{ color: ACCENT }}>كيف تلعبها بالخيارات — تحليل فقط</div>
+          <MoneynessLadder ladder={optLadder} horizonLabel="عقد على الصندوق" />
+        </div>
+      ) : null}
 
       {/* بقية الفرص */}
       {opps.slice(1).map(c => <OpportunityCard key={c.symbol} c={c} onAdd={addToPaper} />)}
