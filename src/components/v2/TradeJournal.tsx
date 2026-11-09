@@ -1,6 +1,6 @@
 'use client'
 
-// ── دفتر الصفقات + المدرب الشخصي ────────────────────────────────────────────
+// ── دفتر الصفقات + المدرب الشخصي — واعٍ بالأصل (SPX · أسهم · صناديق) ──────────
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -11,10 +11,36 @@ import {
   computeStats, coachInsights, weeklyReport, type Trade,
 } from '@/lib/v2/journal'
 
-function JournalContent({ view }: { view: 'positions' | 'history' }) {
+type Platform = 'spx' | 'stocks' | 'funds'
+const PLATFORM_META: Record<Platform, { label: string; defaultSymbol: string; fixed: boolean; placeholder: string; base: string }> = {
+  spx:    { label: 'خيارات SPX',      defaultSymbol: 'SPX', fixed: true,  placeholder: '7500', base: '/v2' },
+  stocks: { label: 'خيارات الأسهم',   defaultSymbol: '',    fixed: false, placeholder: '190',  base: '/stocks' },
+  funds:  { label: 'خيارات الصناديق', defaultSymbol: '',    fixed: false, placeholder: '55',   base: '/funds' },
+}
+
+// جذر العقد (OCC) المخزّن في note بصيغة 'root:<SYM>'. القديم 'root:SPXW' يبقى SPX.
+function tradeRoot(t: { note?: string }): string {
+  const n = t.note ?? ''
+  return n.startsWith('root:') ? n.slice(5) : 'SPXW'
+}
+
+// رمز العقد الكامل (OCC): <جذر><YYMMDD><C/P><ستريك×1000 بـ8 خانات> — يصلح لأي أصل.
+function positionSymbol(t: { strike: number; type: string; expiry?: string }, root: string): string | null {
+  if (!root || !/^[A-Z.]{1,6}$/.test(root)) return null
+  if (!t.expiry || !/^\d{4}-\d{2}-\d{2}$/.test(t.expiry) || !Number.isFinite(Date.parse(t.expiry))
+    || new Date(t.expiry).toISOString().slice(0, 10) !== t.expiry || !Number.isFinite(t.strike) || t.strike <= 0
+    || !['call', 'put'].includes(t.type)) return null
+  const strike = Math.round(t.strike * 1000).toString().padStart(8, '0')
+  if (strike.length !== 8) return null
+  return `${root}${t.expiry.slice(2).replace(/-/g, '')}${t.type === 'call' ? 'C' : 'P'}${strike}`
+}
+
+function JournalContent({ view, platform = 'spx' }: { view: 'positions' | 'history'; platform?: Platform }) {
+  const meta = PLATFORM_META[platform] ?? PLATFORM_META.spx
   const params = useSearchParams()
   const [trades, setTrades] = useState<Trade[]>([])
   const [type, setType] = useState<'call' | 'put'>((params.get('type') as 'call' | 'put') ?? 'call')
+  const [symbol, setSymbol] = useState((params.get('symbol') ?? '').toUpperCase() || meta.defaultSymbol)
   const [strike, setStrike] = useState(params.get('strike') ?? '')
   const [entry, setEntry] = useState(params.get('entry') ?? '')
   const [qty, setQty] = useState('1')
@@ -23,7 +49,8 @@ function JournalContent({ view }: { view: 'positions' | 'history' }) {
   const [exitPx, setExitPx] = useState('')
   const [msg, setMsg] = useState('')
   const positionsView = view === 'positions' || Boolean(params.get('entry'))
-  const { quotes } = useLiveQuotes(trades.filter(t => !t.closedAt && t.note === 'root:SPXW').map(positionSymbol).filter((s): s is string => !!s))
+  // أسعار حيّة لكل المراكز المفتوحة (أي أصل) عبر رمز العقد المبني من جذر كل صفقة.
+  const { quotes } = useLiveQuotes(trades.filter(t => !t.closedAt).map(t => positionSymbol(t, tradeRoot(t))).filter((s): s is string => !!s))
 
   useEffect(() => {
     fetchTrades().then(setTrades).catch(e => setMsg('⚠ ' + (e?.message ?? 'تعذر جلب الدفتر')))
@@ -32,9 +59,11 @@ function JournalContent({ view }: { view: 'positions' | 'history' }) {
   async function addTrade() {
     const k = Number(strike), e = Number(entry), q = Number(qty)
     if (![k, e, q].every(Number.isFinite) || k <= 0 || e <= 0 || !Number.isInteger(q) || q < 1 || q > 10000) { setMsg('أدخل الستريك وسعر الدخول وعدد العقود بشكل صحيح'); return }
-    if (!positionSymbol({ strike: k, type, expiry })) { setMsg('حدد تاريخ انتهاء العقد الصحيح'); return }
+    const root = meta.fixed ? 'SPXW' : symbol.trim().toUpperCase()
+    if (!/^[A-Z.]{1,6}$/.test(root)) { setMsg('أدخل رمز الأصل (مثل AAPL أو XLF)'); return }
+    if (!positionSymbol({ strike: k, type, expiry }, root)) { setMsg('حدد تاريخ انتهاء العقد الصحيح'); return }
     try {
-      const saved = await addTradeDb({ type, strike: k, qty: q, entry: e, expiry, note: 'root:SPXW', openedAt: new Date().toISOString() })
+      const saved = await addTradeDb({ type, strike: k, qty: q, entry: e, expiry, note: 'root:' + root, openedAt: new Date().toISOString() })
       setTrades(prev => [...prev, saved])
       setStrike(''); setEntry(''); setMsg('✓ سُجّلت الصفقة للمتابعة')
     } catch (err: any) { setMsg('⚠ ' + err.message) }
@@ -67,6 +96,14 @@ function JournalContent({ view }: { view: 'positions' | 'history' }) {
   const openTrades = trades.filter(t => !t.closedAt)
   const closedTrades = [...trades.filter(t => t.closedAt)].reverse()
 
+  // ملخّص حيّ للمراكز المفتوحة (نتيجة ورقية حالية — غير محقّقة).
+  const liveOpen = openTrades.reduce((acc, t) => {
+    const q = quotes[positionSymbol(t, tradeRoot(t)) ?? '']
+    const cur = executableOptionQuote(q) ? q?.bid : null
+    if (cur != null) { acc.pnl += (cur - t.entry) * 100 * t.qty; acc.priced++ }
+    return acc
+  }, { pnl: 0, priced: 0 })
+
   const TONE_STYLE = {
     good: { bg: 'rgba(38,208,124,0.06)', border: 'rgba(38,208,124,0.3)', color: '#26D07C' },
     warn: { bg: 'rgba(240,67,90,0.06)', border: 'rgba(240,67,90,0.3)', color: '#F0888A' },
@@ -84,8 +121,28 @@ function JournalContent({ view }: { view: 'positions' | 'history' }) {
             ☁ متزامن سحابياً
           </span>
         </h1>
-        <p className="text-sm text-gray-500 mt-0.5">{positionsView ? 'صفقاتك المسجلة. تسجيل الصفقة أو الخروج هنا لا يرسل أمرًا إلى الوسيط.' : 'صفقاتك المغلقة ونتائجها المسجلة قبل الرسوم.'}</p>
+        <p className="text-sm text-gray-500 mt-0.5">{positionsView ? 'صفقاتك المسجلة بربح/خسارة حيّ. تسجيل الصفقة أو الخروج هنا لا يرسل أمرًا إلى الوسيط.' : 'صفقاتك المغلقة ونتائجها المسجلة قبل الرسوم.'}</p>
       </div>
+
+      {/* ملخّص المراكز المفتوحة الحيّ */}
+      {positionsView && openTrades.length > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-[#0a1929] border border-[#1e3a50] rounded-xl p-3 text-center">
+            <div className="text-xs text-gray-500">مراكز مفتوحة</div>
+            <div className="text-lg font-black font-mono mt-1 text-white">{openTrades.length}</div>
+          </div>
+          <div className="bg-[#0a1929] border border-[#1e3a50] rounded-xl p-3 text-center">
+            <div className="text-xs text-gray-500">نتيجة ورقية حيّة</div>
+            <div className="text-lg font-black font-mono mt-1" style={{ color: liveOpen.pnl >= 0 ? '#26D07C' : '#F0435A' }}>
+              {liveOpen.priced > 0 ? `${liveOpen.pnl >= 0 ? '+' : ''}$${Math.round(liveOpen.pnl)}` : '—'}
+            </div>
+          </div>
+          <div className="bg-[#0a1929] border border-[#1e3a50] rounded-xl p-3 text-center">
+            <div className="text-xs text-gray-500">مُسعّرة الآن</div>
+            <div className="text-lg font-black font-mono mt-1 text-slate-300">{liveOpen.priced}/{openTrades.length}</div>
+          </div>
+        </div>
+      )}
 
       {/* إحصاءاتك الحقيقية */}
       {!positionsView && <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -129,8 +186,19 @@ function JournalContent({ view }: { view: 'positions' | 'history' }) {
 
       {/* تسجيل صفقة */}
       {positionsView && <div className="bg-[#0a1929] border border-[#1e3a50] rounded-2xl p-4 space-y-3">
-        <div className="text-sm font-bold text-[#E8D5A3]">سجّل صفقة فتحتها الآن</div>
+        <div className="text-sm font-bold text-[#E8D5A3]">سجّل صفقة فتحتها الآن · {meta.label}</div>
         <div className="flex gap-2 flex-wrap items-end">
+          {meta.fixed ? (
+            <div className="text-xs text-gray-500">الأصل
+              <div className="mt-1 w-20 rounded-lg px-2 py-2 text-sm font-mono font-bold text-white text-center" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>SPX</div>
+            </div>
+          ) : (
+            <label className="text-xs text-gray-500">رمز الأصل
+              <input value={symbol} onChange={e => setSymbol(e.target.value.toUpperCase())} placeholder="AAPL" dir="ltr"
+                className="block w-24 rounded-lg px-2 py-2 mt-1 text-sm text-white outline-none font-mono"
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }} />
+            </label>
+          )}
           <div className="flex gap-1.5">
             <button onClick={() => setType('call')} className="px-3 py-2 rounded-xl text-xs font-bold"
               style={{ background: type === 'call' ? 'rgba(38,208,124,0.2)' : 'rgba(255,255,255,0.03)', border: `1px solid ${type === 'call' ? '#26D07C' : 'rgba(255,255,255,0.08)'}`, color: type === 'call' ? '#26D07C' : '#6E7E8F' }}>▲ كول</button>
@@ -138,7 +206,7 @@ function JournalContent({ view }: { view: 'positions' | 'history' }) {
               style={{ background: type === 'put' ? 'rgba(240,67,90,0.2)' : 'rgba(255,255,255,0.03)', border: `1px solid ${type === 'put' ? '#F0435A' : 'rgba(255,255,255,0.08)'}`, color: type === 'put' ? '#F0435A' : '#6E7E8F' }}>▼ بوت</button>
           </div>
           {[
-            { label: 'الستريك', v: strike, set: setStrike, ph: '7500', w: 'w-24' },
+            { label: 'الستريك', v: strike, set: setStrike, ph: meta.placeholder, w: 'w-24' },
             { label: 'سعر الدخول $', v: entry, set: setEntry, ph: '8.10', w: 'w-24' },
             { label: 'عدد العقود', v: qty, set: setQty, ph: '1', w: 'w-20' },
           ].map(f => (
@@ -148,7 +216,7 @@ function JournalContent({ view }: { view: 'positions' | 'history' }) {
                 style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }} />
             </label>
           ))}
-          <label className="text-xs text-gray-500">انتهاء عقد SPXW
+          <label className="text-xs text-gray-500">تاريخ الانتهاء
             <input type="date" value={expiry} onChange={e => setExpiry(e.target.value)} className="block mt-1 rounded-lg bg-white/5 p-2 text-sm text-white" />
           </label>
           <button onClick={addTrade} className="px-5 py-2.5 rounded-xl text-sm font-bold"
@@ -166,15 +234,19 @@ function JournalContent({ view }: { view: 'positions' | 'history' }) {
           <div className="text-sm font-bold text-[#E8D5A3] mb-3">صفقاتك المفتوحة ({openTrades.length})</div>
           <div className="space-y-2">
             {openTrades.map(t => {
-              const symbol = t.note === 'root:SPXW' ? positionSymbol(t) : null
-              const quote = symbol ? quotes[symbol] : null
+              const root = tradeRoot(t)
+              const sym = positionSymbol(t, root)
+              const quote = sym ? quotes[sym] : null
               const current = executableOptionQuote(quote) ? quote?.bid : null
               const pnl = current != null ? (current - t.entry) * 100 * t.qty : null
+              const pnlPct = current != null && t.entry > 0 ? ((current - t.entry) / t.entry) * 100 : null
+              const dte = t.expiry ? Math.ceil((new Date(t.expiry + 'T20:00:00Z').getTime() - Date.now()) / 86_400_000) : null
               return (
               <div key={t.id} className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <span className="text-sm font-mono">
-                    <span style={{ color: t.type === 'call' ? '#26D07C' : '#F0435A' }}>{t.type === 'call' ? '▲' : '▼'} {t.strike}</span>
+                    <span className="text-white font-bold">{root}</span>{' '}
+                    <span style={{ color: t.type === 'call' ? '#26D07C' : '#F0435A' }}>{t.type === 'call' ? '▲ كول' : '▼ بوت'} {t.strike}</span>
                     <span className="text-gray-500"> × {t.qty} @ ${t.entry}</span>
                   </span>
                   {closingId === t.id ? (
@@ -187,18 +259,18 @@ function JournalContent({ view }: { view: 'positions' | 'history' }) {
                       <button onClick={() => setClosingId(null)} className="text-xs text-gray-500">إلغاء</button>
                     </span>
                   ) : (
-                    <button onClick={() => { setClosingId(t.id); setExitPx('') }}
+                    <button onClick={() => { setClosingId(t.id); setExitPx(current != null ? current.toFixed(2) : '') }}
                       className="text-xs font-bold px-3 py-1.5 rounded-lg"
                       style={{ background: 'rgba(201,148,58,0.12)', border: '1px solid rgba(201,148,58,0.4)', color: '#E8D5A3' }}>
                       أغلقتها؟ سجّل الخروج
                     </button>
                   )}
                 </div>
-                <div className="mt-2 flex flex-wrap gap-4 text-xs text-slate-400">
-                  <span>الانتهاء: {t.expiry ?? 'غير مسجل — لا يمكن تحديد سعر العقد'}</span>
-                  <span>عرض البيع الآن: <b className="font-mono text-white">{current != null ? `$${current.toFixed(2)}` : 'غير متاح'}</b></span>
-                  <span>النتيجة قبل الرسوم: <b className={pnl != null && pnl >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{pnl != null ? `$${pnl.toFixed(2)}` : '—'}</b></span>
-                  {quote?.asOf && <span>وقت العرض: {new Date(quote.asOf).toLocaleTimeString('ar-SA', { timeZone: 'Asia/Riyadh' })} الرياض</span>}
+                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+                  <span>الانتهاء: {t.expiry ?? 'غير مسجل'}{dte != null ? <b className={dte <= 1 ? 'text-rose-300' : 'text-slate-300'}> ({dte <= 0 ? 'انتهى' : `${dte}ي`})</b> : null}</span>
+                  <span>سعره الآن: <b className="font-mono text-white">{current != null ? `$${current.toFixed(2)}` : 'غير متاح'}</b></span>
+                  <span>النتيجة: <b className={pnl != null && pnl >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{pnl != null ? `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(0)}${pnlPct != null ? ` (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(0)}%)` : ''}` : '—'}</b></span>
+                  {quote?.asOf && <span>{new Date(quote.asOf).toLocaleTimeString('ar-SA', { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit' })} الرياض</span>}
                 </div>
               </div>
             )})}
@@ -214,7 +286,7 @@ function JournalContent({ view }: { view: 'positions' | 'history' }) {
             {closedTrades.slice(0, 30).map(t => (
               <div key={t.id} className="flex items-center justify-between text-xs font-mono rounded-lg px-3 py-2 gap-2"
                 style={{ background: 'rgba(255,255,255,0.02)' }}>
-                <span style={{ color: t.type === 'call' ? '#26D07C' : '#F0435A' }}>{t.type === 'call' ? '▲' : '▼'} {t.strike} × {t.qty}</span>
+                <span><span className="text-slate-300">{tradeRoot(t)}</span> <span style={{ color: t.type === 'call' ? '#26D07C' : '#F0435A' }}>{t.type === 'call' ? '▲' : '▼'} {t.strike} × {t.qty}</span></span>
                 <span className="text-gray-500">${t.entry} ← ${t.exit}</span>
                 <span className="text-gray-600">{t.closedAt?.slice(0, 10)}</span>
                 <span className="flex items-center gap-2">
@@ -229,22 +301,13 @@ function JournalContent({ view }: { view: 'positions' | 'history' }) {
 
       {(positionsView ? openTrades.length === 0 : closedTrades.length === 0) && (
         <div className="text-center py-8 text-gray-600 text-sm leading-relaxed">
-          {positionsView ? 'لا توجد صفقات مفتوحة مسجلة. أضف صفقة دخلتها من النموذج أعلاه.' : <>لا توجد صفقات مغلقة. <Link href="/v2/positions" className="text-amber-200">انتقل إلى متابعة صفقاتي</Link></>}
+          {positionsView ? 'لا توجد صفقات مفتوحة مسجلة. أضف صفقة دخلتها من النموذج أعلاه.' : <>لا توجد صفقات مغلقة. <Link href={`${meta.base}/positions`} className="text-amber-200">انتقل إلى متابعة صفقاتي</Link></>}
         </div>
       )}
     </div>
   )
 }
 
-function positionSymbol(t: { strike: number; type: string; expiry?: string }): string | null {
-  if (!t.expiry || !/^\d{4}-\d{2}-\d{2}$/.test(t.expiry) || !Number.isFinite(Date.parse(t.expiry))
-    || new Date(t.expiry).toISOString().slice(0, 10) !== t.expiry || !Number.isFinite(t.strike) || t.strike <= 0
-    || !['call', 'put'].includes(t.type)) return null
-  const strike = Math.round(t.strike * 1000).toString().padStart(8, '0')
-  if (strike.length !== 8) return null
-  return `SPXW${t.expiry.slice(2).replace(/-/g, '')}${t.type === 'call' ? 'C' : 'P'}${strike}`
-}
-
-export default function TradeJournal({ view }: { view: 'positions' | 'history' }) {
-  return <Suspense fallback={null}><JournalContent view={view} /></Suspense>
+export default function TradeJournal({ view, platform }: { view: 'positions' | 'history'; platform?: Platform }) {
+  return <Suspense fallback={null}><JournalContent view={view} platform={platform} /></Suspense>
 }
