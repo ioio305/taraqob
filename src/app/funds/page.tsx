@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { UnderlyingTradeManager } from '@/components/v2/UnderlyingTradeManager'
 import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
 import { MoneynessLadder } from '@/components/v2/MoneynessLadder'
+import Link from 'next/link'
 import { addPaper } from './paperStore'
 import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
@@ -324,6 +325,16 @@ export default function FundsToday() {
         <div className="rounded-2xl border border-white/10 p-4" style={{ background: 'rgba(255,255,255,.02)' }}>
           <div className="mb-2 text-xs font-bold" style={{ color: ACCENT }}>كيف تلعبها بالخيارات — تحليل فقط</div>
           <MoneynessLadder ladder={optLadder} horizonLabel="عقد على الصندوق" />
+          {(() => {
+            const out = optLadder.rungs.find(r => r.kind === 'out')
+            return out && leadSym && leadDir ? (
+              <Link href={`/funds/positions?symbol=${encodeURIComponent(leadSym)}&type=${leadDir}&strike=${out.strike}&entry=${out.mid}`}
+                    className="mt-2 block text-center text-sm font-bold py-2.5 rounded-xl"
+                    style={{ background: `${ACCENT}1A`, border: `1px solid ${ACCENT}55`, color: ACCENT }}>
+                ➕ أضِفها لمتابعة صفقاتي
+              </Link>
+            ) : null
+          })()}
         </div>
       ) : null}
 

@@ -701,6 +701,12 @@ function StockDetail({ detail }: { detail: DetailData }) {
         </div>
       )}
 
+      <Link href={`/stocks/positions?symbol=${encodeURIComponent(detail.symbol)}&type=${c.type}&strike=${c.strike}&entry=${c.execution?.entryHigh ?? c.mid}&expiry=${encodeURIComponent(c.expiration)}`}
+            className="block text-center text-sm font-bold py-2.5 rounded-xl"
+            style={{ background: `${ACCENT}1A`, border: `1px solid ${ACCENT}55`, color: ACCENT }}>
+        ➕ أضِفها لمتابعة صفقاتي
+      </Link>
+
       {managementReady && (
         <UnderlyingTradeManager
           key={`${detail.symbol}-${c.symbol}-${entry}-${firstTarget}`}

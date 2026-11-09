@@ -797,6 +797,12 @@ export default function V2Dashboard() {
                     </div>
                   )}
 
+                  <Link href={`/v2/positions?type=${c.type}&strike=${c.strike}&entry=${c.execution?.entryHigh ?? c.mid}&expiry=${encodeURIComponent(c.expiration)}`}
+                        className="block text-center text-sm font-bold py-2.5 rounded-xl"
+                        style={{ background: 'rgba(201,148,58,0.12)', border: '1px solid rgba(201,148,58,0.45)', color: '#E8D5A3' }}>
+                    ➕ أضِفها لمتابعة صفقاتي
+                  </Link>
+
                   {isPrimary && tradeScenario && tradeWindow && (
                     <UnderlyingTradeManager
                       key={`spx-${c.symbol}-${plan?.lockedAt ?? 0}`}
