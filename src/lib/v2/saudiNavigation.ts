@@ -18,6 +18,7 @@ export const SAUDI_PREMIUM: SaudiNavItem[] = [
   { href: '/saudi/plan', label: 'خطة اليوم الاحترافية', icon: '📋', exact: false },
   { href: '/saudi/scanner', label: 'ماسح الفرص', icon: '🔎', exact: false },
   { href: '/saudi/portfolio', label: 'محفظتي وصفقاتي', icon: '💼', exact: false },
+  { href: '/saudi/alerts', label: 'تنبيهاتي السعرية', icon: '🔔', exact: false },
 ]
 
 // واجهات البيانات المدفوعة → الصفحة التي تخدمها.

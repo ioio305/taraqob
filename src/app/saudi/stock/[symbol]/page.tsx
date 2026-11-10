@@ -113,6 +113,8 @@ export default function SaudiStockPage() {
                     style={{ color: isFavorite(data.symbol) ? '#F5B301' : '#475569' }}>
                     {isFavorite(data.symbol) ? '★' : '☆'}
                   </button>
+                  <Link href={`/saudi/alerts?symbol=${encodeURIComponent(data.symbol)}`} aria-label="ضع تنبيهاً سعرياً"
+                    title="نبّهني عند سعر" className="text-lg leading-none text-slate-500 hover:text-amber-300">🔔</Link>
                 </div>
                 <div className="mt-1 text-xs text-slate-500">{data.sector}</div>
                 <div className="mt-3 flex items-end gap-3">
