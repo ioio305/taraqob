@@ -124,21 +124,30 @@ export const SCAN_FILTERS: Array<{ key: ScanKey; label: string; icon: string; de
 export type TradePlan = {
   entry: number
   entryLow: number      // أدنى منطقة الدخول (تراجع نصف ATR)
-  stop: number          // الدخول − 2×ATR (نفس «الوقف المقترح» في الاختبار التاريخي)
+  stop: number          // الدخول − stopAtr×ATR (الافتراضي 2 = «الوقف المقترح» في الاختبار التاريخي)
+  stopAtr: number
   riskPct: number
   targets: Array<{ label: string; price: number; pct: number; r: number }>
   resistanceNote: string | null
 }
 
-export function buildTradePlan(row: { price: number; atr: number; resistance: number | null }): TradePlan | null {
+// الافتراضي (2×ATR، تراجع نصف ATR، أهداف 1/2/3) هو الإعداد المختبر تاريخياً — «متوسط».
+const TARGET_LABELS = ['الهدف الأول', 'الهدف الثاني', 'الهدف الثالث']
+export function buildTradePlan(
+  row: { price: number; atr: number; resistance: number | null },
+  opts: { stopAtr?: number; entryPullAtr?: number; targetsR?: number[] } = {},
+): TradePlan | null {
   const { price, atr } = row
+  const stopAtr = opts.stopAtr ?? 2
+  const entryPullAtr = opts.entryPullAtr ?? 0.5
+  const targetsR = opts.targetsR ?? [1, 2, 3]
   if (!(price > 0) || !(atr > 0)) return null
-  const stop = +(price - 2 * atr).toFixed(2)
+  const stop = +(price - stopAtr * atr).toFixed(2)
   const risk = price - stop
   if (!(risk > 0) || stop <= 0) return null
-  const targets = [1, 2, 3].map(r => {
+  const targets = targetsR.map((r, i) => {
     const p = +(price + r * risk).toFixed(2)
-    return { label: `الهدف ${r === 1 ? 'الأول' : r === 2 ? 'الثاني' : 'الثالث'}`, price: p, pct: +(((p - price) / price) * 100).toFixed(1), r }
+    return { label: TARGET_LABELS[i] ?? `الهدف ${i + 1}`, price: p, pct: +(((p - price) / price) * 100).toFixed(1), r }
   })
   const res = row.resistance
   const resistanceNote = res != null && res > price && res < targets[0].price
@@ -146,8 +155,9 @@ export function buildTradePlan(row: { price: number; atr: number; resistance: nu
     : null
   return {
     entry: +price.toFixed(2),
-    entryLow: +(price - 0.5 * atr).toFixed(2),
+    entryLow: +(price - entryPullAtr * atr).toFixed(2),
     stop,
+    stopAtr,
     riskPct: +((risk / price) * 100).toFixed(1),
     targets,
     resistanceNote,

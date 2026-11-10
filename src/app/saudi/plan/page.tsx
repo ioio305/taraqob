@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { PLAN_NEAR_MIN_SCORE, type PlanPick } from '@/lib/v2/saudiPlan'
 import { SAUDI_CALIBRATION } from '@/lib/v2/saudiIndicators'
+import { SAUDI_HORIZONS, normalizeSaudiHorizon, saudiHorizonList, type SaudiHorizon } from '@/lib/v2/saudiHorizon'
+
+const HORIZON_KEY = 'taraqob_saudi_horizon'
 
 const ACCENT = '#16A34A'
 const RED = '#F04760'
@@ -11,7 +14,7 @@ const AMBER = '#F5B301'
 
 type PlanData = {
   asOf: string; universe: number; marketReturn3m: number | null; strongCount: number
-  picks: PlanPick[]; error?: string
+  picks: PlanPick[]; horizon?: { key: SaudiHorizon }; error?: string
 }
 
 function n(v: number | null | undefined, d = 2) {
@@ -61,7 +64,7 @@ function PickCard({ p, rank }: { p: PlanPick; rank: number }) {
 
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
         <Level label="منطقة الدخول" value={`${n(p.plan.entryLow)} – ${n(p.plan.entry)}`} color="#E2E8F0" />
-        <Level label="الوقف (2×ATR)" value={n(p.plan.stop)} sub={`مخاطرة ${p.plan.riskPct}%`} color={RED} />
+        <Level label="وقف الخسارة" value={n(p.plan.stop)} sub={`مخاطرة ${p.plan.riskPct}%`} color={RED} />
         {p.plan.targets.map(t => (
           <Level key={t.r} label={t.label} value={n(t.price)} sub={`+${t.pct}% · ${t.r}:1`} color={ACCENT} />
         ))}
@@ -75,16 +78,30 @@ export default function SaudiProPlan() {
   const [data, setData] = useState<PlanData | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
+  const [horizon, setHorizon] = useState<SaudiHorizon | null>(null)
+
+  useEffect(() => {
+    let saved: string | null = null
+    try { saved = localStorage.getItem(HORIZON_KEY) } catch { /* تجاهل */ }
+    setHorizon(normalizeSaudiHorizon(saved))
+  }, [])
+
+  function switchHorizon(h: SaudiHorizon) {
+    setHorizon(h)
+    setLoading(true)
+    try { localStorage.setItem(HORIZON_KEY, h) } catch { /* تجاهل */ }
+  }
 
   const load = useCallback(async () => {
+    if (!horizon) return
     try {
-      const res = await fetch('/api/v2/saudi/plan')
+      const res = await fetch(`/api/v2/saudi/plan?horizon=${horizon}`)
       const json = (await res.json()) as PlanData
       if (!res.ok || json.error) setErr(json.error ?? 'تعذّر تحميل الخطة')
       else { setData(json); setErr('') }
     } catch { setErr('تعذّر الاتصال بمصدر البيانات') }
     setLoading(false)
-  }, [])
+  }, [horizon])
 
   useEffect(() => {
     load()
@@ -93,6 +110,8 @@ export default function SaudiProPlan() {
   }, [load])
 
   const bearish = data?.marketReturn3m != null && data.marketReturn3m <= 0
+  const spec = SAUDI_HORIZONS[horizon ?? 'moderate']
+  const targetsText = spec.targetsR.map(r => `${r}:1`).join(' و')
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4 pb-24">
@@ -101,8 +120,29 @@ export default function SaudiProPlan() {
         {data ? <div className="text-[10px] text-slate-500">من {data.universe} سهماً · {new Date(data.asOf).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}</div> : null}
       </div>
 
+      <div className="space-y-2 rounded-2xl border border-white/10 p-3" style={{ background: 'rgba(255,255,255,.02)' }}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-xs font-black text-white">ما أسلوبك في التداول؟</div>
+          <div className="flex overflow-hidden rounded-lg border border-white/10" role="group" aria-label="أسلوب التداول">
+            {saudiHorizonList().map(h => (
+              <button key={h.key} type="button" onClick={() => switchHorizon(h.key)} aria-pressed={horizon === h.key}
+                className="px-3 py-1.5 text-xs font-bold"
+                style={{ background: horizon === h.key ? `${ACCENT}22` : 'transparent', color: horizon === h.key ? '#D1FAE5' : '#64748B' }}>
+                {h.emoji} {h.labelAr}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="text-xs leading-6 text-slate-400">
+          <span className="font-bold text-slate-200">مدة الاحتفاظ: {spec.holdAr}.</span> {spec.desc}
+        </div>
+        {!spec.tested ? (
+          <div className="text-[11px] font-bold text-amber-300/80">هذا الأسلوب لم يُختبر تاريخياً بعد، فاستخدمه للمتابعة. الأسلوب المختبر هو «متوسط».</div>
+        ) : null}
+      </div>
+
       <p className="text-xs leading-6 text-slate-400">
-        أفضل الأسهم فنياً اليوم من كل السوق، ولكل سهم منطقة دخول ووقف خسارة على بعد ضعفي متوسط التذبذب اليومي، وثلاثة أهداف بنسبة ربح إلى مخاطرة ١:١ و٢:١ و٣:١. هذه قائمة مراقبة مرتّبة، والقرار لك.
+        أفضل الأسهم فنياً اليوم من كل السوق، ولكل سهم منطقة دخول، ووقف خسارة على بعد {spec.stopAtr === 1 ? 'متوسط التذبذب اليومي مرة واحدة' : spec.stopAtr === 2 ? 'ضعفي متوسط التذبذب اليومي' : 'ثلاثة أضعاف متوسط التذبذب اليومي'}، وثلاثة أهداف بنسبة ربح إلى مخاطرة {targetsText}. هذه قائمة مراقبة مرتّبة، والقرار لك.
       </p>
 
       {bearish ? (

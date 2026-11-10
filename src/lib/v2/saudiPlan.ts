@@ -2,6 +2,7 @@
 // المرشّح القوي أولاً؛ وإن قلّ (مثلاً حين يُخفّض فلتر السوق العام الهابط الدرجات) نكمل
 // بـ«قريب من الترشيح» بشروط صارمة، مع وسمه بوضوح. لغة مراقبة لا «نفّذ».
 import { buildTradePlan, type ScanFlags, type TradePlan } from './saudiSignals'
+import { SAUDI_HORIZONS, horizonRankScore, type SaudiHorizon } from './saudiHorizon'
 
 export type PlanSource = {
   symbol: string; name: string; sector: string
@@ -34,8 +35,11 @@ export function reasonsFor(s: PlanSource): string[] {
   return out.slice(0, 4)
 }
 
-export function buildDailyPlan(stocks: PlanSource[], limit = 8): PlanPick[] {
-  const ranked = [...stocks].sort((a, b) => b.techScore - a.techScore)
+// التصنيف (مغامر/متوسط/محافظ) يغيّر ترتيب المرشّحين ومستويات الخطة فقط — نفس المجموعة دائماً.
+// «متوسط» (الافتراضي) = السلوك الأصلي حرفياً.
+export function buildDailyPlan(stocks: PlanSource[], limit = 8, horizon: SaudiHorizon = 'moderate'): PlanPick[] {
+  const spec = SAUDI_HORIZONS[horizon]
+  const ranked = [...stocks].sort((a, b) => horizonRankScore(horizon, b) - horizonRankScore(horizon, a))
   const strong = ranked.filter(s => s.techSignalEn === 'strong_buy')
   const near = ranked.filter(s =>
     s.techSignalEn !== 'strong_buy' && s.techScore >= PLAN_NEAR_MIN_SCORE &&
@@ -44,7 +48,7 @@ export function buildDailyPlan(stocks: PlanSource[], limit = 8): PlanPick[] {
   for (const [list, tier] of [[strong, 'strong'], [near, 'near']] as const) {
     for (const s of list) {
       if (picks.length >= limit) break
-      const plan = buildTradePlan({ price: s.price, atr: s.atr, resistance: s.resistance })
+      const plan = buildTradePlan({ price: s.price, atr: s.atr, resistance: s.resistance }, spec)
       if (!plan) continue
       picks.push({
         symbol: s.symbol, name: s.name, sector: s.sector,
