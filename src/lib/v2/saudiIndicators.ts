@@ -12,6 +12,14 @@
 // 6. ADX يعدّل الثقة؛ وحواجز صارمة تمنع الدخول القوي تحت EMA200 أو مع التصريف.
 // ================================================================
 
+// ── حالة المعايرة — اختبار تاريخي 10 سنوات على 28 سهماً (scripts/saudiBacktest.ts) ──
+// النتيجة: الترتيب حقيقي (يتفوّق على الشراء العشوائي ~+0.1R للصفقة داخل العيّنة وخارجها)،
+// لكن لا ربح صافياً مُثبتاً بعد التكاليف منذ 2023 ⇒ validated=false: للتحليل والترتيب لا للتنفيذ.
+export const SAUDI_CALIBRATION = {
+  validated: false,
+  summary: 'اختبار تاريخي 10 سنوات على 28 سهماً: ترتيب المحرّك يتفوّق على الشراء العشوائي، لكنه لم يُثبت ربحاً صافياً بعد التكاليف منذ 2023 — للتحليل والترتيب لا للتنفيذ.',
+} as const
+
 export function calcEMA(prices: number[], period: number): number[] {
   const k = 2 / (period + 1)
   const ema: number[] = [prices[0]]
@@ -154,8 +162,8 @@ export function calcVolumeFlow(closes: number[], volumes: number[], window = 20)
 
 export interface TechnicalScore {
   score: number
-  signal: 'دخول قوي' | 'دخول' | 'انتظر' | 'خروج' | 'خروج قوي'
-  signalEn: 'strong_buy' | 'buy' | 'neutral' | 'sell' | 'strong_sell'
+  signal: 'مرشّح قوي' | 'انتظر' | 'ضعيف' | 'تجنّب'
+  signalEn: 'strong_buy' | 'neutral' | 'sell' | 'strong_sell'
   // زخم
   rsi: number
   macd: { bullish: boolean; hist: number }
@@ -277,13 +285,19 @@ export function computeConfluence(
   if (vf.flow === 'تصريف' && score >= 58) score = Math.min(score, 55) // لا دخول مع تصريف
   if (!ema200Above && score >= 72) score = Math.min(score, 68)         // لا دخول قوي تحت الاتجاه طويل المدى
 
+  // ── معايرة الاختبار التاريخي (10 سنوات · scripts/saudiBacktest.ts) ──
+  // فلتر اتجاه السوق العام (CANSLIM «M»): «المرشّح القوي» في سوق هابط أضعف بوضوح
+  // داخل العيّنة وخارجها ⇒ يُخفَّض إلى «انتظر».
+  if (typeof opts.marketReturn === 'number' && opts.marketReturn <= 0 && score >= 72) score = Math.min(score, 70)
+
+  // فئة 58–71 («دخول» سابقاً) كانت أدنى من الشراء الدائم في الفترتين ⇒ دُمجت في «انتظر».
+  // اللغة لغة ترتيب ومراقبة لا تنفيذ، لأن المحرّك غير مُثبت ربحياً بعد (SAUDI_CALIBRATION).
   let signal: TechnicalScore['signal']
   let signalEn: TechnicalScore['signalEn']
-  if (score >= 72) { signal = 'دخول قوي'; signalEn = 'strong_buy' }
-  else if (score >= 58) { signal = 'دخول'; signalEn = 'buy' }
+  if (score >= 72) { signal = 'مرشّح قوي'; signalEn = 'strong_buy' }
   else if (score >= 42) { signal = 'انتظر'; signalEn = 'neutral' }
-  else if (score >= 28) { signal = 'خروج'; signalEn = 'sell' }
-  else { signal = 'خروج قوي'; signalEn = 'strong_sell' }
+  else if (score >= 28) { signal = 'ضعيف'; signalEn = 'sell' }
+  else { signal = 'تجنّب'; signalEn = 'strong_sell' }
 
   return {
     score, signal, signalEn,

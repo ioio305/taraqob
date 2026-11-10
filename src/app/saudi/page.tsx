@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { SaudiStockCard, type SaudiStock } from '@/components/v2/SaudiStockCard'
 import { useSaudiFavorites } from '@/lib/v2/saudiFavorites'
+import { SAUDI_CALIBRATION } from '@/lib/v2/saudiIndicators'
 
 const ACCENT = '#16A34A'
 const REFRESH_SEC = 60
@@ -27,7 +28,7 @@ function n(v: number | null | undefined, d = 2) {
 const STATUS_LABEL: Record<string, string> = { open: 'السوق مفتوح', closed: 'السوق مغلق', pre: 'قبل الافتتاح' }
 
 function verdictColor(verdict: string) {
-  return verdict === 'نفّذ' ? ACCENT : verdict === 'تجنّب' ? '#F04760' : '#60A5FA'
+  return verdict === 'إيجابي' ? ACCENT : verdict === 'سلبي' ? '#F04760' : '#60A5FA'
 }
 
 function ScoreRing({ score, color }: { score: number; color: string }) {
@@ -36,7 +37,7 @@ function ScoreRing({ score, color }: { score: number; color: string }) {
       <div className="flex h-20 w-20 items-center justify-center rounded-full border-4" style={{ borderColor: color, background: `${color}14` }}>
         <span className="text-2xl font-black" style={{ color }}>{score}</span>
       </div>
-      <span className="mt-1 text-[10px] text-slate-500">قرار السوق من 100</span>
+      <span className="mt-1 text-[10px] text-slate-500">مزاج السوق من 100</span>
     </div>
   )
 }
@@ -99,7 +100,7 @@ export default function SaudiToday() {
       <div className="rounded-3xl border-2 p-5" style={{ borderColor: vc, background: `linear-gradient(135deg, ${vc}14, rgba(255,255,255,.02) 55%)` }}>
         <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-[11px] font-bold" style={{ color: vc }}>قرار السوق اليوم</div>
+            <div className="text-[11px] font-bold" style={{ color: vc }}>مزاج السوق اليوم</div>
             <div className="mt-1 text-3xl font-black" style={{ color: vc }}>{data.decision.verdict}</div>
             <div className="mt-1 text-xs text-slate-400">
               {data.decision.direction === 'bullish' ? 'ميل صاعد' : data.decision.direction === 'bearish' ? 'ميل هابط' : 'محايد'} · اتساع {data.market.breadth.advancing}↑ / {data.market.breadth.declining}↓
@@ -115,14 +116,14 @@ export default function SaudiToday() {
       </div>
 
       <div className="space-y-2.5">
-        <div className="text-xs font-bold text-slate-500">أقوى الفرص — مرتّبة بدرجة التحليل الفني · ★ أضِف للمفضّلة</div>
+        <div className="text-xs font-bold text-slate-500">الأسهم مرتّبة بقوتها الفنية — للمراقبة والتحليل · ★ أضِف للمفضّلة</div>
         {data.stocks.map(s => (
           <SaudiStockCard key={s.symbol} s={s} favorite={isFavorite(s.symbol)} onToggleFavorite={() => toggle(s.symbol)} />
         ))}
       </div>
 
       <div className="rounded-xl border border-white/8 px-4 py-3 text-[11px] leading-5 text-slate-500" style={{ background: 'rgba(255,255,255,.015)' }}>
-        أداة تحليل مساعدة لا توصية استثمارية. البيانات من مصادر عامة (ياهو/Stooq) وقد تتأخر. القرار النهائي مسؤوليتك.
+        <span className="font-bold text-amber-300/80">قيد المعايرة: </span>{SAUDI_CALIBRATION.summary} البيانات من مصادر عامة (ياهو/Stooq) وقد تتأخر. القرار النهائي مسؤوليتك.
       </div>
     </div>
   )

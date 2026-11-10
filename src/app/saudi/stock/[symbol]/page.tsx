@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useSaudiFavorites } from '@/lib/v2/saudiFavorites'
+import { SAUDI_CALIBRATION } from '@/lib/v2/saudiIndicators'
 
 const ACCENT = '#16A34A'
 const RED = '#F04760'
@@ -123,7 +124,7 @@ export default function SaudiStockPage() {
                 <div className="flex h-20 w-20 items-center justify-center rounded-full border-4" style={{ borderColor: sc, background: `${sc}14` }}>
                   <span className="text-2xl font-black" style={{ color: sc }}>{t!.score}</span>
                 </div>
-                <span className="mt-1 text-[10px] text-slate-500">قرار فني من 100</span>
+                <span className="mt-1 text-[10px] text-slate-500">قوة فنية من 100</span>
               </div>
             </div>
             <div className="mt-4 flex flex-wrap gap-1.5 text-xs">
@@ -158,7 +159,7 @@ export default function SaudiStockPage() {
           </div>
 
           <div className="rounded-xl border border-white/8 px-4 py-3 text-[11px] leading-5 text-slate-500" style={{ background: 'rgba(255,255,255,.015)' }}>
-            أداة تحليل مساعدة لا توصية استثمارية. البيانات من مصادر عامة (ياهو) وقد تتأخر. القرار النهائي مسؤوليتك.
+            <span className="font-bold text-amber-300/80">قيد المعايرة: </span>{SAUDI_CALIBRATION.summary} البيانات من مصادر عامة (ياهو) وقد تتأخر. القرار النهائي مسؤوليتك.
           </div>
         </>
       )}

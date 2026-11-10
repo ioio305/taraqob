@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { computeConfluence, windowReturn } from '@/lib/v2/saudiIndicators'
-import { SAUDI_NAME } from '@/lib/v2/saudiStocks'
+import { SAUDI_NAME, SAUDI_STOCKS } from '@/lib/v2/saudiStocks'
 
 export const revalidate = 120
 
@@ -37,7 +37,12 @@ async function fetchDaily(yfSymbol: string): Promise<{ candles: Candle[]; meta: 
 export async function GET(_req: Request, { params }: { params: Promise<{ symbol: string }> }) {
   const { symbol } = await params
   const clean = symbol.replace(/[^0-9A-Za-z]/g, '').slice(0, 8)
-  const [data, tasi] = await Promise.all([fetchDaily(`${clean}.SR`), fetchDaily('^TASI')])
+  // مرجع السوق = متوسط عائد 63 جلسة لأسهم القائمة (نفس منطق اللوحة والاختبار التاريخي؛
+  // مؤشر تاسي غير متاح تاريخياً من ياهو). الجلب مشترك مع ماسح السوق عبر ذاكرة Next.
+  const [data, peers] = await Promise.all([
+    fetchDaily(`${clean}.SR`),
+    Promise.all(SAUDI_STOCKS.map(s => fetchDaily(s.symbol))),
+  ])
   if (!data || data.candles.length < 20) {
     return NextResponse.json({ error: 'لا توجد بيانات كافية لهذا السهم' }, { status: 404 })
   }
@@ -46,8 +51,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ symbol:
   const highs = data.candles.map(c => c.h)
   const lows = data.candles.map(c => c.l)
   const volumes = data.candles.map(c => c.v)
-  // مرجع السوق (تاسي) للقوة النسبية — يتراجع بأمان إن تعذّر جلبه.
-  const marketReturn = tasi && tasi.candles.length > 1 ? windowReturn(tasi.candles.map(c => c.c), 63) : undefined
+  const peerReturns = peers
+    .filter((p): p is NonNullable<typeof p> => !!p && p.candles.length > 63)
+    .map(p => windowReturn(p.candles.map(c => c.c), 63))
+  const marketReturn = peerReturns.length >= 5 ? peerReturns.reduce((a, b) => a + b, 0) / peerReturns.length : undefined
   const tech = computeConfluence(closes, highs, lows, volumes, { marketReturn })
 
   const meta = data.meta

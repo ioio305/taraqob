@@ -148,7 +148,8 @@ export async function GET() {
       decision: {
         score,
         direction: score >= 62 ? 'bullish' : score <= 40 ? 'bearish' : 'neutral',
-        verdict: score >= 62 ? 'نفّذ' : score <= 40 ? 'تجنّب' : 'انتظر',
+        // مزاج السوق (وصف) لا قرار تنفيذ — المحرّك غير مُعايَر للتنفيذ بعد (SAUDI_CALIBRATION).
+        verdict: score >= 62 ? 'إيجابي' : score <= 40 ? 'سلبي' : 'محايد',
       },
       stocks: stocks.sort((a, b) => b.techScore - a.techScore),
     })

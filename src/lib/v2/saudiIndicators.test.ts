@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calcATR, calcROC, calcOBV, windowReturn, computeConfluence } from './saudiIndicators'
+import { calcATR, calcROC, calcOBV, windowReturn, computeConfluence, SAUDI_CALIBRATION } from './saudiIndicators'
 
 function uptrend(n = 220) {
   const closes: number[] = [], highs: number[] = [], lows: number[] = [], volumes: number[] = []
@@ -22,7 +22,7 @@ function downtrend(n = 220) {
   return { closes, highs, lows, volumes }
 }
 
-describe('saudi pro engine', () => {
+describe('saudi pro engine (calibrated)', () => {
   it('ATR/ROC/OBV/return compute sane values on a trend', () => {
     const u = uptrend()
     expect(calcATR(u.highs, u.lows, u.closes)).toBeGreaterThan(0)
@@ -31,22 +31,28 @@ describe('saudi pro engine', () => {
     expect(windowReturn(u.closes)).toBeGreaterThan(0)
   })
 
-  it('rates a strong uptrend as a buy, above its 200-day trend', () => {
+  it('ranks a strong uptrend in a rising market as a strong candidate', () => {
     const u = uptrend()
     const t = computeConfluence(u.closes, u.highs, u.lows, u.volumes, { marketReturn: 0.05 })
     expect(t.ema200Above).toBe(true)
     expect(t.golden).toBe(true)
-    expect(t.score).toBeGreaterThanOrEqual(58)
-    expect(['دخول قوي', 'دخول']).toContain(t.signal)
+    expect(t.signalEn).toBe('strong_buy')
+    expect(t.signal).toBe('مرشّح قوي')
     expect(t.suggestedStop).toBeLessThan(u.closes[u.closes.length - 1])
   })
 
-  it('rates a downtrend as a sell, below its 200-day trend', () => {
+  it('downgrades a strong candidate when the overall market is falling (CANSLIM M)', () => {
+    const u = uptrend()
+    const t = computeConfluence(u.closes, u.highs, u.lows, u.volumes, { marketReturn: -0.02 })
+    expect(t.signalEn).toBe('neutral')
+  })
+
+  it('rates a downtrend as weak/avoid, below its 200-day trend', () => {
     const d = downtrend()
     const t = computeConfluence(d.closes, d.highs, d.lows, d.volumes, { marketReturn: 0.05 })
     expect(t.ema200Above).toBe(false)
     expect(t.score).toBeLessThan(42)
-    expect(['خروج', 'خروج قوي']).toContain(t.signal)
+    expect(['ضعيف', 'تجنّب']).toContain(t.signal)
   })
 
   it('computes relative strength only when a benchmark is given', () => {
@@ -55,9 +61,13 @@ describe('saudi pro engine', () => {
     expect(computeConfluence(u.closes, u.highs, u.lows, u.volumes, { marketReturn: 0 }).relStrength).not.toBeNull()
   })
 
-  it('never awards a strong buy below the 200-day trend', () => {
+  it('never awards a strong candidate below the 200-day trend', () => {
     const d = downtrend()
-    const t = computeConfluence(d.closes, d.highs, d.lows, d.volumes, { marketReturn: -0.5 })
-    expect(t.signal).not.toBe('دخول قوي')
+    const t = computeConfluence(d.closes, d.highs, d.lows, d.volumes, { marketReturn: 0.5 })
+    expect(t.signalEn).not.toBe('strong_buy')
+  })
+
+  it('is marked as not validated for execution', () => {
+    expect(SAUDI_CALIBRATION.validated).toBe(false)
   })
 })
