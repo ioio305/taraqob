@@ -2,19 +2,21 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { PLAN_NEAR_MIN_SCORE, type PlanPick } from '@/lib/v2/saudiPlan'
+import type { PlanPick } from '@/lib/v2/saudiPlan'
 import { SAUDI_CALIBRATION } from '@/lib/v2/saudiIndicators'
+import { SaudiEntryBoard } from '@/components/v2/SaudiEntryBoard'
+import type { EntryPick, Regime, ValidatedSetup } from '@/lib/v2/saudiEntry'
 import { SAUDI_HORIZONS, normalizeSaudiHorizon, saudiHorizonList, type SaudiHorizon } from '@/lib/v2/saudiHorizon'
 
 const HORIZON_KEY = 'taraqob_saudi_horizon'
 
 const ACCENT = '#16A34A'
 const RED = '#F04760'
-const AMBER = '#F5B301'
 
 type PlanData = {
   asOf: string; universe: number; marketReturn3m: number | null; strongCount: number
   picks: PlanPick[]; horizon?: { key: SaudiHorizon }; error?: string
+  entry?: { regime: Regime; validated: ValidatedSetup[]; picks: EntryPick[]; unproven: EntryPick[] }
 }
 
 function n(v: number | null | undefined, d = 2) {
@@ -109,7 +111,6 @@ export default function SaudiProPlan() {
     return () => clearInterval(t)
   }, [load])
 
-  const bearish = data?.marketReturn3m != null && data.marketReturn3m <= 0
   const spec = SAUDI_HORIZONS[horizon ?? 'moderate']
   const targetsText = spec.targetsR.map(r => `${r}:1`).join(' و')
 
@@ -120,6 +121,9 @@ export default function SaudiProPlan() {
         {data ? <div className="text-[10px] text-slate-500">من {data.universe} سهماً · {new Date(data.asOf).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}</div> : null}
       </div>
 
+      {data?.entry ? <SaudiEntryBoard entry={data.entry} marketReturn3m={data.marketReturn3m} /> : null}
+
+      <h2 className="pt-2 text-sm font-black text-white">📋 قائمة المتابعة حسب أسلوبك</h2>
       <div className="space-y-2 rounded-2xl border border-white/10 p-3" style={{ background: 'rgba(255,255,255,.02)' }}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-xs font-black text-white">ما أسلوبك في التداول؟</div>
@@ -142,14 +146,9 @@ export default function SaudiProPlan() {
       </div>
 
       <p className="text-xs leading-6 text-slate-400">
-        أفضل الأسهم فنياً اليوم من كل السوق، ولكل سهم منطقة دخول، ووقف خسارة على بعد {spec.stopAtr === 1 ? 'متوسط التذبذب اليومي مرة واحدة' : spec.stopAtr === 2 ? 'ضعفي متوسط التذبذب اليومي' : 'ثلاثة أضعاف متوسط التذبذب اليومي'}، وثلاثة أهداف بنسبة ربح إلى مخاطرة {targetsText}. هذه قائمة مراقبة مرتّبة، والقرار لك.
+        أقوى الأسهم فنياً: دخول، ووقف على بعد {spec.stopAtr === 1 ? 'مرة واحدة من التذبذب اليومي' : spec.stopAtr === 2 ? 'ضعفي التذبذب اليومي' : 'ثلاثة أضعاف التذبذب اليومي'}، وأهداف {targetsText}.
       </p>
 
-      {bearish ? (
-        <div className="rounded-xl border px-4 py-3 text-xs leading-6" style={{ borderColor: `${AMBER}44`, background: `${AMBER}0d`, color: '#FDE68A' }}>
-          السوق العام هابط في آخر ٣ أشهر ({n(data!.marketReturn3m)}%). في هذه الحالة يخفّض المحرّك «المرشّح القوي» إلى «انتظر»، لأن الترشيحات في السوق الهابط كانت أضعف في الاختبار التاريخي. لذلك تجد هنا غالباً أسهماً «قريبة من الترشيح»: فوق متوسط 200 يوم، بلا تصريف، وبدرجة {PLAN_NEAR_MIN_SCORE} فأعلى. خفّف حجم مراكزك.
-        </div>
-      ) : null}
 
       {loading && !data ? (
         <div className="flex h-48 flex-col items-center justify-center gap-2">
@@ -160,7 +159,7 @@ export default function SaudiProPlan() {
         <div className="flex h-48 items-center justify-center text-sm text-slate-500">{err || 'تعذّر التحميل'}</div>
       ) : data.picks.length === 0 ? (
         <div className="rounded-2xl border border-white/10 p-8 text-center text-sm text-slate-400" style={{ background: 'rgba(255,255,255,.02)' }}>
-          لا يوجد اليوم سهم يحقّق شروط الخطة. أحياناً يكون عدم الدخول هو القرار الأفضل.
+          لا يوجد اليوم سهم يحقّق شروط القائمة.
         </div>
       ) : (
         <div className="space-y-3">
@@ -172,7 +171,7 @@ export default function SaudiProPlan() {
       )}
 
       <div className="rounded-xl border border-white/8 px-4 py-3 text-[11px] leading-5 text-slate-500" style={{ background: 'rgba(255,255,255,.015)' }}>
-        <span className="font-bold text-amber-300/80">قيد المعايرة: </span>{SAUDI_CALIBRATION.summary} الأسعار من ياهو مؤخّرة نحو 15 دقيقة، فراجع السعر الحي قبل أي قرار. تابع نتائج الترشيحات السابقة في <Link href="/saudi/performance" className="text-emerald-300">سجل الأداء</Link>.
+        <span className="font-bold text-amber-300/80">للعلم: </span>{SAUDI_CALIBRATION.summary} الأسعار من ياهو مؤخّرة نحو 15 دقيقة، فراجع السعر الحي قبل أي قرار. تابع نتائج الترشيحات السابقة في <Link href="/saudi/performance" className="text-emerald-300">سجل الأداء</Link>.
       </div>
     </div>
   )

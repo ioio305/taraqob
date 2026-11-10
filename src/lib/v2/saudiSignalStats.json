@@ -1,0 +1,2384 @@
+{
+  "generatedAt": "2026-11-10T21:07:19.792Z",
+  "universe": 245,
+  "costPct": 0.4,
+  "split": "2023-01-01",
+  "setups": [
+    {
+      "key": "rsi2_pullback",
+      "label": "ارتداد قصير في اتجاه صاعد (RSI-2 أقل من 10)",
+      "hold": 7,
+      "stopAtr": 3,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 9245,
+        "winRate": 52.4,
+        "avgNetPct": -0.51,
+        "profitFactor": 0.7,
+        "avgDays": 3.9
+      },
+      "IS": {
+        "n": 5373,
+        "winRate": 51.5,
+        "avgNetPct": -0.56,
+        "profitFactor": 0.66,
+        "avgDays": 3.8
+      },
+      "OOS": {
+        "n": 3872,
+        "winRate": 53.6,
+        "avgNetPct": -0.45,
+        "profitFactor": 0.75,
+        "avgDays": 4.1
+      },
+      "bull": {
+        "n": 6091,
+        "winRate": 52.5,
+        "avgNetPct": -0.45,
+        "profitFactor": 0.72,
+        "avgDays": 3.9
+      },
+      "bear": {
+        "n": 3154,
+        "winRate": 52,
+        "avgNetPct": -0.62,
+        "profitFactor": 0.68,
+        "avgDays": 3.9
+      },
+      "OOS_bull": {
+        "n": 2320,
+        "winRate": 53.3,
+        "avgNetPct": -0.5,
+        "profitFactor": 0.72,
+        "avgDays": 4.1
+      },
+      "OOS_bear": {
+        "n": 1552,
+        "winRate": 53.9,
+        "avgNetPct": -0.36,
+        "profitFactor": 0.8,
+        "avgDays": 4.1
+      },
+      "IS_bull": {
+        "n": 3771,
+        "winRate": 52.1,
+        "avgNetPct": -0.43,
+        "profitFactor": 0.72,
+        "avgDays": 3.9
+      },
+      "IS_bear": {
+        "n": 1602,
+        "winRate": 50.2,
+        "avgNetPct": -0.87,
+        "profitFactor": 0.57,
+        "avgDays": 3.8
+      },
+      "IS_bearRec": {
+        "n": 450,
+        "winRate": 53.1,
+        "avgNetPct": -0.39,
+        "profitFactor": 0.73,
+        "avgDays": 3.8
+      },
+      "OOS_bearRec": {
+        "n": 517,
+        "winRate": 52.4,
+        "avgNetPct": -0.71,
+        "profitFactor": 0.61,
+        "avgDays": 4.1
+      },
+      "IS_bearFall": {
+        "n": 1152,
+        "winRate": 49,
+        "avgNetPct": -1.05,
+        "profitFactor": 0.53,
+        "avgDays": 3.7
+      },
+      "OOS_bearFall": {
+        "n": 1035,
+        "winRate": 54.7,
+        "avgNetPct": -0.19,
+        "profitFactor": 0.9,
+        "avgDays": 4
+      }
+    },
+    {
+      "key": "trend_pullback",
+      "label": "تصحيح داخل اتجاه صاعد (RSI-14 يرتد من 40)",
+      "hold": 15,
+      "stopAtr": 2,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 1568,
+        "winRate": 41.6,
+        "avgNetPct": 0.17,
+        "profitFactor": 1.05,
+        "avgDays": 11.5
+      },
+      "IS": {
+        "n": 930,
+        "winRate": 44.1,
+        "avgNetPct": 0.77,
+        "profitFactor": 1.28,
+        "avgDays": 11.5
+      },
+      "OOS": {
+        "n": 638,
+        "winRate": 38.1,
+        "avgNetPct": -0.71,
+        "profitFactor": 0.79,
+        "avgDays": 11.6
+      },
+      "bull": {
+        "n": 995,
+        "winRate": 43.4,
+        "avgNetPct": 0.99,
+        "profitFactor": 1.36,
+        "avgDays": 11.8
+      },
+      "bear": {
+        "n": 573,
+        "winRate": 38.6,
+        "avgNetPct": -1.27,
+        "profitFactor": 0.64,
+        "avgDays": 11.1
+      },
+      "OOS_bull": {
+        "n": 361,
+        "winRate": 36.8,
+        "avgNetPct": -0.34,
+        "profitFactor": 0.9,
+        "avgDays": 11.7
+      },
+      "OOS_bear": {
+        "n": 277,
+        "winRate": 39.7,
+        "avgNetPct": -1.2,
+        "profitFactor": 0.68,
+        "avgDays": 11.5
+      },
+      "IS_bull": {
+        "n": 634,
+        "winRate": 47.2,
+        "avgNetPct": 1.75,
+        "profitFactor": 1.69,
+        "avgDays": 11.8
+      },
+      "IS_bear": {
+        "n": 296,
+        "winRate": 37.5,
+        "avgNetPct": -1.33,
+        "profitFactor": 0.59,
+        "avgDays": 10.8
+      },
+      "IS_bearRec": {
+        "n": 47,
+        "winRate": 38.3,
+        "avgNetPct": -0.95,
+        "profitFactor": 0.62,
+        "avgDays": 11.3
+      },
+      "OOS_bearRec": {
+        "n": 43,
+        "winRate": 37.2,
+        "avgNetPct": -0.73,
+        "profitFactor": 0.75,
+        "avgDays": 12.5
+      },
+      "IS_bearFall": {
+        "n": 249,
+        "winRate": 37.3,
+        "avgNetPct": -1.4,
+        "profitFactor": 0.59,
+        "avgDays": 10.7
+      },
+      "OOS_bearFall": {
+        "n": 234,
+        "winRate": 40.2,
+        "avgNetPct": -1.29,
+        "profitFactor": 0.67,
+        "avgDays": 11.3
+      }
+    },
+    {
+      "key": "breakout20_vol",
+      "label": "اختراق قمة 20 جلسة بحجم مرتفع",
+      "hold": 20,
+      "stopAtr": 2,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 4347,
+        "winRate": 35.7,
+        "avgNetPct": 0.45,
+        "profitFactor": 1.14,
+        "avgDays": 13.1
+      },
+      "IS": {
+        "n": 2489,
+        "winRate": 37.7,
+        "avgNetPct": 0.98,
+        "profitFactor": 1.33,
+        "avgDays": 13.1
+      },
+      "OOS": {
+        "n": 1858,
+        "winRate": 32.9,
+        "avgNetPct": -0.25,
+        "profitFactor": 0.93,
+        "avgDays": 13.1
+      },
+      "bull": {
+        "n": 2985,
+        "winRate": 37,
+        "avgNetPct": 1.04,
+        "profitFactor": 1.33,
+        "avgDays": 13.2
+      },
+      "bear": {
+        "n": 1362,
+        "winRate": 32.7,
+        "avgNetPct": -0.82,
+        "profitFactor": 0.76,
+        "avgDays": 13
+      },
+      "OOS_bull": {
+        "n": 1146,
+        "winRate": 33.2,
+        "avgNetPct": 0.08,
+        "profitFactor": 1.02,
+        "avgDays": 13
+      },
+      "OOS_bear": {
+        "n": 712,
+        "winRate": 32.6,
+        "avgNetPct": -0.79,
+        "profitFactor": 0.78,
+        "avgDays": 13.2
+      },
+      "IS_bull": {
+        "n": 1839,
+        "winRate": 39.4,
+        "avgNetPct": 1.63,
+        "profitFactor": 1.56,
+        "avgDays": 13.3
+      },
+      "IS_bear": {
+        "n": 650,
+        "winRate": 32.9,
+        "avgNetPct": -0.85,
+        "profitFactor": 0.74,
+        "avgDays": 12.7
+      },
+      "IS_bearRec": {
+        "n": 393,
+        "winRate": 38.4,
+        "avgNetPct": -0.05,
+        "profitFactor": 0.98,
+        "avgDays": 13.7
+      },
+      "OOS_bearRec": {
+        "n": 343,
+        "winRate": 30.3,
+        "avgNetPct": -0.83,
+        "profitFactor": 0.77,
+        "avgDays": 13.4
+      },
+      "IS_bearFall": {
+        "n": 257,
+        "winRate": 24.5,
+        "avgNetPct": -2.08,
+        "profitFactor": 0.45,
+        "avgDays": 11.3
+      },
+      "OOS_bearFall": {
+        "n": 369,
+        "winRate": 34.7,
+        "avgNetPct": -0.76,
+        "profitFactor": 0.79,
+        "avgDays": 13
+      }
+    },
+    {
+      "key": "breakout55",
+      "label": "اختراق قمة 55 جلسة (السلاحف)",
+      "hold": 30,
+      "stopAtr": 3,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 3738,
+        "winRate": 41.9,
+        "avgNetPct": 1.03,
+        "profitFactor": 1.26,
+        "avgDays": 22.5
+      },
+      "IS": {
+        "n": 2016,
+        "winRate": 44.4,
+        "avgNetPct": 1.77,
+        "profitFactor": 1.48,
+        "avgDays": 22.3
+      },
+      "OOS": {
+        "n": 1722,
+        "winRate": 38.9,
+        "avgNetPct": 0.17,
+        "profitFactor": 1.04,
+        "avgDays": 22.7
+      },
+      "bull": {
+        "n": 2582,
+        "winRate": 44.5,
+        "avgNetPct": 1.82,
+        "profitFactor": 1.49,
+        "avgDays": 22.7
+      },
+      "bear": {
+        "n": 1156,
+        "winRate": 36.2,
+        "avgNetPct": -0.71,
+        "profitFactor": 0.84,
+        "avgDays": 22.1
+      },
+      "OOS_bull": {
+        "n": 1106,
+        "winRate": 41,
+        "avgNetPct": 0.63,
+        "profitFactor": 1.15,
+        "avgDays": 22.5
+      },
+      "OOS_bear": {
+        "n": 616,
+        "winRate": 35.2,
+        "avgNetPct": -0.65,
+        "profitFactor": 0.86,
+        "avgDays": 22.9
+      },
+      "IS_bull": {
+        "n": 1476,
+        "winRate": 47.1,
+        "avgNetPct": 2.71,
+        "profitFactor": 1.8,
+        "avgDays": 22.8
+      },
+      "IS_bear": {
+        "n": 540,
+        "winRate": 37.2,
+        "avgNetPct": -0.79,
+        "profitFactor": 0.82,
+        "avgDays": 21.1
+      },
+      "IS_bearRec": {
+        "n": 353,
+        "winRate": 41.1,
+        "avgNetPct": -0.03,
+        "profitFactor": 0.99,
+        "avgDays": 22.5
+      },
+      "OOS_bearRec": {
+        "n": 353,
+        "winRate": 30.3,
+        "avgNetPct": -1.42,
+        "profitFactor": 0.71,
+        "avgDays": 22.4
+      },
+      "IS_bearFall": {
+        "n": 187,
+        "winRate": 29.9,
+        "avgNetPct": -2.21,
+        "profitFactor": 0.56,
+        "avgDays": 18.6
+      },
+      "OOS_bearFall": {
+        "n": 263,
+        "winRate": 41.8,
+        "avgNetPct": 0.39,
+        "profitFactor": 1.09,
+        "avgDays": 23.6
+      }
+    },
+    {
+      "key": "golden_cross",
+      "label": "تقاطع ذهبي (متوسط 50 فوق 200)",
+      "hold": 40,
+      "stopAtr": 3,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 1209,
+        "winRate": 35.5,
+        "avgNetPct": 1.21,
+        "profitFactor": 1.27,
+        "avgDays": 28.4
+      },
+      "IS": {
+        "n": 587,
+        "winRate": 38.3,
+        "avgNetPct": 2.86,
+        "profitFactor": 1.7,
+        "avgDays": 28.1
+      },
+      "OOS": {
+        "n": 622,
+        "winRate": 32.8,
+        "avgNetPct": -0.35,
+        "profitFactor": 0.93,
+        "avgDays": 28.6
+      },
+      "bull": {
+        "n": 865,
+        "winRate": 36.6,
+        "avgNetPct": 2.09,
+        "profitFactor": 1.48,
+        "avgDays": 28.6
+      },
+      "bear": {
+        "n": 344,
+        "winRate": 32.6,
+        "avgNetPct": -1.01,
+        "profitFactor": 0.8,
+        "avgDays": 27.9
+      },
+      "OOS_bull": {
+        "n": 409,
+        "winRate": 33.7,
+        "avgNetPct": 0.65,
+        "profitFactor": 1.14,
+        "avgDays": 28.9
+      },
+      "OOS_bear": {
+        "n": 213,
+        "winRate": 31,
+        "avgNetPct": -2.28,
+        "profitFactor": 0.58,
+        "avgDays": 28
+      },
+      "IS_bull": {
+        "n": 456,
+        "winRate": 39.3,
+        "avgNetPct": 3.38,
+        "profitFactor": 1.83,
+        "avgDays": 28.2
+      },
+      "IS_bear": {
+        "n": 131,
+        "winRate": 35.1,
+        "avgNetPct": 1.04,
+        "profitFactor": 1.26,
+        "avgDays": 27.6
+      },
+      "IS_bearRec": {
+        "n": 64,
+        "winRate": 39.1,
+        "avgNetPct": 2.06,
+        "profitFactor": 1.59,
+        "avgDays": 30.5
+      },
+      "OOS_bearRec": {
+        "n": 64,
+        "winRate": 31.3,
+        "avgNetPct": -1.14,
+        "profitFactor": 0.75,
+        "avgDays": 28
+      },
+      "IS_bearFall": {
+        "n": 67,
+        "winRate": 31.3,
+        "avgNetPct": 0.07,
+        "profitFactor": 1.02,
+        "avgDays": 24.9
+      },
+      "OOS_bearFall": {
+        "n": 149,
+        "winRate": 30.9,
+        "avgNetPct": -2.77,
+        "profitFactor": 0.53,
+        "avgDays": 28
+      }
+    },
+    {
+      "key": "macd_up_trend",
+      "label": "MACD يقطع الإشارة صعوداً تحت الصفر في اتجاه صاعد",
+      "hold": 15,
+      "stopAtr": 2,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 2507,
+        "winRate": 39,
+        "avgNetPct": 0.13,
+        "profitFactor": 1.05,
+        "avgDays": 11.7
+      },
+      "IS": {
+        "n": 1425,
+        "winRate": 40.7,
+        "avgNetPct": 0.67,
+        "profitFactor": 1.28,
+        "avgDays": 11.9
+      },
+      "OOS": {
+        "n": 1082,
+        "winRate": 36.8,
+        "avgNetPct": -0.58,
+        "profitFactor": 0.83,
+        "avgDays": 11.3
+      },
+      "bull": {
+        "n": 1366,
+        "winRate": 41.9,
+        "avgNetPct": 1.06,
+        "profitFactor": 1.43,
+        "avgDays": 12.1
+      },
+      "bear": {
+        "n": 1141,
+        "winRate": 35.6,
+        "avgNetPct": -0.97,
+        "profitFactor": 0.7,
+        "avgDays": 11.1
+      },
+      "OOS_bull": {
+        "n": 482,
+        "winRate": 35.5,
+        "avgNetPct": -0.27,
+        "profitFactor": 0.92,
+        "avgDays": 11.5
+      },
+      "OOS_bear": {
+        "n": 600,
+        "winRate": 37.8,
+        "avgNetPct": -0.82,
+        "profitFactor": 0.75,
+        "avgDays": 11.2
+      },
+      "IS_bull": {
+        "n": 884,
+        "winRate": 45.4,
+        "avgNetPct": 1.78,
+        "profitFactor": 1.87,
+        "avgDays": 12.5
+      },
+      "IS_bear": {
+        "n": 541,
+        "winRate": 33.1,
+        "avgNetPct": -1.14,
+        "profitFactor": 0.63,
+        "avgDays": 11
+      },
+      "IS_bearRec": {
+        "n": 108,
+        "winRate": 46.3,
+        "avgNetPct": 0.38,
+        "profitFactor": 1.17,
+        "avgDays": 12.3
+      },
+      "OOS_bearRec": {
+        "n": 101,
+        "winRate": 41.6,
+        "avgNetPct": 0.1,
+        "profitFactor": 1.03,
+        "avgDays": 11.9
+      },
+      "IS_bearFall": {
+        "n": 433,
+        "winRate": 29.8,
+        "avgNetPct": -1.52,
+        "profitFactor": 0.54,
+        "avgDays": 10.7
+      },
+      "OOS_bearFall": {
+        "n": 499,
+        "winRate": 37.1,
+        "avgNetPct": -1.01,
+        "profitFactor": 0.7,
+        "avgDays": 11
+      }
+    },
+    {
+      "key": "ema20_50_adx",
+      "label": "متوسط 20 يقطع 50 صعوداً مع اتجاه قوي (ADX فوق 20)",
+      "hold": 20,
+      "stopAtr": 2,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 2219,
+        "winRate": 35.6,
+        "avgNetPct": 0.11,
+        "profitFactor": 1.03,
+        "avgDays": 14.1
+      },
+      "IS": {
+        "n": 1051,
+        "winRate": 35.2,
+        "avgNetPct": 0.38,
+        "profitFactor": 1.13,
+        "avgDays": 13.8
+      },
+      "OOS": {
+        "n": 1168,
+        "winRate": 36,
+        "avgNetPct": -0.14,
+        "profitFactor": 0.96,
+        "avgDays": 14.4
+      },
+      "bull": {
+        "n": 1099,
+        "winRate": 38.8,
+        "avgNetPct": 1.07,
+        "profitFactor": 1.4,
+        "avgDays": 14.3
+      },
+      "bear": {
+        "n": 1120,
+        "winRate": 32.6,
+        "avgNetPct": -0.83,
+        "profitFactor": 0.77,
+        "avgDays": 13.9
+      },
+      "OOS_bull": {
+        "n": 572,
+        "winRate": 38.6,
+        "avgNetPct": 0.67,
+        "profitFactor": 1.24,
+        "avgDays": 14.7
+      },
+      "OOS_bear": {
+        "n": 596,
+        "winRate": 33.6,
+        "avgNetPct": -0.91,
+        "profitFactor": 0.75,
+        "avgDays": 14.1
+      },
+      "IS_bull": {
+        "n": 527,
+        "winRate": 38.9,
+        "avgNetPct": 1.5,
+        "profitFactor": 1.59,
+        "avgDays": 13.9
+      },
+      "IS_bear": {
+        "n": 524,
+        "winRate": 31.5,
+        "avgNetPct": -0.74,
+        "profitFactor": 0.78,
+        "avgDays": 13.6
+      },
+      "IS_bearRec": {
+        "n": 393,
+        "winRate": 31,
+        "avgNetPct": -1.21,
+        "profitFactor": 0.64,
+        "avgDays": 13.9
+      },
+      "OOS_bearRec": {
+        "n": 432,
+        "winRate": 31.9,
+        "avgNetPct": -0.79,
+        "profitFactor": 0.77,
+        "avgDays": 14
+      },
+      "IS_bearFall": {
+        "n": 131,
+        "winRate": 32.8,
+        "avgNetPct": 0.66,
+        "profitFactor": 1.18,
+        "avgDays": 12.7
+      },
+      "OOS_bearFall": {
+        "n": 164,
+        "winRate": 37.8,
+        "avgNetPct": -1.2,
+        "profitFactor": 0.71,
+        "avgDays": 14.2
+      }
+    },
+    {
+      "key": "squeeze_up",
+      "label": "انطلاق صاعد من انضغاط بولنجر",
+      "hold": 20,
+      "stopAtr": 2,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 1620,
+        "winRate": 37.9,
+        "avgNetPct": 0.72,
+        "profitFactor": 1.27,
+        "avgDays": 13.4
+      },
+      "IS": {
+        "n": 822,
+        "winRate": 41.4,
+        "avgNetPct": 1.66,
+        "profitFactor": 1.72,
+        "avgDays": 13.5
+      },
+      "OOS": {
+        "n": 798,
+        "winRate": 34.3,
+        "avgNetPct": -0.25,
+        "profitFactor": 0.91,
+        "avgDays": 13.2
+      },
+      "bull": {
+        "n": 1124,
+        "winRate": 39.1,
+        "avgNetPct": 1.18,
+        "profitFactor": 1.47,
+        "avgDays": 13.7
+      },
+      "bear": {
+        "n": 496,
+        "winRate": 35.1,
+        "avgNetPct": -0.35,
+        "profitFactor": 0.88,
+        "avgDays": 12.7
+      },
+      "OOS_bull": {
+        "n": 480,
+        "winRate": 34.8,
+        "avgNetPct": -0.09,
+        "profitFactor": 0.97,
+        "avgDays": 13.4
+      },
+      "OOS_bear": {
+        "n": 318,
+        "winRate": 33.6,
+        "avgNetPct": -0.51,
+        "profitFactor": 0.83,
+        "avgDays": 12.8
+      },
+      "IS_bull": {
+        "n": 644,
+        "winRate": 42.4,
+        "avgNetPct": 2.13,
+        "profitFactor": 1.96,
+        "avgDays": 13.9
+      },
+      "IS_bear": {
+        "n": 178,
+        "winRate": 37.6,
+        "avgNetPct": -0.05,
+        "profitFactor": 0.98,
+        "avgDays": 12.4
+      },
+      "IS_bearRec": {
+        "n": 104,
+        "winRate": 43.3,
+        "avgNetPct": 0.61,
+        "profitFactor": 1.27,
+        "avgDays": 13.8
+      },
+      "OOS_bearRec": {
+        "n": 190,
+        "winRate": 32.6,
+        "avgNetPct": -0.73,
+        "profitFactor": 0.76,
+        "avgDays": 13
+      },
+      "IS_bearFall": {
+        "n": 74,
+        "winRate": 29.7,
+        "avgNetPct": -0.98,
+        "profitFactor": 0.68,
+        "avgDays": 10.3
+      },
+      "OOS_bearFall": {
+        "n": 128,
+        "winRate": 35.2,
+        "avgNetPct": -0.18,
+        "profitFactor": 0.94,
+        "avgDays": 12.6
+      }
+    },
+    {
+      "key": "stoch_up_trend",
+      "label": "ستوكاستك يرتد من القاع في اتجاه صاعد",
+      "hold": 10,
+      "stopAtr": 2,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 5007,
+        "winRate": 40.8,
+        "avgNetPct": -0.3,
+        "profitFactor": 0.88,
+        "avgDays": 8.4
+      },
+      "IS": {
+        "n": 2815,
+        "winRate": 43.8,
+        "avgNetPct": 0.16,
+        "profitFactor": 1.07,
+        "avgDays": 8.4
+      },
+      "OOS": {
+        "n": 2192,
+        "winRate": 36.9,
+        "avgNetPct": -0.9,
+        "profitFactor": 0.69,
+        "avgDays": 8.5
+      },
+      "bull": {
+        "n": 3189,
+        "winRate": 42.4,
+        "avgNetPct": 0.17,
+        "profitFactor": 1.07,
+        "avgDays": 8.6
+      },
+      "bear": {
+        "n": 1818,
+        "winRate": 37.9,
+        "avgNetPct": -1.12,
+        "profitFactor": 0.62,
+        "avgDays": 8.1
+      },
+      "OOS_bull": {
+        "n": 1229,
+        "winRate": 37.9,
+        "avgNetPct": -0.43,
+        "profitFactor": 0.83,
+        "avgDays": 8.6
+      },
+      "OOS_bear": {
+        "n": 963,
+        "winRate": 35.5,
+        "avgNetPct": -1.49,
+        "profitFactor": 0.54,
+        "avgDays": 8.3
+      },
+      "IS_bull": {
+        "n": 1960,
+        "winRate": 45.2,
+        "avgNetPct": 0.54,
+        "profitFactor": 1.26,
+        "avgDays": 8.6
+      },
+      "IS_bear": {
+        "n": 855,
+        "winRate": 40.6,
+        "avgNetPct": -0.7,
+        "profitFactor": 0.73,
+        "avgDays": 8
+      },
+      "IS_bearRec": {
+        "n": 196,
+        "winRate": 42.9,
+        "avgNetPct": 0,
+        "profitFactor": 1,
+        "avgDays": 8.6
+      },
+      "OOS_bearRec": {
+        "n": 230,
+        "winRate": 40.4,
+        "avgNetPct": -0.81,
+        "profitFactor": 0.69,
+        "avgDays": 8.3
+      },
+      "IS_bearFall": {
+        "n": 659,
+        "winRate": 39.9,
+        "avgNetPct": -0.91,
+        "profitFactor": 0.68,
+        "avgDays": 7.8
+      },
+      "OOS_bearFall": {
+        "n": 733,
+        "winRate": 34,
+        "avgNetPct": -1.71,
+        "profitFactor": 0.5,
+        "avgDays": 8.3
+      }
+    },
+    {
+      "key": "leader_demand",
+      "label": "قائد السوق مع تدفّق مال قوي",
+      "hold": 20,
+      "stopAtr": 2,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 1734,
+        "winRate": 37.8,
+        "avgNetPct": 0.06,
+        "profitFactor": 1.02,
+        "avgDays": 13.7
+      },
+      "IS": {
+        "n": 911,
+        "winRate": 40.6,
+        "avgNetPct": 0.71,
+        "profitFactor": 1.22,
+        "avgDays": 13.5
+      },
+      "OOS": {
+        "n": 823,
+        "winRate": 34.6,
+        "avgNetPct": -0.66,
+        "profitFactor": 0.82,
+        "avgDays": 13.9
+      },
+      "bull": {
+        "n": 949,
+        "winRate": 40.1,
+        "avgNetPct": 0.99,
+        "profitFactor": 1.28,
+        "avgDays": 13.8
+      },
+      "bear": {
+        "n": 785,
+        "winRate": 34.9,
+        "avgNetPct": -1.07,
+        "profitFactor": 0.69,
+        "avgDays": 13.6
+      },
+      "OOS_bull": {
+        "n": 449,
+        "winRate": 36.3,
+        "avgNetPct": -0.23,
+        "profitFactor": 0.94,
+        "avgDays": 13.8
+      },
+      "OOS_bear": {
+        "n": 374,
+        "winRate": 32.6,
+        "avgNetPct": -1.17,
+        "profitFactor": 0.67,
+        "avgDays": 14
+      },
+      "IS_bull": {
+        "n": 500,
+        "winRate": 43.6,
+        "avgNetPct": 2.09,
+        "profitFactor": 1.66,
+        "avgDays": 13.8
+      },
+      "IS_bear": {
+        "n": 411,
+        "winRate": 37,
+        "avgNetPct": -0.98,
+        "profitFactor": 0.71,
+        "avgDays": 13.2
+      },
+      "IS_bearRec": {
+        "n": 153,
+        "winRate": 37.9,
+        "avgNetPct": -0.17,
+        "profitFactor": 0.95,
+        "avgDays": 13.8
+      },
+      "OOS_bearRec": {
+        "n": 135,
+        "winRate": 34.1,
+        "avgNetPct": -1.06,
+        "profitFactor": 0.7,
+        "avgDays": 14.2
+      },
+      "IS_bearFall": {
+        "n": 258,
+        "winRate": 36.4,
+        "avgNetPct": -1.46,
+        "profitFactor": 0.58,
+        "avgDays": 12.8
+      },
+      "OOS_bearFall": {
+        "n": 239,
+        "winRate": 31.8,
+        "avgNetPct": -1.24,
+        "profitFactor": 0.65,
+        "avgDays": 13.9
+      }
+    },
+    {
+      "key": "trend_pullback_trail",
+      "label": "تصحيح داخل اتجاه صاعد (RSI-14 يرتد من 40)",
+      "hold": 60,
+      "stopAtr": 2,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 1845,
+        "winRate": 30.9,
+        "avgNetPct": -0.13,
+        "profitFactor": 0.93,
+        "avgDays": 6.7
+      },
+      "IS": {
+        "n": 1065,
+        "winRate": 33.8,
+        "avgNetPct": 0.25,
+        "profitFactor": 1.15,
+        "avgDays": 7.2
+      },
+      "OOS": {
+        "n": 780,
+        "winRate": 27.1,
+        "avgNetPct": -0.64,
+        "profitFactor": 0.69,
+        "avgDays": 6
+      },
+      "bull": {
+        "n": 1163,
+        "winRate": 33.1,
+        "avgNetPct": 0.34,
+        "profitFactor": 1.2,
+        "avgDays": 6.7
+      },
+      "bear": {
+        "n": 682,
+        "winRate": 27.3,
+        "avgNetPct": -0.92,
+        "profitFactor": 0.58,
+        "avgDays": 6.7
+      },
+      "OOS_bull": {
+        "n": 438,
+        "winRate": 28.3,
+        "avgNetPct": -0.33,
+        "profitFactor": 0.82,
+        "avgDays": 5.7
+      },
+      "OOS_bear": {
+        "n": 342,
+        "winRate": 25.4,
+        "avgNetPct": -1.04,
+        "profitFactor": 0.55,
+        "avgDays": 6.3
+      },
+      "IS_bull": {
+        "n": 725,
+        "winRate": 36,
+        "avgNetPct": 0.74,
+        "profitFactor": 1.47,
+        "avgDays": 7.3
+      },
+      "IS_bear": {
+        "n": 340,
+        "winRate": 29.1,
+        "avgNetPct": -0.8,
+        "profitFactor": 0.6,
+        "avgDays": 7
+      },
+      "IS_bearRec": {
+        "n": 54,
+        "winRate": 25.9,
+        "avgNetPct": -0.18,
+        "profitFactor": 0.89,
+        "avgDays": 8.2
+      },
+      "OOS_bearRec": {
+        "n": 45,
+        "winRate": 26.7,
+        "avgNetPct": 0.9,
+        "profitFactor": 1.51,
+        "avgDays": 8
+      },
+      "IS_bearFall": {
+        "n": 286,
+        "winRate": 29.7,
+        "avgNetPct": -0.92,
+        "profitFactor": 0.56,
+        "avgDays": 6.8
+      },
+      "OOS_bearFall": {
+        "n": 297,
+        "winRate": 25.3,
+        "avgNetPct": -1.34,
+        "profitFactor": 0.44,
+        "avgDays": 6.1
+      }
+    },
+    {
+      "key": "breakout20_vol_trail",
+      "label": "اختراق قمة 20 جلسة بحجم مرتفع",
+      "hold": 60,
+      "stopAtr": 2,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 3906,
+        "winRate": 29.6,
+        "avgNetPct": 0.67,
+        "profitFactor": 1.21,
+        "avgDays": 16.3
+      },
+      "IS": {
+        "n": 2224,
+        "winRate": 31.6,
+        "avgNetPct": 1.32,
+        "profitFactor": 1.44,
+        "avgDays": 16.1
+      },
+      "OOS": {
+        "n": 1682,
+        "winRate": 27.1,
+        "avgNetPct": -0.19,
+        "profitFactor": 0.95,
+        "avgDays": 16.5
+      },
+      "bull": {
+        "n": 2623,
+        "winRate": 31.4,
+        "avgNetPct": 1.07,
+        "profitFactor": 1.35,
+        "avgDays": 15.8
+      },
+      "bear": {
+        "n": 1283,
+        "winRate": 26.1,
+        "avgNetPct": -0.16,
+        "profitFactor": 0.95,
+        "avgDays": 17.2
+      },
+      "OOS_bull": {
+        "n": 1013,
+        "winRate": 28.4,
+        "avgNetPct": -0.13,
+        "profitFactor": 0.96,
+        "avgDays": 15.6
+      },
+      "OOS_bear": {
+        "n": 669,
+        "winRate": 25,
+        "avgNetPct": -0.29,
+        "profitFactor": 0.92,
+        "avgDays": 17.9
+      },
+      "IS_bull": {
+        "n": 1610,
+        "winRate": 33.2,
+        "avgNetPct": 1.83,
+        "profitFactor": 1.64,
+        "avgDays": 16
+      },
+      "IS_bear": {
+        "n": 614,
+        "winRate": 27.4,
+        "avgNetPct": -0.02,
+        "profitFactor": 0.99,
+        "avgDays": 16.4
+      },
+      "IS_bearRec": {
+        "n": 371,
+        "winRate": 31.5,
+        "avgNetPct": 1.22,
+        "profitFactor": 1.42,
+        "avgDays": 18
+      },
+      "OOS_bearRec": {
+        "n": 322,
+        "winRate": 24.5,
+        "avgNetPct": -0.16,
+        "profitFactor": 0.96,
+        "avgDays": 18.2
+      },
+      "IS_bearFall": {
+        "n": 243,
+        "winRate": 21,
+        "avgNetPct": -1.92,
+        "profitFactor": 0.49,
+        "avgDays": 14.1
+      },
+      "OOS_bearFall": {
+        "n": 347,
+        "winRate": 25.4,
+        "avgNetPct": -0.41,
+        "profitFactor": 0.89,
+        "avgDays": 17.6
+      }
+    },
+    {
+      "key": "breakout55_trail",
+      "label": "اختراق قمة 55 جلسة (السلاحف)",
+      "hold": 60,
+      "stopAtr": 2,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 3908,
+        "winRate": 30.9,
+        "avgNetPct": 0.77,
+        "profitFactor": 1.24,
+        "avgDays": 16.4
+      },
+      "IS": {
+        "n": 2131,
+        "winRate": 32.5,
+        "avgNetPct": 1.28,
+        "profitFactor": 1.42,
+        "avgDays": 16
+      },
+      "OOS": {
+        "n": 1777,
+        "winRate": 29,
+        "avgNetPct": 0.15,
+        "profitFactor": 1.05,
+        "avgDays": 16.9
+      },
+      "bull": {
+        "n": 2703,
+        "winRate": 32.3,
+        "avgNetPct": 1.21,
+        "profitFactor": 1.4,
+        "avgDays": 16
+      },
+      "bear": {
+        "n": 1205,
+        "winRate": 27.8,
+        "avgNetPct": -0.21,
+        "profitFactor": 0.94,
+        "avgDays": 17.3
+      },
+      "OOS_bull": {
+        "n": 1139,
+        "winRate": 30.7,
+        "avgNetPct": 0.48,
+        "profitFactor": 1.15,
+        "avgDays": 16.3
+      },
+      "OOS_bear": {
+        "n": 638,
+        "winRate": 25.9,
+        "avgNetPct": -0.44,
+        "profitFactor": 0.88,
+        "avgDays": 17.9
+      },
+      "IS_bull": {
+        "n": 1564,
+        "winRate": 33.4,
+        "avgNetPct": 1.73,
+        "profitFactor": 1.6,
+        "avgDays": 15.7
+      },
+      "IS_bear": {
+        "n": 567,
+        "winRate": 30,
+        "avgNetPct": 0.04,
+        "profitFactor": 1.01,
+        "avgDays": 16.7
+      },
+      "IS_bearRec": {
+        "n": 362,
+        "winRate": 33.1,
+        "avgNetPct": 0.56,
+        "profitFactor": 1.17,
+        "avgDays": 18.3
+      },
+      "OOS_bearRec": {
+        "n": 361,
+        "winRate": 24.9,
+        "avgNetPct": -0.7,
+        "profitFactor": 0.8,
+        "avgDays": 17.2
+      },
+      "IS_bearFall": {
+        "n": 205,
+        "winRate": 24.4,
+        "avgNetPct": -0.87,
+        "profitFactor": 0.76,
+        "avgDays": 13.8
+      },
+      "OOS_bearFall": {
+        "n": 277,
+        "winRate": 27.1,
+        "avgNetPct": -0.11,
+        "profitFactor": 0.97,
+        "avgDays": 18.8
+      }
+    },
+    {
+      "key": "golden_cross_trail",
+      "label": "تقاطع ذهبي (متوسط 50 فوق 200)",
+      "hold": 60,
+      "stopAtr": 2,
+      "validated": true,
+      "bearOk": false,
+      "all": {
+        "n": 1216,
+        "winRate": 30.2,
+        "avgNetPct": 1.8,
+        "profitFactor": 1.75,
+        "avgDays": 14
+      },
+      "IS": {
+        "n": 593,
+        "winRate": 32.4,
+        "avgNetPct": 2.95,
+        "profitFactor": 2.33,
+        "avgDays": 14.5
+      },
+      "OOS": {
+        "n": 623,
+        "winRate": 28.1,
+        "avgNetPct": 0.71,
+        "profitFactor": 1.27,
+        "avgDays": 13.5
+      },
+      "bull": {
+        "n": 869,
+        "winRate": 32.3,
+        "avgNetPct": 2.71,
+        "profitFactor": 2.18,
+        "avgDays": 14.4
+      },
+      "bear": {
+        "n": 347,
+        "winRate": 24.8,
+        "avgNetPct": -0.45,
+        "profitFactor": 0.83,
+        "avgDays": 13
+      },
+      "OOS_bull": {
+        "n": 409,
+        "winRate": 30.1,
+        "avgNetPct": 1.75,
+        "profitFactor": 1.71,
+        "avgDays": 14.2
+      },
+      "OOS_bear": {
+        "n": 214,
+        "winRate": 24.3,
+        "avgNetPct": -1.27,
+        "profitFactor": 0.56,
+        "avgDays": 12.2
+      },
+      "IS_bull": {
+        "n": 460,
+        "winRate": 34.3,
+        "avgNetPct": 3.55,
+        "profitFactor": 2.66,
+        "avgDays": 14.6
+      },
+      "IS_bear": {
+        "n": 133,
+        "winRate": 25.6,
+        "avgNetPct": 0.87,
+        "profitFactor": 1.35,
+        "avgDays": 14.3
+      },
+      "IS_bearRec": {
+        "n": 65,
+        "winRate": 30.8,
+        "avgNetPct": 2.01,
+        "profitFactor": 1.9,
+        "avgDays": 19
+      },
+      "OOS_bearRec": {
+        "n": 64,
+        "winRate": 17.2,
+        "avgNetPct": -1.62,
+        "profitFactor": 0.46,
+        "avgDays": 14.2
+      },
+      "IS_bearFall": {
+        "n": 68,
+        "winRate": 20.6,
+        "avgNetPct": -0.23,
+        "profitFactor": 0.92,
+        "avgDays": 9.8
+      },
+      "OOS_bearFall": {
+        "n": 150,
+        "winRate": 27.3,
+        "avgNetPct": -1.13,
+        "profitFactor": 0.6,
+        "avgDays": 11.3
+      }
+    },
+    {
+      "key": "ema20_50_adx_trail",
+      "label": "متوسط 20 يقطع 50 صعوداً مع اتجاه قوي (ADX فوق 20)",
+      "hold": 60,
+      "stopAtr": 2,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 2235,
+        "winRate": 29,
+        "avgNetPct": 0.47,
+        "profitFactor": 1.16,
+        "avgDays": 16.1
+      },
+      "IS": {
+        "n": 1059,
+        "winRate": 30,
+        "avgNetPct": 1.01,
+        "profitFactor": 1.36,
+        "avgDays": 15.4
+      },
+      "OOS": {
+        "n": 1176,
+        "winRate": 28.1,
+        "avgNetPct": -0.02,
+        "profitFactor": 0.99,
+        "avgDays": 16.7
+      },
+      "bull": {
+        "n": 1108,
+        "winRate": 32.5,
+        "avgNetPct": 1.49,
+        "profitFactor": 1.6,
+        "avgDays": 16
+      },
+      "bear": {
+        "n": 1127,
+        "winRate": 25.6,
+        "avgNetPct": -0.53,
+        "profitFactor": 0.84,
+        "avgDays": 16.1
+      },
+      "OOS_bull": {
+        "n": 577,
+        "winRate": 31.2,
+        "avgNetPct": 0.8,
+        "profitFactor": 1.3,
+        "avgDays": 16.5
+      },
+      "OOS_bear": {
+        "n": 599,
+        "winRate": 25,
+        "avgNetPct": -0.81,
+        "profitFactor": 0.77,
+        "avgDays": 16.9
+      },
+      "IS_bull": {
+        "n": 531,
+        "winRate": 33.9,
+        "avgNetPct": 2.24,
+        "profitFactor": 1.97,
+        "avgDays": 15.5
+      },
+      "IS_bear": {
+        "n": 528,
+        "winRate": 26.1,
+        "avgNetPct": -0.23,
+        "profitFactor": 0.93,
+        "avgDays": 15.3
+      },
+      "IS_bearRec": {
+        "n": 395,
+        "winRate": 25.1,
+        "avgNetPct": -0.54,
+        "profitFactor": 0.84,
+        "avgDays": 15.7
+      },
+      "OOS_bearRec": {
+        "n": 435,
+        "winRate": 24.6,
+        "avgNetPct": -0.51,
+        "profitFactor": 0.84,
+        "avgDays": 17
+      },
+      "IS_bearFall": {
+        "n": 133,
+        "winRate": 29.3,
+        "avgNetPct": 0.69,
+        "profitFactor": 1.22,
+        "avgDays": 14
+      },
+      "OOS_bearFall": {
+        "n": 164,
+        "winRate": 26.2,
+        "avgNetPct": -1.58,
+        "profitFactor": 0.6,
+        "avgDays": 16.8
+      }
+    },
+    {
+      "key": "squeeze_up_trail",
+      "label": "انطلاق صاعد من انضغاط بولنجر",
+      "hold": 60,
+      "stopAtr": 2,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 1584,
+        "winRate": 32.3,
+        "avgNetPct": 1.09,
+        "profitFactor": 1.43,
+        "avgDays": 15.7
+      },
+      "IS": {
+        "n": 809,
+        "winRate": 35.6,
+        "avgNetPct": 1.97,
+        "profitFactor": 1.87,
+        "avgDays": 15.7
+      },
+      "OOS": {
+        "n": 775,
+        "winRate": 28.8,
+        "avgNetPct": 0.17,
+        "profitFactor": 1.06,
+        "avgDays": 15.7
+      },
+      "bull": {
+        "n": 1098,
+        "winRate": 33.8,
+        "avgNetPct": 1.63,
+        "profitFactor": 1.67,
+        "avgDays": 15.8
+      },
+      "bear": {
+        "n": 486,
+        "winRate": 28.8,
+        "avgNetPct": -0.15,
+        "profitFactor": 0.95,
+        "avgDays": 15.4
+      },
+      "OOS_bull": {
+        "n": 467,
+        "winRate": 28.9,
+        "avgNetPct": 0.24,
+        "profitFactor": 1.09,
+        "avgDays": 15.3
+      },
+      "OOS_bear": {
+        "n": 308,
+        "winRate": 28.6,
+        "avgNetPct": 0.05,
+        "profitFactor": 1.02,
+        "avgDays": 16.4
+      },
+      "IS_bull": {
+        "n": 631,
+        "winRate": 37.4,
+        "avgNetPct": 2.66,
+        "profitFactor": 2.23,
+        "avgDays": 16.2
+      },
+      "IS_bear": {
+        "n": 178,
+        "winRate": 29.2,
+        "avgNetPct": -0.49,
+        "profitFactor": 0.81,
+        "avgDays": 13.8
+      },
+      "IS_bearRec": {
+        "n": 104,
+        "winRate": 32.7,
+        "avgNetPct": 0.08,
+        "profitFactor": 1.03,
+        "avgDays": 15.2
+      },
+      "OOS_bearRec": {
+        "n": 186,
+        "winRate": 28,
+        "avgNetPct": 0,
+        "profitFactor": 1,
+        "avgDays": 16.4
+      },
+      "IS_bearFall": {
+        "n": 74,
+        "winRate": 24.3,
+        "avgNetPct": -1.29,
+        "profitFactor": 0.56,
+        "avgDays": 11.9
+      },
+      "OOS_bearFall": {
+        "n": 122,
+        "winRate": 29.5,
+        "avgNetPct": 0.13,
+        "profitFactor": 1.04,
+        "avgDays": 16.3
+      }
+    },
+    {
+      "key": "leader_demand_trail",
+      "label": "قائد السوق مع تدفّق مال قوي",
+      "hold": 60,
+      "stopAtr": 2,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 1672,
+        "winRate": 31,
+        "avgNetPct": 0.26,
+        "profitFactor": 1.08,
+        "avgDays": 15.6
+      },
+      "IS": {
+        "n": 867,
+        "winRate": 33.7,
+        "avgNetPct": 0.8,
+        "profitFactor": 1.26,
+        "avgDays": 15.9
+      },
+      "OOS": {
+        "n": 805,
+        "winRate": 28.1,
+        "avgNetPct": -0.32,
+        "profitFactor": 0.91,
+        "avgDays": 15.3
+      },
+      "bull": {
+        "n": 902,
+        "winRate": 33.8,
+        "avgNetPct": 0.94,
+        "profitFactor": 1.29,
+        "avgDays": 15.8
+      },
+      "bear": {
+        "n": 770,
+        "winRate": 27.7,
+        "avgNetPct": -0.53,
+        "profitFactor": 0.84,
+        "avgDays": 15.5
+      },
+      "OOS_bull": {
+        "n": 431,
+        "winRate": 29.5,
+        "avgNetPct": -0.44,
+        "profitFactor": 0.87,
+        "avgDays": 15
+      },
+      "OOS_bear": {
+        "n": 374,
+        "winRate": 26.5,
+        "avgNetPct": -0.18,
+        "profitFactor": 0.95,
+        "avgDays": 15.6
+      },
+      "IS_bull": {
+        "n": 471,
+        "winRate": 37.8,
+        "avgNetPct": 2.2,
+        "profitFactor": 1.75,
+        "avgDays": 16.5
+      },
+      "IS_bear": {
+        "n": 396,
+        "winRate": 28.8,
+        "avgNetPct": -0.86,
+        "profitFactor": 0.73,
+        "avgDays": 15.3
+      },
+      "IS_bearRec": {
+        "n": 139,
+        "winRate": 30.9,
+        "avgNetPct": 0.03,
+        "profitFactor": 1.01,
+        "avgDays": 17.7
+      },
+      "OOS_bearRec": {
+        "n": 129,
+        "winRate": 27.9,
+        "avgNetPct": -0.67,
+        "profitFactor": 0.82,
+        "avgDays": 17.3
+      },
+      "IS_bearFall": {
+        "n": 257,
+        "winRate": 27.6,
+        "avgNetPct": -1.33,
+        "profitFactor": 0.57,
+        "avgDays": 14
+      },
+      "OOS_bearFall": {
+        "n": 245,
+        "winRate": 25.7,
+        "avgNetPct": 0.07,
+        "profitFactor": 1.02,
+        "avgDays": 14.8
+      }
+    },
+    {
+      "key": "trend_pullback_trail_rs",
+      "label": "تصحيح داخل اتجاه صاعد (RSI-14 يرتد من 40) لسهم قائد",
+      "hold": 60,
+      "stopAtr": 2,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 965,
+        "winRate": 30.6,
+        "avgNetPct": -0.35,
+        "profitFactor": 0.84,
+        "avgDays": 6.9
+      },
+      "IS": {
+        "n": 510,
+        "winRate": 33.5,
+        "avgNetPct": 0.04,
+        "profitFactor": 1.02,
+        "avgDays": 7.6
+      },
+      "OOS": {
+        "n": 455,
+        "winRate": 27.3,
+        "avgNetPct": -0.78,
+        "profitFactor": 0.65,
+        "avgDays": 6.1
+      },
+      "bull": {
+        "n": 394,
+        "winRate": 34,
+        "avgNetPct": 0.49,
+        "profitFactor": 1.25,
+        "avgDays": 6.8
+      },
+      "bear": {
+        "n": 571,
+        "winRate": 28.2,
+        "avgNetPct": -0.92,
+        "profitFactor": 0.59,
+        "avgDays": 7
+      },
+      "OOS_bull": {
+        "n": 158,
+        "winRate": 32.3,
+        "avgNetPct": 0.03,
+        "profitFactor": 1.02,
+        "avgDays": 5.9
+      },
+      "OOS_bear": {
+        "n": 297,
+        "winRate": 24.6,
+        "avgNetPct": -1.21,
+        "profitFactor": 0.49,
+        "avgDays": 6.3
+      },
+      "IS_bull": {
+        "n": 236,
+        "winRate": 35.2,
+        "avgNetPct": 0.8,
+        "profitFactor": 1.4,
+        "avgDays": 7.4
+      },
+      "IS_bear": {
+        "n": 274,
+        "winRate": 32.1,
+        "avgNetPct": -0.61,
+        "profitFactor": 0.7,
+        "avgDays": 7.7
+      },
+      "IS_bearRec": {
+        "n": 29,
+        "winRate": 37.9,
+        "avgNetPct": 0.91,
+        "profitFactor": 1.59,
+        "avgDays": 10.8
+      },
+      "OOS_bearRec": {
+        "n": 32,
+        "winRate": 28.1,
+        "avgNetPct": 1.63,
+        "profitFactor": 2.07,
+        "avgDays": 8.3
+      },
+      "IS_bearFall": {
+        "n": 245,
+        "winRate": 31.4,
+        "avgNetPct": -0.79,
+        "profitFactor": 0.63,
+        "avgDays": 7.4
+      },
+      "OOS_bearFall": {
+        "n": 265,
+        "winRate": 24.2,
+        "avgNetPct": -1.56,
+        "profitFactor": 0.38,
+        "avgDays": 6
+      }
+    },
+    {
+      "key": "breakout20_vol_trail_rs",
+      "label": "اختراق قمة 20 جلسة بحجم مرتفع لسهم قائد",
+      "hold": 60,
+      "stopAtr": 2,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 2448,
+        "winRate": 30.4,
+        "avgNetPct": 0.44,
+        "profitFactor": 1.13,
+        "avgDays": 16.7
+      },
+      "IS": {
+        "n": 1300,
+        "winRate": 33.1,
+        "avgNetPct": 1.18,
+        "profitFactor": 1.38,
+        "avgDays": 16.7
+      },
+      "OOS": {
+        "n": 1148,
+        "winRate": 27.4,
+        "avgNetPct": -0.41,
+        "profitFactor": 0.89,
+        "avgDays": 16.7
+      },
+      "bull": {
+        "n": 1446,
+        "winRate": 31.9,
+        "avgNetPct": 0.76,
+        "profitFactor": 1.22,
+        "avgDays": 16
+      },
+      "bear": {
+        "n": 1002,
+        "winRate": 28.2,
+        "avgNetPct": -0.02,
+        "profitFactor": 0.99,
+        "avgDays": 17.7
+      },
+      "OOS_bull": {
+        "n": 615,
+        "winRate": 28,
+        "avgNetPct": -0.45,
+        "profitFactor": 0.88,
+        "avgDays": 15.3
+      },
+      "OOS_bear": {
+        "n": 533,
+        "winRate": 26.6,
+        "avgNetPct": -0.35,
+        "profitFactor": 0.91,
+        "avgDays": 18.4
+      },
+      "IS_bull": {
+        "n": 831,
+        "winRate": 34.8,
+        "avgNetPct": 1.65,
+        "profitFactor": 1.54,
+        "avgDays": 16.5
+      },
+      "IS_bear": {
+        "n": 469,
+        "winRate": 30.1,
+        "avgNetPct": 0.35,
+        "profitFactor": 1.11,
+        "avgDays": 17
+      },
+      "IS_bearRec": {
+        "n": 256,
+        "winRate": 34.4,
+        "avgNetPct": 1.87,
+        "profitFactor": 1.64,
+        "avgDays": 18.3
+      },
+      "OOS_bearRec": {
+        "n": 237,
+        "winRate": 24.5,
+        "avgNetPct": -0.3,
+        "profitFactor": 0.92,
+        "avgDays": 18.3
+      },
+      "IS_bearFall": {
+        "n": 213,
+        "winRate": 24.9,
+        "avgNetPct": -1.47,
+        "profitFactor": 0.59,
+        "avgDays": 15.3
+      },
+      "OOS_bearFall": {
+        "n": 296,
+        "winRate": 28.4,
+        "avgNetPct": -0.39,
+        "profitFactor": 0.9,
+        "avgDays": 18.4
+      }
+    },
+    {
+      "key": "breakout55_trail_rs",
+      "label": "اختراق قمة 55 جلسة (السلاحف) لسهم قائد",
+      "hold": 60,
+      "stopAtr": 2,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 2649,
+        "winRate": 31,
+        "avgNetPct": 0.57,
+        "profitFactor": 1.17,
+        "avgDays": 16.7
+      },
+      "IS": {
+        "n": 1365,
+        "winRate": 33,
+        "avgNetPct": 1.19,
+        "profitFactor": 1.36,
+        "avgDays": 16.4
+      },
+      "OOS": {
+        "n": 1284,
+        "winRate": 28.8,
+        "avgNetPct": -0.08,
+        "profitFactor": 0.98,
+        "avgDays": 17
+      },
+      "bull": {
+        "n": 1611,
+        "winRate": 32.4,
+        "avgNetPct": 1.14,
+        "profitFactor": 1.34,
+        "avgDays": 16.2
+      },
+      "bear": {
+        "n": 1038,
+        "winRate": 28.7,
+        "avgNetPct": -0.3,
+        "profitFactor": 0.92,
+        "avgDays": 17.3
+      },
+      "OOS_bull": {
+        "n": 727,
+        "winRate": 29.7,
+        "avgNetPct": 0.05,
+        "profitFactor": 1.01,
+        "avgDays": 15.7
+      },
+      "OOS_bear": {
+        "n": 557,
+        "winRate": 27.6,
+        "avgNetPct": -0.24,
+        "profitFactor": 0.93,
+        "avgDays": 18.5
+      },
+      "IS_bull": {
+        "n": 884,
+        "winRate": 34.6,
+        "avgNetPct": 2.03,
+        "profitFactor": 1.65,
+        "avgDays": 16.6
+      },
+      "IS_bear": {
+        "n": 481,
+        "winRate": 29.9,
+        "avgNetPct": -0.37,
+        "profitFactor": 0.9,
+        "avgDays": 15.9
+      },
+      "IS_bearRec": {
+        "n": 289,
+        "winRate": 33.2,
+        "avgNetPct": -0.04,
+        "profitFactor": 0.99,
+        "avgDays": 17.4
+      },
+      "OOS_bearRec": {
+        "n": 300,
+        "winRate": 27.3,
+        "avgNetPct": -0.3,
+        "profitFactor": 0.91,
+        "avgDays": 18.1
+      },
+      "IS_bearFall": {
+        "n": 192,
+        "winRate": 25,
+        "avgNetPct": -0.85,
+        "profitFactor": 0.77,
+        "avgDays": 13.6
+      },
+      "OOS_bearFall": {
+        "n": 257,
+        "winRate": 28,
+        "avgNetPct": -0.17,
+        "profitFactor": 0.96,
+        "avgDays": 19
+      }
+    },
+    {
+      "key": "golden_cross_trail_rs",
+      "label": "تقاطع ذهبي (متوسط 50 فوق 200) لسهم قائد",
+      "hold": 60,
+      "stopAtr": 2,
+      "validated": true,
+      "bearOk": false,
+      "all": {
+        "n": 708,
+        "winRate": 28.7,
+        "avgNetPct": 1.23,
+        "profitFactor": 1.44,
+        "avgDays": 14.6
+      },
+      "IS": {
+        "n": 322,
+        "winRate": 32,
+        "avgNetPct": 1.84,
+        "profitFactor": 1.7,
+        "avgDays": 15.4
+      },
+      "OOS": {
+        "n": 386,
+        "winRate": 25.9,
+        "avgNetPct": 0.72,
+        "profitFactor": 1.24,
+        "avgDays": 13.9
+      },
+      "bull": {
+        "n": 428,
+        "winRate": 31.5,
+        "avgNetPct": 2.39,
+        "profitFactor": 1.88,
+        "avgDays": 15.2
+      },
+      "bear": {
+        "n": 280,
+        "winRate": 24.3,
+        "avgNetPct": -0.55,
+        "profitFactor": 0.81,
+        "avgDays": 13.6
+      },
+      "OOS_bull": {
+        "n": 208,
+        "winRate": 28.4,
+        "avgNetPct": 2.41,
+        "profitFactor": 1.84,
+        "avgDays": 14.9
+      },
+      "OOS_bear": {
+        "n": 178,
+        "winRate": 23,
+        "avgNetPct": -1.26,
+        "profitFactor": 0.59,
+        "avgDays": 12.7
+      },
+      "IS_bull": {
+        "n": 220,
+        "winRate": 34.5,
+        "avgNetPct": 2.38,
+        "profitFactor": 1.93,
+        "avgDays": 15.5
+      },
+      "IS_bear": {
+        "n": 102,
+        "winRate": 26.5,
+        "avgNetPct": 0.67,
+        "profitFactor": 1.24,
+        "avgDays": 15.2
+      },
+      "IS_bearRec": {
+        "n": 48,
+        "winRate": 33.3,
+        "avgNetPct": 1.44,
+        "profitFactor": 1.6,
+        "avgDays": 20.4
+      },
+      "OOS_bearRec": {
+        "n": 54,
+        "winRate": 14.8,
+        "avgNetPct": -1.56,
+        "profitFactor": 0.5,
+        "avgDays": 13.7
+      },
+      "IS_bearFall": {
+        "n": 54,
+        "winRate": 20.4,
+        "avgNetPct": -0.01,
+        "profitFactor": 1,
+        "avgDays": 10.6
+      },
+      "OOS_bearFall": {
+        "n": 124,
+        "winRate": 26.6,
+        "avgNetPct": -1.12,
+        "profitFactor": 0.63,
+        "avgDays": 12.3
+      }
+    },
+    {
+      "key": "ema20_50_adx_trail_rs",
+      "label": "متوسط 20 يقطع 50 صعوداً مع اتجاه قوي (ADX فوق 20) لسهم قائد",
+      "hold": 60,
+      "stopAtr": 2,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 625,
+        "winRate": 29.4,
+        "avgNetPct": -0.25,
+        "profitFactor": 0.93,
+        "avgDays": 16.8
+      },
+      "IS": {
+        "n": 250,
+        "winRate": 31.6,
+        "avgNetPct": 0.63,
+        "profitFactor": 1.19,
+        "avgDays": 15.8
+      },
+      "OOS": {
+        "n": 375,
+        "winRate": 28,
+        "avgNetPct": -0.83,
+        "profitFactor": 0.77,
+        "avgDays": 17.5
+      },
+      "bull": {
+        "n": 159,
+        "winRate": 30.2,
+        "avgNetPct": -0.24,
+        "profitFactor": 0.92,
+        "avgDays": 15.1
+      },
+      "bear": {
+        "n": 466,
+        "winRate": 29.2,
+        "avgNetPct": -0.25,
+        "profitFactor": 0.93,
+        "avgDays": 17.4
+      },
+      "OOS_bull": {
+        "n": 96,
+        "winRate": 30.2,
+        "avgNetPct": 0,
+        "profitFactor": 1,
+        "avgDays": 15.9
+      },
+      "OOS_bear": {
+        "n": 279,
+        "winRate": 27.2,
+        "avgNetPct": -1.12,
+        "profitFactor": 0.7,
+        "avgDays": 18.1
+      },
+      "IS_bull": {
+        "n": 63,
+        "winRate": 30.2,
+        "avgNetPct": -0.59,
+        "profitFactor": 0.8,
+        "avgDays": 13.9
+      },
+      "IS_bear": {
+        "n": 187,
+        "winRate": 32.1,
+        "avgNetPct": 1.04,
+        "profitFactor": 1.3,
+        "avgDays": 16.5
+      },
+      "IS_bearRec": {
+        "n": 108,
+        "winRate": 34.3,
+        "avgNetPct": 1.23,
+        "profitFactor": 1.37,
+        "avgDays": 18.6
+      },
+      "OOS_bearRec": {
+        "n": 162,
+        "winRate": 29,
+        "avgNetPct": -0.08,
+        "profitFactor": 0.98,
+        "avgDays": 19.2
+      },
+      "IS_bearFall": {
+        "n": 79,
+        "winRate": 29.1,
+        "avgNetPct": 0.78,
+        "profitFactor": 1.22,
+        "avgDays": 13.6
+      },
+      "OOS_bearFall": {
+        "n": 117,
+        "winRate": 24.8,
+        "avgNetPct": -2.56,
+        "profitFactor": 0.43,
+        "avgDays": 16.4
+      }
+    },
+    {
+      "key": "squeeze_up_trail_rs",
+      "label": "انطلاق صاعد من انضغاط بولنجر لسهم قائد",
+      "hold": 60,
+      "stopAtr": 2,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 456,
+        "winRate": 30.7,
+        "avgNetPct": 0.68,
+        "profitFactor": 1.23,
+        "avgDays": 16.2
+      },
+      "IS": {
+        "n": 226,
+        "winRate": 31.9,
+        "avgNetPct": 0.88,
+        "profitFactor": 1.33,
+        "avgDays": 15.9
+      },
+      "OOS": {
+        "n": 230,
+        "winRate": 29.6,
+        "avgNetPct": 0.49,
+        "profitFactor": 1.15,
+        "avgDays": 16.5
+      },
+      "bull": {
+        "n": 270,
+        "winRate": 30.4,
+        "avgNetPct": 0.88,
+        "profitFactor": 1.3,
+        "avgDays": 15.9
+      },
+      "bear": {
+        "n": 186,
+        "winRate": 31.2,
+        "avgNetPct": 0.4,
+        "profitFactor": 1.13,
+        "avgDays": 16.5
+      },
+      "OOS_bull": {
+        "n": 126,
+        "winRate": 25.4,
+        "avgNetPct": 0.2,
+        "profitFactor": 1.06,
+        "avgDays": 15
+      },
+      "OOS_bear": {
+        "n": 104,
+        "winRate": 34.6,
+        "avgNetPct": 0.84,
+        "profitFactor": 1.26,
+        "avgDays": 18.2
+      },
+      "IS_bull": {
+        "n": 144,
+        "winRate": 34.7,
+        "avgNetPct": 1.47,
+        "profitFactor": 1.57,
+        "avgDays": 16.8
+      },
+      "IS_bear": {
+        "n": 82,
+        "winRate": 26.8,
+        "avgNetPct": -0.16,
+        "profitFactor": 0.94,
+        "avgDays": 14.3
+      },
+      "IS_bearRec": {
+        "n": 36,
+        "winRate": 41.7,
+        "avgNetPct": 1.46,
+        "profitFactor": 1.66,
+        "avgDays": 19.8
+      },
+      "OOS_bearRec": {
+        "n": 48,
+        "winRate": 35.4,
+        "avgNetPct": 0.68,
+        "profitFactor": 1.21,
+        "avgDays": 18.6
+      },
+      "IS_bearFall": {
+        "n": 46,
+        "winRate": 15.2,
+        "avgNetPct": -1.42,
+        "profitFactor": 0.57,
+        "avgDays": 10.1
+      },
+      "OOS_bearFall": {
+        "n": 56,
+        "winRate": 33.9,
+        "avgNetPct": 0.98,
+        "profitFactor": 1.31,
+        "avgDays": 17.9
+      }
+    },
+    {
+      "key": "leader_demand_trail_rs",
+      "label": "قائد السوق مع تدفّق مال قوي لسهم قائد",
+      "hold": 60,
+      "stopAtr": 2,
+      "validated": false,
+      "bearOk": false,
+      "all": {
+        "n": 1672,
+        "winRate": 31,
+        "avgNetPct": 0.26,
+        "profitFactor": 1.08,
+        "avgDays": 15.6
+      },
+      "IS": {
+        "n": 867,
+        "winRate": 33.7,
+        "avgNetPct": 0.8,
+        "profitFactor": 1.26,
+        "avgDays": 15.9
+      },
+      "OOS": {
+        "n": 805,
+        "winRate": 28.1,
+        "avgNetPct": -0.32,
+        "profitFactor": 0.91,
+        "avgDays": 15.3
+      },
+      "bull": {
+        "n": 902,
+        "winRate": 33.8,
+        "avgNetPct": 0.94,
+        "profitFactor": 1.29,
+        "avgDays": 15.8
+      },
+      "bear": {
+        "n": 770,
+        "winRate": 27.7,
+        "avgNetPct": -0.53,
+        "profitFactor": 0.84,
+        "avgDays": 15.5
+      },
+      "OOS_bull": {
+        "n": 431,
+        "winRate": 29.5,
+        "avgNetPct": -0.44,
+        "profitFactor": 0.87,
+        "avgDays": 15
+      },
+      "OOS_bear": {
+        "n": 374,
+        "winRate": 26.5,
+        "avgNetPct": -0.18,
+        "profitFactor": 0.95,
+        "avgDays": 15.6
+      },
+      "IS_bull": {
+        "n": 471,
+        "winRate": 37.8,
+        "avgNetPct": 2.2,
+        "profitFactor": 1.75,
+        "avgDays": 16.5
+      },
+      "IS_bear": {
+        "n": 396,
+        "winRate": 28.8,
+        "avgNetPct": -0.86,
+        "profitFactor": 0.73,
+        "avgDays": 15.3
+      },
+      "IS_bearRec": {
+        "n": 139,
+        "winRate": 30.9,
+        "avgNetPct": 0.03,
+        "profitFactor": 1.01,
+        "avgDays": 17.7
+      },
+      "OOS_bearRec": {
+        "n": 129,
+        "winRate": 27.9,
+        "avgNetPct": -0.67,
+        "profitFactor": 0.82,
+        "avgDays": 17.3
+      },
+      "IS_bearFall": {
+        "n": 257,
+        "winRate": 27.6,
+        "avgNetPct": -1.33,
+        "profitFactor": 0.57,
+        "avgDays": 14
+      },
+      "OOS_bearFall": {
+        "n": 245,
+        "winRate": 25.7,
+        "avgNetPct": 0.07,
+        "profitFactor": 1.02,
+        "avgDays": 14.8
+      }
+    }
+  ]
+}

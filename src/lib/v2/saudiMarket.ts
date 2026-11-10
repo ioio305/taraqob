@@ -11,6 +11,8 @@ import { unstable_cache } from 'next/cache'
 import { computeConfluence, windowReturn, type TechnicalScore } from './saudiIndicators'
 import { SAUDI_STOCKS, type SaudiStockMeta } from './saudiStocks'
 import { SEGMENT_LIST, segmentOf, type SaudiSegment } from './saudiUniverse'
+import { firedSignals, type FiredSignal } from './saudiEntry'
+import { atrSeries, chandelierLong } from './saudiPro'
 import { buildStockExtras, type SaudiStockExtras } from './saudiSignals'
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
@@ -90,6 +92,8 @@ export type SaudiStockRow = {
   ema20Above: boolean; ema50Above: boolean; ema200Above: boolean; golden: boolean; adx: number; vwap: number; priceVsVwap: string
   atr: number; atrPct: number; suggestedStop: number; obvRising: boolean; relStrength: number | null
   bullishCount: number; bearishCount: number
+  // إشارات الدخول المرصودة (آخر 3 جلسات) ومخرج الثريا الحالي — انظر saudiEntry.ts.
+  entrySignals: FiredSignal[]; chandelier: number | null
 } & SaudiStockExtras
 
 export type SaudiSnapshot = {
@@ -126,6 +130,8 @@ function rowFor(meta: SaudiStockMeta, d: SaudiDaily, marketReturn: number | unde
     atr: tech.atr, atrPct: tech.atrPct, suggestedStop: tech.suggestedStop, obvRising: tech.obvRising, relStrength: tech.relStrength,
     bullishCount: tech.bullishCount, bearishCount: tech.bearishCount,
     ...buildStockExtras(cs, price, tech),
+    entrySignals: firedSignals(cs, tech.relStrength != null ? tech.relStrength / 100 : null),
+    chandelier: chandelierLong(cs, atrSeries(cs)).at(-1) ?? null,
   }
 }
 
@@ -147,17 +153,17 @@ export async function buildSaudiSnapshot(list: SaudiStockMeta[] = SAUDI_STOCKS):
 }
 
 // اللقطة المشتركة — تُحسب مرة كل 5 دقائق على الأكثر. الخطأ لا يُخزَّن (يُعاد المحاولة).
-export const getSaudiSnapshot = unstable_cache(() => buildSaudiSnapshot(), ['saudi-snapshot-v1'], {
+export const getSaudiSnapshot = unstable_cache(() => buildSaudiSnapshot(), ['saudi-snapshot-v2'], {
   revalidate: SNAPSHOT_TTL_SEC,
   tags: ['saudi-snapshot'],
 })
 
-const getNomuSnapshot = unstable_cache(() => buildSaudiSnapshot(SEGMENT_LIST.nomu), ['saudi-snapshot-nomu-v1'], {
+const getNomuSnapshot = unstable_cache(() => buildSaudiSnapshot(SEGMENT_LIST.nomu), ['saudi-snapshot-nomu-v2'], {
   revalidate: SNAPSHOT_TTL_SEC,
   tags: ['saudi-snapshot'],
 })
 
-const getFundsSnapshot = unstable_cache(() => buildSaudiSnapshot(SEGMENT_LIST.funds), ['saudi-snapshot-funds-v1'], {
+const getFundsSnapshot = unstable_cache(() => buildSaudiSnapshot(SEGMENT_LIST.funds), ['saudi-snapshot-funds-v2'], {
   revalidate: SNAPSHOT_TTL_SEC,
   tags: ['saudi-snapshot'],
 })

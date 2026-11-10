@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSaudiSnapshot } from '@/lib/v2/saudiMarket'
 import { buildDailyPlan } from '@/lib/v2/saudiPlan'
 import { SAUDI_HORIZONS, normalizeSaudiHorizon } from '@/lib/v2/saudiHorizon'
+import { buildEntryPicks } from '@/lib/v2/saudiEntry'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -19,6 +20,7 @@ export async function GET(req: Request) {
       marketReturn3m: snap.marketReturn != null ? +(snap.marketReturn * 100).toFixed(2) : null,
       strongCount,
       horizon: SAUDI_HORIZONS[horizon],
+      entry: buildEntryPicks(snap.stocks, snap.marketReturn),
       picks,
     }, { headers: { 'Cache-Control': 'private, max-age=60' } })
   } catch (err) {

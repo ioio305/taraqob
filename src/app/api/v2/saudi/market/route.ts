@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { fetchYahooIndex, getSaudiSnapshot, marketStatus, type SaudiStockRow } from '@/lib/v2/saudiMarket'
 import { overlayLiveQuotes } from '@/lib/v2/saudiQuotes'
+import { buildEntryPicks } from '@/lib/v2/saudiEntry'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -14,8 +15,16 @@ export async function GET() {
     ])
     // نسخة لكل طلب: لا نعدّل كائنات اللقطة المخزّنة عند دمج أسعار سهمك.
     // أعلام الماسح والمستويات للأداة المدفوعة (/api/v2/saudi/scanner) — لا تُرسل هنا.
-    const stocks: Array<Omit<SaudiStockRow, 'flags' | 'support' | 'resistance' | 'goldenCrossDaysAgo'>> = snapshot.stocks
-      .map(({ flags: _f, support: _s, resistance: _r, goldenCrossDaysAgo: _g, ...rest }) => rest)
+    const stocks: Array<Omit<SaudiStockRow, 'flags' | 'support' | 'resistance' | 'goldenCrossDaysAgo' | 'entrySignals' | 'chandelier'>> = snapshot.stocks
+      .map(({ flags: _f, support: _s, resistance: _r, goldenCrossDaysAgo: _g, entrySignals: _e, chandelier: _c, ...rest }) => rest)
+    // ملخص فرص الدخول (العدد والحال فقط — الأسماء في الخطة الاحترافية المدفوعة).
+    const entry = buildEntryPicks(snapshot.stocks, snapshot.marketReturn)
+    const entrySummary = {
+      regime: entry.regime,
+      picks: entry.picks.length,
+      unproven: entry.unproven.length,
+      validated: entry.validated.map(v => ({ label: v.label, avgNetPct: v.stats.avgNetPct, profitFactor: v.stats.profitFactor, n: v.stats.n })),
+    }
 
     // ── أسعار سهمك فوق ياهو (خطط Starter/Pro فقط) ──
     const quotes = await overlayLiveQuotes(stocks)
@@ -55,6 +64,7 @@ export async function GET() {
         verdict: score >= 62 ? 'إيجابي' : score <= 40 ? 'سلبي' : 'محايد',
       },
       universe: snapshot.universe,
+      entry: entrySummary,
       stocks: stocks.sort((a, b) => b.techScore - a.techScore),
       quotes,
     }, { headers: { 'Cache-Control': 'private, max-age=30' } })

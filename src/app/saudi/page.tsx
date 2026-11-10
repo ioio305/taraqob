@@ -21,6 +21,7 @@ type MarketData = {
   stocks: SaudiStock[]
   universe?: number
   quotes?: { delayed: boolean; label: string; attribution: string | null }
+  entry?: { regime: 'bull' | 'bear'; picks: number; unproven: number }
   error?: string
 }
 
@@ -133,25 +134,24 @@ export default function SaudiToday() {
         </div>
       </div>
 
-      {data.stocks.length >= 3 ? (
-        <div className="rounded-2xl border border-white/10 p-4" style={{ background: 'rgba(255,255,255,.02)' }}>
-          <div className="text-xs font-black text-white">📌 خطة اليوم المبسّطة — أقوى ٣ أسهم فنياً</div>
-          <div className="mt-3 grid gap-2 sm:grid-cols-3">
-            {data.stocks.slice(0, 3).map((s, i) => (
-              <Link key={s.symbol} href={`/saudi/stock/${s.symbol}`}
-                className="rounded-xl border border-white/8 px-3 py-2 transition-colors hover:border-emerald-500/40">
-                <div className="text-[10px] text-slate-500">#{i + 1} · {s.sector}</div>
-                <div className="truncate text-sm font-black text-white">{s.name}</div>
-                <div className="text-[11px] font-bold" style={{ color: s.techSignalEn === 'strong_buy' ? ACCENT : '#60A5FA' }}>{s.techSignal} · {s.techScore}</div>
-              </Link>
-            ))}
+      {data.entry ? (
+        <Link href="/saudi/plan" className="block rounded-2xl border-2 p-4 transition-colors hover:border-white/30"
+          style={{ borderColor: data.entry.regime === 'bull' ? `${ACCENT}66` : '#F0476066', background: 'rgba(255,255,255,.02)' }}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-black text-white">🎯 فرص الدخول اليوم</div>
+              <div className="mt-1 text-xs leading-6" style={{ color: data.entry.regime === 'bull' ? '#D1FAE5' : '#FECACA' }}>
+                {data.entry.picks > 0
+                  ? `${data.entry.picks} ${data.entry.picks === 1 ? 'سهم عليه' : 'أسهم عليها'} إشارة «ادخل» مثبتة بالاختبار التاريخي`
+                  : data.entry.regime === 'bull'
+                    ? 'لا إشارة دخول مثبتة اليوم'
+                    : 'السوق هابط: لا دخول مثبت اليوم. الشراء في هذا الوضع خسر تاريخياً.'}
+              </div>
+              {data.entry.unproven > 0 ? <div className="text-[11px] text-amber-300/80">{data.entry.unproven} إشارات أخرى غير مثبتة في هذا الوضع</div> : null}
+            </div>
+            <span className="shrink-0 rounded-lg px-3 py-2 text-xs font-black text-white" style={{ background: ACCENT }}>التفاصيل ←</span>
           </div>
-          <Link href="/saudi/plan" className="mt-3 flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-xs font-bold"
-            style={{ background: `${ACCENT}17`, color: '#D1FAE5' }}>
-            <span>الخطة الاحترافية: منطقة دخول ووقف خسارة وثلاثة أهداف لكل سهم، مع ماسح الفرص ومحفظتك</span>
-            <span aria-hidden>←</span>
-          </Link>
-        </div>
+        </Link>
       ) : null}
 
       <div className="space-y-2.5">
@@ -175,7 +175,7 @@ export default function SaudiToday() {
       </div>
 
       <div className="rounded-xl border border-white/8 px-4 py-3 text-[11px] leading-5 text-slate-500" style={{ background: 'rgba(255,255,255,.015)' }}>
-        <span className="font-bold text-amber-300/80">قيد المعايرة: </span>{SAUDI_CALIBRATION.summary} البيانات من مصادر عامة (ياهو) وقد تتأخر. القرار النهائي مسؤوليتك.
+        <span className="font-bold text-amber-300/80">للعلم: </span>{SAUDI_CALIBRATION.summary} البيانات من مصادر عامة (ياهو) وقد تتأخر. القرار النهائي مسؤوليتك.
       </div>
     </div>
   )

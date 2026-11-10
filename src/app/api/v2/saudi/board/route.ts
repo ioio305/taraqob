@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     const index = !all && info.index ? await fetchYahooIndex(info.index.symbol) : null
 
     // نسخة لكل طلب بلا حقول الأداة المدفوعة (الأعلام والمستويات).
-    const stocks = snaps.flatMap((snap, i) => (snap?.stocks ?? []).map(({ flags: _f, support: _s, resistance: _r, goldenCrossDaysAgo: _g, ...rest }) => ({ ...rest, segment: segments[i] })))
+    const stocks = snaps.flatMap((snap, i) => (snap?.stocks ?? []).map(({ flags: _f, support: _s, resistance: _r, goldenCrossDaysAgo: _g, entrySignals: _e, chandelier: _c, ...rest }) => ({ ...rest, segment: segments[i] })))
     const quotes = await overlayLiveQuotes(stocks)
 
     const advancing = stocks.filter(s => s.change > 0).length
