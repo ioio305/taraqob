@@ -14,7 +14,7 @@ export async function middleware(request: NextRequest) {
 
   // حماية الطلبات التي تغيّر البيانات من المواقع الخارجية والأحجام المبالغ فيها.
   const isMutation = !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
-  const isWebhook = pathname === '/api/v2/stripe/webhook'
+  const isWebhook = pathname === '/api/v2/stripe/webhook' || pathname === '/api/v2/moyasar/webhook'
   if (isMutation && !isWebhook) {
     if (isBodyTooLarge(request.headers.get('content-length'))) {
       return NextResponse.json({ error: 'الطلب أكبر من الحد المسموح' }, { status: 413 })
@@ -53,6 +53,7 @@ export async function middleware(request: NextRequest) {
     '/manifest.webmanifest', '/api/health', '/api/public/teaser', '/api/v2/signals/evaluate', '/api/v2/backup',
     '/api/invite/validate',
     '/api/v2/chat', '/api/v2/leads', '/api/v2/unsubscribe',
+    '/api/v2/moyasar/webhook', '/api/v2/stripe/webhook',
     '/api/v2/digest', '/api/v2/daily-recommendation', '/api/v2/telegram-watch', '/api/v2/telegram-digest', '/unsubscribe',
   ]
   if (publicRoutes.includes(pathname) || pathname.startsWith('/auth/')) {

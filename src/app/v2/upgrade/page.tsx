@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { PLAN, FREE_FEATURES, PRO_FEATURES, MARKETS, PACKAGES } from '@/lib/v2/subscriptionModel'
+import { BILLING_PACKAGES, priceSar, type BillingCycle } from '@/lib/v2/billing'
 
 function ReferralCard() {
   const [data, setData] = useState<{ link: string; referredCount: number; earnedDays: number } | null>(null)
@@ -42,6 +43,31 @@ function PlanColumn({ tier, features }: { tier: 'free' | 'pro'; features: string
 
 export default function UpgradePage() {
   const [selected, setSelected] = useState('pro-all')
+  const [cycle, setCycle] = useState<BillingCycle>('monthly')
+  const [busy, setBusy] = useState('')
+  const [msg, setMsg] = useState('')
+
+  async function subscribe(pkgKey: string) {
+    setBusy(pkgKey); setMsg('')
+    try {
+      const res = await fetch('/api/v2/moyasar/checkout', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ package: pkgKey, cycle }),
+      })
+      const data = await res.json()
+      if (res.ok && data.url) { window.location.href = data.url; return }
+      setMsg(data.error || 'تعذّر بدء الاشتراك')
+    } catch { setMsg('تعذّر الاتصال بالخادم') }
+    setBusy('')
+  }
+
+  function priceLabel(pkgKey: string) {
+    const bp = BILLING_PACKAGES[pkgKey]
+    if (!bp) return null
+    const sar = priceSar(bp, cycle)
+    if (sar <= 0) return 'السعر قريباً'
+    return `${sar.toLocaleString('en-US')} ر.س / ${cycle === 'yearly' ? 'سنة' : 'شهر'}`
+  }
 
   return (
     <div className="mx-auto min-h-full max-w-5xl px-4 py-9 sm:px-6" dir="rtl">
@@ -55,21 +81,32 @@ export default function UpgradePage() {
 
       <ReferralCard />
 
-      {/* ما الذي يفتحه المدفوع — الجدار يمرّ عبر التوصية نفسها */}
       <div className="mb-7 grid gap-3 sm:grid-cols-2">
         <PlanColumn tier="free" features={FREE_FEATURES} />
         <PlanColumn tier="pro" features={PRO_FEATURES} />
       </div>
 
-      {/* الباقات المركّبة = بصيرة × السوق */}
+      {/* الدورة */}
+      <div className="mb-4 flex items-center justify-center gap-2">
+        {(['monthly', 'yearly'] as BillingCycle[]).map(c => (
+          <button key={c} onClick={() => setCycle(c)}
+            className="rounded-xl px-4 py-2 text-xs font-bold transition-colors"
+            style={{ background: cycle === c ? 'rgba(201,148,58,.15)' : 'rgba(255,255,255,.03)', border: `1px solid ${cycle === c ? 'rgba(201,148,58,.45)' : 'rgba(255,255,255,.06)'}`, color: cycle === c ? '#E8D5A3' : '#8A97A6' }}>
+            {c === 'monthly' ? 'شهري' : 'سنوي — وفّر أكثر'}
+          </button>
+        ))}
+      </div>
+
+      {/* الباقات المركّبة = متقدمة × السوق */}
       <div className="mb-3 text-sm font-black text-white">الباقات حسب السوق</div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {PACKAGES.map(pkg => {
           const sel = selected === pkg.key
           const color = pkg.tier === 'pro' ? (pkg.highlight ? '#A78BFA' : '#C9943A') : '#7C8A99'
+          const price = priceLabel(pkg.key)
           return (
-            <button key={pkg.key} onClick={() => setSelected(pkg.key)}
-              className="relative rounded-2xl p-5 text-right transition-colors"
+            <div key={pkg.key} onClick={() => setSelected(pkg.key)}
+              className="relative flex cursor-pointer flex-col rounded-2xl p-5 text-right transition-colors"
               style={{ background: sel ? `${color}14` : 'rgba(13,27,42,.78)', border: `1px solid ${sel ? `${color}66` : 'rgba(255,255,255,.06)'}` }}>
               {pkg.badge ? <span className="absolute -top-3 right-4 rounded-full px-2.5 py-1 text-[10px] font-black" style={{ background: color, color: '#071018' }}>{pkg.badge}</span> : null}
               <div className="text-xs font-black" style={{ color }}>{pkg.name}</div>
@@ -82,16 +119,29 @@ export default function UpgradePage() {
                   })}
               </div>
               <div className="mt-3 min-h-[32px] text-xs leading-5 text-slate-500">{pkg.tagline}</div>
-              <div className="mt-3 text-xs font-black" style={{ color }}>{sel ? 'محددة ✓' : 'اختيار'}</div>
-            </button>
+              {price ? <div className="mt-2 text-sm font-black" style={{ color }}>{price}</div> : null}
+              <div className="mt-4">
+                {pkg.tier === 'free' ? (
+                  <Link href="/platforms" onClick={e => e.stopPropagation()}
+                    className="block rounded-xl px-3 py-2 text-center text-xs font-black"
+                    style={{ background: 'rgba(255,255,255,.05)', color: '#E2E8F0' }}>ابدأ مجاناً</Link>
+                ) : (
+                  <button onClick={e => { e.stopPropagation(); subscribe(pkg.key) }} disabled={busy === pkg.key}
+                    className="block w-full rounded-xl px-3 py-2 text-center text-xs font-black disabled:opacity-50"
+                    style={{ background: color, color: '#071018' }}>
+                    {busy === pkg.key ? '…' : 'اشترك'}
+                  </button>
+                )}
+              </div>
+            </div>
           )
         })}
       </div>
 
-      <div className="mt-7 rounded-2xl border border-amber-400/20 bg-amber-400/[.05] p-5 text-center">
-        <div className="text-sm font-black text-amber-300">الفوترة غير مفعّلة حاليًا</div>
-        <div className="mt-1 text-xs text-slate-500">ستظهر الأسعار بالريال شاملة الضريبة قبل إطلاق الدفع. حتى ذلك، الوصول مفتوح للمعاينة.</div>
-        <Link href="/platforms" className="mt-4 inline-flex rounded-xl bg-amber-300 px-5 py-2.5 text-xs font-black text-amber-950">العودة إلى منصاتي</Link>
+      {msg ? <div className="mt-4 rounded-xl border border-amber-400/25 bg-amber-400/[.06] px-4 py-2.5 text-center text-xs text-amber-200">{msg}</div> : null}
+
+      <div className="mt-6 rounded-2xl border border-white/[.07] bg-[#0D1B2A]/60 p-4 text-center text-[11px] leading-5 text-slate-500">
+        الدفع عبر Moyasar (مدى · Apple Pay · بطاقة) بالريال شامل الضريبة. يمكنك الإلغاء في أي وقت.
       </div>
     </div>
   )
