@@ -21,7 +21,7 @@ type NavItem = { href: string; label: string; icon: string; exact: boolean; tier
 
 // ── «التداول»: القائمة الأساسية الموحّدة — مطابقة للمؤشرات (أدوات تداول شخصية) ──
 const NAV_CORE: NavItem[] = [
-  { href: '/funds',           label: 'الداشبورد',         icon: '◈',  exact: true,  tier: 'radar' },
+  { href: '/funds',           label: 'خطة اليوم',         icon: '◈',  exact: true,  tier: 'radar' },
   { href: '/funds/positions', label: 'متابعة صفقاتي',     icon: '↝',  exact: false, tier: 'radar' },
   { href: '/funds/watch',     label: 'المراقبة المباشرة', icon: '◉',  exact: false, tier: 'radar' },
   { href: '/funds/journal',   label: 'سجل الصفقات',       icon: '📔', exact: false, tier: 'radar' },

@@ -73,10 +73,10 @@ export default function PlanPage() {
 
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-black text-[#E8D5A3]">📋 خطة اليوم</h1>
+          <h1 className="text-xl font-black text-[#E8D5A3]">📋 خطة اليوم الاحترافية</h1>
           <p className="text-xs text-gray-500 mt-0.5">{plan?.dayAr ?? '...'} — موقف ترقب الواحد الواضح قبل الجرس</p>
         </div>
-        <Link href="/v2" className="text-xs text-gray-500 hover:text-white">→ الداشبورد</Link>
+        <Link href="/v2" className="text-xs text-gray-500 hover:text-white">→ خطة اليوم</Link>
       </div>
 
       {err && <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-xl p-4 text-sm">{err}</div>}

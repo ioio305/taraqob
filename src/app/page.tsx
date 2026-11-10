@@ -148,7 +148,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
               <span className="w-3 h-3 rounded-full" style={{ background: '#FEBC2E' }} />
               <span className="w-3 h-3 rounded-full" style={{ background: '#28C840' }} />
               <span className="text-xs font-mono mx-auto" style={{ color: '#6B7B8D' }}>
-                TARAQOB PRO — الداشبورد
+                TARAQOB PRO — خطة اليوم
               </span>
             </div>
 

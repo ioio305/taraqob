@@ -3,7 +3,7 @@ import { TRADING_MAIN, TRADING_PREMIUM, requiredTradingTier, tradingTierAllows, 
 
 describe('daily trading navigation and access', () => {
   it('keeps five distinct daily destinations without a duplicate recommendations page', () => {
-    expect(TRADING_MAIN.map(item => item.label)).toEqual(['الداشبورد', 'متابعة صفقاتي', 'المراقبة المباشرة', 'سجل الصفقات', 'المحفظة التجريبية'])
+    expect(TRADING_MAIN.map(item => item.label)).toEqual(['خطة اليوم', 'متابعة صفقاتي', 'المراقبة المباشرة', 'سجل الصفقات', 'المحفظة التجريبية'])
     expect(new Set(TRADING_MAIN.map(item => item.href)).size).toBe(5)
     for (const item of TRADING_MAIN) expect(requiredTradingTier(item.href)).toBeNull()
   })

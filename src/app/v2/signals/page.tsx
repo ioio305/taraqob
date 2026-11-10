@@ -118,7 +118,7 @@ export default function SignalsPage() {
     <div className="min-h-screen bg-navy-950 text-white" dir="rtl">
       <header className="border-b border-navy-800 bg-navy-900/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center gap-3">
-          <Link href="/v2" className="text-surface-400 hover:text-white transition-colors text-sm">→ الداشبورد</Link>
+          <Link href="/v2" className="text-surface-400 hover:text-white transition-colors text-sm">→ خطة اليوم</Link>
           <span className="text-surface-700">/</span>
           <span className="text-sm font-medium">الإشارات</span>
         </div>

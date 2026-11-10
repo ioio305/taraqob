@@ -546,7 +546,7 @@ function AnalyzeContent() {
               </span>
             )}
             <Link href="/v2" className="text-xs shrink-0" style={{ color: '#7C8A99' }}>
-              ← الداشبورد
+              ← خطة اليوم
             </Link>
           </div>
         </div>
@@ -1143,7 +1143,7 @@ export default function AnalyzePage() {
           borderBottom: '1px solid rgba(255,255,255,0.04)',
           backdropFilter: 'blur(10px)',
         }}>
-        <Link href="/v2" className="text-sm transition-colors" style={{ color: '#7C8A99' }}>→ الداشبورد</Link>
+        <Link href="/v2" className="text-sm transition-colors" style={{ color: '#7C8A99' }}>→ خطة اليوم</Link>
         <span style={{ color: '#55657A' }}>/</span>
         <span className="text-sm font-medium text-white">تحليل العقد</span>
         <span className="mr-auto text-xs font-mono px-2 py-0.5 rounded"

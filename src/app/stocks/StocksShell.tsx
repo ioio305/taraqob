@@ -35,7 +35,7 @@ type NavItem = { href: string; label: string; icon: string; exact: boolean; requ
 
 // ── «التداول»: القائمة الأساسية الموحّدة — مطابقة للمؤشرات (أدوات تداول شخصية) ──
 const NAV_CORE: NavItem[] = [
-  { href: '/stocks',           label: 'الداشبورد',         icon: '◈',  exact: true,  requiredTier: 'radar' },
+  { href: '/stocks',           label: 'خطة اليوم',         icon: '◈',  exact: true,  requiredTier: 'radar' },
   { href: '/stocks/positions', label: 'متابعة صفقاتي',     icon: '↝',  exact: false, requiredTier: 'radar' },
   { href: '/stocks/watch',     label: 'المراقبة المباشرة', icon: '◉',  exact: false, requiredTier: 'radar' },
   { href: '/stocks/journal',   label: 'سجل الصفقات',       icon: '📔', exact: false, requiredTier: 'radar' },

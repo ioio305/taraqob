@@ -2,7 +2,7 @@ import { TIER_RANK, type SubscriptionTier } from './accessRules'
 
 export type TradingNavItem = { href: string; label: string; icon: string; exact: boolean }
 export const TRADING_MAIN: TradingNavItem[] = [
-  { href: '/v2', label: 'الداشبورد', icon: '◈', exact: true },
+  { href: '/v2', label: 'خطة اليوم', icon: '◈', exact: true },
   { href: '/v2/positions', label: 'متابعة صفقاتي', icon: '↝', exact: false },
   { href: '/v2/watch', label: 'المراقبة المباشرة', icon: '◉', exact: false },
   { href: '/v2/journal', label: 'سجل الصفقات', icon: '📔', exact: false },
@@ -11,7 +11,7 @@ export const TRADING_MAIN: TradingNavItem[] = [
 
 // Preserve existing paid-tier access; higher tools keep their existing tier.
 export const TRADING_PREMIUM = [
-  { href: '/v2/plan', label: 'خطة اليوم', icon: '📋', exact: false, requiredTier: 'signal' },
+  { href: '/v2/plan', label: 'خطة اليوم الاحترافية', icon: '📋', exact: false, requiredTier: 'signal' },
   { href: '/v2/signals', label: 'الإشارات', icon: '◉', exact: false, requiredTier: 'signal' },
   { href: '/v2/decision-room', label: 'غرفة القرار', icon: '✦', exact: false, requiredTier: 'alpha' },
   { href: '/v2/radar', label: 'رادار الأموال', icon: '📡', exact: false, requiredTier: 'signal' },

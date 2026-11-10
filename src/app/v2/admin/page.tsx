@@ -76,7 +76,7 @@ export default function AdminDashboard() {
           <Link href="/v2"
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm"
             style={{ background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.15)', color: '#60A5FA' }}>
-            ◈ داشبورد التداول
+            ◈ خطة اليوم
           </Link>
         </div>
       </div>
