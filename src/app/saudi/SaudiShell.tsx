@@ -17,6 +17,7 @@ type NavItem = { href: string; label: string; icon: string; exact: boolean; tier
 // «التداول» — موحّد مع بقية المنصّات؛ تُضاف الأدوات مع بناء صفحاتها لاحقاً
 const NAV_CORE: NavItem[] = [
   { href: '/saudi', label: 'خطة اليوم', icon: '◈', exact: true, tier: 'radar' },
+  { href: '/saudi/sectors', label: 'القطاعات', icon: '▦', exact: false, tier: 'radar' },
   { href: '/saudi/watchlist', label: 'المفضّلة', icon: '★', exact: false, tier: 'radar' },
 ]
 const NAV_EXTRAS: NavItem[] = []
