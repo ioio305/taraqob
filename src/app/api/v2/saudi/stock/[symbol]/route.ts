@@ -62,7 +62,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ symbol:
 
   const meta = data.meta
   const yahooPrice = Number(meta.regularMarketPrice ?? closes[closes.length - 1])
-  const prevClose = Number(meta.chartPreviousClose ?? meta.previousClose ?? closes[closes.length - 2] ?? yahooPrice)
+  // إغلاق الجلسة السابقة = الشمعة قبل الأخيرة (chartPreviousClose مع نافذة سنة = إغلاق ما قبل سنة).
+  const prevClose = Number(closes.length >= 2 ? closes[closes.length - 2] : (meta.previousClose ?? yahooPrice))
   const price = live?.price ?? yahooPrice
   const changeAbs = live ? +live.change.toFixed(2) : +(price - prevClose).toFixed(2)
   const change = live ? +live.changePct.toFixed(2) : prevClose > 0 ? +(((price - prevClose) / prevClose) * 100).toFixed(2) : 0

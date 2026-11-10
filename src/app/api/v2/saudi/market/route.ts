@@ -66,7 +66,9 @@ async function fetchYahooHistory(yfSymbol: string): Promise<YahooHist | null> {
 
     return {
       price: meta.regularMarketPrice ?? valid[valid.length - 1].c,
-      prevClose: meta.chartPreviousClose ?? meta.previousClose ?? 0,
+      // إغلاق الجلسة السابقة = الشمعة قبل الأخيرة. (chartPreviousClose مع نافذة سنة
+      // يعود لإغلاق ما قبل سنة، فكان «تغيّر اليوم» يُحسب خطأً على سنة كاملة.)
+      prevClose: valid.length >= 2 ? valid[valid.length - 2].c : (meta.previousClose ?? 0),
       high: meta.regularMarketDayHigh ?? 0,
       low: meta.regularMarketDayLow ?? 0,
       volume: meta.regularMarketVolume ?? 0,
