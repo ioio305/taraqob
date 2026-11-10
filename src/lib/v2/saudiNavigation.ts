@@ -5,9 +5,10 @@ import { isPro } from './subscriptionModel'
 
 export type SaudiNavItem = { href: string; label: string; icon: string; exact: boolean }
 
-// مجاني: خطة اليوم المبسّطة + القطاعات والمفضّلة (يُضاف كل قسم هنا مع بناء صفحته).
+// مجاني: خطة اليوم المبسّطة + سجل الأداء الشفاف + القطاعات والمفضّلة (يُضاف كل قسم هنا مع بناء صفحته).
 export const SAUDI_MAIN: SaudiNavItem[] = [
   { href: '/saudi', label: 'خطة اليوم', icon: '◈', exact: true },
+  { href: '/saudi/performance', label: 'سجل الأداء', icon: '≣', exact: false },
   { href: '/saudi/sectors', label: 'القطاعات', icon: '▦', exact: false },
   { href: '/saudi/watchlist', label: 'المفضّلة', icon: '★', exact: false },
 ]

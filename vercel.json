@@ -15,6 +15,10 @@
     {
       "path": "/api/v2/daily-recommendation",
       "schedule": "0 22 * * 1-5"
+    },
+    {
+      "path": "/api/v2/saudi/track",
+      "schedule": "0 13 * * 0-4"
     }
   ]
 }

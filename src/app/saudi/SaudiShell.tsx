@@ -68,9 +68,6 @@ export default function SaudiShell({ children, userName, tier, isStaff, isPanelS
         <div className="mt-4 px-2 pb-1 text-[11px] font-bold text-slate-600">⭐ أدوات احترافية{premiumOpen ? '' : ' — الباقة المتقدمة'}</div>
         <div className="space-y-0.5">{SAUDI_PREMIUM.map(item => nav(item, !premiumOpen))}</div>
         {!isStaff && <div className="mt-4"><SidebarPlanCard tier={tier} platform="saudi" /></div>}
-        <div className="mt-4 px-2">
-          <Link href="/track" className="text-xs text-slate-500 transition-colors hover:text-white">السجل العام</Link>
-        </div>
       </div>
 
       <div className="border-t border-white/5 px-4 py-3">
