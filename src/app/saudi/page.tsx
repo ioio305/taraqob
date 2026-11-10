@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 
 const ACCENT = '#16A34A'
 const REFRESH_SEC = 60
@@ -71,7 +72,7 @@ function StockCard({ s }: { s: SaudiStock }) {
   const sc = signalColor(s.techSignalEn)
   const up = s.change >= 0
   return (
-    <div className="rounded-2xl border p-4" style={{ borderColor: `${sc}33`, background: 'rgba(255,255,255,.02)' }}>
+    <Link href={`/saudi/stock/${s.symbol}?name=${encodeURIComponent(s.name)}`} className="block rounded-2xl border p-4 transition-colors hover:border-white/25" style={{ borderColor: `${sc}33`, background: 'rgba(255,255,255,.02)' }}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -95,7 +96,7 @@ function StockCard({ s }: { s: SaudiStock }) {
         <span className="rounded-full px-2.5 py-1 text-slate-400" style={{ background: 'rgba(255,255,255,.04)' }}>ADX {s.adx}</span>
         <span className="rounded-full px-2.5 py-1 text-slate-400" style={{ background: 'rgba(255,255,255,.04)' }}>ضغط الشراء {s.buyPressure}%</span>
       </div>
-    </div>
+    </Link>
   )
 }
 
