@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { computeConfluence } from '@/lib/v2/saudiIndicators'
+import { computeConfluence, windowReturn } from '@/lib/v2/saudiIndicators'
 import { SAUDI_STOCKS } from '@/lib/v2/saudiStocks'
 
 export const revalidate = 60
@@ -25,7 +25,7 @@ async function fetchStooq(sym: string): Promise<Stooq | null> {
 
 async function fetchYahooHistory(yfSymbol: string): Promise<YahooHist | null> {
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yfSymbol}?range=3mo&interval=1d`
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yfSymbol}?range=1y&interval=1d`
     const res = await fetch(url, { headers: YF, next: { revalidate: 60 } })
     if (!res.ok) return null
     const data = await res.json()
@@ -66,8 +66,9 @@ type StockOut = {
   high: number; low: number; prevClose: number; volume: number
   buyPressure: number; flow: string; flowLabel: string
   techScore: number; techSignal: string; techSignalEn: string
-  rsi: number; macdBullish: boolean; macdHist: number; bbPct: number; stoch: number
-  ema20Above: boolean; ema50Above: boolean; adx: number; vwap: number; priceVsVwap: string
+  rsi: number; macdBullish: boolean; macdHist: number; bbPct: number; stoch: number; roc: number
+  ema20Above: boolean; ema50Above: boolean; ema200Above: boolean; golden: boolean; adx: number; vwap: number; priceVsVwap: string
+  atrPct: number; suggestedStop: number; obvRising: boolean; relStrength: number | null
   bullishCount: number; bearishCount: number
 }
 
@@ -93,13 +94,19 @@ export async function GET() {
     const tradingHr = astHour >= 10 && astHour < 15
     const status: 'open' | 'closed' | 'pre' = tradingDay && tradingHr ? 'open' : tradingDay && astHour < 10 ? 'pre' : 'closed'
 
+    // مرجع السوق للقوة النسبية = متوسط عائد أسهم السوق على ~3 أشهر.
+    const returns = stockResults
+      .filter((r): r is YahooHist => !!r && r.closes.length > 1)
+      .map(r => windowReturn(r.closes, 63))
+    const marketReturn = returns.length ? returns.reduce((a, b) => a + b, 0) / returns.length : undefined
+
     const stocks: StockOut[] = SAUDI_STOCKS.map((s, i): StockOut | null => {
       const yf = stockResults[i]
       if (!yf || yf.price === 0) return null
       const prev = yf.prevClose || yf.price
       const changeAbs = +(yf.price - prev).toFixed(2)
       const changePct = prev > 0 ? +(((yf.price - prev) / prev) * 100).toFixed(2) : 0
-      const tech = computeConfluence(yf.closes, yf.highs, yf.lows, yf.volumes)
+      const tech = computeConfluence(yf.closes, yf.highs, yf.lows, yf.volumes, { marketReturn })
       const flowLabel = tech.flow === 'تجميع' ? 'تجميع — شراء قوي' : tech.flow === 'تصريف' ? 'تصريف — بيع قوي' : 'محايد — انتظر'
       return {
         symbol: s.symbol.replace('.SR', ''), name: s.name, sector: s.sector,
@@ -107,8 +114,9 @@ export async function GET() {
         high: +yf.high.toFixed(2), low: +yf.low.toFixed(2), prevClose: +prev.toFixed(2), volume: yf.volume,
         buyPressure: tech.buyPressure, flow: tech.flow, flowLabel,
         techScore: tech.score, techSignal: tech.signal, techSignalEn: tech.signalEn,
-        rsi: tech.rsi, macdBullish: tech.macd.bullish, macdHist: tech.macd.hist, bbPct: tech.bb.pct, stoch: tech.stoch,
-        ema20Above: tech.ema20Above, ema50Above: tech.ema50Above, adx: tech.adx, vwap: tech.vwap, priceVsVwap: tech.priceVsVwap,
+        rsi: tech.rsi, macdBullish: tech.macd.bullish, macdHist: tech.macd.hist, bbPct: tech.bb.pct, stoch: tech.stoch, roc: tech.roc,
+        ema20Above: tech.ema20Above, ema50Above: tech.ema50Above, ema200Above: tech.ema200Above, golden: tech.golden, adx: tech.adx, vwap: tech.vwap, priceVsVwap: tech.priceVsVwap,
+        atrPct: tech.atrPct, suggestedStop: tech.suggestedStop, obvRising: tech.obvRising, relStrength: tech.relStrength,
         bullishCount: tech.bullishCount, bearishCount: tech.bearishCount,
       }
     }).filter((x): x is StockOut => x !== null)

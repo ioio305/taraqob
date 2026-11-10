@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { computeConfluence } from '@/lib/v2/saudiIndicators'
+import { computeConfluence, windowReturn } from '@/lib/v2/saudiIndicators'
 import { SAUDI_NAME } from '@/lib/v2/saudiStocks'
 
 export const revalidate = 120
@@ -11,7 +11,7 @@ type Candle = { t: number; o: number; h: number; l: number; c: number; v: number
 
 async function fetchDaily(yfSymbol: string): Promise<{ candles: Candle[]; meta: Record<string, unknown> } | null> {
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yfSymbol}?range=6mo&interval=1d`
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yfSymbol}?range=1y&interval=1d`
     const res = await fetch(url, { headers: YF, next: { revalidate: 120 } })
     if (!res.ok) return null
     const data = await res.json()
@@ -37,7 +37,7 @@ async function fetchDaily(yfSymbol: string): Promise<{ candles: Candle[]; meta: 
 export async function GET(_req: Request, { params }: { params: Promise<{ symbol: string }> }) {
   const { symbol } = await params
   const clean = symbol.replace(/[^0-9A-Za-z]/g, '').slice(0, 8)
-  const data = await fetchDaily(`${clean}.SR`)
+  const [data, tasi] = await Promise.all([fetchDaily(`${clean}.SR`), fetchDaily('^TASI')])
   if (!data || data.candles.length < 20) {
     return NextResponse.json({ error: 'لا توجد بيانات كافية لهذا السهم' }, { status: 404 })
   }
@@ -46,7 +46,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ symbol:
   const highs = data.candles.map(c => c.h)
   const lows = data.candles.map(c => c.l)
   const volumes = data.candles.map(c => c.v)
-  const tech = computeConfluence(closes, highs, lows, volumes)
+  // مرجع السوق (تاسي) للقوة النسبية — يتراجع بأمان إن تعذّر جلبه.
+  const marketReturn = tasi && tasi.candles.length > 1 ? windowReturn(tasi.candles.map(c => c.c), 63) : undefined
+  const tech = computeConfluence(closes, highs, lows, volumes, { marketReturn })
 
   const meta = data.meta
   const price = Number(meta.regularMarketPrice ?? closes[closes.length - 1])
@@ -63,8 +65,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ symbol:
     prevClose: +prevClose.toFixed(2),
     changeAbs,
     change,
-    high6m: +Math.max(...highs).toFixed(2),
-    low6m: +Math.min(...lows).toFixed(2),
+    high52: +Math.max(...highs).toFixed(2),
+    low52: +Math.min(...lows).toFixed(2),
     tech,
     series: data.candles.slice(-60).map(c => c.c),
   })

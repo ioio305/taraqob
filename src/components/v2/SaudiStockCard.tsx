@@ -8,8 +8,9 @@ export type SaudiStock = {
   high: number; low: number; prevClose: number; volume: number
   buyPressure: number; flow: string; flowLabel: string
   techScore: number; techSignal: string; techSignalEn: string
-  rsi: number; macdBullish: boolean; macdHist: number; bbPct: number; stoch: number
-  ema20Above: boolean; ema50Above: boolean; adx: number; vwap: number; priceVsVwap: string
+  rsi: number; macdBullish: boolean; macdHist: number; bbPct: number; stoch: number; roc?: number
+  ema20Above: boolean; ema50Above: boolean; ema200Above?: boolean; golden?: boolean; adx: number; vwap: number; priceVsVwap: string
+  atrPct?: number; suggestedStop?: number; obvRising?: boolean; relStrength?: number | null
   bullishCount: number; bearishCount: number
 }
 
@@ -64,6 +65,8 @@ export function SaudiStockCard({ s, favorite, onToggleFavorite }: {
       <div className="mt-3 flex flex-wrap gap-1.5 text-[11px]">
         <span className="rounded-full px-2.5 py-1 font-bold" style={{ color: sc, background: `${sc}18` }}>{s.techSignal}</span>
         <span className="rounded-full px-2.5 py-1 font-bold" style={{ color: flowColor(s.flow), background: `${flowColor(s.flow)}18` }}>{s.flowLabel}</span>
+        {s.relStrength != null ? <span className="rounded-full px-2.5 py-1 font-bold" style={{ color: s.relStrength >= 0 ? ACCENT : RED, background: `${s.relStrength >= 0 ? ACCENT : RED}18` }}>قوة نسبية {s.relStrength >= 0 ? '+' : ''}{s.relStrength}%</span> : null}
+        {s.ema200Above != null ? <span className="rounded-full px-2.5 py-1 font-bold" style={{ color: s.ema200Above ? ACCENT : RED, background: `${s.ema200Above ? ACCENT : RED}18` }}>{s.ema200Above ? 'فوق م200' : 'تحت م200'}</span> : null}
         <span className="rounded-full px-2.5 py-1 text-slate-400" style={{ background: 'rgba(255,255,255,.04)' }}>RSI {s.rsi}</span>
         <span className="rounded-full px-2.5 py-1 text-slate-400" style={{ background: 'rgba(255,255,255,.04)' }}>ADX {s.adx}</span>
         <span className="rounded-full px-2.5 py-1 text-slate-400" style={{ background: 'rgba(255,255,255,.04)' }}>ضغط الشراء {s.buyPressure}%</span>

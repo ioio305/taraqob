@@ -10,14 +10,15 @@ const RED = '#F04760'
 
 type Tech = {
   score: number; signal: string; signalEn: string
-  rsi: number; macd: { bullish: boolean; hist: number }; bb: { pct: number }; stoch: number
-  ema20Above: boolean; ema50Above: boolean; adx: number; vwap: number; priceVsVwap: string
-  buyPressure: number; flow: string; bullishCount: number; bearishCount: number
+  rsi: number; macd: { bullish: boolean; hist: number }; bb: { pct: number }; stoch: number; roc: number
+  ema20Above: boolean; ema50Above: boolean; ema200Above: boolean; golden: boolean; adx: number; vwap: number; priceVsVwap: string
+  atr: number; atrPct: number; suggestedStop: number
+  buyPressure: number; flow: string; obvRising: boolean; relStrength: number | null; bullishCount: number; bearishCount: number
 }
 type StockData = {
   symbol: string; name: string; sector: string
   price: number; prevClose: number; changeAbs: number; change: number
-  high6m: number; low6m: number
+  high52: number; low52: number
   tech: Tech; series: number[]
   error?: string
 }
@@ -127,10 +128,12 @@ export default function SaudiStockPage() {
             </div>
             <div className="mt-4 flex flex-wrap gap-1.5 text-xs">
               <span className="rounded-full px-3 py-1 font-black" style={{ color: sc, background: `${sc}1e` }}>{t!.signal}</span>
+              <span className="rounded-full px-3 py-1 font-bold" style={{ color: t!.ema200Above ? ACCENT : RED, background: `${t!.ema200Above ? ACCENT : RED}18` }}>{t!.golden && t!.ema200Above ? 'اتجاه صاعد مؤكّد' : t!.ema200Above ? 'فوق متوسط 200' : 'تحت متوسط 200'}</span>
+              {t!.relStrength != null ? <span className="rounded-full px-3 py-1 font-bold" style={{ color: t!.relStrength >= 0 ? ACCENT : RED, background: `${t!.relStrength >= 0 ? ACCENT : RED}18` }}>قوة نسبية {t!.relStrength >= 0 ? '+' : ''}{t!.relStrength}% مقابل السوق</span> : null}
               <span className="rounded-full px-3 py-1 font-bold" style={{ color: flowColor(t!.flow), background: `${flowColor(t!.flow)}18` }}>السيولة: {t!.flow} ({t!.buyPressure}% شراء)</span>
             </div>
             <div className="mt-4"><Sparkline series={data.series} color={sc} /></div>
-            <div className="mt-1 text-left text-[10px] text-slate-600">آخر 60 جلسة · المدى (6 أشهر): {n(data.low6m)} — {n(data.high6m)}</div>
+            <div className="mt-1 text-left text-[10px] text-slate-600">آخر 60 جلسة · المدى (سنة): {n(data.low52)} — {n(data.high52)}</div>
           </div>
 
           {/* شبكة المؤشرات */}
@@ -146,6 +149,11 @@ export default function SaudiStockPage() {
               <Tile label="فوق EMA20" value={t!.ema20Above ? 'نعم' : 'لا'} color={t!.ema20Above ? ACCENT : RED} />
               <Tile label="فوق EMA50" value={t!.ema50Above ? 'نعم' : 'لا'} color={t!.ema50Above ? ACCENT : RED} />
               <Tile label="ضغط الشراء" value={`${t!.buyPressure}%`} color={t!.buyPressure > 58 ? ACCENT : t!.buyPressure < 42 ? RED : undefined} hint={t!.flow} />
+              <Tile label="فوق EMA200 (الاتجاه)" value={t!.ema200Above ? 'نعم' : 'لا'} color={t!.ema200Above ? ACCENT : RED} hint={t!.golden ? 'تقاطع ذهبي 50/200' : 'تحت الذهبي'} />
+              <Tile label="قوة الزخم ROC" value={`${t!.roc}%`} color={t!.roc > 0 ? ACCENT : RED} />
+              <Tile label="الحجم التراكمي OBV" value={t!.obvRising ? 'صاعد' : 'هابط'} color={t!.obvRising ? ACCENT : RED} />
+              <Tile label="وقف مقترح (2×ATR)" value={n(t!.suggestedStop)} color={RED} hint={`تقلّب ${t!.atrPct}%`} />
+              {t!.relStrength != null ? <Tile label="قوة نسبية مقابل السوق" value={`${t!.relStrength >= 0 ? '+' : ''}${t!.relStrength}%`} color={t!.relStrength >= 0 ? ACCENT : RED} hint="تفوّق/تخلّف عن تاسي" /> : null}
             </div>
           </div>
 
