@@ -13,7 +13,7 @@ import { DecisionCouncilStrip } from '@/components/v2/DecisionCouncilStrip'
 import { StocksWatcher } from '@/components/v2/StocksWatcher'
 import { PlatformSwitcher } from '@/components/v2/PlatformSwitcher'
 import { SidebarPlanCard } from '@/components/v2/SidebarPlanCard'
-import { planName, planColor } from '@/lib/v2/subscriptionModel'
+import { planName, planColor, isPro } from '@/lib/v2/subscriptionModel'
 
 // ══════════════════════════════════════════════════════════════════════════
 // قوقعة منصة الشركات — مستقلة تماماً عن منصة المؤشر (SPX)
@@ -25,10 +25,10 @@ import { planName, planColor } from '@/lib/v2/subscriptionModel'
 const ACCENT = '#60A5FA'   // هوية منصة الشركات
 
 // ── الباقات: radar (مجاني) < signal < edge < alpha ────────────────────────────
-const TIER_RANK: Record<string, number> = { radar: 1, signal: 2, edge: 3, alpha: 4 }
 // شارات المستوى بأسماء الباقتين (أساسية/متقدمة) عبر planName/planColor
+// بوابات مستويين: المجاني يرى أدوات radar فقط، والمدفوع يرى كل الأدوات.
 function tierAllows(userTier: string, required: string): boolean {
-  return (TIER_RANK[userTier] ?? 1) >= (TIER_RANK[required] ?? 1)
+  return required === 'radar' || isPro(userTier)
 }
 
 type NavItem = { href: string; label: string; icon: string; exact: boolean; requiredTier: string }

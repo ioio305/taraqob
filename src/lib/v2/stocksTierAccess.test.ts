@@ -1,18 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import { stocksFeatureForPath, tierAllowsStocksFeature } from './stocksTierAccess'
 
-describe('stocks tier access', () => {
-  it('keeps the daily recommendation available in radar', () => {
+describe('stocks tier access (two-tier model)', () => {
+  it('keeps radar-tier features free and gates the rest behind any paid tier', () => {
     expect(tierAllowsStocksFeature('radar', 'daily_recommendation')).toBe(true)
+    expect(tierAllowsStocksFeature('radar', 'company_monitor')).toBe(true)
     expect(tierAllowsStocksFeature('radar', 'stock_analysis')).toBe(false)
+    expect(tierAllowsStocksFeature('radar', 'performance')).toBe(false)
   })
 
-  it('unlocks features progressively', () => {
-    expect(tierAllowsStocksFeature('signal', 'news')).toBe(true)
-    expect(tierAllowsStocksFeature('signal', 'flow')).toBe(false)
-    expect(tierAllowsStocksFeature('edge', 'flow')).toBe(true)
-    expect(tierAllowsStocksFeature('edge', 'performance')).toBe(false)
-    expect(tierAllowsStocksFeature('alpha', 'performance')).toBe(true)
+  it('unlocks every paid feature for any paid tier (paid = all)', () => {
+    for (const tier of ['signal', 'edge', 'alpha']) {
+      expect(tierAllowsStocksFeature(tier, 'news')).toBe(true)
+      expect(tierAllowsStocksFeature(tier, 'flow')).toBe(true)
+      expect(tierAllowsStocksFeature(tier, 'performance')).toBe(true)
+      expect(tierAllowsStocksFeature(tier, 'decision_room')).toBe(true)
+      // الأدوات المجانية تبقى متاحة للمدفوع أيضاً
+      expect(tierAllowsStocksFeature(tier, 'daily_recommendation')).toBe(true)
+    }
   })
 
   it('maps protected company paths to their features', () => {

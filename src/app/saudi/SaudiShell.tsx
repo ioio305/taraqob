@@ -8,10 +8,9 @@ import { createClient } from '@/lib/supabase/client'
 import { PlatformSwitcher } from '@/components/v2/PlatformSwitcher'
 import { SidebarPlanCard } from '@/components/v2/SidebarPlanCard'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
-import { planName } from '@/lib/v2/subscriptionModel'
+import { planName, isPro } from '@/lib/v2/subscriptionModel'
 
 const ACCENT = '#16A34A'
-const TIER_RANK: Record<string, number> = { radar: 1, signal: 2, edge: 3, alpha: 4 }
 
 type NavItem = { href: string; label: string; icon: string; exact: boolean; tier: string }
 
@@ -21,8 +20,9 @@ const NAV_CORE: NavItem[] = [
 ]
 const NAV_EXTRAS: NavItem[] = []
 
+// بوابات مستويين: المجاني يرى أدوات radar فقط، والمدفوع يرى كل الأدوات.
 function allowedTier(current: string, required: string) {
-  return (TIER_RANK[current] ?? 1) >= (TIER_RANK[required] ?? 1)
+  return required === 'radar' || isPro(current)
 }
 
 export default function SaudiShell({ children, userName, tier, isStaff, platformAccess }: {

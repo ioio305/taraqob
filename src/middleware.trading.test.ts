@@ -38,10 +38,12 @@ describe('real middleware premium boundaries', () => {
     expect(api.status).toBe(403)
     expect((await api.json()).error).toBe('tier_upgrade_required')
   })
-  it('preserves alpha-only access to the decision room', async () => {
-    data.tier = 'edge'
-    expect((await call('/v2/decision-room')).status).toBe(307)
+  it('grants any paid member full premium access (two-tier: paid = all)', async () => {
+    data.tier = 'signal'
+    expect((await call('/v2/decision-room')).status).toBe(200)
     expect((await call('/v2/lab')).status).toBe(200)
+    data.tier = 'edge'
+    expect((await call('/v2/decision-room')).status).toBe(200)
     data.tier = 'alpha'
     expect((await call('/v2/decision-room')).status).toBe(200)
   })

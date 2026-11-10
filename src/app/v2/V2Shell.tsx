@@ -18,18 +18,17 @@ import { getSelectedIndex, indexMeta, type IndexId } from '@/lib/v2/indexSelecti
 import { showBrowserNotificationOnce } from '@/lib/v2/browserNotifications'
 import { SHOW_STRATEGY_LAB } from '@/lib/v2/featureFlags'
 import { TRADING_MAIN, visiblePremiumTools } from '@/lib/v2/tradingNavigation'
-import { planName, planColor, planOf } from '@/lib/v2/subscriptionModel'
+import { planName, planColor, planOf, isPro } from '@/lib/v2/subscriptionModel'
 
 const ROLE_LABEL_MAP: Record<string, string>  = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
 const ROLE_COLOR_MAP: Record<string, string>  = { admin: '#C9943A', moderator: '#60A5FA', user: '#7C8A99' }
 const ROLE_ICON_MAP:  Record<string, string>  = { admin: '⊞', moderator: '◎', user: '◈' }
 
 // ── Tier helpers ─────────────────────────────────────────────────
-const TIER_RANK:  Record<string, number> = { radar: 1, signal: 2, edge: 3, alpha: 4 }
 // شارات المستوى تُعرض بأسماء الباقتين (أساسية/متقدمة) عبر planName/planColor
-
+// بوابات مستويين: المجاني يرى أدوات radar فقط، والمدفوع (أي مستوى أعلى) يرى كل الأدوات.
 function tierAllows(userTier: string, required: string): boolean {
-  return (TIER_RANK[userTier] ?? 1) >= (TIER_RANK[required] ?? 2)
+  return required === 'radar' || isPro(userTier)
 }
 
 const NAV_ADMIN = [

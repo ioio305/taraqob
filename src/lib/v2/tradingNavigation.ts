@@ -1,4 +1,5 @@
-import { TIER_RANK, type SubscriptionTier } from './accessRules'
+import { type SubscriptionTier } from './accessRules'
+import { isPro } from './subscriptionModel'
 
 export type TradingNavItem = { href: string; label: string; icon: string; exact: boolean }
 export const TRADING_MAIN: TradingNavItem[] = [
@@ -23,9 +24,9 @@ export const TRADING_PREMIUM = [
   { href: '/v2/lab', label: 'المختبر', icon: '🧪', exact: false, requiredTier: 'edge' },
 ] satisfies Array<TradingNavItem & { requiredTier: SubscriptionTier }>
 
+// نموذج الباقتين: المدفوع (أي مستوى أعلى من radar) يرى كل الأدوات المميّزة.
 export function visiblePremiumTools(tier: string, staff: boolean) {
-  const rank = TIER_RANK[tier as SubscriptionTier] ?? TIER_RANK.radar
-  return TRADING_PREMIUM.filter(item => staff || rank >= TIER_RANK[item.requiredTier])
+  return staff || isPro(tier) ? TRADING_PREMIUM : []
 }
 
 const PREMIUM_APIS: Record<string, string> = {
@@ -40,5 +41,5 @@ export function requiredTradingTier(path: string): SubscriptionTier | null {
 }
 
 export function tradingTierAllows(tier: string, required: SubscriptionTier): boolean {
-  return (TIER_RANK[tier as SubscriptionTier] ?? TIER_RANK.radar) >= TIER_RANK[required]
+  return required === 'radar' || isPro(tier)
 }

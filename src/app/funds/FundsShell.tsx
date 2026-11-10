@@ -12,10 +12,9 @@ import { DecisionCouncilStrip } from '@/components/v2/DecisionCouncilStrip'
 import { PlatformSwitcher } from '@/components/v2/PlatformSwitcher'
 import { SidebarPlanCard } from '@/components/v2/SidebarPlanCard'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
-import { planName } from '@/lib/v2/subscriptionModel'
+import { planName, isPro } from '@/lib/v2/subscriptionModel'
 
 const ACCENT = '#26D07C'
-const TIER_RANK: Record<string, number> = { radar: 1, signal: 2, edge: 3, alpha: 4 }
 
 type NavItem = { href: string; label: string; icon: string; exact: boolean; tier: string }
 
@@ -39,8 +38,9 @@ const NAV_EXTRAS: NavItem[] = [
   { href: '/funds/decision-room', label: 'غرفة القرار',   icon: '✦', exact: false, tier: 'alpha' },
 ]
 
+// بوابات مستويين: المجاني يرى أدوات radar فقط، والمدفوع يرى كل الأدوات.
 function allowedTier(current: string, required: string) {
-  return (TIER_RANK[current] ?? 1) >= (TIER_RANK[required] ?? 1)
+  return required === 'radar' || isPro(current)
 }
 
 export default function FundsShell({ children, userName, tier, isStaff, platformAccess }: {

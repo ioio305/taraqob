@@ -54,9 +54,10 @@ export const PACKAGES: Package[] = [
 ]
 
 // ── جسر مع نظام المستويات الحالي ────────────────────────────────────────────
-// radar (أو غير محدّد) = مجاني «نظرة»؛ أي مستوى أعلى = مدفوع «بصيرة».
+// radar/فارغ/غير معروف = مجاني «أساسية»؛ مستوى مدفوع معروف (signal/edge/alpha) = «متقدمة».
+const PAID_TIERS = new Set(['signal', 'edge', 'alpha'])
 export function planOf(tier: string | null | undefined): PlanTier {
-  return !tier || tier === 'radar' ? 'free' : 'pro'
+  return tier != null && PAID_TIERS.has(tier) ? 'pro' : 'free'
 }
 export function planName(tier: string | null | undefined): string {
   return PLAN[planOf(tier)].name

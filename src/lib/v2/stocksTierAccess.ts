@@ -1,4 +1,5 @@
-import { TIER_RANK, type SubscriptionTier } from './accessRules'
+import { type SubscriptionTier } from './accessRules'
+import { isPro } from './subscriptionModel'
 
 export type StocksFeature =
   | 'daily_recommendation'
@@ -43,10 +44,10 @@ export function stocksFeatureForPath(pathname: string): StocksFeature | null {
   return null
 }
 
+// نموذج الباقتين: ميزات radar مجانية، وما سواها يفتحه أي مستوى مدفوع.
 export function tierAllowsStocksFeature(
   tier: string,
   feature: StocksFeature,
 ): boolean {
-  const current = tier in TIER_RANK ? tier as SubscriptionTier : 'radar'
-  return TIER_RANK[current] >= TIER_RANK[STOCKS_FEATURE_TIER[feature]]
+  return STOCKS_FEATURE_TIER[feature] === 'radar' || isPro(tier)
 }
