@@ -1,12 +1,9 @@
 import type { PlatformKey, SubscriptionTier } from './accessRules'
+import { ROLE_INFO, normalizeAccountRole, type AccountRole } from './staffRoles'
 
-export const ROLE_CATALOG = {
-  user: { label: 'مستخدم', color: '#7C8A99', description: 'يستخدم المنصات حسب اشتراكه فقط.' },
-  moderator: { label: 'مشرف', color: '#60A5FA', description: 'يدير المحتوى والمستخدمين دون صلاحيات المالك.' },
-  admin: { label: 'مدير', color: '#C9943A', description: 'صلاحيات الإدارة العليا والوصول الكامل.' },
-} as const
-
-export type AccountRole = keyof typeof ROLE_CATALOG
+// الأدوار تُعرَّف في staffRoles.ts (مصدر واحد) — هذه أسماء توافقية.
+export const ROLE_CATALOG = ROLE_INFO
+export type { AccountRole }
 
 export const TIER_CATALOG: Record<SubscriptionTier, {
   label: string
@@ -34,5 +31,5 @@ export const PLATFORM_CATALOG: Array<{
 ]
 
 export function normalizeRole(value: unknown): AccountRole {
-  return value === 'admin' || value === 'moderator' ? value : 'user'
+  return normalizeAccountRole(value)
 }

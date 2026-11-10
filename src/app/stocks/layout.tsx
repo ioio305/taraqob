@@ -21,6 +21,7 @@ export default async function StocksLayout({ children }: { children: ReactNode }
       userName={viewer.displayName}
       tier={viewer.platformTiers.stocks}
       isStaff={viewer.isStaff}
+      isPanelStaff={viewer.isPanelStaff}
       platformAccess={viewer.platformAccess}
     >
       {children}

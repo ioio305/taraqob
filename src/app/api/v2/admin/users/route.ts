@@ -1,140 +1,109 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
 import { createInvitationToken } from '@/lib/security/tokens'
-import { normalizeRole } from '@/lib/v2/productCatalog'
-import { TIER_RANK, type SubscriptionTier } from '@/lib/v2/accessRules'
+import { isResponse, requireStaff } from '@/lib/v2/staffAuth'
+import { invitableRoles, normalizeAccountRole, type AccountRole } from '@/lib/v2/staffRoles'
+import { marketPlanOf } from '@/lib/v2/marketPlans'
+import { logActivity } from '@/lib/v2/activityLog'
 
 export const dynamic = 'force-dynamic'
 
-// DB enum values that map to the "user" role in the UI
+// الأدوار القديمة في قاعدة البيانات التي تعني «مستخدم».
 const USER_LIKE_ROLES = ['user', 'free', 'pro', 'quant', 'beta_user', 'analyst']
+const STAFF_ROLES = ['admin', 'moderator', 'support']
 
-// Normalize UI role → DB role.
-function dbRole(role: string): string {
-  return role
+// يمنع كسر صيغة فلتر PostgREST (الفواصل والأقواس) في البحث.
+function safeSearch(value: string | null): string | null {
+  const cleaned = (value ?? '').replace(/[,()*%\\]/g, ' ').trim().slice(0, 80)
+  return cleaned || null
 }
 
-// GET — قائمة المستخدمين مع فلترة
+// GET — قائمة المستخدمين مع باقة كل سوق
 export async function GET(request: NextRequest) {
-  const supabase = await createClient()
-  const serviceClient = createServiceClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { data: me } = await supabase.from('user_profiles').select('role').eq('id', user.id).single()
-  if (!me || !['admin', 'moderator'].includes(me.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  const actor = await requireStaff('users.view')
+  if (isResponse(actor)) return actor
+  const service = createServiceClient()
 
   const { searchParams } = new URL(request.url)
   const roleFilter = searchParams.get('role')
   const status     = searchParams.get('status')
-  const search     = searchParams.get('q')
-  const page       = parseInt(searchParams.get('page') ?? '1')
-  const limit      = 20
+  const search     = safeSearch(searchParams.get('q'))
+  const page       = Math.max(1, parseInt(searchParams.get('page') ?? '1') || 1)
+  const limit      = Math.min(100, Math.max(5, parseInt(searchParams.get('limit') ?? '20') || 20))
 
-  let query = supabase
+  let query = service
     .from('user_profiles')
-    .select('id, full_name, full_name_ar, email, role, is_active, created_at, preferences, subscription_tier', { count: 'exact' })
+    .select('id, full_name, full_name_ar, email, role, is_active, created_at, last_seen_at', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range((page - 1) * limit, page * limit - 1)
 
-  // When filtering by 'user', expand to all non-staff DB roles
-  if (roleFilter === 'user') {
-    query = query.in('role', USER_LIKE_ROLES)
-  } else if (roleFilter) {
-    query = query.eq('role', roleFilter)
-  }
+  if (roleFilter === 'user') query = query.in('role', USER_LIKE_ROLES)
+  else if (roleFilter === 'staff') query = query.in('role', STAFF_ROLES)
+  else if (roleFilter && STAFF_ROLES.includes(roleFilter)) query = query.eq('role', roleFilter)
   if (status === 'active')   query = query.neq('is_active', false)
   if (status === 'inactive') query = query.eq('is_active', false)
-  if (search) query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`)
+  if (search) query = query.or(`full_name.ilike.%${search}%,full_name_ar.ilike.%${search}%,email.ilike.%${search}%`)
 
   const { data, count, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Normalize roles in response so UI always sees admin | moderator | user
-  const ids = (data ?? []).map(userProfile => userProfile.id)
+  const ids = (data ?? []).map(profile => profile.id)
   const { data: subscriptions } = ids.length
-    ? await serviceClient
+    ? await service
         .from('platform_subscriptions')
         .select('user_id, platform, tier, status, current_period_end')
         .in('user_id', ids)
-    : { data: [] }
-  const subscriptionsByUser = new Map<string, typeof subscriptions>()
-  for (const subscription of subscriptions ?? []) {
-    const rows = subscriptionsByUser.get(subscription.user_id) ?? []
-    rows.push(subscription)
-    subscriptionsByUser.set(subscription.user_id, rows)
+    : { data: [] as Array<{ user_id: string; platform: string; tier: string; status: string; current_period_end: string | null }> }
+
+  const byUser = new Map<string, NonNullable<typeof subscriptions>>()
+  for (const row of subscriptions ?? []) {
+    const rows = byUser.get(row.user_id) ?? []
+    rows.push(row)
+    byUser.set(row.user_id, rows)
   }
 
-  const users = (data ?? []).map(userProfile => {
-    const platformSubscriptions = subscriptionsByUser.get(userProfile.id) ?? []
-    const now = Date.now()
-    const activeSubscriptions = platformSubscriptions.filter(subscription => {
-      const periodEnd = subscription.current_period_end ? Date.parse(subscription.current_period_end) : NaN
-      return subscription.status === 'active' && (!Number.isFinite(periodEnd) || periodEnd > now)
-    })
-    const effectiveTier = activeSubscriptions
-      .map(subscription => subscription.tier as SubscriptionTier)
-      .filter(tier => tier in TIER_RANK)
-      .sort((a, b) => TIER_RANK[b] - TIER_RANK[a])[0]
-      ?? (platformSubscriptions.length ? 'radar' : userProfile.subscription_tier)
+  const users = (data ?? []).map(profile => {
+    const rows = byUser.get(profile.id) ?? []
     return {
-      ...userProfile,
-      role: normalizeRole(userProfile.role),
-      subscription_tier: effectiveTier,
-      platform_subscriptions: platformSubscriptions,
+      ...profile,
+      role: normalizeAccountRole(profile.role),
+      markets: { saudi: marketPlanOf(rows, 'saudi'), us: marketPlanOf(rows, 'us') },
     }
   })
 
-  return NextResponse.json({ users, total: count ?? 0, page, limit })
+  return NextResponse.json({ users, total: count ?? 0, page, limit, viewerRole: actor.role })
 }
 
-// POST — دعوة مستخدم جديد
+// POST — دعوة حساب جديد (المالك: مستخدم/مشرف عام/دعم فني · المشرف العام: مستخدم فقط)
 export async function POST(request: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const actor = await requireStaff('users.invite')
+  if (isResponse(actor)) return actor
 
-  const { data: me } = await supabase.from('user_profiles').select('role, email').eq('id', user.id).single()
-  if (!me || !['admin', 'moderator'].includes(me.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
-
-  const body = await request.json()
+  const body = await request.json().catch(() => ({}))
   const email = String(body?.email ?? '').trim().toLowerCase().slice(0, 254)
-  const roleRaw = String(body?.role ?? 'user')
-  if (!['user', 'moderator', 'admin'].includes(roleRaw)) {
-    return NextResponse.json({ error: 'الصلاحية غير صحيحة' }, { status: 400 })
-  }
-  const role = dbRole(roleRaw)
-
+  const role = normalizeAccountRole(body?.role ?? 'user') as AccountRole
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ error: 'البريد الإلكتروني غير صحيح' }, { status: 400 })
   }
-
-  // لا يمكن للمشرف دعوة مدير
-  if (me.role === 'moderator' && role === 'admin') {
-    return NextResponse.json({ error: 'المشرف لا يمكنه دعوة مدير' }, { status: 403 })
+  if (!invitableRoles(actor.role).includes(role)) {
+    return NextResponse.json({ error: 'لا يمكنك الدعوة بهذا الدور' }, { status: 403 })
   }
 
+  const service = createServiceClient()
   const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString()
   const token = createInvitationToken()
 
-  const { error: invErr } = await supabase.from('invitations').insert({
-    email, role, invited_by: user.id, token, expires_at: expiresAt,
+  const { error } = await service.from('invitations').insert({
+    email, role, invited_by: actor.id, token, expires_at: expiresAt,
   })
-  if (invErr) return NextResponse.json({ error: invErr.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  await supabase.from('audit_logs').insert({
-    actor_id: user.id, actor_email: me.email ?? '',
-    action: 'invite_user', entity_type: 'invitation',
-    new_values: { email, role },
+  await logActivity({
+    actorId: actor.id, actorEmail: actor.email, action: 'invite_user',
+    entityType: 'invitation', entityId: null, details: { email, role }, request,
   })
 
-  const appUrl     = process.env.NEXT_PUBLIC_APP_URL || 'https://trqob.com'
-  const inviteLink = `${appUrl}/auth/accept-invite?token=${token}`
-
-  return NextResponse.json({ success: true, inviteLink })
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://trqob.com'
+  return NextResponse.json({ success: true, inviteLink: `${appUrl}/auth/accept-invite?token=${token}` })
 }

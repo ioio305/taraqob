@@ -74,7 +74,7 @@ export default function LoginForm({ market }: { market: Market }) {
 
     // الدخول إلى السوق المختار فقط (الخادم يحفظ السوق ويتحقق من الاشتراك).
     // صفحة قصدها قبل الدخول تُحترم ما دامت من نفس السوق.
-    const target = new URLSearchParams({ m: market })
+    const target = new URLSearchParams({ m: market, via: 'login' })
     const next = searchParams.get('next')
     if (next && next.startsWith('/') && !next.startsWith('//')) target.set('next', next)
     window.location.href = `/auth/market?${target.toString()}`

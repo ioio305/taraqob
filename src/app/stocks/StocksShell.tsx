@@ -112,11 +112,12 @@ function MobileTab({ href, icon, label, exact }: { href: string; icon: string; l
   )
 }
 
-export default function StocksShell({ children, userName, tier = 'radar', isStaff = false, platformAccess }: {
+export default function StocksShell({ children, userName, tier = 'radar', isStaff = false, isPanelStaff = false, platformAccess }: {
   children: ReactNode
   userName: string
   tier?: string
   isStaff?: boolean
+  isPanelStaff?: boolean
   platformAccess: PlatformAccess
 }) {
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -152,7 +153,7 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
 
       <div className="flex-1 min-h-0 overflow-y-auto">
         {/* محوّل المنصّات */}
-        <PlatformSwitcher access={platformAccess} />
+        <PlatformSwitcher access={platformAccess} adminLink={isPanelStaff} />
         <div className="mx-4 my-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }} />
 
         {/* تنقّل الشركات فقط */}

@@ -9,6 +9,7 @@ import {
   type PlatformAccess,
   type SubscriptionTier,
 } from '@/lib/v2/accessRules'
+import { bypassesSubscriptions, isPanelStaff, normalizeAccountRole } from '@/lib/v2/staffRoles'
 
 export { hasMinimumTier } from '@/lib/v2/accessRules'
 
@@ -78,7 +79,9 @@ export const getV2Viewer = cache(async () => {
     funds:  normalizeTier(subMap.get('funds')),
     saudi:  normalizeTier(subMap.get('saudi')),
   }
-  const isStaff = profile.role === 'admin' || profile.role === 'moderator'
+  // المالك والمشرف العام يرون كل الأسواق؛ الدعم الفني يدخل اللوحة دون تجاوز الاشتراكات.
+  const role = normalizeAccountRole(profile.role)
+  const isStaff = bypassesSubscriptions(role)
   const platformAccess: PlatformAccess = derivePlatformAccess(subscriptionRows, {
     isStaff,
     // التوافق القديم يخص منصة المؤشرات فقط، ولا يفتح بقية المنصات تلقائياً.
@@ -90,7 +93,9 @@ export const getV2Viewer = cache(async () => {
     profile,
     displayName: profile.full_name_ar || profile.full_name || user.email || '',
     secondaryRoles,
+    role,
     isStaff,
+    isPanelStaff: isPanelStaff(role),
     // اشتراك كل منصة على حدة
     platformTiers,
     platformAccess,

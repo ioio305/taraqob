@@ -19,9 +19,10 @@ import { showBrowserNotificationOnce } from '@/lib/v2/browserNotifications'
 import { SHOW_STRATEGY_LAB } from '@/lib/v2/featureFlags'
 import { TRADING_MAIN, visiblePremiumTools } from '@/lib/v2/tradingNavigation'
 import { planName, planColor, planOf, isPro } from '@/lib/v2/subscriptionModel'
+import { isPanelStaff } from '@/lib/v2/staffRoles'
 
-const ROLE_LABEL_MAP: Record<string, string>  = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
-const ROLE_COLOR_MAP: Record<string, string>  = { admin: '#C9943A', moderator: '#60A5FA', user: '#7C8A99' }
+const ROLE_LABEL_MAP: Record<string, string>  = { admin: 'المالك', moderator: 'مشرف عام', support: 'دعم فني', user: 'مستخدم' }
+const ROLE_COLOR_MAP: Record<string, string>  = { admin: '#C9943A', moderator: '#60A5FA', support: '#26D07C', user: '#7C8A99' }
 const ROLE_ICON_MAP:  Record<string, string>  = { admin: '⊞', moderator: '◎', user: '◈' }
 
 // ── Tier helpers ─────────────────────────────────────────────────
@@ -31,11 +32,6 @@ function tierAllows(userTier: string, required: string): boolean {
   return required === 'radar' || isPro(userTier)
 }
 
-const NAV_ADMIN = [
-  { href: '/v2/admin',       label: 'نظرة عامة',   icon: '⊞', exact: true  },
-  { href: '/v2/admin/users', label: 'المستخدمون',  icon: '◎', exact: false },
-  { href: '/v2/admin/audit', label: 'سجل الأحداث', icon: '≡',  exact: false },
-]
 
 // ── NavLink ────────────────────────────────────────────────────
 function NavLink({ href, label, icon, exact, accent = '#C9943A' }: {
@@ -281,7 +277,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
     const next = r === userRole ? null : r
     setPreviewRole(next)
     if (next) { localStorage.setItem('taraqob_view_as', next); router.push('/v2') }
-    else { localStorage.removeItem('taraqob_view_as'); router.push('/v2/admin') }
+    else { localStorage.removeItem('taraqob_view_as'); router.push('/admin') }
   }
 
   async function logout() {
@@ -305,7 +301,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
       {/* Logo */}
       <div className="px-5 pt-5 pb-4 shrink-0"
         style={{ borderBottom: '1px solid rgba(201,148,58,0.1)' }}>
-        <Link href={showAdminNav ? '/v2/admin' : '/v2'} className="flex items-center gap-3">
+        <Link href="/v2" className="flex items-center gap-3">
           <Image src="/logo.png" alt="ترقّب" width={36} height={36} priority className="w-9 h-9 object-contain shrink-0" />
           <div>
             <div className="font-bold text-white text-sm tracking-wider">ترقّب</div>
@@ -338,21 +334,8 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
       {/* ── منطقة الأقسام: قابلة للتمرير — ذيل السايدبار (الخروج) مثبت دائماً ── */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         {/* محوّل المنصّات — المؤشر · الشركات · الصناديق */}
-        <PlatformSwitcher access={platformAccess} />
+        <PlatformSwitcher access={platformAccess} adminLink={isPanelStaff(userRole)} />
         <div className="mx-4 my-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }} />
-
-        {showAdminNav && (
-          <div className="px-3 pt-3 pb-1">
-            <SectionTitle color="#C9943A">الإدارة</SectionTitle>
-            <div className="space-y-0.5 mt-1">
-              {NAV_ADMIN.map(item => <NavLink key={item.href} {...item} accent="#C9943A" />)}
-            </div>
-          </div>
-        )}
-
-        {showAdminNav && (
-          <div className="mx-4 my-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }} />
-        )}
 
         <div className="px-3 pt-1 pb-1">
           <SectionTitle>التداول</SectionTitle>
@@ -540,7 +523,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
                 style={{ background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.15)', color: '#60A5FA' }}>
                 ◈ التداول
               </Link>
-              <Link href="/v2/admin"
+              <Link href="/admin"
                 className="text-xs px-3 py-1.5 rounded-lg transition-all font-mono"
                 style={{ background: 'rgba(201,148,58,0.08)', border: '1px solid rgba(201,148,58,0.15)', color: '#C9943A' }}>
                 ⊞ الإدارة

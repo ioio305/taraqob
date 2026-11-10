@@ -17,7 +17,7 @@ describe('two separate markets', () => {
     expect(marketOfPath('/stocks')).toBe('us')
     expect(marketOfPath('/funds/watch?x=1')).toBe('us')
     expect(marketOfPath('/upgrade?market=saudi')).toBeNull()
-    expect(marketOfPath('/v2/admin/users')).toBeNull()
+    expect(marketOfPath('/admin/users')).toBeNull()
   })
 
   it('derives market access from platform access', () => {

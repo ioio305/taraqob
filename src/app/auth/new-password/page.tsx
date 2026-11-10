@@ -54,9 +54,9 @@ export default function NewPasswordPage() {
       : { data: null }
 
     setDone(true)
-    const destination = ['admin', 'moderator'].includes(profile?.role ?? '')
-      ? '/v2/admin'
-      : '/v2'
+    const destination = ['admin', 'moderator', 'support'].includes(profile?.role ?? '')
+      ? '/admin'
+      : '/auth/market'
 
     window.setTimeout(() => window.location.replace(destination), 1200)
   }

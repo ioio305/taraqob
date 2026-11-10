@@ -5,6 +5,7 @@ import { isAllowedMutationOrigin, isBodyTooLarge } from '@/lib/security/requestR
 import { STOCKS_FEATURE_TIER, stocksFeatureForPath, tierAllowsStocksFeature } from '@/lib/v2/stocksTierAccess'
 import { requiredTradingTier, tradingTierAllows } from '@/lib/v2/tradingNavigation'
 import { getTrialState } from '@/lib/v2/accessRules'
+import { bypassesSubscriptions, isPanelStaff } from '@/lib/v2/staffRoles'
 
 type CookieToSet = { name: string; value: string; options: CookieOptions }
 
@@ -33,9 +34,10 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── إعادة توجيه المسارات الكلاسيكية القديمة ─────────────────
-  if (pathname.startsWith('/admin')) {
+  // لوحة الإدارة صارت محايدة خارج واجهة الأوبشن: /v2/admin/* → /admin/*
+  if (pathname === '/v2/admin' || pathname.startsWith('/v2/admin/')) {
     const url = request.nextUrl.clone()
-    url.pathname = pathname.replace(/^\/admin/, '/v2/admin') || '/v2/admin'
+    url.pathname = pathname.replace(/^\/v2\/admin/, '/admin') || '/admin'
     return NextResponse.redirect(url)
   }
   if (pathname === '/dashboard' || pathname === '/analyst') {
@@ -128,13 +130,15 @@ export async function middleware(request: NextRequest) {
   }
 
   const role = profile.role
-  const isStaff = ['admin', 'moderator'].includes(role)
+  // المالك والمشرف العام يتجاوزان الاشتراكات؛ الدعم الفني يدخل اللوحة فقط.
+  const isStaff = bypassesSubscriptions(role)
 
-  // ── /v2/admin — أدمن ومشرف فقط ──────────────────────────────
-  if (pathname.startsWith('/v2/admin')) {
-    if (!isStaff) {
+  // ── /admin — المالك والمشرف العام والدعم الفني فقط ─────────────
+  if (pathname === '/admin' || pathname.startsWith('/admin/')) {
+    if (!isPanelStaff(role)) {
       const url = request.nextUrl.clone()
-      url.pathname = '/v2'
+      url.pathname = '/auth/market'
+      url.search = ''
       return NextResponse.redirect(url)
     }
   }
@@ -151,7 +155,6 @@ export async function middleware(request: NextRequest) {
     requestedPlatform = 'saudi'
   } else if (
     pathname.startsWith('/v2')
-    && !pathname.startsWith('/v2/admin')
     && !pathname.startsWith('/v2/upgrade')
   ) {
     requestedPlatform = 'spx'

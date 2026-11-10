@@ -15,7 +15,7 @@ export default async function FundsLayout({ children }: { children: ReactNode })
 
   return (
     <FundsShell userName={viewer.displayName} tier={viewer.platformTiers.funds}
-                isStaff={viewer.isStaff} platformAccess={viewer.platformAccess}>
+                isStaff={viewer.isStaff} isPanelStaff={viewer.isPanelStaff} platformAccess={viewer.platformAccess}>
       {children}
     </FundsShell>
   )

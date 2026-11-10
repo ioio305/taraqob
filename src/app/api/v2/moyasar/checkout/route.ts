@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { billingPackage, priceHalalas, PAID_TIER, type BillingCycle } from '@/lib/v2/billing'
+import { logActivity } from '@/lib/v2/activityLog'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,6 +58,12 @@ export async function POST(request: NextRequest) {
   if (!res.ok || !invoice?.url) {
     return NextResponse.json({ error: 'تعذّر إنشاء الفاتورة — حاول لاحقاً' }, { status: 502 })
   }
+
+  await logActivity({
+    actorId: user.id, actorEmail: user.email, action: 'checkout_start',
+    details: { package: pkg.key, cycle, amount_sar: amount / 100, market: pkg.platforms.includes('saudi') && pkg.platforms.length === 1 ? 'saudi' : pkg.platforms.includes('saudi') ? 'both' : 'us' },
+    request,
+  })
 
   return NextResponse.json({ url: invoice.url })
 }

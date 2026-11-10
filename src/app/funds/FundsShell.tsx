@@ -43,11 +43,12 @@ function allowedTier(current: string, required: string) {
   return required === 'radar' || isPro(current)
 }
 
-export default function FundsShell({ children, userName, tier, isStaff, platformAccess }: {
+export default function FundsShell({ children, userName, tier, isStaff, isPanelStaff = false, platformAccess }: {
   children: ReactNode
   userName: string
   tier: string
   isStaff: boolean
+  isPanelStaff?: boolean
   platformAccess: PlatformAccess
 }) {
   const pathname = usePathname()
@@ -89,7 +90,7 @@ export default function FundsShell({ children, userName, tier, isStaff, platform
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-3">
-        <PlatformSwitcher access={platformAccess} />
+        <PlatformSwitcher access={platformAccess} adminLink={isPanelStaff} />
 
         <div className="px-2 pb-1 text-[11px] font-bold text-slate-600">التداول</div>
         <div className="space-y-0.5">{visibleMain.map(nav)}</div>

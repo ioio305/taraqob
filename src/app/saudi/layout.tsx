@@ -15,7 +15,7 @@ export default async function SaudiLayout({ children }: { children: ReactNode })
 
   return (
     <SaudiShell userName={viewer.displayName} tier={viewer.platformTiers.saudi}
-                isStaff={viewer.isStaff} platformAccess={viewer.platformAccess}>
+                isStaff={viewer.isStaff} isPanelStaff={viewer.isPanelStaff} platformAccess={viewer.platformAccess}>
       {children}
     </SaudiShell>
   )

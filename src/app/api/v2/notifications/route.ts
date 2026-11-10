@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { can } from '@/lib/v2/staffRoles'
 
 export const dynamic = 'force-dynamic'
 
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    if (!me || !['admin', 'moderator'].includes(me.role)) {
+    if (!me || !can(me.role, 'users.notify')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
   }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { billingPackage, priceHalalas, PAID_TIER, type BillingCycle } from '@/lib/v2/billing'
+import { logActivity } from '@/lib/v2/activityLog'
 
 export const dynamic = 'force-dynamic'
 
@@ -79,6 +80,11 @@ export async function POST(request: NextRequest) {
   }
 
   await service.from('moyasar_webhook_events').insert({ invoice_id: invoiceId })
+
+  await logActivity({
+    actorId: userId, action: 'subscription_activated',
+    details: { package: pkg.key, cycle, invoice_id: invoiceId, period_end: periodEnd.toISOString() },
+  })
 
   await service.from('notifications').insert({
     user_id: userId,
