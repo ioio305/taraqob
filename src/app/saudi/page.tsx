@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
+import Link from 'next/link'
 import { SaudiStockCard, type SaudiStock } from '@/components/v2/SaudiStockCard'
 import { useSaudiFavorites } from '@/lib/v2/saudiFavorites'
 import { SAUDI_CALIBRATION } from '@/lib/v2/saudiIndicators'
@@ -131,6 +132,27 @@ export default function SaudiToday() {
           <StatCard label="اتساع السوق" value={`${Math.round(data.market.breadth.adRatio * 100)}%`} sub={`${data.market.breadth.total} سهماً`} />
         </div>
       </div>
+
+      {data.stocks.length >= 3 ? (
+        <div className="rounded-2xl border border-white/10 p-4" style={{ background: 'rgba(255,255,255,.02)' }}>
+          <div className="text-xs font-black text-white">📌 خطة اليوم المبسّطة — أقوى ٣ أسهم فنياً</div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            {data.stocks.slice(0, 3).map((s, i) => (
+              <Link key={s.symbol} href={`/saudi/stock/${s.symbol}`}
+                className="rounded-xl border border-white/8 px-3 py-2 transition-colors hover:border-emerald-500/40">
+                <div className="text-[10px] text-slate-500">#{i + 1} · {s.sector}</div>
+                <div className="truncate text-sm font-black text-white">{s.name}</div>
+                <div className="text-[11px] font-bold" style={{ color: s.techSignalEn === 'strong_buy' ? ACCENT : '#60A5FA' }}>{s.techSignal} · {s.techScore}</div>
+              </Link>
+            ))}
+          </div>
+          <Link href="/saudi/plan" className="mt-3 flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-xs font-bold"
+            style={{ background: `${ACCENT}17`, color: '#D1FAE5' }}>
+            <span>الخطة الاحترافية: منطقة دخول ووقف خسارة وثلاثة أهداف لكل سهم، مع ماسح الفرص ومحفظتك</span>
+            <span aria-hidden>←</span>
+          </Link>
+        </div>
+      ) : null}
 
       <div className="space-y-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2">

@@ -14,6 +14,7 @@ export const SAUDI_MAIN: SaudiNavItem[] = [
 
 // مدفوع: الأدوات الاحترافية.
 export const SAUDI_PREMIUM: SaudiNavItem[] = [
+  { href: '/saudi/plan', label: 'خطة اليوم الاحترافية', icon: '📋', exact: false },
   { href: '/saudi/scanner', label: 'ماسح الفرص', icon: '🔎', exact: false },
 ]
 
