@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { MARKETS_INFO, type Market } from '@/lib/v2/markets'
 
 const URL_ERROR_MESSAGES: Record<string, string> = {
   inactive:     'هذا الحساب معطّل. تواصل مع المسؤول.',
@@ -14,9 +15,15 @@ const URL_ERROR_MESSAGES: Record<string, string> = {
   unauthorized: 'غير مصرح لك بالوصول.',
 }
 
-export default function LoginForm() {
-  const router       = useRouter()
+const BUTTON_BG: Record<Market, string> = {
+  saudi: 'linear-gradient(135deg,#16A34A,#0E7A35)',
+  us: 'linear-gradient(135deg,#C9943A,#8F6415)',
+}
+
+// تسجيل الدخول إلى سوق واحد اختاره المستخدم من البطاقة — بعد الدخول يفتح هذا السوق فقط.
+export default function LoginForm({ market }: { market: Market }) {
   const searchParams = useSearchParams()
+  const info = MARKETS_INFO[market]
 
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
@@ -65,51 +72,46 @@ export default function LoginForm() {
       return
     }
 
-    // كان قاصداً صفحة محددة قبل أن يوقفه تسجيل الدخول؟ → نعيده إليها
+    // الدخول إلى السوق المختار فقط (الخادم يحفظ السوق ويتحقق من الاشتراك).
+    // صفحة قصدها قبل الدخول تُحترم ما دامت من نفس السوق.
+    const target = new URLSearchParams({ m: market })
     const next = searchParams.get('next')
-    if (next && next.startsWith('/') && !next.startsWith('//')) {
-      window.location.href = next
-      return
-    }
-    // الدخول يفتح صفحة اختيار السوق: السوق السعودي (سهم 305) أو الأوبشن الأمريكي.
-    // التحقق النهائي من حالة الحساب والصلاحيات يتم في الخادم؛ لا نسجل خروج
-    // المستخدم بسبب تعثر مؤقت في قراءة ملفه من المتصفح.
-    window.location.href = '/platforms'
+    if (next && next.startsWith('/') && !next.startsWith('//')) target.set('next', next)
+    window.location.href = `/auth/market?${target.toString()}`
   }
+
+  const ref = searchParams.get('ref')
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6" dir="rtl"
          style={{ background: '#060D14', fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
 
-      {/* Ambient glow */}
       <div className="fixed inset-0 pointer-events-none" aria-hidden>
         <div style={{
           position: 'absolute', top: '20%', left: '50%', transform: 'translateX(-50%)',
           width: '50vw', height: '50vw', borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(201,148,58,0.05) 0%, transparent 70%)',
+          background: `radial-gradient(circle, ${info.color}10 0%, transparent 70%)`,
         }} />
       </div>
 
       <div className="w-full max-w-sm relative z-10">
-
-        {/* Logo + Brand */}
         <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <Image src="/logo.png" alt="ترقّب" width={80} height={80} priority
-                 className="w-20 h-20 object-contain"
-                 style={{ filter: 'drop-shadow(0 0 20px rgba(201,148,58,0.3))' }} />
-          </div>
+          <Link href="/" className="flex justify-center mb-4">
+            <Image src="/logo.png" alt="ترقّب" width={80} height={80} priority className="w-20 h-20 object-contain" />
+          </Link>
           <h1 className="text-2xl font-bold text-white tracking-wider">ترقّب</h1>
-          <p className="text-sm mt-1 font-mono" style={{ color: '#8A97A6' }}>
-            حساب واحد · منصات مستقلة · اختر اشتراكك
-          </p>
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-black"
+            style={{ color: info.color, background: `${info.color}14`, border: `1px solid ${info.color}45` }}>
+            <span aria-hidden>{info.flag}</span> تسجيل الدخول — {info.label}
+          </div>
+          <div className="mt-2">
+            <Link href="/#markets" className="text-xs" style={{ color: '#7C8A99' }}>تغيير السوق</Link>
+          </div>
         </div>
 
-        {/* Card */}
         <div className="rounded-2xl p-6 space-y-4"
              style={{ background: 'rgba(13,27,42,0.9)', border: '1px solid rgba(255,255,255,0.07)', boxShadow: '0 24px 60px rgba(0,0,0,0.4)' }}>
 
-          {/* Success */}
           {success && (
             <div className="rounded-xl p-3 text-xs"
                  style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', color: '#34D399' }}>
@@ -117,7 +119,6 @@ export default function LoginForm() {
             </div>
           )}
 
-          {/* Error */}
           {error && (
             <div className="rounded-xl p-3 text-xs"
                  style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#F87171' }}>
@@ -125,7 +126,6 @@ export default function LoginForm() {
             </div>
           )}
 
-          {/* Email */}
           <div>
             <label className="block text-xs font-mono mb-2" style={{ color: '#8A97A6' }}>
               البريد الإلكتروني
@@ -133,12 +133,11 @@ export default function LoginForm() {
             <input
               type="email" value={email} onChange={e => setEmail(e.target.value)}
               required dir="ltr" placeholder="example@email.com"
-              className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none font-mono transition-all focus:ring-2 focus:ring-[#C9943A]/40 focus:border-[#C9943A]/50"
+              className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none font-mono transition-all focus:ring-2 focus:ring-white/20"
               style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
             />
           </div>
 
-          {/* Password */}
           <div>
             <label htmlFor="login-password" className="block text-xs font-mono mb-2" style={{ color: '#8A97A6' }}>
               كلمة المرور
@@ -148,7 +147,7 @@ export default function LoginForm() {
                 id="login-password" type={showPassword ? 'text' : 'password'}
                 value={password} onChange={e => setPassword(e.target.value)}
                 autoComplete="current-password" required dir="ltr"
-                className="w-full rounded-xl py-3 pl-12 pr-4 text-sm text-white outline-none transition-all focus:ring-2 focus:ring-[#C9943A]/40 focus:border-[#C9943A]/50 [&::-ms-reveal]:hidden"
+                className="w-full rounded-xl py-3 pl-12 pr-4 text-sm text-white outline-none transition-all focus:ring-2 focus:ring-white/20 [&::-ms-reveal]:hidden"
                 style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
               />
               <button
@@ -156,21 +155,20 @@ export default function LoginForm() {
                 onClick={() => setShowPassword(visible => !visible)}
                 aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
                 aria-controls="login-password"
-                className="absolute inset-y-0 left-0 flex w-11 items-center justify-center rounded-l-xl text-slate-400 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#C9943A]"
+                className="absolute inset-y-0 left-0 flex w-11 items-center justify-center rounded-l-xl text-slate-400 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/40"
               >
                 {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
               </button>
             </div>
           </div>
 
-          {/* Submit */}
           <button
             type="button"
             onClick={handleLogin}
             disabled={loading || !email || !password}
             className="w-full py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
-            style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
-            {loading ? 'جارٍ الدخول...' : 'تسجيل الدخول'}
+            style={{ background: BUTTON_BG[market], color: '#060D14' }}>
+            {loading ? 'جارٍ الدخول...' : `الدخول إلى ${info.label}`}
           </button>
 
           <Link href="/auth/forgot-password"
@@ -181,8 +179,8 @@ export default function LoginForm() {
 
           <div className="pt-3 text-center" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
             <span className="text-xs" style={{ color: '#5E6E7F' }}>ليس لديك حساب؟ </span>
-            <Link href={`/register${searchParams.get('ref') ? `?ref=${searchParams.get('ref')}` : ''}`}
-                  className="text-xs font-bold" style={{ color: '#C9943A' }}>
+            <Link href={`/register?market=${market}${ref ? `&ref=${encodeURIComponent(ref)}` : ''}`}
+                  className="text-xs font-bold" style={{ color: info.color }}>
               أنشئه مجاناً — تجربة 7 أيام كاملة
             </Link>
           </div>

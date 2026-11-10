@@ -20,8 +20,8 @@ export async function GET(request: NextRequest) {
       if (user) {
         let redirect = next
 
-        // الدخول يذهب مباشرةً إلى منصة مراقبة التوصيات (SPX) لا إلى منتقي المنصات.
-        if (next === '/') redirect = '/v2'
+        // بعد تفعيل البريد: إلى السوق الذي اختاره عند التسجيل (أو الوحيد الذي يملكه).
+        if (next === '/') redirect = '/auth/market'
 
         return NextResponse.redirect(`${origin}${redirect}`)
       }

@@ -33,7 +33,7 @@ describe('real middleware premium boundaries', () => {
   it('redirects a basic member from premium pages and returns JSON 403 from their APIs', async () => {
     const page = await call('/v2/plan')
     expect(page.status).toBe(307)
-    expect(page.headers.get('location')).toContain('/v2/upgrade?tier=')
+    expect(page.headers.get('location')).toContain('/upgrade?market=us&tier=')
     const api = await call('/api/v2/gameplan')
     expect(api.status).toBe(403)
     expect((await api.json()).error).toBe('tier_upgrade_required')

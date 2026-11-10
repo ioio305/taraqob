@@ -8,7 +8,7 @@ export function SidebarPlanCard({ tier, platform }: { tier: string; platform: 's
 
   return (
     <Link
-      href={`/v2/upgrade?platform=${platform}`}
+      href={`/upgrade?market=${platform === 'saudi' ? 'saudi' : 'us'}`}
       className="mx-3 mb-3 block rounded-xl px-3 py-2.5"
       style={{ background: `${pro.color}0D`, border: `1px solid ${pro.color}24` }}
     >

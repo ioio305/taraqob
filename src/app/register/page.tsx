@@ -1,29 +1,28 @@
 'use client'
 
-// ── إنشاء حساب — بوابة التجربة المجانية 7 أيام ──────────────────────────────
+// ── إنشاء حساب لسوق محدد — تجربة مجانية 7 أيام في السوق المختار ─────────────────
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
-import { normalizeBundlePlatforms, subscriptionBundle, type SubscriptionBundleKey } from '@/lib/v2/subscriptionBundles'
-import type { PlatformKey } from '@/lib/v2/accessRules'
+import { MARKET_COOKIE, MARKETS_INFO, parseMarket, type Market } from '@/lib/v2/markets'
 
-const PLATFORMS = [
-  { key: 'spx', label: 'SPX', color: '#C9943A' },
-  { key: 'stocks', label: 'الشركات', color: '#60A5FA' },
-  { key: 'funds', label: 'الصناديق', color: '#26D07C' },
-] as const
+const US_PLATFORMS = ['spx', 'stocks', 'funds']
+
+const BUTTON_BG: Record<Market, string> = {
+  saudi: 'linear-gradient(135deg,#16A34A,#0E7A35)',
+  us: 'linear-gradient(135deg,#C9943A,#8F6415)',
+}
 
 function RegisterContent() {
   const searchParams = useSearchParams()
-  const requestedPlatform = ['spx', 'stocks', 'funds'].includes(searchParams.get('platform') ?? '')
-    ? searchParams.get('platform')
-    : 'spx'
-  const bundle = subscriptionBundle(searchParams.get('plan'))
-  const [selectedPlatforms, setSelectedPlatforms] = useState(() =>
-    normalizeBundlePlatforms(bundle.key, [requestedPlatform ?? 'spx']),
-  )
+  const market = parseMarket(searchParams.get('market'))
+  const requested = searchParams.get('platform') ?? ''
+  // منصة التجربة: السعودي للسوق السعودي، وللأمريكي المنصة المطلوبة أو المؤشرات.
+  const trialPlatform = market === 'saudi' ? 'saudi' : US_PLATFORMS.includes(requested) ? requested : 'spx'
+  const ref = searchParams.get('ref')
+
   const [name, setName]         = useState('')
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
@@ -33,11 +32,35 @@ function RegisterContent() {
   const [verifyMode, setVerifyMode] = useState(false)
   const [resent, setResent]     = useState(false)
 
-  // جاء برابط دعوة صديق؟ نحفظ معرف الداعي ليُكافأ بعد أول دخول
   useEffect(() => {
-    const ref = searchParams.get('ref')
     if (ref) { try { localStorage.setItem('taraqob_ref', ref) } catch { /* تجاهل */ } }
-  }, [searchParams])
+    // نحفظ السوق المختار ليُفتح هو بعد تفعيل البريد ولو من رابط البريد.
+    if (market) { try { document.cookie = `${MARKET_COOKIE}=${market}; path=/; max-age=31536000; samesite=lax` } catch { /* تجاهل */ } }
+  }, [ref, market])
+
+  // لم يُختر سوق ⇒ الاختيار أولاً.
+  if (!market) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6" dir="rtl"
+        style={{ background: '#060D14', fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
+        <div className="w-full max-w-md text-center">
+          <Image src="/logo.png" alt="ترقّب" width={64} height={64} priority className="mx-auto h-16 w-16 object-contain" />
+          <h1 className="mt-4 text-2xl font-black text-white">حساب جديد — اختر السوق</h1>
+          <div className="mt-6 grid gap-3">
+            {(['saudi', 'us'] as Market[]).map(m => (
+              <Link key={m} href={`/register?market=${m}${ref ? `&ref=${encodeURIComponent(ref)}` : ''}`}
+                className="flex items-center justify-between rounded-2xl px-5 py-4 text-base font-black"
+                style={{ color: MARKETS_INFO[m].color, background: `${MARKETS_INFO[m].color}12`, border: `1px solid ${MARKETS_INFO[m].color}45` }}>
+                <span>{MARKETS_INFO[m].flag} {MARKETS_INFO[m].label}</span><span>←</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const info = MARKETS_INFO[market]
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault()
@@ -52,11 +75,10 @@ function RegisterContent() {
       options: {
         data: {
           full_name: name.trim(),
-          selected_platform: selectedPlatforms[0],
-          selected_platforms: selectedPlatforms,
-          subscription_bundle: bundle.key,
+          selected_market: market,
+          selected_platform: trialPlatform,
+          selected_platforms: [trialPlatform],
         },
-        // رابط التفعيل في البريد يهبط على مسار الاستقبال الذي يسجّل الدخول تلقائياً
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     })
@@ -69,30 +91,17 @@ function RegisterContent() {
       return
     }
 
-    // الملف الشخصي يُنشأ تلقائياً — نكمّل الاسم فقط (يعمل فقط عند وجود جلسة)
     if (data.user && data.session) {
-      await supabase.from('user_profiles')
-        .update({ full_name: name.trim() })
-        .eq('id', data.user.id)
+      await supabase.from('user_profiles').update({ full_name: name.trim() }).eq('id', data.user.id)
     }
 
-    // تأكيد البريد مفعّل؟ (لا جلسة حتى يضغط رابط بريده) → شاشة «تحقق من بريدك»
     if (data.user && !data.session) {
       setVerifyMode(true)
       setLoading(false)
       return
     }
 
-    window.location.href = '/login?registered=1'
-  }
-
-  function togglePlatform(platform: PlatformKey) {
-    if (bundle.key === 'radar' || bundle.key === 'alpha') return
-    setSelectedPlatforms(current => {
-      if (bundle.key === 'signal') return [platform]
-      if (current.includes(platform)) return current
-      return normalizeBundlePlatforms(bundle.key as SubscriptionBundleKey, [current[1], platform])
-    })
+    window.location.href = `/login?registered=1&market=${market}`
   }
 
   async function resendVerification() {
@@ -106,7 +115,6 @@ function RegisterContent() {
     setResent(true)
   }
 
-  // ── شاشة «تحقق من بريدك» — تظهر بعد التسجيل حين يكون تأكيد البريد مفعلاً ──
   if (verifyMode) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6" dir="rtl"
@@ -118,7 +126,7 @@ function RegisterContent() {
             أرسلنا رابط تفعيل إلى<br /><b className="text-white" dir="ltr">{email}</b>
           </p>
           <p className="text-xs mb-6" style={{ color: '#5E6E7F' }}>
-            اضغط الرابط في الرسالة وسيفتح حسابك مباشرة مع بدء تجربتك المجانية.
+            اضغط الرابط في الرسالة وسيفتح حسابك في {info.label} مع بدء تجربتك المجانية.
             لم تجدها؟ افحص مجلد «غير الهام».
           </p>
           {resent && (
@@ -129,11 +137,11 @@ function RegisterContent() {
           )}
           <button onClick={resendVerification}
             className="text-sm font-bold px-6 py-3 rounded-xl"
-            style={{ background: 'rgba(201,148,58,0.12)', border: '1px solid rgba(201,148,58,0.4)', color: '#E8D5A3' }}>
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', color: '#E2E8F0' }}>
             ↻ أعد إرسال الرابط
           </button>
           <div className="mt-6">
-            <Link href="/login" className="text-xs" style={{ color: '#5E6E7F' }}>
+            <Link href={`/login?market=${market}`} className="text-xs" style={{ color: '#5E6E7F' }}>
               فعّلت حسابك؟ سجّل دخولك ←
             </Link>
           </div>
@@ -148,32 +156,17 @@ function RegisterContent() {
       <div className="w-full max-w-sm relative z-10">
 
         <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <Image src="/logo.png" alt="ترقّب" width={80} height={80} priority className="w-20 h-20 object-contain"
-              style={{ filter: 'drop-shadow(0 0 20px rgba(201,148,58,0.3))' }} />
+          <Link href="/" className="flex justify-center mb-4">
+            <Image src="/logo.png" alt="ترقّب" width={80} height={80} priority className="w-20 h-20 object-contain" />
+          </Link>
+          <h1 className="text-2xl font-bold text-white tracking-wider">حساب جديد في ترقّب</h1>
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-black"
+            style={{ color: info.color, background: `${info.color}14`, border: `1px solid ${info.color}45` }}>
+            <span aria-hidden>{info.flag}</span> {info.label} · تجربة 7 أيام مجاناً
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-wider">أهلاً بك في ترقّب</h1>
-          <p className="text-sm mt-2 font-bold" style={{ color: '#26D07C' }}>
-            باقة {bundle.label} · {bundle.platformCount === 3 ? 'المنصات الثلاث' : bundle.platformCount === 2 ? 'اختر منصتين' : 'اختر منصة واحدة'}
-          </p>
-        </div>
-
-        <div className="mb-4 grid grid-cols-3 gap-2">
-          {PLATFORMS.map(platform => {
-            const selected = selectedPlatforms.includes(platform.key)
-            return (
-              <button key={platform.key} type="button" onClick={() => togglePlatform(platform.key)}
-                className="rounded-xl px-2 py-3 text-xs font-bold"
-                style={{
-                  color: selected ? platform.color : '#64748B',
-                  background: selected ? `${platform.color}12` : 'rgba(255,255,255,.02)',
-                  border: `1px solid ${selected ? `${platform.color}50` : 'rgba(255,255,255,.06)'}`,
-                  opacity: bundle.key === 'radar' || bundle.key === 'alpha' ? .85 : 1,
-                }}>
-                {selected ? '✓ ' : ''}{platform.label}
-              </button>
-            )
-          })}
+          <div className="mt-2">
+            <Link href="/#markets" className="text-xs" style={{ color: '#7C8A99' }}>تغيير السوق</Link>
+          </div>
         </div>
 
         <form onSubmit={handleRegister} className="rounded-2xl p-6 space-y-4"
@@ -210,13 +203,13 @@ function RegisterContent() {
 
           <button type="submit" disabled={loading}
             className="w-full py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
-            style={{ background: 'linear-gradient(135deg,#C9943A,#8F6415)', color: '#060D14' }}>
+            style={{ background: BUTTON_BG[market], color: '#060D14' }}>
             {loading ? 'جارٍ إنشاء حسابك...' : 'ابدأ تجربتك المجانية ←'}
           </button>
 
           <div className="pt-3 text-center" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
             <span className="text-xs" style={{ color: '#5E6E7F' }}>لديك حساب؟ </span>
-            <Link href="/login" className="text-xs font-bold" style={{ color: '#C9943A' }}>
+            <Link href={`/login?market=${market}`} className="text-xs font-bold" style={{ color: info.color }}>
               سجّل دخولك
             </Link>
           </div>

@@ -11,7 +11,7 @@ export default async function SaudiLayout({ children }: { children: ReactNode })
   const viewer = await getV2Viewer()
   if (!viewer) redirect('/login?next=/saudi')
   if (!viewer.profile || viewer.profile.is_active === false) redirect('/login?error=inactive')
-  if (!viewer.platformAccess.saudi) redirect('/platforms?locked=saudi')
+  if (!viewer.platformAccess.saudi) redirect('/access?market=saudi')
 
   return (
     <SaudiShell userName={viewer.displayName} tier={viewer.platformTiers.saudi}

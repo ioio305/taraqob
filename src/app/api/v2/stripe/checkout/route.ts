@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
     line_items: [{ price: priceId, quantity: 1 }],
     customer_email: profile?.email ?? user.email ?? undefined,
     metadata: { user_id: user.id, tier, billing, platforms: platforms.join(',') },
-    success_url: `${appUrl}/platforms?upgraded=${tier}`,
+    success_url: `${appUrl}/auth/market`,
     cancel_url:  `${appUrl}/v2/upgrade`,
     subscription_data: {
       metadata: { user_id: user.id, tier, billing, platforms: platforms.join(',') },

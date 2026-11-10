@@ -14,7 +14,7 @@ export default async function StocksLayout({ children }: { children: ReactNode }
   const viewer = await getV2Viewer()
   if (!viewer) redirect('/login?next=/stocks')
   if (!viewer.profile || viewer.profile.is_active === false) redirect('/login?error=inactive')
-  if (!viewer.platformAccess.stocks) redirect('/platforms?locked=stocks')
+  if (!viewer.platformAccess.stocks) redirect('/access?market=us&platform=stocks')
 
   return (
     <StocksShell

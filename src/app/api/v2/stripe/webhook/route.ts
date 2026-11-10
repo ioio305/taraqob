@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       type:    'system',
       title:   `تم تفعيل باقة ${tier === 'signal' ? 'سيجنال' : tier === 'edge' ? 'إيدج' : 'ألفا'} ✓`,
       body:    `تم فتح ${platforms.length === 3 ? 'المنصات الثلاث' : platforms.length === 2 ? 'منصتين' : 'منصتك المختارة'}. مرحباً بك!`,
-      url:     '/platforms',
+      url:     '/',
     })
   }
 

@@ -11,7 +11,7 @@ export default async function FundsLayout({ children }: { children: ReactNode })
   const viewer = await getV2Viewer()
   if (!viewer) redirect('/login?next=/funds')
   if (!viewer.profile || viewer.profile.is_active === false) redirect('/login?error=inactive')
-  if (!viewer.platformAccess.funds) redirect('/platforms?locked=funds')
+  if (!viewer.platformAccess.funds) redirect('/access?market=us&platform=funds')
 
   return (
     <FundsShell userName={viewer.displayName} tier={viewer.platformTiers.funds}

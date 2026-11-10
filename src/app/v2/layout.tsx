@@ -11,7 +11,7 @@ export default async function V2Layout({ children }: { children: ReactNode }) {
   const viewer = await getV2Viewer()
   if (!viewer) redirect('/login?next=/v2')
   if (!viewer.profile || viewer.profile.is_active === false) redirect('/login?error=inactive')
-  if (!viewer.platformAccess.spx) redirect('/platforms?locked=spx')
+  if (!viewer.platformAccess.spx) redirect('/access?market=us&platform=spx')
 
   return (
     <V2Shell userName={viewer.displayName} userRole={viewer.profile.role}

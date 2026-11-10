@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       currency: 'SAR',
       description: `${pkg.name} — ${cycle === 'yearly' ? 'سنوي' : 'شهري'}`,
       callback_url: `${appUrl}/api/v2/moyasar/webhook`,
-      success_url: `${appUrl}/platforms?paid=${pkg.key}`,
+      success_url: `${appUrl}/auth/market?m=${pkg.platforms.length === 1 && pkg.platforms[0] === 'saudi' ? 'saudi' : 'us'}`,
       metadata: {
         user_id: user.id,
         package: pkg.key,

@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     type: 'system',
     title: `تم تفعيل باقة ${pkg.name} ✓`,
     body: 'تم فتح وصولك الكامل. مرحباً بك!',
-    url: '/platforms',
+    url: '/',
   })
 
   return NextResponse.json({ received: true })

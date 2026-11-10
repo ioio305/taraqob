@@ -40,7 +40,17 @@ export async function middleware(request: NextRequest) {
   }
   if (pathname === '/dashboard' || pathname === '/analyst') {
     const url = request.nextUrl.clone()
-    url.pathname = '/v2'
+    url.pathname = '/auth/market'
+    url.search = ''
+    return NextResponse.redirect(url)
+  }
+  // صفحة الباقات صارت محايدة (/upgrade) خارج واجهة الأوبشن — الروابط القديمة تُحوَّل إليها.
+  if (pathname === '/v2/upgrade') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/upgrade'
+    if (!url.searchParams.get('market')) {
+      url.searchParams.set('market', url.searchParams.get('platform') === 'saudi' ? 'saudi' : 'us')
+    }
     return NextResponse.redirect(url)
   }
 
@@ -177,9 +187,10 @@ export async function middleware(request: NextRequest) {
         )
       }
       const url = request.nextUrl.clone()
-      url.pathname = '/platforms'
+      url.pathname = '/access'
       url.search = ''
-      url.searchParams.set('locked', requestedPlatform)
+      url.searchParams.set('market', requestedPlatform === 'saudi' ? 'saudi' : 'us')
+      url.searchParams.set('platform', requestedPlatform)
       return NextResponse.redirect(url)
     }
 
@@ -191,8 +202,9 @@ export async function middleware(request: NextRequest) {
           { error: 'tier_upgrade_required', platform: 'spx', requiredTier: tradingFeatureTier }, { status: 403 },
         )
         const url = request.nextUrl.clone()
-        url.pathname = '/v2/upgrade'
+        url.pathname = '/upgrade'
         url.search = ''
+        url.searchParams.set('market', 'us')
         url.searchParams.set('tier', tradingFeatureTier)
         return NextResponse.redirect(url)
       }
@@ -213,8 +225,9 @@ export async function middleware(request: NextRequest) {
         )
       }
       const url = request.nextUrl.clone()
-      url.pathname = '/v2/upgrade'
+      url.pathname = '/upgrade'
       url.search = ''
+      url.searchParams.set('market', 'us')
       url.searchParams.set('platform', 'stocks')
       url.searchParams.set('tier', requiredTier)
       return NextResponse.redirect(url)
