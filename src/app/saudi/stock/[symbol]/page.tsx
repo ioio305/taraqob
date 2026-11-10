@@ -21,6 +21,8 @@ type StockData = {
   price: number; prevClose: number; changeAbs: number; change: number
   high52: number; low52: number
   tech: Tech; series: number[]
+  quote?: { bid: number | null; ask: number | null; netLiquidity: number | null; updatedAt: string | null } | null
+  quotes?: { delayed: boolean; label: string; attribution: string | null }
   error?: string
 }
 
@@ -119,6 +121,11 @@ export default function SaudiStockPage() {
                     {up ? '+' : ''}{n(data.changeAbs)} ({up ? '+' : ''}{n(data.change)}%)
                   </span>
                 </div>
+                {data.quotes ? (
+                  <div className="mt-1 text-[10px] font-bold" style={{ color: data.quotes.delayed ? '#F5B301' : ACCENT }}>
+                    {data.quotes.delayed ? '⏱ ' : '● '}{data.quotes.label}{data.quotes.attribution ? ` · ${data.quotes.attribution}` : ''}
+                  </div>
+                ) : null}
               </div>
               <div className="flex flex-col items-center">
                 <div className="flex h-20 w-20 items-center justify-center rounded-full border-4" style={{ borderColor: sc, background: `${sc}14` }}>
@@ -154,7 +161,12 @@ export default function SaudiStockPage() {
               <Tile label="قوة الزخم ROC" value={`${t!.roc}%`} color={t!.roc > 0 ? ACCENT : RED} />
               <Tile label="الحجم التراكمي OBV" value={t!.obvRising ? 'صاعد' : 'هابط'} color={t!.obvRising ? ACCENT : RED} />
               <Tile label="وقف مقترح (2×ATR)" value={n(t!.suggestedStop)} color={RED} hint={`تقلّب ${t!.atrPct}%`} />
-              {t!.relStrength != null ? <Tile label="قوة نسبية مقابل السوق" value={`${t!.relStrength >= 0 ? '+' : ''}${t!.relStrength}%`} color={t!.relStrength >= 0 ? ACCENT : RED} hint="تفوّق/تخلّف عن تاسي" /> : null}
+              {t!.relStrength != null ? <Tile label="قوة نسبية مقابل السوق" value={`${t!.relStrength >= 0 ? '+' : ''}${t!.relStrength}%`} color={t!.relStrength >= 0 ? ACCENT : RED} hint="تفوّق/تخلّف عن السوق" /> : null}
+              {data.quote?.bid != null && data.quote?.ask != null ? <Tile label="أفضل طلب / عرض" value={`${n(data.quote.bid)} / ${n(data.quote.ask)}`} hint="من سهمك" /> : null}
+              {data.quote?.netLiquidity != null ? (
+                <Tile label="صافي السيولة اليوم" value={`${(data.quote.netLiquidity / 1e6).toFixed(1)} م ر.س`}
+                  color={data.quote.netLiquidity >= 0 ? ACCENT : RED} hint={data.quote.netLiquidity >= 0 ? 'دخول أموال' : 'خروج أموال'} />
+              ) : null}
             </div>
           </div>
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { computeConfluence, windowReturn } from '@/lib/v2/saudiIndicators'
 import { SAUDI_NAME, SAUDI_STOCKS } from '@/lib/v2/saudiStocks'
+import { fetchSahmkQuote, quoteFreshness, sahmkPlan, sahmkRevalidate } from '@/lib/v2/saudiQuotes'
 
 export const revalidate = 120
 
@@ -39,9 +40,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ symbol:
   const clean = symbol.replace(/[^0-9A-Za-z]/g, '').slice(0, 8)
   // مرجع السوق = متوسط عائد 63 جلسة لأسهم القائمة (نفس منطق اللوحة والاختبار التاريخي؛
   // مؤشر تاسي غير متاح تاريخياً من ياهو). الجلب مشترك مع ماسح السوق عبر ذاكرة Next.
-  const [data, peers] = await Promise.all([
+  const [data, peers, live] = await Promise.all([
     fetchDaily(`${clean}.SR`),
     Promise.all(SAUDI_STOCKS.map(s => fetchDaily(s.symbol))),
+    // سعر سهمك (كل الخطط تدعم السهم الواحد) — null بلا مفتاح أو عند أي فشل ⇒ ياهو.
+    fetchSahmkQuote(clean, sahmkRevalidate(sahmkPlan(), 'single')),
   ])
   if (!data || data.candles.length < 20) {
     return NextResponse.json({ error: 'لا توجد بيانات كافية لهذا السهم' }, { status: 404 })
@@ -58,10 +61,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ symbol:
   const tech = computeConfluence(closes, highs, lows, volumes, { marketReturn })
 
   const meta = data.meta
-  const price = Number(meta.regularMarketPrice ?? closes[closes.length - 1])
-  const prevClose = Number(meta.chartPreviousClose ?? meta.previousClose ?? closes[closes.length - 2] ?? price)
-  const changeAbs = +(price - prevClose).toFixed(2)
-  const change = prevClose > 0 ? +(((price - prevClose) / prevClose) * 100).toFixed(2) : 0
+  const yahooPrice = Number(meta.regularMarketPrice ?? closes[closes.length - 1])
+  const prevClose = Number(meta.chartPreviousClose ?? meta.previousClose ?? closes[closes.length - 2] ?? yahooPrice)
+  const price = live?.price ?? yahooPrice
+  const changeAbs = live ? +live.change.toFixed(2) : +(price - prevClose).toFixed(2)
+  const change = live ? +live.changePct.toFixed(2) : prevClose > 0 ? +(((price - prevClose) / prevClose) * 100).toFixed(2) : 0
   const info = SAUDI_NAME[clean]
 
   return NextResponse.json({
@@ -76,5 +80,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ symbol:
     low52: +Math.min(...lows).toFixed(2),
     tech,
     series: data.candles.slice(-60).map(c => c.c),
+    quote: live ? { bid: live.bid, ask: live.ask, netLiquidity: live.netLiquidity, updatedAt: live.updatedAt } : null,
+    quotes: quoteFreshness(live ? 'sahmk' : 'yahoo', live ? live.isDelayed : true),
   })
 }

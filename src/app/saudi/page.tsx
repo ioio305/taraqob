@@ -17,6 +17,7 @@ type MarketData = {
   }
   decision: { score: number; direction: string; verdict: string }
   stocks: SaudiStock[]
+  quotes?: { delayed: boolean; label: string; attribution: string | null }
   error?: string
 }
 
@@ -94,6 +95,11 @@ export default function SaudiToday() {
         <div className="text-left text-[10px] text-slate-500">
           <div>{STATUS_LABEL[data.status] ?? ''}</div>
           <div>آخر تحديث: {new Date(data.timestamp).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}</div>
+          {data.quotes ? (
+            <div className="font-bold" style={{ color: data.quotes.delayed ? '#F5B301' : ACCENT }}>
+              {data.quotes.delayed ? '⏱ ' : '● '}{data.quotes.label}{data.quotes.attribution ? ` · ${data.quotes.attribution}` : ''}
+            </div>
+          ) : null}
         </div>
       </div>
 

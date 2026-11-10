@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { computeConfluence, windowReturn } from '@/lib/v2/saudiIndicators'
 import { SAUDI_STOCKS } from '@/lib/v2/saudiStocks'
+import { fetchSahmkBulk, quoteFreshness, sahmkConfigured, sahmkPlan, sahmkRevalidate, type QuoteSource } from '@/lib/v2/saudiQuotes'
 
 export const revalidate = 60
 
@@ -121,6 +122,27 @@ export async function GET() {
       }
     }).filter((x): x is StockOut => x !== null)
 
+    // ── أسعار سهمك فوق ياهو (خطط Starter/Pro فقط — المجاني لا يدعم الجماعي ولا يتحمّل حصته المسح) ──
+    let quoteSource: QuoteSource = 'yahoo'
+    let quotesDelayed = true
+    const plan = sahmkPlan()
+    if (sahmkConfigured() && plan !== 'free') {
+      const live = await fetchSahmkBulk(stocks.map(s => s.symbol), sahmkRevalidate(plan, 'bulk'))
+      if (live.size) {
+        quoteSource = 'sahmk'
+        quotesDelayed = false
+        for (const s of stocks) {
+          const q = live.get(s.symbol)
+          if (!q) continue
+          s.price = +q.price.toFixed(2)
+          s.changeAbs = +q.change.toFixed(2)
+          s.change = +q.changePct.toFixed(2)
+          if (q.volume != null) s.volume = q.volume
+          if (q.isDelayed) quotesDelayed = true
+        }
+      }
+    }
+
     const advancing = stocks.filter(s => s.change > 0).length
     const declining = stocks.filter(s => s.change <= 0).length
     const adRatio = stocks.length > 0 ? advancing / stocks.length : 0.5
@@ -152,6 +174,7 @@ export async function GET() {
         verdict: score >= 62 ? 'إيجابي' : score <= 40 ? 'سلبي' : 'محايد',
       },
       stocks: stocks.sort((a, b) => b.techScore - a.techScore),
+      quotes: quoteFreshness(quoteSource, quotesDelayed),
     })
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'تعذّر التحميل', isLive: false }, { status: 500 })
