@@ -17,6 +17,7 @@ export const SAUDI_MAIN: SaudiNavItem[] = [
 // مدفوع: الأدوات الاحترافية.
 export const SAUDI_PREMIUM: SaudiNavItem[] = [
   { href: '/saudi/plan', label: 'خطة اليوم الاحترافية', icon: '📋', exact: false },
+  { href: '/saudi/signals', label: 'إشارات اليوم', icon: '⚡', exact: false },
   { href: '/saudi/scanner', label: 'ماسح الفرص', icon: '🔎', exact: false },
   { href: '/saudi/portfolio', label: 'محفظتي وصفقاتي', icon: '💼', exact: false },
   { href: '/saudi/alerts', label: 'تنبيهاتي السعرية', icon: '🔔', exact: false },
@@ -30,14 +31,14 @@ export const SAUDI_SEGMENT_NAV: Record<'nomu' | 'funds', { main: SaudiNavItem[];
       { href: '/saudi/nomu', label: 'كل شركات نمو', icon: '🌱', exact: true },
       { href: '/saudi/watchlist', label: 'المفضّلة', icon: '★', exact: false },
     ],
-    premium: SAUDI_PREMIUM.filter(i => i.href === '/saudi/portfolio' || i.href === '/saudi/alerts'),
+    premium: SAUDI_PREMIUM.filter(i => i.href === '/saudi/signals' || i.href === '/saudi/portfolio' || i.href === '/saudi/alerts'),
   },
   funds: {
     main: [
       { href: '/saudi/funds', label: 'كل الصناديق', icon: '🧺', exact: true },
       { href: '/saudi/watchlist', label: 'المفضّلة', icon: '★', exact: false },
     ],
-    premium: SAUDI_PREMIUM.filter(i => i.href === '/saudi/portfolio' || i.href === '/saudi/alerts'),
+    premium: SAUDI_PREMIUM.filter(i => i.href === '/saudi/signals' || i.href === '/saudi/portfolio' || i.href === '/saudi/alerts'),
   },
 }
 
@@ -47,6 +48,7 @@ const PREMIUM_APIS: Array<[prefix: string, page: string]> = [
   ['/api/v2/saudi/plan', '/saudi/plan'],
   ['/api/v2/saudi/portfolio', '/saudi/portfolio'],
   ['/api/v2/saudi/alerts', '/saudi/alerts'],
+  ['/api/v2/saudi/signals', '/saudi/signals'],
   ['/api/v2/saudi/analysis', '/saudi/__pro-analysis'],
   ['/api/v2/saudi/chart', '/saudi/chart'],
   ['/api/v2/saudi/liquidity', '/saudi/liquidity'],

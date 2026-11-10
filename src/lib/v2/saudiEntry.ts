@@ -3,7 +3,7 @@
 // (< 2023) وخارجها (≥ 2023) في نفس حال السوق الحالية (صاعد/هابط).
 // إعادة تشغيل الدراسة تحدّث saudiSignalStats.json فتتحدّث المنصة تلقائياً.
 import stats from './saudiSignalStats.json'
-import { SETUP_BY_KEY, buildSetupSeries, type SetupCtx } from './saudiSetups'
+import { DETECT_KEYS, SETUP_BY_KEY, buildSetupSeries, type SetupCtx } from './saudiSetups'
 import type { Candle } from './saudiSignals'
 
 export type Regime = 'bull' | 'bear'
@@ -40,7 +40,7 @@ export function statsFor(key: string, regime: Regime): SegStats {
 export type FiredSignal = { key: string; daysAgo: number; signalPrice: number }
 
 // الإشارات المرصودة التي ظهرت في آخر 3 جلسات (0 = إغلاق اليوم). rs = قوة السهم النسبية (كسر عشري).
-export function firedSignals(c: Candle[], rs: number | null, keys = WATCHED_KEYS, lookback = 3): FiredSignal[] {
+export function firedSignals(c: Candle[], rs: number | null, keys = DETECT_KEYS, lookback = 3): FiredSignal[] {
   if (c.length < 210 || !keys.length) return []
   const base = buildSetupSeries(c)
   const out: FiredSignal[] = []
@@ -53,6 +53,13 @@ export function firedSignals(c: Candle[], rs: number | null, keys = WATCHED_KEYS
     }
   }
   return out
+}
+
+// شرط الدخول واحد بين الإشارة ونسختها بوقف متحرّك، فالمرصود بمفتاح أساسي يُقيَّم بأفضل نسخة له إحصائياً.
+export function bestVariant(key: string, regime: Regime): string {
+  const base = key.replace(/_trail(_rs)?$/, '')
+  const family = key.endsWith('_trail_rs') ? [key] : [base, `${base}_trail`]
+  return family.filter(k => SETUP_BY_KEY[k]).sort((a, b) => (statsFor(b, regime).profitFactor ?? 0) - (statsFor(a, regime).profitFactor ?? 0))[0] ?? key
 }
 
 export type EntryPick = {
@@ -89,7 +96,8 @@ export function buildEntryPicks(stocks: Source[], marketReturn: number | null): 
   for (const s of stocks) {
     if (!s.entrySignals?.length || !(s.atr > 0)) continue
     // الأقوى إحصائياً أولاً لكل سهم.
-    const ranked = [...s.entrySignals].sort((a, b) => (statsFor(b.key, regime).profitFactor ?? 0) - (statsFor(a.key, regime).profitFactor ?? 0) || a.daysAgo - b.daysAgo)
+    const variants = s.entrySignals.map(f => ({ ...f, key: bestVariant(f.key, regime) }))
+    const ranked = [...variants].sort((a, b) => (statsFor(b.key, regime).profitFactor ?? 0) - (statsFor(a.key, regime).profitFactor ?? 0) || a.daysAgo - b.daysAgo)
     const v = ranked.find(f => vkeys.has(f.key))
     if (v) picks.push(toPick(s, v))
     else unproven.push(toPick(s, ranked[0]))

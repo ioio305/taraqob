@@ -54,7 +54,7 @@ export default function SaudiShell({ children, userName, tier, isStaff, isPanelS
   // والتنبيهات مشتركة، فتبقى المنصة المختارة آخر مرة مميّزة عند فتحها.
   const [lastSegment, setLastSegment] = useState<SaudiSegment>('main')
   const pathSegment = segmentOfPath(pathname)
-  const shared = /^\/saudi\/(stock|watchlist|portfolio|alerts)(\/|$)/.test(pathname)
+  const shared = /^\/saudi\/(stock|watchlist|portfolio|alerts|signals)(\/|$)/.test(pathname)
   const segment: SaudiSegment = shared ? lastSegment : pathSegment
   useEffect(() => {
     if (shared) return

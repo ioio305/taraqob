@@ -13,7 +13,7 @@ type Row = {
   entry_price: number; stop_price: number; sessions_tracked: number
   ret_5: number | null; ret_10: number | null; ret_20: number | null
   hit_stop: boolean; stop_hit_date: string | null; max_gain: number | null; max_drawdown: number | null
-  status: 'open' | 'done'
+  status: 'open' | 'done'; setup_key?: string | null; proven?: boolean | null
 }
 type PerfData = { ready: boolean; total?: number; stopRate?: number | null; stats: HorizonStats[]; rows: Row[]; error?: string | null }
 
@@ -30,19 +30,31 @@ function Ret({ v }: { v: number | null }) {
 export default function SaudiPerformance() {
   const [data, setData] = useState<PerfData | null>(null)
   const [err, setErr] = useState('')
+  const [source, setSource] = useState<'entry' | 'strong'>('entry')
 
   useEffect(() => {
-    fetch('/api/v2/saudi/performance')
+    setData(null); setErr('')
+    fetch(`/api/v2/saudi/performance?source=${source}`)
       .then(r => r.json())
       .then((j: PerfData) => { if (j.error) setErr(j.error); else setData(j) })
       .catch(() => setErr('تعذّر الاتصال'))
-  }, [])
+  }, [source])
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4 pb-24">
       <h1 className="text-lg font-black text-white">≣ سجل الأداء الشفاف — السوق السعودي</h1>
+      <div className="flex gap-1.5">
+        {([['entry', '🎯 فرص الدخول'], ['strong', 'المرشّح القوي']] as const).map(([k, label]) => (
+          <button key={k} type="button" onClick={() => setSource(k)} className="rounded-full border px-3 py-1 text-[11px] font-bold"
+            style={{ borderColor: source === k ? `${ACCENT}60` : 'rgba(255,255,255,.08)', color: source === k ? '#D1FAE5' : '#8A97A6', background: source === k ? `${ACCENT}17` : 'transparent' }}>
+            {label}
+          </button>
+        ))}
+      </div>
       <p className="text-xs leading-6 text-slate-400">
-        كل سهم يصل إلى «مرشّح قوي» يُسجَّل تلقائياً بعد إغلاق السوق بسعر إغلاق ذلك اليوم، ثم نتابع نتيجته بعد ٥ و١٠ و٢٠ جلسة، وهل لمس وقف الخسارة (ضعفا متوسط التذبذب اليومي). نعرض كل الترشيحات، الرابحة والخاسرة، دون حذف أو انتقاء.
+        {source === 'entry'
+          ? 'كل فرصة دخول تُسجَّل يوم ظهورها بسعر الإغلاق، ثم نتيجتها بعد ٥ و١٠ و٢٠ جلسة. كل النتائج تظهر، الرابحة والخاسرة.'
+          : 'كل «مرشّح قوي» يُسجَّل يوم ظهوره بسعر الإغلاق، ثم نتيجته بعد ٥ و١٠ و٢٠ جلسة. كل النتائج تظهر، الرابحة والخاسرة.'}
       </p>
 
       {!data && !err ? (
@@ -53,9 +65,7 @@ export default function SaudiPerformance() {
         <div className="flex h-40 items-center justify-center text-sm text-slate-500">{err}</div>
       ) : !data!.ready || data!.rows.length === 0 ? (
         <div className="rounded-2xl border border-white/10 p-6 text-center text-sm leading-7 text-slate-400" style={{ background: 'rgba(255,255,255,.02)' }}>
-          {data!.ready ? 'لم تُسجَّل ترشيحات بعد.' : 'بدأ تجهيز السجل، وستظهر أول الترشيحات هنا بعد أول إغلاق.'}
-          <br />
-          يُسجَّل «المرشّح القوي» فقط. حين يكون السوق العام هابطاً يخفّض المحرّك درجاته، فقد تمرّ أيام بلا ترشيح، وهذا جزء من الشفافية.
+          {data!.ready ? 'لا سجلات بعد. تُسجَّل تلقائياً بعد إغلاق كل جلسة.' : 'السجل يبدأ مع أول إغلاق بعد تفعيله.'}
         </div>
       ) : (
         <>

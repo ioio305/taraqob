@@ -87,4 +87,7 @@ export const SETUPS: Setup[] = [
   })),
 ]
 
+// مفاتيح الإشارات المتمايزة شرطاً (الوقف المتحرّك لا يغيّر شرط الدخول): الأساسية + نسخة «القائد».
+export const DETECT_KEYS: string[] = [...BASE_SETUPS.map(s => s.key), ...BASE_SETUPS.filter(s => TREND_KEYS.includes(s.key)).map(s => `${s.key}_trail_rs`)]
+
 export const SETUP_BY_KEY: Record<string, Setup> = Object.fromEntries(SETUPS.map(s => [s.key, s]))

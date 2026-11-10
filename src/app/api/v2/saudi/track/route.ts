@@ -5,6 +5,7 @@ import { buildSaudiSnapshot, fetchSaudiDaily, getSaudiRowsFor, mapLimit } from '
 import { alertHit, describeAlert } from '@/lib/v2/saudiAlerts'
 import { emailButton, emailShell, sendResendBatch } from '@/lib/v2/email'
 import { evaluateTrack, riyadhDate } from '@/lib/v2/saudiTrack'
+import { buildEntryPicks } from '@/lib/v2/saudiEntry'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -38,15 +39,31 @@ export async function GET(req: NextRequest) {
       const snap = await buildSaudiSnapshot()
       const strong = snap.stocks.filter(s => s.techSignalEn === 'strong_buy' && s.atr > 0)
       if (strong.length) {
-        const { error } = await sb.from('saudi_signal_log').upsert(strong.map(s => ({
+        const rows = strong.map(s => ({
           signal_date: today, symbol: s.symbol, name: s.name, sector: s.sector,
           score: s.techScore, entry_price: s.price, stop_price: s.suggestedStop, atr: s.atr,
           market_return: snap.marketReturn,
-        })), { onConflict: 'signal_date,symbol', ignoreDuplicates: true })
+        }))
+        // بعد الترحيل 025 يصبح المفتاح (اليوم، السهم، المصدر)؛ قبله (اليوم، السهم).
+        let { error } = await sb.from('saudi_signal_log').upsert(rows.map(r => ({ ...r, source: 'strong' })), { onConflict: 'signal_date,symbol,source', ignoreDuplicates: true })
+        if (error) ({ error } = await sb.from('saudi_signal_log').upsert(rows, { onConflict: 'signal_date,symbol', ignoreDuplicates: true }))
         if (error) return NextResponse.json({ ok: false, step: 'log', error: error.message }, { status: 500 })
       }
       logged = strong.length
       logNote = strong.length ? `سُجّل ${strong.length} مرشّحاً قوياً` : 'لا مرشّح قوياً اليوم'
+
+      // فرص الدخول التي ظهرت اليوم (المثبتة وغير المثبتة، كلٌّ موسوم) — تحتاج الترحيل 025.
+      const entry = buildEntryPicks(snap.stocks, snap.marketReturn)
+      const todays = [...entry.picks.map(p => ({ p, proven: true })), ...entry.unproven.map(p => ({ p, proven: false }))].filter(x => x.p.daysAgo === 0)
+      if (todays.length) {
+        const bySym = new Map(snap.stocks.map(s => [s.symbol, s]))
+        const { error } = await sb.from('saudi_signal_log').upsert(todays.map(({ p, proven }) => ({
+          signal_date: today, symbol: p.symbol, name: p.name, sector: p.sector,
+          score: bySym.get(p.symbol)?.techScore ?? 0, entry_price: p.entry, stop_price: p.stop, atr: bySym.get(p.symbol)?.atr ?? null,
+          market_return: snap.marketReturn, source: 'entry', setup_key: p.setupKey, proven,
+        })), { onConflict: 'signal_date,symbol,source', ignoreDuplicates: true })
+        logNote += error ? ' · فرص الدخول: بانتظار الترحيل 025' : ` · سُجّلت ${todays.length} فرصة دخول`
+      }
     }
   }
 
