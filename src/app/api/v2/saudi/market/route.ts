@@ -8,20 +8,37 @@ export const revalidate = 60
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
 const YF = { 'User-Agent': UA, Accept: 'application/json', 'Accept-Language': 'en-US,en;q=0.9' }
 
-type Stooq = { open: number; high: number; low: number; close: number; volume: number; date: string }
+type IndexQuote = { price: number; changePct: number; high: number; low: number }
 type YahooHist = {
   price: number; prevClose: number; high: number; low: number; volume: number
   closes: number[]; highs: number[]; lows: number[]; volumes: number[]
 }
 
-async function fetchStooq(sym: string): Promise<Stooq | null> {
-  const res = await fetch(`https://stooq.com/q/l/?s=${sym}&f=sd2t2ohlcv&h&e=csv`, {
-    headers: { 'User-Agent': UA }, next: { revalidate: 60 },
-  })
-  if (!res.ok) return null
-  const cols = (await res.text()).trim().split('\n')[1]?.split(',')
-  if (!cols) return null
-  return { open: +cols[3] || 0, high: +cols[4] || 0, low: +cols[5] || 0, close: +cols[6] || 0, volume: +cols[7] || 0, date: cols[1] }
+// المؤشر العام (تاسي) والنفط (برنت) من ياهو. كان المصدر Stooq وتوقّف نهائياً،
+// فأسقط الصفحة كلها. فشل المؤشر الآن لا يُسقط الأسهم.
+async function fetchYahooIndex(yfSymbol: string): Promise<IndexQuote | null> {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yfSymbol)}?range=1mo&interval=1d`
+    const res = await fetch(url, { headers: YF, next: { revalidate: 60 } })
+    if (!res.ok) return null
+    const result = (await res.json())?.chart?.result?.[0]
+    const meta = result?.meta
+    const price = Number(meta?.regularMarketPrice)
+    // إغلاق الجلسة السابقة: الشمعة قبل الأخيرة إن وُجدت. ياهو يحتفظ لتاسي بشمعة اليوم
+    // وحدها، وعندها يكون chartPreviousClose هو إغلاق أمس.
+    const closes = ((result?.indicators?.quote?.[0]?.close ?? []) as Array<number | null>)
+      .filter((c): c is number => typeof c === 'number' && c > 0)
+    const prev = closes.length >= 2
+      ? closes[closes.length - 2]
+      : Number(meta?.chartPreviousClose ?? meta?.previousClose)
+    if (!Number.isFinite(price) || price <= 0) return null
+    return {
+      price,
+      changePct: Number.isFinite(prev) && prev > 0 ? ((price - prev) / prev) * 100 : 0,
+      high: Number(meta?.regularMarketDayHigh) || price,
+      low: Number(meta?.regularMarketDayLow) || price,
+    }
+  } catch { return null }
 }
 
 async function fetchYahooHistory(yfSymbol: string): Promise<YahooHist | null> {
@@ -76,17 +93,16 @@ type StockOut = {
 export async function GET() {
   try {
     const [indices, stockResults] = await Promise.all([
-      Promise.all([fetchStooq('^tasi'), fetchStooq('brent.uk')]),
+      Promise.all([fetchYahooIndex('^TASI.SR'), fetchYahooIndex('BZ=F')]),
       Promise.all(SAUDI_STOCKS.map(s => fetchYahooHistory(s.symbol))),
     ])
-    const [tasiStooq, oilStooq] = indices
-    if (!tasiStooq || tasiStooq.close === 0) throw new Error('تعذّر الاتصال بمصدر البيانات')
+    const [tasi, oil] = indices
+    if (!tasi && !stockResults.some(Boolean)) throw new Error('تعذّر الاتصال بمصدر البيانات')
 
-    const tasiPrice = tasiStooq.close
-    const tasiChangePct = tasiStooq.open > 0 ? ((tasiPrice - tasiStooq.open) / tasiStooq.open) * 100 : 0
-    const oilPrice = oilStooq?.close ?? 0
-    const oilOpen = oilStooq?.open ?? 0
-    const oilChangePct = oilOpen > 0 ? ((oilPrice - oilOpen) / oilOpen) * 100 : 0
+    const tasiPrice = tasi?.price ?? 0
+    const tasiChangePct = tasi?.changePct ?? 0
+    const oilPrice = oil?.price ?? 0
+    const oilChangePct = oil?.changePct ?? 0
 
     const now = new Date()
     const astHour = (now.getUTCHours() + 3) % 24
@@ -163,7 +179,7 @@ export async function GET() {
       isLive: true,
       status,
       market: {
-        tasi: { value: +tasiPrice.toFixed(2), changePct: +tasiChangePct.toFixed(2), high: tasiStooq.high, low: tasiStooq.low },
+        tasi: { value: +tasiPrice.toFixed(2), changePct: +tasiChangePct.toFixed(2), high: tasi?.high ?? 0, low: tasi?.low ?? 0 },
         oil: { value: +oilPrice.toFixed(2), changePct: +oilChangePct.toFixed(2) },
         breadth: { advancing, declining, total: stocks.length, adRatio: +adRatio.toFixed(2) },
       },

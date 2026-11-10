@@ -129,7 +129,7 @@ export default function SaudiToday() {
       </div>
 
       <div className="rounded-xl border border-white/8 px-4 py-3 text-[11px] leading-5 text-slate-500" style={{ background: 'rgba(255,255,255,.015)' }}>
-        <span className="font-bold text-amber-300/80">قيد المعايرة: </span>{SAUDI_CALIBRATION.summary} البيانات من مصادر عامة (ياهو/Stooq) وقد تتأخر. القرار النهائي مسؤوليتك.
+        <span className="font-bold text-amber-300/80">قيد المعايرة: </span>{SAUDI_CALIBRATION.summary} البيانات من مصادر عامة (ياهو) وقد تتأخر. القرار النهائي مسؤوليتك.
       </div>
     </div>
   )
