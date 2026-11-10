@@ -18,6 +18,7 @@ import { getSelectedIndex, indexMeta, type IndexId } from '@/lib/v2/indexSelecti
 import { showBrowserNotificationOnce } from '@/lib/v2/browserNotifications'
 import { SHOW_STRATEGY_LAB } from '@/lib/v2/featureFlags'
 import { TRADING_MAIN, visiblePremiumTools } from '@/lib/v2/tradingNavigation'
+import { planName, planColor, planOf } from '@/lib/v2/subscriptionModel'
 
 const ROLE_LABEL_MAP: Record<string, string>  = { admin: 'مدير', moderator: 'مشرف', user: 'مستخدم' }
 const ROLE_COLOR_MAP: Record<string, string>  = { admin: '#C9943A', moderator: '#60A5FA', user: '#7C8A99' }
@@ -25,8 +26,7 @@ const ROLE_ICON_MAP:  Record<string, string>  = { admin: '⊞', moderator: '◎'
 
 // ── Tier helpers ─────────────────────────────────────────────────
 const TIER_RANK:  Record<string, number> = { radar: 1, signal: 2, edge: 3, alpha: 4 }
-const TIER_LABEL: Record<string, string> = { radar: 'رادار', signal: 'سيجنال', edge: 'إيدج', alpha: 'ألفا' }
-const TIER_COLOR: Record<string, string> = { radar: '#7C8A99', signal: '#60A5FA', edge: '#C9943A', alpha: '#A78BFA' }
+// شارات المستوى تُعرض بأسماء الباقتين (أساسية/متقدمة) عبر planName/planColor
 
 function tierAllows(userTier: string, required: string): boolean {
   return (TIER_RANK[userTier] ?? 1) >= (TIER_RANK[required] ?? 2)
@@ -61,7 +61,7 @@ function NavLink({ href, label, icon, exact, accent = '#C9943A' }: {
 
 // ── LockedNavLink (tier gate) ──────────────────────────────────
 function LockedNavLink({ label, icon, requiredTier }: { label: string; icon: string; requiredTier: string }) {
-  const tc = TIER_COLOR[requiredTier] ?? '#7C8A99'
+  const tc = planColor(requiredTier)
   return (
     <Link href="/v2/upgrade"
       className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
@@ -70,7 +70,7 @@ function LockedNavLink({ label, icon, requiredTier }: { label: string; icon: str
       <span className="font-medium" style={{ color: '#6E7E8F' }}>{label}</span>
       <span className="mr-auto text-[10px] font-mono px-1.5 py-0.5 rounded"
         style={{ background: `${tc}15`, color: tc, border: `1px solid ${tc}25` }}>
-        {TIER_LABEL[requiredTier]}
+        {planName(requiredTier)}
       </span>
     </Link>
   )
@@ -151,7 +151,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
     : isMod
 
   const roleColor = ROLE_COLOR_MAP[effectiveRole] ?? '#7C8A99'
-  const tierColor = TIER_COLOR[subscriptionTier]  ?? '#7C8A99'
+  const tierColor = planColor(subscriptionTier)
 
   // ── Fetch notifications ────────────────────────────────────
   const fetchNotifications = useCallback(async () => {
@@ -325,10 +325,10 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: tierColor }} />
               <span className="text-xs font-mono" style={{ color: tierColor }}>
-                {TIER_LABEL[subscriptionTier] ?? subscriptionTier}
+                {planName(subscriptionTier)}
               </span>
             </div>
-            {subscriptionTier === 'radar' && (
+            {planOf(subscriptionTier) === 'free' && (
               <Link href="/v2/upgrade" className="text-[10px] font-mono"
                 style={{ color: '#C9943A' }}>ترقية ↗</Link>
             )}

@@ -8,9 +8,9 @@ import { createClient } from '@/lib/supabase/client'
 import { PlatformSwitcher } from '@/components/v2/PlatformSwitcher'
 import { SidebarPlanCard } from '@/components/v2/SidebarPlanCard'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
+import { planName } from '@/lib/v2/subscriptionModel'
 
 const ACCENT = '#16A34A'
-const TIER_LABEL: Record<string, string> = { radar: 'رادار', signal: 'سيجنال', edge: 'إيدج', alpha: 'ألفا' }
 const TIER_RANK: Record<string, number> = { radar: 1, signal: 2, edge: 3, alpha: 4 }
 
 type NavItem = { href: string; label: string; icon: string; exact: boolean; tier: string }
@@ -88,7 +88,7 @@ export default function SaudiShell({ children, userName, tier, isStaff, platform
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="truncate text-xs font-bold text-white">{userName}</div>
-            <div className="text-[10px] text-slate-600">{isStaff ? 'كامل' : (TIER_LABEL[tier] ?? tier)}</div>
+            <div className="text-[10px] text-slate-600">{isStaff ? 'كامل' : planName(tier)}</div>
           </div>
           <button onClick={logout} disabled={loggingOut} className="rounded-lg border border-red-400/15 bg-red-400/5 px-3 py-1.5 text-xs text-red-300">
             {loggingOut ? '…' : 'خروج'}

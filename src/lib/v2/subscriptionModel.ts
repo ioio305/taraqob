@@ -64,3 +64,7 @@ export function planName(tier: string | null | undefined): string {
 export function isPro(tier: string | null | undefined): boolean {
   return planOf(tier) === 'pro'
 }
+
+export function planColor(tier: string | null | undefined): string {
+  return PLAN[planOf(tier)].color
+}

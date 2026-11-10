@@ -13,6 +13,7 @@ import { DecisionCouncilStrip } from '@/components/v2/DecisionCouncilStrip'
 import { StocksWatcher } from '@/components/v2/StocksWatcher'
 import { PlatformSwitcher } from '@/components/v2/PlatformSwitcher'
 import { SidebarPlanCard } from '@/components/v2/SidebarPlanCard'
+import { planName, planColor } from '@/lib/v2/subscriptionModel'
 
 // ══════════════════════════════════════════════════════════════════════════
 // قوقعة منصة الشركات — مستقلة تماماً عن منصة المؤشر (SPX)
@@ -25,8 +26,7 @@ const ACCENT = '#60A5FA'   // هوية منصة الشركات
 
 // ── الباقات: radar (مجاني) < signal < edge < alpha ────────────────────────────
 const TIER_RANK: Record<string, number> = { radar: 1, signal: 2, edge: 3, alpha: 4 }
-const TIER_LABEL: Record<string, string> = { radar: 'رادار', signal: 'سيجنال', edge: 'إيدج', alpha: 'ألفا' }
-const TIER_COLOR: Record<string, string> = { radar: '#7C8A99', signal: '#60A5FA', edge: '#C9943A', alpha: '#A78BFA' }
+// شارات المستوى بأسماء الباقتين (أساسية/متقدمة) عبر planName/planColor
 function tierAllows(userTier: string, required: string): boolean {
   return (TIER_RANK[userTier] ?? 1) >= (TIER_RANK[required] ?? 1)
 }
@@ -80,13 +80,13 @@ function NavLink({ href, label, icon, exact, onClick }: { href: string; label: s
 
 // عنصر تنقّل مقفل — أعلى من باقة المستخدم (يوجّه لصفحة الترقية)
 function LockedNavLink({ label, icon, requiredTier }: { label: string; icon: string; requiredTier: string }) {
-  const tc = TIER_COLOR[requiredTier] ?? '#7C8A99'
+  const tc = planColor(requiredTier)
   return (
     <Link href={`/v2/upgrade?platform=stocks&tier=${requiredTier}`} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm" style={{ borderRight: '2px solid transparent' }}>
       <span className="w-4 text-center text-sm shrink-0" style={{ color: '#5E6E7F' }}>{icon}</span>
       <span className="font-medium" style={{ color: '#6E7E8F' }}>{label}</span>
       <span className="mr-auto text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0" style={{ background: `${tc}15`, color: tc, border: `1px solid ${tc}25` }}>
-        {TIER_LABEL[requiredTier]}
+        {planName(requiredTier)}
       </span>
     </Link>
   )
@@ -229,8 +229,8 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
             </Link>
             <div className="hidden md:flex items-center gap-2">
             <span className="rounded-lg px-2.5 py-1.5 text-[11px] font-mono"
-                  style={{ color: TIER_COLOR[tier] ?? '#7C8A99', background: `${TIER_COLOR[tier] ?? '#7C8A99'}10`, border: `1px solid ${TIER_COLOR[tier] ?? '#7C8A99'}24` }}>
-              {isStaff ? 'كامل' : TIER_LABEL[tier] ?? tier}
+                  style={{ color: planColor(tier), background: `${planColor(tier)}10`, border: `1px solid ${planColor(tier)}24` }}>
+              {isStaff ? 'كامل' : planName(tier)}
             </span>
             </div>
           </div>
