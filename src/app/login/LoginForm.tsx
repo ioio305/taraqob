@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
+import { Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 const URL_ERROR_MESSAGES: Record<string, string> = {
@@ -19,6 +20,7 @@ export default function LoginForm() {
 
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState<string | null>(null)
   const [success, setSuccess]   = useState<string | null>(null)
@@ -138,15 +140,27 @@ export default function LoginForm() {
 
           {/* Password */}
           <div>
-            <label className="block text-xs font-mono mb-2" style={{ color: '#8A97A6' }}>
+            <label htmlFor="login-password" className="block text-xs font-mono mb-2" style={{ color: '#8A97A6' }}>
               كلمة المرور
             </label>
-            <input
-              type="password" value={password} onChange={e => setPassword(e.target.value)}
-              required dir="ltr"
-              className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none transition-all focus:ring-2 focus:ring-[#C9943A]/40 focus:border-[#C9943A]/50"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
-            />
+            <div className="relative">
+              <input
+                id="login-password" type={showPassword ? 'text' : 'password'}
+                value={password} onChange={e => setPassword(e.target.value)}
+                autoComplete="current-password" required dir="ltr"
+                className="w-full rounded-xl py-3 pl-12 pr-4 text-sm text-white outline-none transition-all focus:ring-2 focus:ring-[#C9943A]/40 focus:border-[#C9943A]/50 [&::-ms-reveal]:hidden"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(visible => !visible)}
+                aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                aria-controls="login-password"
+                className="absolute inset-y-0 left-0 flex w-11 items-center justify-center rounded-l-xl text-slate-400 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#C9943A]"
+              >
+                {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+              </button>
+            </div>
           </div>
 
           {/* Submit */}
