@@ -5,15 +5,15 @@
 // الجدار يمرّ عبر التوصية الفعّالة نفسها لا حولها: المجاني مذاق يبني الثقة،
 // والمدفوع يفتح كل التوصيات الحيّة و«لماذا» والبحث الشامل.
 //
-// ملاحظة: الأسماء تسويقية (عائلة البصر) — قابلة للتغيير من هذا الملف وحده.
+// الأسماء: أساسية (مجاني) · متقدمة (مدفوع لسوق واحد) · احترافية (الشامل للسوقين) — من هذا الملف وحده.
 // هذا النموذج يُقدَّم للمستخدم؛ جسر planOf() يربطه بنظام المستويات الحالي
 // (radar/signal/edge/alpha) حتى تُوحَّد بوابات الوصول وتُفعَّل الفوترة.
 
 export type PlanTier = 'free' | 'pro'
 
 export const PLAN: Record<PlanTier, { key: PlanTier; name: string; color: string; tagline: string }> = {
-  free: { key: 'free', name: 'نظرة', color: '#7C8A99', tagline: 'ابدأ مجاناً — توصية اليوم والسجل الشفاف' },
-  pro:  { key: 'pro',  name: 'بصيرة', color: '#C9943A', tagline: 'كل التوصيات الحيّة و«لماذا» والبحث الشامل' },
+  free: { key: 'free', name: 'أساسية', color: '#7C8A99', tagline: 'ابدأ مجاناً — توصية اليوم والسجل الشفاف' },
+  pro:  { key: 'pro',  name: 'متقدمة', color: '#C9943A', tagline: 'كل التوصيات الحيّة و«لماذا» والبحث الشامل' },
 }
 
 export const FREE_FEATURES: string[] = [
@@ -47,10 +47,10 @@ export type Package = {
 }
 
 export const PACKAGES: Package[] = [
-  { key: 'free',        name: 'نظرة',           tier: 'free', markets: [],                   tagline: 'مجاناً — ابدأ وابنِ ثقتك' },
-  { key: 'pro-options', name: 'بصيرة · الأوبشن', tier: 'pro',  markets: ['options'],          tagline: 'كل أدوات الأوبشن الأمريكي' },
-  { key: 'pro-saudi',   name: 'بصيرة · السعودي', tier: 'pro',  markets: ['saudi'],            tagline: 'كل أدوات السوق السعودي' },
-  { key: 'pro-all',     name: 'ذروة · الشامل',   tier: 'pro',  markets: ['options', 'saudi'], tagline: 'السوقان معاً — كل شيء', badge: 'الأعلى', highlight: true },
+  { key: 'free',        name: 'أساسية',           tier: 'free', markets: [],                   tagline: 'مجاناً — ابدأ وابنِ ثقتك' },
+  { key: 'pro-options', name: 'متقدمة · الأوبشن', tier: 'pro',  markets: ['options'],          tagline: 'كل أدوات الأوبشن الأمريكي' },
+  { key: 'pro-saudi',   name: 'متقدمة · السعودي', tier: 'pro',  markets: ['saudi'],            tagline: 'كل أدوات السوق السعودي' },
+  { key: 'pro-all',     name: 'احترافية · الشامل', tier: 'pro',  markets: ['options', 'saudi'], tagline: 'السوقان معاً — كل شيء', badge: 'الأعلى', highlight: true },
 ]
 
 // ── جسر مع نظام المستويات الحالي ────────────────────────────────────────────

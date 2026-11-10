@@ -49,7 +49,7 @@ export default function UpgradePage() {
         <div className="text-xs font-black text-amber-400">الباقات</div>
         <h1 className="mt-2 text-3xl font-black text-white">اختر باقتك</h1>
         <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">
-          باقتان فقط: <span className="font-bold text-slate-300">نظرة</span> مجاناً تبني ثقتك، و<span className="font-bold text-amber-300">بصيرة</span> تفتح كل التوصيات الحيّة و«لماذا». اختر سوقك — أو الاثنين معاً.
+          باقتان فقط: <span className="font-bold text-slate-300">أساسية</span> مجاناً تبني ثقتك، و<span className="font-bold text-amber-300">متقدمة</span> تفتح كل التوصيات الحيّة و«لماذا». اختر سوقك — أو الاثنين معاً بـ«احترافية».
         </p>
       </header>
 
