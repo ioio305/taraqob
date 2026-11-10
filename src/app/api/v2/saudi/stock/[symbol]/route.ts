@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { computeConfluence } from '@/lib/v2/saudiIndicators'
-import { SAUDI_NAME } from '@/lib/v2/saudiStocks'
-import { fetchSaudiDaily, getSaudiSnapshot } from '@/lib/v2/saudiMarket'
+import { SAUDI_ANY, SAUDI_SEGMENTS } from '@/lib/v2/saudiUniverse'
+import { fetchSaudiDaily, getSegmentSnapshot } from '@/lib/v2/saudiMarket'
 import { buildStockExtras } from '@/lib/v2/saudiSignals'
 import { fetchSahmkQuote, quoteFreshness, sahmkPlan, sahmkRevalidate } from '@/lib/v2/saudiQuotes'
 
@@ -16,7 +16,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ symbol:
   const [data, snapshot, live] = await Promise.all([
     // نافذة سنة كما في اللقطة والاختبار التاريخي (EMA200 حسّاس لطول النافذة).
     fetchSaudiDaily(`${clean}.SR`, '1y', 120),
-    getSaudiSnapshot().catch(() => null),
+    getSegmentSnapshot(SAUDI_ANY[clean]?.segment ?? 'main').catch(() => null),
     // سعر سهمك (كل الخطط تدعم السهم الواحد) — null بلا مفتاح أو عند أي فشل ⇒ ياهو.
     fetchSahmkQuote(clean, sahmkRevalidate(sahmkPlan(), 'single')),
   ])
@@ -38,12 +38,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ symbol:
   const price = live?.price ?? yahooPrice
   const changeAbs = live ? +live.change.toFixed(2) : +(price - prevClose).toFixed(2)
   const change = live ? +live.changePct.toFixed(2) : prevClose > 0 ? +(((price - prevClose) / prevClose) * 100).toFixed(2) : 0
-  const info = SAUDI_NAME[clean]
+  const info = SAUDI_ANY[clean]
 
   return NextResponse.json({
     symbol: clean,
     name: info?.name ?? String(meta.shortName ?? clean),
     sector: info?.sector ?? '',
+    segment: info?.segment ?? 'main',
+    segmentLabel: SAUDI_SEGMENTS[info?.segment ?? 'main'].label,
     price: +price.toFixed(2),
     prevClose: +prevClose.toFixed(2),
     changeAbs,

@@ -18,7 +18,7 @@ export default function SaudiWatchlist() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/v2/saudi/market')
+      const res = await fetch('/api/v2/saudi/board?segment=all')
       const json = (await res.json()) as MarketData
       if (json.error) setErr(json.error)
       else { setStocks(Array.isArray(json.stocks) ? json.stocks : []); setErr('') }
@@ -52,7 +52,7 @@ export default function SaudiWatchlist() {
         <div className="rounded-2xl border border-white/10 p-8 text-center" style={{ background: 'rgba(255,255,255,.02)' }}>
           <div className="text-2xl">☆</div>
           <div className="mt-2 text-sm font-bold text-slate-300">لا مفضّلة بعد</div>
-          <div className="mt-1 text-xs text-slate-500">افتح <Link href="/saudi" className="text-emerald-300">السوق السعودي</Link> واضغط ★ على الأسهم التي تتابعها.</div>
+          <div className="mt-1 text-xs text-slate-500">افتح <Link href="/saudi/companies" className="text-emerald-300">كل الشركات</Link> أو «نمو» أو الصناديق، واضغط ★ على ما تتابعه.</div>
         </div>
       ) : mine.length === 0 ? (
         <div className="flex h-48 items-center justify-center text-center text-sm text-slate-500">مفضّلتك ليست ضمن الأسهم المعروضة حالياً.</div>

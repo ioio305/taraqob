@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { SAUDI_STOCKS } from '@/lib/v2/saudiStocks'
+import { SAUDI_ALL_LISTINGS as SAUDI_STOCKS } from '@/lib/v2/saudiUniverse'
 import { STATUS_LABEL, type HoldingAssessment, type HoldingStatus } from '@/lib/v2/saudiPortfolio'
 import { showBrowserNotificationOnce } from '@/lib/v2/browserNotifications'
 
@@ -150,7 +150,7 @@ export default function SaudiPortfolio() {
             </Field>
           </div>
           {form.symbol.length === 4 ? (
-            <div className="text-[11px] text-slate-400">{SAUDI_STOCKS.find(s => s.symbol === `${form.symbol}.SR`)?.name ?? 'رمز غير موجود في السوق الرئيسية'}</div>
+            <div className="text-[11px] text-slate-400">{SAUDI_STOCKS.find(s => s.symbol === `${form.symbol}.SR`)?.name ?? 'رمز غير موجود في تداول'}</div>
           ) : null}
           {formErr ? <div className="text-xs font-bold" style={{ color: RED }}>{formErr}</div> : null}
           <div className="flex gap-2">

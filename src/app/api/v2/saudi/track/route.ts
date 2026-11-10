@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { buildSaudiSnapshot, fetchSaudiDaily, getSaudiSnapshot, mapLimit } from '@/lib/v2/saudiMarket'
+import { buildSaudiSnapshot, fetchSaudiDaily, getSaudiRowsFor, mapLimit } from '@/lib/v2/saudiMarket'
 import { alertHit, describeAlert } from '@/lib/v2/saudiAlerts'
 import { emailButton, emailShell, sendResendBatch } from '@/lib/v2/email'
 import { evaluateTrack, riyadhDate } from '@/lib/v2/saudiTrack'
@@ -90,8 +90,7 @@ async function checkPriceAlerts(sb: ReturnType<typeof createServiceClient>, toda
       .is('triggered_at', null)
       .limit(2000)
     if (error || !pending?.length) return { checked: 0, triggered: 0 }
-    const snap = await getSaudiSnapshot()
-    const bySymbol = new Map(snap.stocks.map(s => [s.symbol, s]))
+    const bySymbol = await getSaudiRowsFor(pending.map(a => String(a.symbol)))
     const sessionOpen = Date.parse(`${today}T07:00:00Z`) // 10:00 بتوقيت الرياض
     const now = new Date().toISOString()
     const hits: Array<{ user_id: string; name: string; text: string }> = []

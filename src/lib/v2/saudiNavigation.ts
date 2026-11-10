@@ -8,6 +8,7 @@ export type SaudiNavItem = { href: string; label: string; icon: string; exact: b
 // مجاني: خطة اليوم المبسّطة + سجل الأداء الشفاف + القطاعات والمفضّلة (يُضاف كل قسم هنا مع بناء صفحته).
 export const SAUDI_MAIN: SaudiNavItem[] = [
   { href: '/saudi', label: 'خطة اليوم', icon: '◈', exact: true },
+  { href: '/saudi/companies', label: 'كل الشركات', icon: '☰', exact: false },
   { href: '/saudi/performance', label: 'سجل الأداء', icon: '≣', exact: false },
   { href: '/saudi/sectors', label: 'القطاعات', icon: '▦', exact: false },
   { href: '/saudi/watchlist', label: 'المفضّلة', icon: '★', exact: false },
@@ -20,6 +21,25 @@ export const SAUDI_PREMIUM: SaudiNavItem[] = [
   { href: '/saudi/portfolio', label: 'محفظتي وصفقاتي', icon: '💼', exact: false },
   { href: '/saudi/alerts', label: 'تنبيهاتي السعرية', icon: '🔔', exact: false },
 ]
+
+// منصّتا «نمو» والصناديق: لوحة كل الإدراجات + المفضّلة، ومن المدفوع ما يعمل على أي رمز
+// (المحفظة والتنبيهات). أدوات الخطة والماسح وسجل الأداء للسوق الرئيسية حيث عويِر المحرّك.
+export const SAUDI_SEGMENT_NAV: Record<'nomu' | 'funds', { main: SaudiNavItem[]; premium: SaudiNavItem[] }> = {
+  nomu: {
+    main: [
+      { href: '/saudi/nomu', label: 'كل شركات نمو', icon: '🌱', exact: true },
+      { href: '/saudi/watchlist', label: 'المفضّلة', icon: '★', exact: false },
+    ],
+    premium: SAUDI_PREMIUM.filter(i => i.href === '/saudi/portfolio' || i.href === '/saudi/alerts'),
+  },
+  funds: {
+    main: [
+      { href: '/saudi/funds', label: 'كل الصناديق', icon: '🧺', exact: true },
+      { href: '/saudi/watchlist', label: 'المفضّلة', icon: '★', exact: false },
+    ],
+    premium: SAUDI_PREMIUM.filter(i => i.href === '/saudi/portfolio' || i.href === '/saudi/alerts'),
+  },
+}
 
 // واجهات البيانات المدفوعة → الصفحة التي تخدمها.
 const PREMIUM_APIS: Array<[prefix: string, page: string]> = [

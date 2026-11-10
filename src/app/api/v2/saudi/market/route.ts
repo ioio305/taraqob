@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { fetchYahooIndex, getSaudiSnapshot, marketStatus, type SaudiStockRow } from '@/lib/v2/saudiMarket'
-import { fetchSahmkBulk, quoteFreshness, sahmkConfigured, sahmkPlan, sahmkRevalidate, type QuoteSource } from '@/lib/v2/saudiQuotes'
+import { overlayLiveQuotes } from '@/lib/v2/saudiQuotes'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -17,26 +17,8 @@ export async function GET() {
     const stocks: Array<Omit<SaudiStockRow, 'flags' | 'support' | 'resistance' | 'goldenCrossDaysAgo'>> = snapshot.stocks
       .map(({ flags: _f, support: _s, resistance: _r, goldenCrossDaysAgo: _g, ...rest }) => rest)
 
-    // ── أسعار سهمك فوق ياهو (خطط Starter/Pro فقط — المجاني لا يدعم الجماعي ولا يتحمّل حصته المسح) ──
-    let quoteSource: QuoteSource = 'yahoo'
-    let quotesDelayed = true
-    const plan = sahmkPlan()
-    if (sahmkConfigured() && plan !== 'free') {
-      const live = await fetchSahmkBulk(stocks.map(s => s.symbol), sahmkRevalidate(plan, 'bulk'))
-      if (live.size) {
-        quoteSource = 'sahmk'
-        quotesDelayed = false
-        for (const s of stocks) {
-          const q = live.get(s.symbol)
-          if (!q) continue
-          s.price = +q.price.toFixed(2)
-          s.changeAbs = +q.change.toFixed(2)
-          s.change = +q.changePct.toFixed(2)
-          if (q.volume != null) s.volume = q.volume
-          if (q.isDelayed) quotesDelayed = true
-        }
-      }
-    }
+    // ── أسعار سهمك فوق ياهو (خطط Starter/Pro فقط) ──
+    const quotes = await overlayLiveQuotes(stocks)
 
     const tasiChangePct = tasi?.changePct ?? 0
     const oilChangePct = oil?.changePct ?? 0
@@ -74,7 +56,7 @@ export async function GET() {
       },
       universe: snapshot.universe,
       stocks: stocks.sort((a, b) => b.techScore - a.techScore),
-      quotes: quoteFreshness(quoteSource, quotesDelayed),
+      quotes,
     }, { headers: { 'Cache-Control': 'private, max-age=30' } })
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'تعذّر التحميل', isLive: false }, { status: 500 })

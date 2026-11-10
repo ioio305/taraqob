@@ -10,6 +10,7 @@
 import { unstable_cache } from 'next/cache'
 import { computeConfluence, windowReturn, type TechnicalScore } from './saudiIndicators'
 import { SAUDI_STOCKS, type SaudiStockMeta } from './saudiStocks'
+import { SEGMENT_LIST, segmentOf, type SaudiSegment } from './saudiUniverse'
 import { buildStockExtras, type SaudiStockExtras } from './saudiSignals'
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
@@ -128,26 +129,54 @@ function rowFor(meta: SaudiStockMeta, d: SaudiDaily, marketReturn: number | unde
   }
 }
 
-export async function buildSaudiSnapshot(): Promise<SaudiSnapshot> {
-  const histories = await mapLimit(SAUDI_STOCKS, CONCURRENCY, s => fetchSaudiDaily(s.symbol))
+// اللقطة لقائمة رموز (الافتراضي السوق الرئيسية — المحرّك معاير عليها). مرجع القوة النسبية
+// يُحسب من القائمة نفسها: «نمو» تُقاس بـ«نمو» والصناديق بالصناديق.
+export async function buildSaudiSnapshot(list: SaudiStockMeta[] = SAUDI_STOCKS): Promise<SaudiSnapshot> {
+  const histories = await mapLimit(list, CONCURRENCY, s => fetchSaudiDaily(s.symbol))
   // مرجع السوق للقوة النسبية = متوسط عائد أسهم السوق على ~3 أشهر (نفس منطق الاختبار التاريخي).
   const returns = histories
     .filter((h): h is SaudiDaily => !!h && h.candles.length > 63)
     .map(h => windowReturn(h.candles.map(c => c.c), 63))
   const marketReturn = returns.length >= 5 ? returns.reduce((a, b) => a + b, 0) / returns.length : undefined
-  const stocks = SAUDI_STOCKS
+  const stocks = list
     .map((s, i) => (histories[i] ? rowFor(s, histories[i]!, marketReturn) : null))
     .filter((x): x is SaudiStockRow => x !== null)
     .sort((a, b) => b.techScore - a.techScore)
   if (!stocks.length) throw new Error('تعذّر الاتصال بمصدر البيانات')
-  return { asOf: new Date().toISOString(), marketReturn: marketReturn ?? null, universe: SAUDI_STOCKS.length, stocks }
+  return { asOf: new Date().toISOString(), marketReturn: marketReturn ?? null, universe: list.length, stocks }
 }
 
 // اللقطة المشتركة — تُحسب مرة كل 5 دقائق على الأكثر. الخطأ لا يُخزَّن (يُعاد المحاولة).
-export const getSaudiSnapshot = unstable_cache(buildSaudiSnapshot, ['saudi-snapshot-v1'], {
+export const getSaudiSnapshot = unstable_cache(() => buildSaudiSnapshot(), ['saudi-snapshot-v1'], {
   revalidate: SNAPSHOT_TTL_SEC,
   tags: ['saudi-snapshot'],
 })
+
+const getNomuSnapshot = unstable_cache(() => buildSaudiSnapshot(SEGMENT_LIST.nomu), ['saudi-snapshot-nomu-v1'], {
+  revalidate: SNAPSHOT_TTL_SEC,
+  tags: ['saudi-snapshot'],
+})
+
+const getFundsSnapshot = unstable_cache(() => buildSaudiSnapshot(SEGMENT_LIST.funds), ['saudi-snapshot-funds-v1'], {
+  revalidate: SNAPSHOT_TTL_SEC,
+  tags: ['saudi-snapshot'],
+})
+
+// لقطة منصة من منصّات السوق السعودي الثلاث.
+export function getSegmentSnapshot(segment: SaudiSegment): Promise<SaudiSnapshot> {
+  return segment === 'nomu' ? getNomuSnapshot() : segment === 'funds' ? getFundsSnapshot() : getSaudiSnapshot()
+}
+
+// أسعار رموز من أي منصة (المحفظة والتنبيهات): تُجلب لقطات المنصّات المطلوبة فقط.
+// فشل منصة لا يُسقط البقية.
+export async function getSaudiRowsFor(codes: string[]): Promise<Map<string, SaudiStockRow>> {
+  const segments = new Set<SaudiSegment>()
+  for (const c of codes) segments.add(segmentOf(c) ?? 'main')
+  const snaps = await Promise.all(Array.from(segments).map(seg => getSegmentSnapshot(seg).catch(() => null)))
+  const map = new Map<string, SaudiStockRow>()
+  for (const snap of snaps) for (const row of snap?.stocks ?? []) map.set(row.symbol, row)
+  return map
+}
 
 export function marketStatus(now = new Date()): 'open' | 'closed' | 'pre' {
   const riyadh = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Riyadh' }))

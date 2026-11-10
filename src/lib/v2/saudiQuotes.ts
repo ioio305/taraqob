@@ -133,3 +133,25 @@ export function quoteFreshness(source: QuoteSource, delayed: boolean): QuoteFres
   }
   return { source: 'yahoo', delayed: true, label: 'أسعار مؤخّرة (مصدر عام)', attribution: null }
 }
+
+// يدمج أسعار سهمك فوق صفوف ياهو (يعدّل الصفوف الممرّرة — مرّر نسخاً لا كائنات اللقطة المخزّنة).
+// خطط Starter/Pro فقط: المجاني لا يدعم الجماعي ولا يتحمّل حصته المسح.
+export async function overlayLiveQuotes(
+  rows: Array<{ symbol: string; price: number; changeAbs: number; change: number; volume: number }>,
+): Promise<QuoteFreshness> {
+  const plan = sahmkPlan()
+  if (!sahmkConfigured() || plan === 'free' || !rows.length) return quoteFreshness('yahoo', true)
+  const live = await fetchSahmkBulk(rows.map(s => s.symbol), sahmkRevalidate(plan, 'bulk'))
+  if (!live.size) return quoteFreshness('yahoo', true)
+  let delayed = false
+  for (const s of rows) {
+    const q = live.get(s.symbol)
+    if (!q) continue
+    s.price = +q.price.toFixed(2)
+    s.changeAbs = +q.change.toFixed(2)
+    s.change = +q.changePct.toFixed(2)
+    if (q.volume != null) s.volume = q.volume
+    if (q.isDelayed) delayed = true
+  }
+  return quoteFreshness('sahmk', delayed)
+}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { SAUDI_STOCKS } from '@/lib/v2/saudiStocks'
+import { SAUDI_ALL_LISTINGS as SAUDI_STOCKS } from '@/lib/v2/saudiUniverse'
 import { describeAlert } from '@/lib/v2/saudiAlerts'
 import { showBrowserNotificationOnce } from '@/lib/v2/browserNotifications'
 
@@ -140,7 +140,7 @@ export default function SaudiAlerts() {
           </Field>
           {form.symbol.length === 4 ? (
             <div className="text-[11px] text-slate-400">
-              {stockName(form.symbol) ?? 'رمز غير موجود في السوق الرئيسية'}
+              {stockName(form.symbol) ?? 'رمز غير موجود في تداول'}
               {current != null ? ` · السعر الآن ${n(current)}` : ''}
             </div>
           ) : null}

@@ -17,7 +17,7 @@ type Tech = {
   buyPressure: number; flow: string; obvRising: boolean; relStrength: number | null; bullishCount: number; bearishCount: number
 }
 type StockData = {
-  symbol: string; name: string; sector: string
+  symbol: string; name: string; sector: string; segment?: string; segmentLabel?: string
   price: number; prevClose: number; changeAbs: number; change: number
   high52: number; low52: number
   tech: Tech; series: number[]
@@ -116,7 +116,7 @@ export default function SaudiStockPage() {
                   <Link href={`/saudi/alerts?symbol=${encodeURIComponent(data.symbol)}`} aria-label="ضع تنبيهاً سعرياً"
                     title="نبّهني عند سعر" className="text-lg leading-none text-slate-500 hover:text-amber-300">🔔</Link>
                 </div>
-                <div className="mt-1 text-xs text-slate-500">{data.sector}</div>
+                <div className="mt-1 text-xs text-slate-500">{data.sector}{data.segment && data.segment !== 'main' ? ` · ${data.segmentLabel}` : ''}</div>
                 <div className="mt-3 flex items-end gap-3">
                   <span className="text-3xl font-black text-white">{n(data.price)}</span>
                   <span className="pb-1 text-sm font-bold" style={{ color: up ? ACCENT : RED }}>
