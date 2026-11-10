@@ -13,7 +13,7 @@ import {
 export { hasMinimumTier } from '@/lib/v2/accessRules'
 
 // ── رؤية «3 منصات»: اشتراك منفصل لكل منصة، حساب واحد ──────────────────────────
-export type Platform = 'spx' | 'stocks' | 'funds'
+export type Platform = 'spx' | 'stocks' | 'funds' | 'saudi'
 export type PlatformTiers = Record<Platform, SubscriptionTier>
 
 function normalizeTier(v: unknown): SubscriptionTier {
@@ -76,6 +76,7 @@ export const getV2Viewer = cache(async () => {
     spx:    normalizeTier(spxTrial.effectiveTier),
     stocks: normalizeTier(subMap.get('stocks')),
     funds:  normalizeTier(subMap.get('funds')),
+    saudi:  normalizeTier(subMap.get('saudi')),
   }
   const isStaff = profile.role === 'admin' || profile.role === 'moderator'
   const platformAccess: PlatformAccess = derivePlatformAccess(subscriptionRows, {

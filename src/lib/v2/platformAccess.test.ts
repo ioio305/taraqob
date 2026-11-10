@@ -7,21 +7,21 @@ describe('platform access', () => {
       { platform: 'spx', tier: 'edge', status: 'active' },
       { platform: 'stocks', tier: 'signal', status: 'active' },
     ])
-    expect(access).toEqual({ spx: true, stocks: true, funds: false })
+    expect(access).toEqual({ spx: true, stocks: true, funds: false, saudi: false })
     expect(platformAccessCount(access)).toBe(2)
     expect(accessPackageLabel(access)).toBe('منصتان')
   })
 
   it('grants all platforms to staff', () => {
     expect(derivePlatformAccess([], { isStaff: true }))
-      .toEqual({ spx: true, stocks: true, funds: true })
+      .toEqual({ spx: true, stocks: true, funds: true, saudi: true })
   })
 
   it('does not grant canceled or invalid subscriptions', () => {
     expect(derivePlatformAccess([
       { platform: 'funds', tier: 'edge', status: 'canceled' },
       { platform: 'stocks', tier: 'unknown', status: 'active' },
-    ])).toEqual({ spx: false, stocks: false, funds: false })
+    ])).toEqual({ spx: false, stocks: false, funds: false, saudi: false })
   })
 
   it('does not grant an expired platform trial', () => {

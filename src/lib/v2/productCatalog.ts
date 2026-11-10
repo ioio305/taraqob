@@ -30,6 +30,7 @@ export const PLATFORM_CATALOG: Array<{
   { key: 'spx', href: '/v2', label: 'المؤشرات', description: 'مؤشرات وخيارات السوق', icon: '📈', color: '#C9943A' },
   { key: 'stocks', href: '/stocks', label: 'الشركات', description: 'الأسهم والشركات', icon: '🏢', color: '#60A5FA' },
   { key: 'funds', href: '/funds', label: 'الصناديق', description: 'الصناديق ودوران القطاعات', icon: '🧺', color: '#26D07C' },
+  { key: 'saudi', href: '/saudi', label: 'السوق السعودي', description: 'أسهم تداول — السوق السعودي', icon: '🇸🇦', color: '#16A34A' },
 ]
 
 export function normalizeRole(value: unknown): AccountRole {

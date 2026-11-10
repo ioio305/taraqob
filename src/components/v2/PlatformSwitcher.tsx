@@ -8,7 +8,7 @@ import { PLATFORM_CATALOG } from '@/lib/v2/productCatalog'
 export function PlatformSwitcher({ access }: { access: PlatformAccess }) {
   const pathname = usePathname()
   return (
-    <nav aria-label="منصات ترقّب" className="mb-4 grid grid-cols-3 gap-1.5">
+    <nav aria-label="منصات ترقّب" className="mb-4 grid grid-cols-4 gap-1.5">
       {PLATFORM_CATALOG.map(platform => {
         const active = platform.key === 'spx'
           ? pathname.startsWith('/v2')

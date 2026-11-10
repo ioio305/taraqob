@@ -131,11 +131,13 @@ export async function middleware(request: NextRequest) {
   // ── بوابات المنصات المستقلة ─────────────────────────────────
   // صفحات وأهم APIs كل منصة تحتاج اشتراكاً خاصاً. امتلاك منصتين يعني وجود
   // صفين نشطين؛ الباقة الشاملة تعني الصفوف الثلاثة.
-  let requestedPlatform: 'spx' | 'stocks' | 'funds' | null = null
+  let requestedPlatform: 'spx' | 'stocks' | 'funds' | 'saudi' | null = null
   if (pathname.startsWith('/stocks') || pathname.startsWith('/api/v2/stocks')) {
     requestedPlatform = 'stocks'
   } else if (pathname.startsWith('/funds') || pathname.startsWith('/api/v2/funds')) {
     requestedPlatform = 'funds'
+  } else if (pathname.startsWith('/saudi') || pathname.startsWith('/api/v2/saudi')) {
+    requestedPlatform = 'saudi'
   } else if (
     pathname.startsWith('/v2')
     && !pathname.startsWith('/v2/admin')

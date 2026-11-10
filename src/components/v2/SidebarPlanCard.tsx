@@ -8,7 +8,7 @@ const NEXT_TIER: Partial<Record<SubscriptionTier, SubscriptionTier>> = {
   edge: 'alpha',
 }
 
-export function SidebarPlanCard({ tier, platform }: { tier: string; platform: 'spx' | 'stocks' | 'funds' }) {
+export function SidebarPlanCard({ tier, platform }: { tier: string; platform: 'spx' | 'stocks' | 'funds' | 'saudi' }) {
   const current = tier in TIER_RANK ? tier as SubscriptionTier : 'radar'
   const next = NEXT_TIER[current]
   if (!next) return null

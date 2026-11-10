@@ -6,7 +6,7 @@ export const TIER_RANK = {
 } as const
 
 export type SubscriptionTier = keyof typeof TIER_RANK
-export const PLATFORM_KEYS = ['spx', 'stocks', 'funds'] as const
+export const PLATFORM_KEYS = ['spx', 'stocks', 'funds', 'saudi'] as const
 export type PlatformKey = typeof PLATFORM_KEYS[number]
 export type PlatformAccess = Record<PlatformKey, boolean>
 
@@ -49,12 +49,13 @@ export function derivePlatformAccess(
   rows: PlatformSubscriptionRow[] | null,
   options: { isStaff?: boolean; legacySpx?: boolean } = {},
 ): PlatformAccess {
-  if (options.isStaff) return { spx: true, stocks: true, funds: true }
+  if (options.isStaff) return { spx: true, stocks: true, funds: true, saudi: true }
 
   const access: PlatformAccess = {
     spx: options.legacySpx ?? false,
     stocks: false,
     funds: false,
+    saudi: false,
   }
 
   for (const row of rows ?? []) {
@@ -82,7 +83,7 @@ export function platformAccessCount(access: PlatformAccess): number {
 
 export function accessPackageLabel(access: PlatformAccess): string {
   const count = platformAccessCount(access)
-  if (count === 3) return 'الشامل'
+  if (count >= 3) return 'الشامل'
   if (count === 2) return 'منصتان'
   if (count === 1) return 'منصة واحدة'
   return 'بدون اشتراك'
