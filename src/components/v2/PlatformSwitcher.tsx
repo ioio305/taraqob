@@ -8,7 +8,8 @@ import { PLATFORM_CATALOG } from '@/lib/v2/productCatalog'
 export function PlatformSwitcher({ access }: { access: PlatformAccess }) {
   const pathname = usePathname()
   return (
-    <nav aria-label="منصات ترقّب" className="mb-4 grid grid-cols-4 gap-1.5">
+    <div className="mb-4">
+    <nav aria-label="منصات ترقّب" className="grid grid-cols-4 gap-1.5">
       {PLATFORM_CATALOG.map(platform => {
         const active = platform.key === 'spx'
           ? pathname.startsWith('/v2')
@@ -35,5 +36,11 @@ export function PlatformSwitcher({ access }: { access: PlatformAccess }) {
         )
       })}
     </nav>
+    <Link href="/platforms" prefetch={false}
+      className="mt-1.5 block rounded-lg py-1.5 text-center text-[10px] font-bold text-slate-500 transition-colors hover:text-white"
+      style={{ background: 'rgba(255,255,255,.02)' }}>
+      ⇄ اختيار السوق (السعودي · الأوبشن)
+    </Link>
+    </div>
   )
 }
