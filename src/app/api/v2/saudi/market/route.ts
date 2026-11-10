@@ -13,7 +13,9 @@ export async function GET() {
       fetchYahooIndex('BZ=F'),
     ])
     // نسخة لكل طلب: لا نعدّل كائنات اللقطة المخزّنة عند دمج أسعار سهمك.
-    const stocks: SaudiStockRow[] = snapshot.stocks.map(s => ({ ...s }))
+    // أعلام الماسح والمستويات للأداة المدفوعة (/api/v2/saudi/scanner) — لا تُرسل هنا.
+    const stocks: Array<Omit<SaudiStockRow, 'flags' | 'support' | 'resistance' | 'goldenCrossDaysAgo'>> = snapshot.stocks
+      .map(({ flags: _f, support: _s, resistance: _r, goldenCrossDaysAgo: _g, ...rest }) => rest)
 
     // ── أسعار سهمك فوق ياهو (خطط Starter/Pro فقط — المجاني لا يدعم الجماعي ولا يتحمّل حصته المسح) ──
     let quoteSource: QuoteSource = 'yahoo'

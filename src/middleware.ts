@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server'
 import { isAllowedMutationOrigin, isBodyTooLarge } from '@/lib/security/requestRules'
 import { STOCKS_FEATURE_TIER, stocksFeatureForPath, tierAllowsStocksFeature } from '@/lib/v2/stocksTierAccess'
 import { requiredTradingTier, tradingTierAllows } from '@/lib/v2/tradingNavigation'
+import { saudiTierAllows } from '@/lib/v2/saudiNavigation'
 import { getTrialState } from '@/lib/v2/accessRules'
 import { bypassesSubscriptions, isPanelStaff } from '@/lib/v2/staffRoles'
 
@@ -209,6 +210,22 @@ export async function middleware(request: NextRequest) {
         url.search = ''
         url.searchParams.set('market', 'us')
         url.searchParams.set('tier', tradingFeatureTier)
+        return NextResponse.redirect(url)
+      }
+    }
+
+    // السوق السعودي: الأدوات الاحترافية (الماسح، الخطة الاحترافية، المحفظة…) للباقة المدفوعة فقط.
+    // باقة السوق السعودي من صف منصته وحده (لا تُورَث من باقة الأوبشن القديمة).
+    if (requestedPlatform === 'saudi') {
+      const saudiTier = subscriptionActive ? subscription?.tier ?? 'radar' : 'radar'
+      if (!saudiTierAllows(saudiTier, pathname)) {
+        if (pathname.startsWith('/api/')) return NextResponse.json(
+          { error: 'tier_upgrade_required', platform: 'saudi' }, { status: 403 },
+        )
+        const url = request.nextUrl.clone()
+        url.pathname = '/upgrade'
+        url.search = ''
+        url.searchParams.set('market', 'saudi')
         return NextResponse.redirect(url)
       }
     }

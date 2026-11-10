@@ -9,23 +9,11 @@ import { PlatformSwitcher } from '@/components/v2/PlatformSwitcher'
 import { SidebarPlanCard } from '@/components/v2/SidebarPlanCard'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
 import { planName, isPro } from '@/lib/v2/subscriptionModel'
+import { SAUDI_MAIN, SAUDI_PREMIUM, type SaudiNavItem } from '@/lib/v2/saudiNavigation'
 
 const ACCENT = '#16A34A'
 
-type NavItem = { href: string; label: string; icon: string; exact: boolean; tier: string }
-
-// «التداول» — موحّد مع بقية المنصّات؛ تُضاف الأدوات مع بناء صفحاتها لاحقاً
-const NAV_CORE: NavItem[] = [
-  { href: '/saudi', label: 'خطة اليوم', icon: '◈', exact: true, tier: 'radar' },
-  { href: '/saudi/sectors', label: 'القطاعات', icon: '▦', exact: false, tier: 'radar' },
-  { href: '/saudi/watchlist', label: 'المفضّلة', icon: '★', exact: false, tier: 'radar' },
-]
-const NAV_EXTRAS: NavItem[] = []
-
-// بوابات مستويين: المجاني يرى أدوات radar فقط، والمدفوع يرى كل الأدوات.
-function allowedTier(current: string, required: string) {
-  return required === 'radar' || isPro(current)
-}
+type NavItem = SaudiNavItem
 
 export default function SaudiShell({ children, userName, tier, isStaff, isPanelStaff = false, platformAccess }: {
   children: ReactNode
@@ -44,20 +32,22 @@ export default function SaudiShell({ children, userName, tier, isStaff, isPanelS
     try { await createClient().auth.signOut() } finally { window.location.href = '/' }
   }
 
-  function nav(item: NavItem) {
+  function nav(item: NavItem, locked = false) {
     const active = item.exact ? pathname === item.href : pathname.startsWith(item.href)
     return (
-      <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)}
+      <Link key={item.href} href={locked ? '/upgrade?market=saudi' : item.href} onClick={() => setMobileOpen(false)}
+        title={locked ? 'متاح في الباقة المتقدمة' : undefined}
         className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm"
         style={{ color: active ? '#D1FAE5' : '#8A97A6', background: active ? `${ACCENT}17` : 'transparent', borderRight: `2px solid ${active ? ACCENT : 'transparent'}` }}>
         <span style={{ color: active ? ACCENT : '#64748B' }}>{item.icon}</span>
         <span className="font-bold">{item.label}</span>
+        {locked ? <span className="mr-auto text-[11px] text-amber-300/70" aria-label="مقفل">🔒</span> : null}
       </Link>
     )
   }
 
-  const visibleMain = NAV_CORE.filter(item => isStaff || allowedTier(tier, item.tier))
-  const visibleExtras = NAV_EXTRAS.filter(item => isStaff || allowedTier(tier, item.tier))
+  // المجاني يرى الأدوات المدفوعة مقفلة (رابط للترقية) ليعرف ما يفوته؛ المدفوع والفريق يرونها مفتوحة.
+  const premiumOpen = isStaff || isPro(tier)
 
   const Sidebar = (
     <div className="flex h-full flex-col select-none bg-[#07130F]">
@@ -74,13 +64,9 @@ export default function SaudiShell({ children, userName, tier, isStaff, isPanelS
       <div className="flex-1 overflow-y-auto px-3 py-3">
         <PlatformSwitcher access={platformAccess} adminLink={isPanelStaff} />
         <div className="px-2 pb-1 text-[11px] font-bold text-slate-600">التداول</div>
-        <div className="space-y-0.5">{visibleMain.map(nav)}</div>
-        {visibleExtras.length > 0 && (
-          <>
-            <div className="mt-4 px-2 pb-1 text-[11px] font-bold text-slate-600">⭐ أدوات مميزة</div>
-            <div className="space-y-0.5">{visibleExtras.map(nav)}</div>
-          </>
-        )}
+        <div className="space-y-0.5">{SAUDI_MAIN.map(item => nav(item))}</div>
+        <div className="mt-4 px-2 pb-1 text-[11px] font-bold text-slate-600">⭐ أدوات احترافية{premiumOpen ? '' : ' — الباقة المتقدمة'}</div>
+        <div className="space-y-0.5">{SAUDI_PREMIUM.map(item => nav(item, !premiumOpen))}</div>
         {!isStaff && <div className="mt-4"><SidebarPlanCard tier={tier} platform="saudi" /></div>}
         <div className="mt-4 px-2">
           <Link href="/track" className="text-xs text-slate-500 transition-colors hover:text-white">السجل العام</Link>
