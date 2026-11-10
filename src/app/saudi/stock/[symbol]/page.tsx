@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { useSaudiFavorites } from '@/lib/v2/saudiFavorites'
 
 const ACCENT = '#16A34A'
 const RED = '#F04760'
@@ -60,6 +61,7 @@ function Tile({ label, value, color, hint }: { label: string; value: string; col
 export default function SaudiStockPage() {
   const params = useParams<{ symbol: string }>()
   const symbol = String(params?.symbol ?? '')
+  const { isFavorite, toggle } = useSaudiFavorites()
 
   const [data, setData] = useState<StockData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -102,6 +104,11 @@ export default function SaudiStockPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-2xl font-black text-white">{data.name}</span>
                   <span className="rounded-md px-2 py-0.5 text-[11px] font-bold text-slate-400" style={{ background: 'rgba(255,255,255,.06)' }}>{data.symbol}</span>
+                  <button type="button" aria-label={isFavorite(data.symbol) ? 'إزالة من المفضّلة' : 'إضافة للمفضّلة'}
+                    onClick={() => toggle(data.symbol)} className="text-xl leading-none"
+                    style={{ color: isFavorite(data.symbol) ? '#F5B301' : '#475569' }}>
+                    {isFavorite(data.symbol) ? '★' : '☆'}
+                  </button>
                 </div>
                 <div className="mt-1 text-xs text-slate-500">{data.sector}</div>
                 <div className="mt-3 flex items-end gap-3">
