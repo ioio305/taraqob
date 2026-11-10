@@ -14,7 +14,12 @@
 // ============================================================
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { computeConfluence } from '../src/lib/v2/saudiIndicators.ts'
-import { SAUDI_STOCKS } from '../src/lib/v2/saudiStocks.ts'
+import { SAUDI_BACKTEST_SYMBOLS, SAUDI_NAME, SAUDI_STOCKS } from '../src/lib/v2/saudiStocks.ts'
+
+// العيّنة الافتراضية = عيّنة المعايرة الثابتة (28 سهماً). SAUDI_UNIVERSE=all يختبر السوق كاملاً.
+const UNIVERSE = process.env.SAUDI_UNIVERSE === 'all'
+  ? SAUDI_STOCKS
+  : SAUDI_BACKTEST_SYMBOLS.map(symbol => ({ symbol, name: SAUDI_NAME[symbol.replace('.SR', '')]?.name ?? symbol }))
 
 const H = Number(process.argv[2] ?? 20)       // أفق الاحتفاظ (جلسات)
 const STEP = Number(process.argv[3] ?? 5)     // كل كم جلسة نأخذ عيّنة
@@ -77,9 +82,9 @@ function rec(p: Period, key: string, r: number, pct: number, stopped: boolean) {
 }
 
 async function main() {
-  console.log(`جلب ~10 سنوات لـ ${SAUDI_STOCKS.length} سهماً… (H=${H} · STEP=${STEP})`)
+  console.log(`جلب ~10 سنوات لـ ${UNIVERSE.length} سهماً… (H=${H} · STEP=${STEP})`)
   const data = new Map<string, Bars>()
-  for (const s of SAUDI_STOCKS) {
+  for (const s of UNIVERSE) {
     const b = await fetchBars(s.symbol)
     if (b) data.set(s.symbol, b)
     else console.log(`  ✗ تخطّي ${s.symbol} (${s.name})`)

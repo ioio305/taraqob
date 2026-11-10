@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { SaudiStockCard, type SaudiStock } from '@/components/v2/SaudiStockCard'
 import { useSaudiFavorites } from '@/lib/v2/saudiFavorites'
 import { SAUDI_CALIBRATION } from '@/lib/v2/saudiIndicators'
 
 const ACCENT = '#16A34A'
 const REFRESH_SEC = 60
+const PAGE = 20
 
 type MarketData = {
   timestamp: string; isLive: boolean; status: 'open' | 'closed' | 'pre'
@@ -17,6 +18,7 @@ type MarketData = {
   }
   decision: { score: number; direction: string; verdict: string }
   stocks: SaudiStock[]
+  universe?: number
   quotes?: { delayed: boolean; label: string; attribution: string | null }
   error?: string
 }
@@ -58,6 +60,8 @@ export default function SaudiToday() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const { isFavorite, toggle } = useSaudiFavorites()
+  const [query, setQuery] = useState('')
+  const [shown, setShown] = useState(PAGE)
 
   const load = useCallback(async () => {
     try {
@@ -74,6 +78,13 @@ export default function SaudiToday() {
     const t = setInterval(load, REFRESH_SEC * 1000)
     return () => clearInterval(t)
   }, [load])
+
+  const filtered = useMemo(() => {
+    const list = data?.stocks ?? []
+    const q = query.trim()
+    if (!q) return list
+    return list.filter(s => s.symbol.includes(q) || s.name.includes(q) || s.sector.includes(q))
+  }, [data, query])
 
   if (loading && !data) {
     return (
@@ -122,10 +133,23 @@ export default function SaudiToday() {
       </div>
 
       <div className="space-y-2.5">
-        <div className="text-xs font-bold text-slate-500">الأسهم مرتّبة بقوتها الفنية — للمراقبة والتحليل · ★ أضِف للمفضّلة</div>
-        {data.stocks.map(s => (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-xs font-bold text-slate-500">كل أسهم السوق ({data.stocks.length} سهماً) مرتّبة بقوتها الفنية — للمراقبة والتحليل · ★ أضِف للمفضّلة</div>
+          <input value={query} onChange={e => { setQuery(e.target.value); setShown(PAGE) }} placeholder="ابحث بالاسم أو الرمز أو القطاع"
+            aria-label="بحث في الأسهم"
+            className="w-full rounded-lg border border-white/10 bg-white/[.03] px-3 py-2 text-base text-white placeholder:text-slate-600 focus:border-emerald-500/50 focus:outline-none sm:w-64 sm:text-sm" />
+        </div>
+        {filtered.length === 0 ? (
+          <div className="rounded-xl border border-white/8 p-6 text-center text-sm text-slate-500">لا يوجد سهم يطابق «{query}»</div>
+        ) : filtered.slice(0, shown).map(s => (
           <SaudiStockCard key={s.symbol} s={s} favorite={isFavorite(s.symbol)} onToggleFavorite={() => toggle(s.symbol)} />
         ))}
+        {filtered.length > shown ? (
+          <button type="button" onClick={() => setShown(v => v + PAGE * 2)}
+            className="w-full rounded-xl border border-white/10 py-2.5 text-sm font-bold text-slate-300 transition-colors hover:border-emerald-500/40 hover:text-white">
+            عرض المزيد ({filtered.length - shown} سهماً)
+          </button>
+        ) : null}
       </div>
 
       <div className="rounded-xl border border-white/8 px-4 py-3 text-[11px] leading-5 text-slate-500" style={{ background: 'rgba(255,255,255,.015)' }}>
