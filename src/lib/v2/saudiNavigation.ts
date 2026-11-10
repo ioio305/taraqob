@@ -47,6 +47,7 @@ const PREMIUM_APIS: Array<[prefix: string, page: string]> = [
   ['/api/v2/saudi/plan', '/saudi/plan'],
   ['/api/v2/saudi/portfolio', '/saudi/portfolio'],
   ['/api/v2/saudi/alerts', '/saudi/alerts'],
+  ['/api/v2/saudi/analysis', '/saudi/__pro-analysis'],
   ['/api/v2/saudi/chart', '/saudi/chart'],
   ['/api/v2/saudi/liquidity', '/saudi/liquidity'],
 ]
