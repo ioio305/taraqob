@@ -89,7 +89,7 @@ export function UpgradeView({ market }: { market: Market }) {
           <button key={c} onClick={() => setCycle(c)}
             className="rounded-xl px-4 py-2 text-xs font-bold transition-colors"
             style={{ background: cycle === c ? `${info.color}22` : 'rgba(255,255,255,.03)', border: `1px solid ${cycle === c ? `${info.color}70` : 'rgba(255,255,255,.06)'}`, color: cycle === c ? '#fff' : '#8A97A6' }}>
-            {c === 'monthly' ? 'شهري' : 'سنوي — شهران مجاناً'}
+            {c === 'monthly' ? 'شهري' : 'سنوي — وفّر شهرين'}
           </button>
         ))}
       </div>
