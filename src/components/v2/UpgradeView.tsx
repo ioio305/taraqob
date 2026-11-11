@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { PLAN, FREE_FEATURES, PRO_FEATURES, MARKETS, PACKAGES } from '@/lib/v2/subscriptionModel'
-import { BILLING_PACKAGES, priceSar, type BillingCycle } from '@/lib/v2/billing'
+import type { BillingCycle } from '@/lib/v2/billing'
+import { PriceTag } from '@/components/v2/PriceTag'
 import { MARKETS_INFO, type Market } from '@/lib/v2/markets'
 
 function ReferralCard() {
@@ -66,14 +67,6 @@ export function UpgradeView({ market }: { market: Market }) {
     setBusy('')
   }
 
-  function priceLabel(pkgKey: string) {
-    const bp = BILLING_PACKAGES[pkgKey]
-    if (!bp) return null
-    const sar = priceSar(bp, cycle)
-    if (sar <= 0) return 'السعر قريباً'
-    return `${sar.toLocaleString('en-US')} ر.س / ${cycle === 'yearly' ? 'سنة' : 'شهر'}`
-  }
-
   return (
     <div className="mx-auto min-h-full max-w-5xl px-4 py-9 sm:px-6" dir="rtl">
       <header className="mb-8 text-center">
@@ -96,7 +89,7 @@ export function UpgradeView({ market }: { market: Market }) {
           <button key={c} onClick={() => setCycle(c)}
             className="rounded-xl px-4 py-2 text-xs font-bold transition-colors"
             style={{ background: cycle === c ? `${info.color}22` : 'rgba(255,255,255,.03)', border: `1px solid ${cycle === c ? `${info.color}70` : 'rgba(255,255,255,.06)'}`, color: cycle === c ? '#fff' : '#8A97A6' }}>
-            {c === 'monthly' ? 'شهري' : 'سنوي — وفّر أكثر'}
+            {c === 'monthly' ? 'شهري' : 'سنوي — شهران مجاناً'}
           </button>
         ))}
       </div>
@@ -106,7 +99,6 @@ export function UpgradeView({ market }: { market: Market }) {
           const sel = selected === pkg.key
           const both = pkg.markets.length > 1
           const color = pkg.tier === 'free' ? '#7C8A99' : both ? '#A78BFA' : info.color
-          const price = priceLabel(pkg.key)
           return (
             <div key={pkg.key} onClick={() => setSelected(pkg.key)}
               className="relative flex cursor-pointer flex-col rounded-2xl p-5 text-right transition-colors"
@@ -122,8 +114,10 @@ export function UpgradeView({ market }: { market: Market }) {
                   })}
               </div>
               <div className="mt-3 min-h-[32px] text-xs leading-5 text-slate-500">{both ? 'السوقان معاً في اشتراك واحد' : pkg.tagline}</div>
-              {price ? <div className="mt-2 text-sm font-black" style={{ color }}>{price}</div> : null}
-              <div className="mt-4">
+              <div className="mt-3 border-t border-white/[.06] pt-4">
+                <PriceTag pkgKey={pkg.key} cycle={cycle} color={color} free={pkg.tier === 'free'} />
+              </div>
+              <div className="mt-auto pt-5">
                 {pkg.tier === 'free' ? (
                   <Link href={`/auth/market?m=${market}`} onClick={e => e.stopPropagation()}
                     className="block rounded-xl px-3 py-2 text-center text-xs font-black"
@@ -144,7 +138,7 @@ export function UpgradeView({ market }: { market: Market }) {
       {msg ? <div className="mt-4 rounded-xl border border-amber-400/25 bg-amber-400/[.06] px-4 py-2.5 text-center text-xs text-amber-200">{msg}</div> : null}
 
       <div className="mt-6 rounded-2xl border border-white/[.07] bg-[#0D1B2A]/60 p-4 text-center text-[11px] leading-5 text-slate-500">
-        الدفع عبر Moyasar (مدى · Apple Pay · بطاقة) بالريال شامل الضريبة. يمكنك الإلغاء في أي وقت.
+        الدفع بالريال شامل الضريبة عبر Moyasar (مدى · Apple Pay · بطاقة). سعر الدولار للتوضيح. الإلغاء في أي وقت.
       </div>
     </div>
   )

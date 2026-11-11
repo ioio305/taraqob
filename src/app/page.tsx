@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { MarketCards } from '@/components/v2/MarketCards'
+import { PublicPricing } from '@/components/v2/PublicPricing'
 
 // ── الصفحة الرئيسية العامة: «ترقّب» بسوقين منفصلين ───────────────────────────
 // البطاقتان تظهران هنا قبل الدخول فقط. المسجّل يُوجَّه مباشرة إلى سوقه
@@ -46,6 +47,7 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
         </div>
         <nav className="flex items-center gap-4">
           <Link href="/how-it-works" className="hidden text-sm sm:block" style={{ color: '#7C8A99' }}>كيف يعمل</Link>
+          <a href="#pricing" className="hidden text-sm sm:block" style={{ color: '#7C8A99' }}>الأسعار</a>
           <Link href="/compliance" className="hidden text-sm sm:block" style={{ color: '#7C8A99' }}>الإفصاح</Link>
           {user ? (
             <Link href="/auth/market" className="rounded-lg px-5 py-2 text-sm font-bold"
@@ -88,6 +90,8 @@ export default async function RootPage({ searchParams }: { searchParams?: Promis
         </div>
         <MarketCards mode="landing" />
       </section>
+
+      <PublicPricing />
 
       {/* ── المبادئ ── */}
       <section style={{ borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(13,27,42,0.4)' }}>
