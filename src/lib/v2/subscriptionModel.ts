@@ -46,10 +46,11 @@ export type Package = {
   highlight?: boolean
 }
 
+// الترتيب كما يُعرض (من اليمين): المجانية ← السعودي ← الأوبشن ← الشامل.
 export const PACKAGES: Package[] = [
   { key: 'free',        name: 'أساسية',           tier: 'free', markets: [],                   tagline: 'مجاناً — ابدأ وابنِ ثقتك' },
-  { key: 'pro-options', name: 'متقدمة · الأوبشن', tier: 'pro',  markets: ['options'],          tagline: 'كل أدوات الأوبشن الأمريكي' },
   { key: 'pro-saudi',   name: 'متقدمة · السعودي', tier: 'pro',  markets: ['saudi'],            tagline: 'كل أدوات السوق السعودي' },
+  { key: 'pro-options', name: 'متقدمة · الأوبشن', tier: 'pro',  markets: ['options'],          tagline: 'كل أدوات الأوبشن الأمريكي' },
   { key: 'pro-all',     name: 'احترافية · الشامل', tier: 'pro',  markets: ['options', 'saudi'], tagline: 'السوقان معاً — كل شيء', badge: 'الأعلى', highlight: true },
 ]
 
