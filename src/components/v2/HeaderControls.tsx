@@ -92,31 +92,56 @@ function useTabs(access: PlatformAccess, saudiSegment?: SaudiSegment): Tab[] {
 
 export function TopPlatformTabs({ access, saudiSegment, variant }: { access: PlatformAccess; saudiSegment?: SaudiSegment; variant: 'header' | 'mobile' }) {
   const tabs = useTabs(access, saudiSegment)
+  const pathname = usePathname()
   const header = variant === 'header'
+  // ضغطة على منصّة أخرى: الزر يُبرز فوراً بدوّار، وشريط تقدّم أعلى الشاشة حتى تُفتح المنصّة.
+  const [pending, setPending] = useState<string | null>(null)
+  useEffect(() => { setPending(null) }, [pathname])
+  const pendingTab = tabs.find(t => t.key === pending)
   return (
-    <nav aria-label="المنصّات"
-      className={header
-        ? 'pointer-events-auto absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 xl:flex'
-        : 'flex shrink-0 justify-center overflow-x-auto px-3 py-1.5 xl:hidden'}
-      style={header ? undefined : { background: 'rgba(8,16,26,0.95)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-      <div className="flex items-center gap-1 rounded-xl p-1" style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.07)' }}>
-        {tabs.map(t => (
-          <Link key={t.key} href={t.href} prefetch={false} aria-current={t.active ? 'page' : undefined}
-            title={t.enabled ? t.label : `${t.label} — غير مشمولة في باقتك`}
-            className={`flex items-center gap-1.5 rounded-lg font-bold transition-colors ${header ? 'px-4 py-1.5 text-[13px]' : 'px-3 py-1 text-[11px]'}`}
-            style={{
-              opacity: t.enabled ? 1 : 0.5,
-              color: t.active ? '#fff' : '#8A97A6',
-              background: t.active ? `${t.color}26` : 'transparent',
-              boxShadow: t.active ? `inset 0 0 0 1px ${t.color}66` : 'none',
-            }}>
-            <span aria-hidden className="text-sm leading-none">{t.icon}</span>
-            <span className="whitespace-nowrap">{t.label}</span>
-            {!t.enabled && <span aria-hidden className="text-[10px]">🔒</span>}
-          </Link>
-        ))}
-      </div>
-    </nav>
+    <>
+      {pendingTab ? (
+        <div className="pointer-events-none fixed inset-x-0 top-0 z-[60] h-[3px] overflow-hidden" role="progressbar" aria-label={`جارٍ فتح ${pendingTab.label}`}>
+          <div className="tqk-route-bar h-full w-1/3 rounded-full" style={{ background: pendingTab.color, boxShadow: `0 0 10px ${pendingTab.color}` }} />
+          <style>{`@keyframes tqk-route { from { transform: translateX(-100%) } to { transform: translateX(300%) } } .tqk-route-bar { animation: tqk-route 1s ease-in-out infinite } @media (prefers-reduced-motion: reduce) { .tqk-route-bar { animation: none; width: 100% } }`}</style>
+        </div>
+      ) : null}
+      <nav aria-label="المنصّات" aria-busy={pending ? true : undefined}
+        className={header
+          ? 'pointer-events-auto absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 xl:flex'
+          : 'flex shrink-0 justify-center overflow-x-auto px-3 py-1.5 xl:hidden'}
+        style={header ? undefined : { background: 'rgba(8,16,26,0.95)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+        <div className="flex items-center gap-1 rounded-xl p-1" style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.07)' }}>
+          {tabs.map(t => {
+            const isPending = pending === t.key
+            const lit = t.active && !pending
+            return (
+              <Link key={t.key} href={t.href} prefetch={t.enabled} aria-current={t.active ? 'page' : undefined}
+                onClick={e => {
+                  if (t.active || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+                  setPending(t.key)
+                }}
+                title={t.enabled ? t.label : `${t.label} — غير مشمولة في باقتك`}
+                className={`flex items-center gap-1.5 rounded-lg font-bold transition-all duration-150 active:scale-95 ${header ? 'px-4 py-1.5 text-[13px]' : 'px-3 py-1 text-[11px]'} ${t.active ? '' : 'hover:bg-white/[.06] hover:text-white'}`}
+                style={{
+                  opacity: t.enabled ? 1 : 0.5,
+                  color: lit || isPending ? '#fff' : '#8A97A6',
+                  background: isPending ? `${t.color}33` : lit ? `${t.color}26` : t.active ? `${t.color}10` : undefined,
+                  boxShadow: isPending ? `inset 0 0 0 1px ${t.color}` : lit ? `inset 0 0 0 1px ${t.color}66` : 'none',
+                }}>
+                {isPending ? (
+                  <span aria-hidden className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2" style={{ borderColor: t.color, borderTopColor: 'transparent' }} />
+                ) : (
+                  <span aria-hidden className="text-sm leading-none">{t.icon}</span>
+                )}
+                <span className="whitespace-nowrap">{isPending ? `جارٍ فتح ${t.label}…` : t.label}</span>
+                {!t.enabled && <span aria-hidden className="text-[10px]">🔒</span>}
+              </Link>
+            )
+          })}
+        </div>
+      </nav>
+    </>
   )
 }
 
