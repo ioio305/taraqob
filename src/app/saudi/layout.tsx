@@ -14,7 +14,7 @@ export default async function SaudiLayout({ children }: { children: ReactNode })
   if (!viewer.platformAccess.saudi) redirect('/access?market=saudi')
 
   return (
-    <SaudiShell userName={viewer.displayName} tier={viewer.platformTiers.saudi}
+    <SaudiShell userName={viewer.displayName} userRole={viewer.profile.role} tier={viewer.platformTiers.saudi}
                 isStaff={viewer.isStaff} isPanelStaff={viewer.isPanelStaff} platformAccess={viewer.platformAccess}>
       {children}
     </SaudiShell>

@@ -6,14 +6,15 @@ import type { NewsResult, NewsEvent } from '@/app/api/v2/news/route'
 export type { NewsResult }
 
 // ── Shared fetch hook ─────────────────────────────────────────────────────────
-export function useNews(refreshMs = 120_000) {
+// endpoint: أخبار الأوبشن (الافتراضي) أو أخبار السوق السعودي (/api/v2/saudi/news).
+export function useNews(refreshMs = 120_000, endpoint = '/api/v2/news') {
   const [news,    setNews]    = useState<NewsResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [failed,  setFailed]  = useState(false)
 
   async function fetch_() {
     try {
-      const res  = await fetch('/api/v2/news')
+      const res  = await fetch(endpoint)
       if (!res.ok) throw new Error()
       const data: NewsResult = await res.json()
       setNews(data)

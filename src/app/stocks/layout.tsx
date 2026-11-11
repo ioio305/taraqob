@@ -19,6 +19,7 @@ export default async function StocksLayout({ children }: { children: ReactNode }
   return (
     <StocksShell
       userName={viewer.displayName}
+      userRole={viewer.profile.role}
       tier={viewer.platformTiers.stocks}
       isStaff={viewer.isStaff}
       isPanelStaff={viewer.isPanelStaff}

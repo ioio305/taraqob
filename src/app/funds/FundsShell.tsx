@@ -10,6 +10,7 @@ import { FundsWatcher } from '@/components/v2/FundsWatcher'
 import { NewsTicker } from '@/components/v2/NewsTicker'
 import { DecisionCouncilStrip } from '@/components/v2/DecisionCouncilStrip'
 import { PlatformSwitcher } from '@/components/v2/PlatformSwitcher'
+import { MarketTopBar, TopPlatformTabs, useRolePreview } from '@/components/v2/HeaderControls'
 import { SidebarPlanCard } from '@/components/v2/SidebarPlanCard'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
 import { planName, isPro } from '@/lib/v2/subscriptionModel'
@@ -43,9 +44,10 @@ function allowedTier(current: string, required: string) {
   return required === 'radar' || isPro(current)
 }
 
-export default function FundsShell({ children, userName, tier, isStaff, isPanelStaff = false, platformAccess }: {
+export default function FundsShell({ children, userName, userRole = 'user', tier, isStaff: isStaffAccount, isPanelStaff = false, platformAccess }: {
   children: ReactNode
   userName: string
+  userRole?: string
   tier: string
   isStaff: boolean
   isPanelStaff?: boolean
@@ -54,6 +56,9 @@ export default function FundsShell({ children, userName, tier, isStaff, isPanelS
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
+  // معاينة الأدوار للمالك: «مستخدم» يُظهر ما يراه المشترك حسب باقته.
+  const role = useRolePreview(userRole, '/funds')
+  const isStaff = isStaffAccount && role.effectiveRole !== 'user'
 
   async function logout() {
     setLoggingOut(true)
@@ -123,15 +128,15 @@ export default function FundsShell({ children, userName, tier, isStaff, isPanelS
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-white/5 bg-[#07130F]/95 px-4">
-          <button onClick={() => setMobileOpen(true)} className="text-slate-400 lg:hidden" aria-label="القائمة">☰</button>
-          <MarketClock accent={ACCENT} />
-          <Link href={isStaff || allowedTier(tier, 'alpha') ? '/funds/decision-room' : '/v2/upgrade?platform=funds&tier=alpha'}
-            className="flex items-center gap-2 rounded-xl bg-emerald-300 px-3.5 py-2 text-xs font-black text-emerald-950 shadow-lg shadow-emerald-500/15">
-            <span>✦</span><span>غرفة القرار</span>
-          </Link>
-          <button onClick={logout} disabled={loggingOut} className="h-8 w-8 rounded-lg border border-red-400/15 bg-red-400/5 text-red-300" aria-label="تسجيل الخروج">↪</button>
-        </header>
+        <MarketTopBar
+          access={platformAccess}
+          clock={<MarketClock accent={ACCENT} />}
+          decision={{ href: isStaff || allowedTier(tier, 'alpha') ? '/funds/decision-room' : '/v2/upgrade?platform=funds&tier=alpha', background: '#6EE7B7', border: '#A7F3D0', color: '#022C22' }}
+          role={{ ...role, userRole }}
+          onMenu={() => setMobileOpen(true)}
+          accent={ACCENT}
+        />
+        <TopPlatformTabs access={platformAccess} variant="mobile" />
         <NewsTicker />
         <DecisionCouncilStrip platform="funds" />
         <FundsWatcher />

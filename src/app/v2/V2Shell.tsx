@@ -1,10 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import { AlertsWatcher } from '@/components/v2/AlertsWatcher'
 import { BeginnerHelpers } from '@/components/v2/BeginnerGuide'
 import { AssistantWidget } from '@/components/v2/AssistantWidget'
@@ -12,18 +11,16 @@ import { NewsTicker } from '@/components/v2/NewsTicker'
 import { MarketClock } from '@/components/v2/MarketClock'
 import { DecisionCouncilStrip } from '@/components/v2/DecisionCouncilStrip'
 import { PlatformSwitcher } from '@/components/v2/PlatformSwitcher'
+import { NotificationBell } from '@/components/v2/NotificationBell'
+import { LogoutButton, RoleSwitch, TopPlatformTabs, ROLE_COLOR_MAP, ROLE_LABEL_MAP } from '@/components/v2/HeaderControls'
 import { SidebarPlanCard } from '@/components/v2/SidebarPlanCard'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
 import { getSelectedIndex, indexMeta, type IndexId } from '@/lib/v2/indexSelection'
-import { showBrowserNotificationOnce } from '@/lib/v2/browserNotifications'
 import { SHOW_STRATEGY_LAB } from '@/lib/v2/featureFlags'
 import { TRADING_MAIN, visiblePremiumTools } from '@/lib/v2/tradingNavigation'
 import { planName, planColor, planOf, isPro } from '@/lib/v2/subscriptionModel'
 import { isPanelStaff } from '@/lib/v2/staffRoles'
 
-const ROLE_LABEL_MAP: Record<string, string>  = { admin: 'المالك', moderator: 'مشرف عام', support: 'دعم فني', user: 'مستخدم' }
-const ROLE_COLOR_MAP: Record<string, string>  = { admin: '#C9943A', moderator: '#60A5FA', support: '#26D07C', user: '#7C8A99' }
-const ROLE_ICON_MAP:  Record<string, string>  = { admin: '⊞', moderator: '◎', user: '◈' }
 
 // ── Tier helpers ─────────────────────────────────────────────────
 // شارات المستوى تُعرض بأسماء الباقتين (أساسية/متقدمة) عبر planName/planColor
@@ -80,25 +77,6 @@ function SectionTitle({ children, color = '#7C8A99' }: { children: string; color
   )
 }
 
-// ── Notification types ────────────────────────────────────────
-type Notification = {
-  id: string; type: string; title: string; body: string | null
-  url: string | null; is_read: boolean; created_at: string
-}
-
-function notificationTime(value: string): string {
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return ''
-  return new Intl.DateTimeFormat('ar-SA-u-ca-gregory', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Asia/Riyadh',
-  }).format(parsed)
-}
-
 // ── Main Shell ─────────────────────────────────────────────────
 export default function V2Shell({ children, userName, userRole, userSecondaryRoles = [], subscriptionTier = 'radar', trialDaysLeft = null, platformAccess }: {
   children: ReactNode; userName: string; userRole: string
@@ -123,14 +101,7 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
       }
     } catch { /* تجاهل */ }
   }, [])
-  const [loggingOut, setLoggingOut] = useState(false)
   const [previewRole, setPreviewRole] = useState<string | null>(null)
-
-  // ── Notifications state ────────────────────────────────────
-  const [notifications, setNotifications] = useState<Notification[]>([])
-  const [bellOpen, setBellOpen]           = useState(false)
-  const bellRef                           = useRef<HTMLDivElement>(null)
-  const seenNotificationIds               = useRef<Set<string> | null>(null)
 
   // ── Security: ALWAYS from DB prop ─────────────────────────
   const isAdmin = userRole === 'admin'
@@ -139,131 +110,12 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
 
   const canPreview    = isAdmin
   const effectiveRole = canPreview && previewRole ? previewRole : userRole
-  const isPreviewing  = canPreview && previewRole !== null && previewRole !== userRole
 
   const showAdminNav = isAdmin
     ? (effectiveRole === 'admin' || effectiveRole === 'moderator')
     : isMod
 
-  const roleColor = ROLE_COLOR_MAP[effectiveRole] ?? '#7C8A99'
   const tierColor = planColor(subscriptionTier)
-
-  // ── Fetch notifications ────────────────────────────────────
-  const fetchNotifications = useCallback(async () => {
-    try {
-      const res  = await fetch('/api/v2/notifications', { cache: 'no-store' })
-      const data = await res.json()
-      if (!Array.isArray(data.notifications)) return
-
-      const incoming = data.notifications as Notification[]
-      if (seenNotificationIds.current === null) {
-        seenNotificationIds.current = new Set(incoming.map(item => item.id))
-      } else {
-        for (const item of incoming) {
-          if (!seenNotificationIds.current.has(item.id)) {
-            seenNotificationIds.current.add(item.id)
-            if (!item.is_read) showBrowserNotificationOnce(item.title, item.body ?? '')
-          }
-        }
-      }
-      setNotifications(incoming)
-    } catch { /* silent */ }
-  }, [])
-
-  useEffect(() => {
-    void fetchNotifications()
-    const id = setInterval(fetchNotifications, 15_000)
-    const refreshNow = () => { void fetchNotifications() }
-    const refreshVisible = () => { if (document.visibilityState === 'visible') void fetchNotifications() }
-    window.addEventListener('taraqob:notifications-changed', refreshNow)
-    window.addEventListener('focus', refreshNow)
-    document.addEventListener('visibilitychange', refreshVisible)
-    return () => {
-      clearInterval(id)
-      window.removeEventListener('taraqob:notifications-changed', refreshNow)
-      window.removeEventListener('focus', refreshNow)
-      document.removeEventListener('visibilitychange', refreshVisible)
-    }
-  }, [fetchNotifications])
-
-  // وصول فوري عند إضافة إشعار خادمي، مع بقاء الفحص الدوري كمسار احتياطي.
-  useEffect(() => {
-    const supabase = createClient()
-    let active = true
-    let channel: ReturnType<typeof supabase.channel> | null = null
-
-    void supabase.auth.getUser().then(({ data }) => {
-      if (!active || !data.user) return
-      channel = supabase
-        .channel(`notifications:${data.user.id}`)
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${data.user.id}` },
-          payload => {
-            const item = payload.new as Notification
-            if (!item?.id) return
-            const seen = seenNotificationIds.current ?? new Set<string>()
-            seenNotificationIds.current = seen
-            if (!seen.has(item.id)) {
-              seen.add(item.id)
-              showBrowserNotificationOnce(item.title, item.body ?? '')
-            }
-            setNotifications(current => [item, ...current.filter(existing => existing.id !== item.id)].slice(0, 30))
-          },
-        )
-        .subscribe()
-    })
-
-    return () => {
-      active = false
-      if (channel) void supabase.removeChannel(channel)
-    }
-  }, [])
-
-  // Close bell on outside click
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (bellRef.current && !bellRef.current.contains(e.target as Node)) setBellOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
-
-  function openBell() {
-    setBellOpen(v => !v)
-  }
-
-  async function markNotificationRead(id: string) {
-    const current = notifications.find(n => n.id === id)
-    if (!current || current.is_read) return
-
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
-    try {
-      const response = await fetch('/api/v2/notifications', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      })
-      if (!response.ok) void fetchNotifications()
-    } catch { void fetchNotifications() }
-  }
-
-  async function markAllNotificationsRead() {
-    const previous = notifications
-    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
-    try {
-      const response = await fetch('/api/v2/notifications', { method: 'PATCH' })
-      if (!response.ok) setNotifications(previous)
-    } catch { setNotifications(previous) }
-  }
-
-  async function openNotification(notification: Notification) {
-    await markNotificationRead(notification.id)
-    setBellOpen(false)
-    if (notification.url) router.push(notification.url)
-  }
-
-  const unreadCount = notifications.filter(n => !n.is_read).length
 
   // ── Role preview ───────────────────────────────────────────
   useEffect(() => {
@@ -278,11 +130,6 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
     setPreviewRole(next)
     if (next) { localStorage.setItem('taraqob_view_as', next); router.push('/v2') }
     else { localStorage.removeItem('taraqob_view_as'); router.push('/admin') }
-  }
-
-  async function logout() {
-    setLoggingOut(true)
-    try { await createClient().auth.signOut() } finally { window.location.href = '/' }
   }
 
   // ── Tier-aware nav renderer ────────────────────────────────
@@ -411,6 +258,8 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
 
           <MarketClock />
 
+          <TopPlatformTabs access={platformAccess} variant="header" />
+
           {!showAdminNav && (staffNavigation || tierAllows(subscriptionTier, 'alpha')) && (
             <Link
               href={isStaff || tierAllows(subscriptionTier, 'alpha') ? '/v2/decision-room' : '/v2/upgrade?tier=alpha'}
@@ -421,100 +270,10 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
             </Link>
           )}
 
-          {/* ── Notification bell ── */}
-          <div ref={bellRef} className="relative">
-            <button onClick={openBell} aria-label="الإشعارات" aria-expanded={bellOpen}
-              className="relative w-8 h-8 rounded-lg flex items-center justify-center transition-all"
-              style={{ background: bellOpen ? 'rgba(201,148,58,0.1)' : 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: '#7C8A99' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-              </svg>
-              {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -left-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold font-mono"
-                  style={{ background: '#EF4444', color: 'white' }}>
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </button>
-
-            {bellOpen && (
-              <div className="absolute top-full left-0 mt-2 w-80 rounded-xl overflow-hidden z-50"
-                style={{ background: '#0D1B2A', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
-                <div className="px-4 py-3 flex items-center justify-between"
-                  style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                  <span className="text-sm font-semibold text-white">الإشعارات</span>
-                  <div className="flex items-center gap-2">
-                    {unreadCount > 0 && (
-                      <button type="button" onClick={() => void markAllNotificationsRead()}
-                        className="text-[10px] transition-colors hover:text-white" style={{ color: '#C9943A' }}>
-                        قرأت الكل
-                      </button>
-                    )}
-                    <span className="text-xs font-mono" style={{ color: '#7C8A99' }}>{notifications.length} إشعار</span>
-                  </div>
-                </div>
-                {notifications.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-sm" style={{ color: '#6B7B8D' }}>لا توجد إشعارات</div>
-                ) : (
-                  <div className="max-h-80 overflow-y-auto">
-                    {notifications.slice(0, 20).map(n => {
-                      const typeColor: Record<string, string> = { alert: '#EF4444', signal: '#10B981', info: '#60A5FA', system: '#C9943A' }
-                      const tc = typeColor[n.type] ?? '#7C8A99'
-                      return (
-                        <button key={n.id} type="button" onClick={() => void openNotification(n)}
-                          className="px-4 py-3 w-full text-right transition-colors hover:bg-white/[0.03]"
-                          style={{
-                            borderBottom: '1px solid rgba(255,255,255,0.04)',
-                            background: n.is_read ? 'transparent' : 'rgba(201,148,58,0.04)',
-                          }}>
-                          <div className="flex items-start gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: n.is_read ? '#33404D' : tc }} />
-                            <div className="min-w-0 flex-1">
-                              <div className="text-xs font-semibold text-white mb-0.5">{n.title}</div>
-                              {n.body && <div className="text-xs leading-relaxed whitespace-pre-line" style={{ color: '#7C8A99' }}>{n.body}</div>}
-                              {n.url && (
-                                <span className="text-xs mt-1 inline-block" style={{ color: tc }}>فتح ←</span>
-                              )}
-                              <div className="text-[10px] font-mono mt-1" style={{ color: '#55657A' }}>
-                                {notificationTime(n.created_at)} · الرياض
-                              </div>
-                            </div>
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          <NotificationBell />
 
           {/* ── مبدّل الدور: مفتاح تحويل أنيق — ضغطة واحدة تنقلك بين الأدوار ── */}
-          {canPreview && (
-            <div className="flex items-center rounded-full p-0.5 gap-0.5"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              {(['admin', 'moderator', 'user'] as const).map(r => {
-                const active = r === effectiveRole
-                const rc = ROLE_COLOR_MAP[r] ?? '#7C8A99'
-                return (
-                  <button key={r} onClick={() => switchPreview(r)}
-                    title={`التحويل إلى عرض ${ROLE_LABEL_MAP[r] ?? r}${r === userRole ? ' (دورك الأساسي)' : ''}`}
-                    className="flex items-center gap-1.5 rounded-full transition-all duration-200"
-                    style={{
-                      padding: active ? '4px 12px' : '4px 8px',
-                      background: active ? `${rc}1F` : 'transparent',
-                      border: active ? `1px solid ${rc}55` : '1px solid transparent',
-                      color: active ? rc : '#6B7B8D',
-                      boxShadow: active ? `0 0 12px ${rc}22` : 'none',
-                    }}>
-                    <span className="text-xs">{ROLE_ICON_MAP[r] ?? '◎'}</span>
-                    {active && <span className="text-xs font-bold whitespace-nowrap">{ROLE_LABEL_MAP[r] ?? r}</span>}
-                  </button>
-                )
-              })}
-            </div>
-          )}
+          {canPreview && <RoleSwitch userRole={userRole} effectiveRole={effectiveRole} onSwitch={switchPreview} />}
 
           {isStaff && !canPreview && (
             <div className="hidden sm:flex items-center gap-2">
@@ -532,31 +291,10 @@ export default function V2Shell({ children, userName, userRole, userSecondaryRol
           )}
 
           {/* ── تسجيل الخروج — دائماً هنا، دائماً مرئي ── */}
-          <button
-            onClick={logout}
-            disabled={loggingOut}
-            title="تسجيل الخروج"
-            className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all disabled:opacity-40"
-            style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)', color: '#8B9BAD' }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = 'rgba(239,68,68,0.15)'
-              e.currentTarget.style.color = '#EF4444'
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = 'rgba(239,68,68,0.06)'
-              e.currentTarget.style.color = '#8B9BAD'
-            }}>
-            {loggingOut ? (
-              <span className="text-xs font-mono" style={{ color: '#EF4444' }}>...</span>
-            ) : (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                <polyline points="16,17 21,12 16,7"/>
-                <line x1="21" y1="12" x2="9" y2="12"/>
-              </svg>
-            )}
-          </button>
+          <LogoutButton />
         </header>
+
+        <TopPlatformTabs access={platformAccess} variant="mobile" />
 
         {/* شريط الأخبار المتحرك — ثابت في كل الأقسام */}
         <NewsTicker />

@@ -4,8 +4,11 @@ import { useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import { PlatformSwitcher } from '@/components/v2/PlatformSwitcher'
+import { MarketTopBar, TopPlatformTabs, useRolePreview } from '@/components/v2/HeaderControls'
+import { SaudiMarketClock } from '@/components/v2/SaudiMarketClock'
+import { NewsTicker } from '@/components/v2/NewsTicker'
+import { SaudiDecisionStrip } from '@/components/v2/SaudiDecisionStrip'
 import { SidebarPlanCard } from '@/components/v2/SidebarPlanCard'
 import type { PlatformAccess } from '@/lib/v2/accessRules'
 import { planName, isPro } from '@/lib/v2/subscriptionModel'
@@ -16,9 +19,10 @@ const ACCENT = '#16A34A'
 
 type NavItem = SaudiNavItem
 
-export default function SaudiShell({ children, userName, tier, isStaff, isPanelStaff = false, platformAccess }: {
+export default function SaudiShell({ children, userName, userRole = 'user', tier, isStaff: isStaffAccount, isPanelStaff = false, platformAccess }: {
   children: ReactNode
   userName: string
+  userRole?: string
   tier: string
   isStaff: boolean
   isPanelStaff?: boolean
@@ -26,12 +30,10 @@ export default function SaudiShell({ children, userName, tier, isStaff, isPanelS
 }) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [loggingOut, setLoggingOut] = useState(false)
-
-  async function logout() {
-    setLoggingOut(true)
-    try { await createClient().auth.signOut() } finally { window.location.href = '/' }
-  }
+  useEffect(() => { setMobileOpen(false) }, [pathname])
+  // معاينة الأدوار للمالك: «مستخدم» يُظهر ما يراه المشترك حسب باقته.
+  const role = useRolePreview(userRole, '/saudi')
+  const isStaff = isStaffAccount && role.effectiveRole !== 'user'
 
   function nav(item: NavItem, locked = false) {
     const active = item.exact ? pathname === item.href : pathname.startsWith(item.href)
@@ -70,27 +72,6 @@ export default function SaudiShell({ children, userName, tier, isStaff, isPanelS
   const mainNav = segment === 'main' ? SAUDI_MAIN : SAUDI_SEGMENT_NAV[segment].main
   const premiumNav = segment === 'main' ? SAUDI_PREMIUM : SAUDI_SEGMENT_NAV[segment].premium
 
-  const SegmentSwitcher = (
-    <nav aria-label="منصّات السوق السعودي" className="mb-4 grid grid-cols-3 gap-1.5">
-      {(Object.keys(SAUDI_SEGMENTS) as SaudiSegment[]).map(key => {
-        const s = SAUDI_SEGMENTS[key]
-        const active = key === segment
-        return (
-          <Link key={key} href={s.href} onClick={() => setMobileOpen(false)} aria-current={active ? 'page' : undefined}
-            className="flex min-w-0 flex-col items-center gap-1 rounded-lg border py-2 transition-colors"
-            style={{
-              color: active ? '#D1FAE5' : '#7C8A99',
-              background: active ? `${ACCENT}17` : 'rgba(255,255,255,.02)',
-              borderColor: active ? `${ACCENT}55` : 'rgba(255,255,255,.05)',
-            }}>
-            <span aria-hidden>{s.icon}</span>
-            <span className="truncate text-[10px] font-bold">{s.short}</span>
-          </Link>
-        )
-      })}
-    </nav>
-  )
-
   const Sidebar = (
     <div className="flex h-full flex-col select-none bg-[#07130F]">
       <div className="border-b border-emerald-400/10 px-5 py-5">
@@ -104,7 +85,6 @@ export default function SaudiShell({ children, userName, tier, isStaff, isPanelS
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-3">
-        {SegmentSwitcher}
         <PlatformSwitcher access={platformAccess} adminLink={isPanelStaff} />
         <div className="px-2 pb-1 text-[11px] font-bold text-slate-600">{SAUDI_SEGMENTS[segment].label}</div>
         <div className="space-y-0.5">{mainNav.map(item => nav(item))}</div>
@@ -119,9 +99,6 @@ export default function SaudiShell({ children, userName, tier, isStaff, isPanelS
             <div className="truncate text-xs font-bold text-white">{userName}</div>
             <div className="text-[10px] text-slate-600">{isStaff ? 'كامل' : planName(tier)}</div>
           </div>
-          <button onClick={logout} disabled={loggingOut} className="rounded-lg border border-red-400/15 bg-red-400/5 px-3 py-1.5 text-xs text-red-300">
-            {loggingOut ? '…' : 'خروج'}
-          </button>
         </div>
       </div>
     </div>
@@ -138,11 +115,18 @@ export default function SaudiShell({ children, userName, tier, isStaff, isPanelS
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-white/5 bg-[#07130F]/95 px-4">
-          <button onClick={() => setMobileOpen(true)} className="text-slate-400 lg:hidden" aria-label="القائمة">☰</button>
-          <div className="text-xs font-bold" style={{ color: ACCENT }}>🇸🇦 السوق السعودي — {SAUDI_SEGMENTS[segment].label}</div>
-          <button onClick={logout} disabled={loggingOut} className="h-8 w-8 rounded-lg border border-red-400/15 bg-red-400/5 text-red-300" aria-label="تسجيل الخروج">↪</button>
-        </header>
+        <MarketTopBar
+          access={platformAccess}
+          clock={<SaudiMarketClock />}
+          decision={{ href: premiumOpen ? '/saudi/plan' : '/upgrade?market=saudi', background: '#4ADE80', border: '#86EFAC', color: '#052E16' }}
+          role={{ ...role, userRole }}
+          onMenu={() => setMobileOpen(true)}
+          saudiSegment={segment}
+          accent={ACCENT}
+        />
+        <TopPlatformTabs access={platformAccess} saudiSegment={segment} variant="mobile" />
+        <NewsTicker endpoint="/api/v2/saudi/news" accent={ACCENT} />
+        <SaudiDecisionStrip />
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>

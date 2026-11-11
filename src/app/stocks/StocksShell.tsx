@@ -12,6 +12,7 @@ import { StocksDecisionTicker } from '@/components/v2/StocksDecisionTicker'
 import { DecisionCouncilStrip } from '@/components/v2/DecisionCouncilStrip'
 import { StocksWatcher } from '@/components/v2/StocksWatcher'
 import { PlatformSwitcher } from '@/components/v2/PlatformSwitcher'
+import { MarketTopBar, TopPlatformTabs, useRolePreview } from '@/components/v2/HeaderControls'
 import { SidebarPlanCard } from '@/components/v2/SidebarPlanCard'
 import { planName, planColor, isPro } from '@/lib/v2/subscriptionModel'
 
@@ -112,9 +113,10 @@ function MobileTab({ href, icon, label, exact }: { href: string; icon: string; l
   )
 }
 
-export default function StocksShell({ children, userName, tier = 'radar', isStaff = false, isPanelStaff = false, platformAccess }: {
+export default function StocksShell({ children, userName, userRole = 'user', tier = 'radar', isStaff: isStaffAccount = false, isPanelStaff = false, platformAccess }: {
   children: ReactNode
   userName: string
+  userRole?: string
   tier?: string
   isStaff?: boolean
   isPanelStaff?: boolean
@@ -122,6 +124,9 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
 }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
+  // معاينة الأدوار للمالك: «مستخدم» يُظهر ما يراه المشترك حسب باقته.
+  const role = useRolePreview(userRole, '/stocks')
+  const isStaff = isStaffAccount && role.effectiveRole !== 'user'
 
   async function logout() {
     setLoggingOut(true)
@@ -210,38 +215,15 @@ export default function StocksShell({ children, userName, tier = 'radar', isStaf
 
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* رأس موحّد بمستوى منصة SPX */}
-        <header className="relative z-30 shrink-0 flex items-center justify-between px-4 h-12 gap-3"
-                style={{ background: 'rgba(8,16,26,0.96)', borderBottom: '1px solid rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)' }}>
-          <button onClick={() => setMobileOpen(true)}
-                  className="lg:hidden w-8 h-8 rounded-lg flex items-center justify-center"
-                  style={{ color: '#8A97A6', background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.06)' }}
-                  aria-label="القائمة">
-            ☰
-          </button>
-
-          <MarketClock accent={ACCENT} />
-
-          <div className="flex items-center gap-2">
-            <Link href={isStaff || tierAllows(tier, 'alpha') ? '/stocks/decision-room' : '/v2/upgrade?platform=stocks&plan=alpha'}
-                  className="flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-black text-slate-950 shadow-lg shadow-violet-500/20"
-                  style={{ background: '#C4B5FD', border: '1px solid #DDD6FE' }}>
-              <span className="text-base leading-none">✦</span>
-              <span>غرفة القرار</span>
-            </Link>
-            <div className="hidden md:flex items-center gap-2">
-            <span className="rounded-lg px-2.5 py-1.5 text-[11px] font-mono"
-                  style={{ color: planColor(tier), background: `${planColor(tier)}10`, border: `1px solid ${planColor(tier)}24` }}>
-              {isStaff ? 'كامل' : planName(tier)}
-            </span>
-            </div>
-          </div>
-
-          <button onClick={logout} disabled={loggingOut} aria-label="تسجيل الخروج" title={`خروج ${userName}`}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center disabled:opacity-40"
-                  style={{ color: '#8B9BAD', background: 'rgba(239,68,68,.06)', border: '1px solid rgba(239,68,68,.15)' }}>
-            {loggingOut ? '…' : '↪'}
-          </button>
-        </header>
+        <MarketTopBar
+          access={platformAccess}
+          clock={<MarketClock accent={ACCENT} />}
+          decision={{ href: isStaff || tierAllows(tier, 'alpha') ? '/stocks/decision-room' : '/v2/upgrade?platform=stocks&plan=alpha', background: '#C4B5FD', border: '#DDD6FE', color: '#020617' }}
+          role={{ ...role, userRole }}
+          onMenu={() => setMobileOpen(true)}
+          accent={ACCENT}
+        />
+        <TopPlatformTabs access={platformAccess} variant="mobile" />
 
         <StocksDecisionTicker />
         <DecisionCouncilStrip platform="stocks" />

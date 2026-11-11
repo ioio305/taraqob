@@ -29,8 +29,8 @@ function TickerItem({ ev }: { ev: NewsEvent }) {
     : inner
 }
 
-export function NewsTicker() {
-  const { news, loading, failed } = useNews()
+export function NewsTicker({ endpoint, accent = '#C9943A' }: { endpoint?: string; accent?: string } = {}) {
+  const { news, loading, failed } = useNews(120_000, endpoint)
   const events = news?.events ?? []
 
   if (loading || failed || events.length === 0) {
@@ -58,7 +58,7 @@ export function NewsTicker() {
       `}</style>
       <div className="h-full flex items-center">
         <span className="shrink-0 px-3 h-full flex items-center text-[11px] font-mono font-bold"
-          style={{ color: '#C9943A', borderInlineStart: '1px solid rgba(255,255,255,0.08)', background: 'rgba(8,16,26,0.98)' }}>
+          style={{ color: accent, borderInlineStart: '1px solid rgba(255,255,255,0.08)', background: 'rgba(8,16,26,0.98)' }}>
           📰 الأخبار
         </span>
         <div className="overflow-hidden flex-1">
