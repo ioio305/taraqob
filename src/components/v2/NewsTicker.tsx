@@ -15,7 +15,7 @@ function timeStr(ev: NewsEvent): string {
 function TickerItem({ ev }: { ev: NewsEvent }) {
   const color = ev.impact >= 61 ? '#EF4444' : ev.impact >= 26 ? '#F59E0B' : '#10B981'
   const inner = (
-    <span className="inline-flex items-center gap-2 px-4 text-[11px] leading-none"
+    <span dir="rtl" className="inline-flex items-center gap-2 px-4 text-[11px] leading-none"
       style={{ borderInlineStart: '1px solid rgba(255,255,255,0.06)' }}>
       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
       {ev.isUpcoming && <span className="font-mono" style={{ color }}>⬆</span>}
@@ -61,7 +61,7 @@ export function NewsTicker({ endpoint, accent = '#C9943A' }: { endpoint?: string
           style={{ color: accent, borderInlineStart: '1px solid rgba(255,255,255,0.08)', background: 'rgba(8,16,26,0.98)' }}>
           📰 الأخبار
         </span>
-        <div className="overflow-hidden flex-1">
+        <div className="overflow-hidden flex-1" dir="ltr">
           <div className="tqk-track">
             {[...events, ...events].map((ev, i) => <TickerItem key={`${ev.id}-${i}`} ev={ev} />)}
           </div>
