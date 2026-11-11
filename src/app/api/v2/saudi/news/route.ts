@@ -17,6 +17,7 @@ function decode(s: string): string {
 
 function shortSource(src: string): string {
   if (/ارقام|أرقام|argaam/i.test(src)) return 'أرقام'
+  if (/مباشر/.test(src)) return 'مباشر'
   if (/مال/.test(src)) return 'مال'
   if (/الاقتصادية/.test(src)) return 'الاقتصادية'
   if (/العربية/.test(src)) return 'العربية'
@@ -38,8 +39,9 @@ export async function GET() {
       const source = decode(it.match(/<source[^>]*>([\s\S]*?)<\/source>/)?.[1] ?? '')
       const link = decode(it.match(/<link>([\s\S]*?)<\/link>/)?.[1] ?? '')
       const date = Date.parse(it.match(/<pubDate>([\s\S]*?)<\/pubDate>/)?.[1] ?? '')
-      // العنوان ينتهي بـ « - اسم المصدر» — نحذفه.
-      const title = rawTitle.replace(/\s+-\s+[^-]+$/, '').trim()
+      // العنوان ينتهي باسم المصدر (وقد يحوي «-» كما في «ارقام : … - تاسي») — نقطعه من موضعه.
+      const cut = source && rawTitle.endsWith(source) ? rawTitle.slice(0, rawTitle.length - source.length) : rawTitle.replace(/\s+-\s+[^-]+$/, '')
+      const title = cut.replace(/\s*-\s*$/, '').trim()
       if (!title || !Number.isFinite(date) || seen.has(title)) continue
       seen.add(title)
       const impact = HIGH.test(title) ? 70 : MID.test(title) ? 40 : 15
