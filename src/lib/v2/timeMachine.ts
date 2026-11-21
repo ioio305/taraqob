@@ -136,7 +136,7 @@ export function verdictFor(pTarget: number, pStop: number, targetR: number, cost
   if (abs < 15) {
     return gap > 0
       ? { key: 'lean_target', tone: 'good', text: 'تميل قليلاً نحو الربح — أفضلية بسيطة لا تضمن شيئاً.' }
-      : { key: 'lean_stop', tone: 'bad', text: 'تميل نحو الخسارة — بعد التكاليف لا تكفي مرات الهدف لتعويض مرات الوقف.' }
+      : { key: 'lean_stop', tone: 'bad', text: 'تميل نحو الخسارة — مرات الهدف لا تكفي لتعويض مرات الوقف.' }
   }
   return gap > 0
     ? { key: 'strong_target', tone: 'good', text: 'تميل بوضوح نحو الربح — لكنها محاكاة من الماضي لا وعد.' }
