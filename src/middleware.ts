@@ -5,6 +5,7 @@ import { isAllowedMutationOrigin, isBodyTooLarge } from '@/lib/security/requestR
 import { STOCKS_FEATURE_TIER, stocksFeatureForPath, tierAllowsStocksFeature } from '@/lib/v2/stocksTierAccess'
 import { requiredTradingTier, tradingTierAllows } from '@/lib/v2/tradingNavigation'
 import { saudiTierAllows } from '@/lib/v2/saudiNavigation'
+import { fundsTierAllows } from '@/lib/v2/fundsTierAccess'
 import { getTrialState } from '@/lib/v2/accessRules'
 import { bypassesSubscriptions, isPanelStaff } from '@/lib/v2/staffRoles'
 
@@ -227,6 +228,14 @@ export async function middleware(request: NextRequest) {
         url.search = ''
         url.searchParams.set('market', 'saudi')
         return NextResponse.redirect(url)
+      }
+    }
+
+    // الصناديق: الأدوات الاحترافية (آلة الزمن) للباقة المدفوعة فقط.
+    if (requestedPlatform === 'funds') {
+      const fundsTier = subscriptionActive ? subscription?.tier ?? 'radar' : profile.subscription_tier ?? 'radar'
+      if (!fundsTierAllows(fundsTier, pathname)) {
+        return NextResponse.json({ error: 'tier_upgrade_required', platform: 'funds' }, { status: 403 })
       }
     }
 

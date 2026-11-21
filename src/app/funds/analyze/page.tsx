@@ -6,6 +6,7 @@ import { Search } from 'lucide-react'
 import { FundBrief } from '../FundBrief'
 import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
 import { UnderlyingTradeManager } from '@/components/v2/UnderlyingTradeManager'
+import { IntradayTimeMachine } from '@/components/v2/IntradayTimeMachine'
 import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
 import type { DecisionCouncil } from '@/lib/v2/decisionCouncil'
 import type { OpportunityWindow, UnderlyingScenario } from '@/lib/v2/opportunityModel'
@@ -114,6 +115,17 @@ export default function FundAnalyzePage() {
                       validUntil={data.opportunityWindow?.validUntil}
                     />
                   </div>
+                  {data.opportunityWindow ? (
+                    <div className="mt-4">
+                      <IntradayTimeMachine
+                        key={`tm-${data.symbol}-${data.scenario.entry}`}
+                        platform="funds"
+                        symbol={data.symbol}
+                        scenario={data.scenario}
+                        window={data.opportunityWindow}
+                      />
+                    </div>
+                  ) : null}
                 </>
               ) : null}
             </>

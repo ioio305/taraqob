@@ -33,6 +33,7 @@ const PREMIUM_APIS: Record<string, string> = {
   '/api/v2/gameplan': '/v2/plan', '/api/v2/radar': '/v2/radar', '/api/v2/console': '/v2/console',
   '/api/v2/exit': '/v2/exit', '/api/v2/chart': '/v2/smart-chart',
   '/api/v2/lab': '/v2/lab', '/api/v2/lab/environment': '/v2/lab',
+  '/api/v2/timemachine': '/v2/plan', // آلة الزمن — للمدفوع (نفس مستوى خطة اليوم الاحترافية)
 }
 
 export function requiredTradingTier(path: string): SubscriptionTier | null {

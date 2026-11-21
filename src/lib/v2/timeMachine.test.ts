@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
-  breakEven, buildPool, mulberry32, replayHistory, simulate, validatePlan, verdictFor,
-  type TmBar, type TmPlan,
+  breakEven, buildPool, etSlot, groupSessions, mulberry32, nextSlot, replayHistory, replayIntradayHistory,
+  simulate, simulateIntraday, validateIntradayPlan, validatePlan, verdictFor, SESSION_BARS,
+  type TmBar, type TmIntradayPlan, type TmPlan, type TmStampedBar,
 } from './timeMachine'
+
+// جلسات اصطناعية من 78 شمعة بعائد متماثل حول الصفر.
+function sessionsOf(count: number, drift = 0, vol = 0.0015, seed = 11): TmBar[][] {
+  const flat = series(count * SESSION_BARS, drift, vol, seed)
+  return Array.from({ length: count }, (_, s) => flat.slice(s * SESSION_BARS, (s + 1) * SESSION_BARS))
+}
+const iplan = (over: Partial<TmIntradayPlan> = {}): TmIntradayPlan => ({
+  direction: 'up', entry: 100, stop: 99.5, target: 100.5, startSlot: 10, bars: 60, costPct: 0, ...over,
+})
 
 // سلسلة اصطناعية ثابتة: عائد يومي عشوائي متماثل حول الصفر مع انجراف اختياري.
 function series(n: number, drift = 0, vol = 0.015, seed = 7): TmBar[] {
@@ -91,5 +101,61 @@ describe('timeMachine', () => {
     expect(h.samples).toBeGreaterThan(80)
     expect(h.enough).toBe(true)
     expect(replayHistory(series(40), { stopAtr: 2, targetR: 1, bars: 20, costPct: 0 }).enough).toBe(false)
+  })
+
+  describe('اللحظي (SPX والصناديق)', () => {
+    it('توقيت نيويورك: 9:30 = الشمعة 0 و15:55 = الشمعة 77، وخارج الجلسة = −1', () => {
+      const mon = Date.UTC(2026, 10, 16, 14, 30) / 1000 // الاثنين 9:30 بتوقيت نيويورك (EST)
+      expect(etSlot(mon)).toMatchObject({ date: '2026-11-16', slot: 0, weekday: 'Mon' })
+      expect(etSlot(mon + 77 * 300).slot).toBe(77)
+      expect(etSlot(mon + 78 * 300).slot).toBe(-1)
+      expect(nextSlot(mon + 10 * 300 + 60)).toEqual({ slot: 11, marketOpen: true })
+      expect(nextSlot(mon - 3600)).toEqual({ slot: 0, marketOpen: false })
+    })
+
+    it('يجمع الجلسات الكاملة فقط', () => {
+      const mon = Date.UTC(2026, 10, 16, 14, 30) / 1000
+      const bars: TmStampedBar[] = []
+      for (let d = 0; d < 3; d++) {
+        const n = d === 1 ? 42 : SESSION_BARS // اليوم الثاني نصف يوم ⇒ يُستبعد
+        for (let k = 0; k < n; k++) bars.push({ t: mon + d * 86400 + k * 300, o: 100, h: 101, l: 99, c: 100 })
+      }
+      expect(groupSessions(bars).length).toBe(2)
+    })
+
+    it('ثابت البذرة، والنسب مجموعها 1', () => {
+      const s = sessionsOf(40)
+      const a = simulateIntraday(s, iplan(), { replays: 2000 })!
+      expect(a).toEqual(simulateIntraday(s, iplan(), { replays: 2000 }))
+      expect(a.pTarget + a.pStop + a.pOpen).toBeCloseTo(1, 10)
+    })
+
+    it('بلا انجراف: الصعود والهبوط قريبان من رمي عملة', () => {
+      const s = sessionsOf(60)
+      const up = simulateIntraday(s, iplan({ bars: 200 }))!
+      const down = simulateIntraday(s, iplan({ direction: 'down', stop: 100.5, target: 99.5, bars: 200 }))!
+      expect(up.verdict.key).toBe('coin_flip')
+      expect(down.verdict.key).toBe('coin_flip')
+    })
+
+    it('يرفض خطة هبوط معكوسة وبيانات قليلة', () => {
+      expect(validateIntradayPlan(iplan({ direction: 'down' }))).not.toBeNull()
+      expect(simulateIntraday(sessionsOf(10), iplan())).toBeNull()
+    })
+
+    it('السجل: عيّنة لكل جلسة سابقة', () => {
+      const h = replayIntradayHistory(sessionsOf(40), iplan())
+      expect(h.samples).toBe(39)
+      expect(h.samples).toBe(h.target + h.stop + h.open)
+    })
+  })
+})
+
+describe('أسطر تحت الحكم', () => {
+  it('تنبّه عند كثرة غير المحسوم وعند تعارض المتوسط مع الحكم', async () => {
+    const { withNotes, verdictFor } = await import('./timeMachine')
+    const v = verdictFor(0.15, 0.4, 2, 0)
+    expect(withNotes(v, 0.45, 0.1).notes.length).toBe(2)
+    expect(withNotes(verdictFor(0.3, 0.3, 1, 0), 0.1, 0).notes).toEqual([])
   })
 })

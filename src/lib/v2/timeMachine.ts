@@ -53,6 +53,7 @@ export type TmRun = {
   targetR: number
   costR: number
   verdict: TmVerdict
+  notes: string[]   // أسطر تحت الحكم عند الحاجة (كثرة غير المحسوم، متوسط يخالف الميل)
 }
 
 export type TmHistory = {
@@ -142,6 +143,18 @@ export function verdictFor(pTarget: number, pStop: number, targetR: number, cost
     : { key: 'strong_stop', tone: 'bad', text: 'تميل بوضوح نحو الخسارة — الأفضل الانتظار أو تعديل الخطة.' }
 }
 
+/** أسطر تحت الحكم: الحكم ينظر فقط لما حُسم، فإن كثر غير المحسوم أو خالف المتوسطُ الميلَ نقولها. */
+export function withNotes(verdict: TmVerdict, pOpen: number, avgR: number): { verdict: TmVerdict; notes: string[] } {
+  const notes: string[] = []
+  if (pOpen > 0.4 && verdict.key !== 'undecided') {
+    notes.push(`${Math.round(pOpen * 100)}% من المحاولات لم تصل للهدف ولا للوقف — السعر في نهاية المدة هو الذي يحسمها.`)
+  }
+  if ((verdict.tone === 'bad' && avgR > 0.02) || (verdict.tone === 'good' && avgR < -0.02)) {
+    notes.push('انتبه: متوسط النتيجة يخالف الحكم بسبب المحاولات التي لم تُحسم — لا تعتمد على أحدهما وحده.')
+  }
+  return { verdict, notes }
+}
+
 /** يحسم مساراً واحداً من سعر الدخول. يعيد [النتيجة بمضاعف المخاطرة قبل التكلفة، الحالة، سعر النهاية]. */
 function walk(
   pool: Array<[number, number, number, number]>, plan: TmPlan, rnd: () => number, block: number,
@@ -203,7 +216,7 @@ export function simulate(bars: TmBar[], plan: TmPlan, opts: TmOptions = {}): TmR
     avgR: +(sumR / replays).toFixed(3),
     targetR: +targetR.toFixed(2),
     costR: +costR.toFixed(3),
-    verdict: verdictFor(pTarget, pStop, targetR, costR),
+    ...withNotes(verdictFor(pTarget, pStop, targetR, costR), 1 - pTarget - pStop, sumR / replays),
   }
 }
 
@@ -242,6 +255,208 @@ export function replayHistory(
     if (state === 1) target++
     else if (state === 2) stop++
     else open++
+    sumR += r - costR
+  }
+  const samples = target + stop + open
+  return { samples, target, stop, open, avgR: samples ? +(sumR / samples).toFixed(3) : 0, enough: samples >= TM_MIN_HISTORY }
+}
+
+// ================================================================
+// آلة الزمن اللحظية (SPX والصناديق): شموع 5 دقائق لجلسات نيويورك الكاملة.
+// كل شمعة تُسحب من الوقت نفسه من اليوم في جلسة سابقة (الحركة عند الافتتاح غيرها
+// قبل الإغلاق)، بكتل متتالية. المسار قد يمتد لأكثر من جلسة: الشمعة الأولى من الجلسة
+// التالية تحمل فجوة الافتتاح. تدعم الصعود والهبوط. تقيس حركة الأصل لا سعر العقد.
+// ================================================================
+
+export type TmDirection = 'up' | 'down'
+export const SESSION_BARS = 78          // 9:30 → 16:00 بتوقيت نيويورك بشموع 5 دقائق
+export const FORCED_EXIT_SLOT = 72      // 15:30 = الخروج الإجباري للمضاربة اليومية
+export const TM_MIN_SESSIONS = 20
+
+export type TmStampedBar = TmBar & { t: number } // t بالثواني (يونكس)
+
+export type TmIntradayPlan = {
+  direction: TmDirection
+  entry: number
+  stop: number
+  target: number
+  startSlot: number // أول شمعة بعد الدخول (0 = افتتاح الجلسة التالية)
+  bars: number
+  costPct: number
+}
+
+const ET_FMT = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', weekday: 'short', hour12: false,
+})
+
+/** تاريخ الجلسة ورقم الشمعة (0..77) بتوقيت نيويورك؛ slot = −1 خارج الجلسة النظامية. */
+export function etSlot(tSec: number): { date: string; slot: number; weekday: string } {
+  const parts = Object.fromEntries(ET_FMT.formatToParts(new Date(tSec * 1000)).map(p => [p.type, p.value]))
+  const minutes = (Number(parts.hour) % 24) * 60 + Number(parts.minute)
+  const slot = Math.floor((minutes - 570) / 5)
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, slot: slot >= 0 && slot < SESSION_BARS ? slot : -1, weekday: parts.weekday }
+}
+
+/** الجلسات الكاملة فقط (78 شمعة)، بالترتيب الزمني. أنصاف الأيام والجلسات الناقصة تُستبعد. */
+export function groupSessions(bars: TmStampedBar[]): TmBar[][] {
+  const byDate = new Map<string, Array<TmBar | undefined>>()
+  for (const b of bars) {
+    if (!(b.o > 0 && b.h > 0 && b.l > 0 && b.c > 0)) continue
+    const s = etSlot(b.t)
+    if (s.slot < 0) continue
+    const arr = byDate.get(s.date) ?? new Array<TmBar | undefined>(SESSION_BARS).fill(undefined)
+    arr[s.slot] = { o: b.o, h: b.h, l: b.l, c: b.c }
+    byDate.set(s.date, arr)
+  }
+  return [...byDate.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([, arr]) => arr)
+    .filter((arr): arr is TmBar[] => arr.every(Boolean))
+}
+
+/** أول شمعة بعد الآن: داخل الجلسة = الشمعة التالية، وخارجها = افتتاح الجلسة القادمة. */
+export function nextSlot(nowSec: number): { slot: number; marketOpen: boolean } {
+  const s = etSlot(nowSec)
+  if (s.weekday === 'Sat' || s.weekday === 'Sun' || s.slot < 0) return { slot: 0, marketOpen: false }
+  const next = s.slot + 1
+  return next >= SESSION_BARS ? { slot: 0, marketOpen: false } : { slot: next, marketOpen: true }
+}
+
+type Ratio = [number, number, number, number]
+
+/** صف لكل جلسة s ≥ 1: الشمعة ÷ إغلاق الشمعة السابقة (الشمعة 0 ÷ إغلاق الجلسة السابقة = فجوة الافتتاح). */
+export function buildSlotRatios(sessions: TmBar[][], detrend = false): Ratio[][] {
+  const out: Ratio[][] = []
+  for (let s = 1; s < sessions.length; s++) {
+    const row: Ratio[] = []
+    for (let k = 0; k < SESSION_BARS; k++) {
+      const pc = k === 0 ? sessions[s - 1][SESSION_BARS - 1].c : sessions[s][k - 1].c
+      const b = sessions[s][k]
+      row.push([b.o / pc, b.h / pc, b.l / pc, b.c / pc])
+    }
+    out.push(row)
+  }
+  if (detrend && out.length) {
+    let sum = 0, n = 0
+    for (const row of out) for (const r of row) { sum += Math.log(r[3]); n++ }
+    const k = Math.exp(-sum / n)
+    for (const row of out) for (const r of row) { r[0] *= k; r[1] *= k; r[2] *= k; r[3] *= k }
+  }
+  return out
+}
+
+export function validateIntradayPlan(p: TmIntradayPlan): string | null {
+  if (!(p.entry > 0) || !(p.stop > 0) || !(p.target > 0)) return 'الخطة ناقصة'
+  const ok = p.direction === 'up' ? p.stop < p.entry && p.target > p.entry : p.stop > p.entry && p.target < p.entry
+  if (!ok) return p.direction === 'up' ? 'في الصعود: الوقف تحت الدخول والهدف فوقه' : 'في الهبوط: الوقف فوق الدخول والهدف تحته'
+  if (!(p.startSlot >= 0 && p.startSlot < SESSION_BARS)) return 'وقت البداية خارج الجلسة'
+  if (!(p.bars >= 1 && p.bars <= SESSION_BARS * 5)) return 'المدى خارج الحدود'
+  return null
+}
+
+/** يحسم شمعة واحدة: null إن لم تُحسم، وإلا [سعر الخروج، 1 هدف | 2 وقف]. الوقف أولاً عند لمس الحدّين، والفجوة بالافتتاح. */
+function settle(plan: { direction: TmDirection; stop: number; target: number }, O: number, H: number, L: number): [number, 1 | 2] | null {
+  if (plan.direction === 'up') {
+    if (L <= plan.stop) return [O < plan.stop ? O : plan.stop, 2]
+    if (H >= plan.target) return [plan.target, 1]
+  } else {
+    if (H >= plan.stop) return [O > plan.stop ? O : plan.stop, 2]
+    if (L <= plan.target) return [plan.target, 1]
+  }
+  return null
+}
+
+export function simulateIntraday(sessions: TmBar[][], plan: TmIntradayPlan, opts: TmOptions = {}): TmRun | null {
+  if (validateIntradayPlan(plan)) return null
+  if (sessions.length < TM_MIN_SESSIONS) return null
+  const replays = Math.max(100, Math.min(50_000, Math.floor(opts.replays ?? TM_DEFAULTS.replays)))
+  const seed = Math.floor(opts.seed ?? TM_DEFAULTS.seed)
+  const block = Math.max(1, Math.min(24, Math.floor(opts.block ?? 6)))
+  const detrend = opts.detrend ?? true
+  const ratios = buildSlotRatios(sessions, detrend)
+  const S = ratios.length
+  const sign = plan.direction === 'up' ? 1 : -1
+  const risk = Math.abs(plan.entry - plan.stop)
+  const targetR = Math.abs(plan.target - plan.entry) / risk
+  const costR = (plan.costPct * plan.entry) / risk
+  const rnd = mulberry32(seed)
+
+  let hitT = 0, hitS = 0, green = 0, sumR = 0
+  const ends: number[] = new Array(replays)
+  for (let i = 0; i < replays; i++) {
+    let p = plan.entry
+    let slot = plan.startSlot
+    let left = plan.bars
+    let used = block // يفرض سحب كتلة جديدة في البداية
+    let row = ratios[0]
+    let res: [number, 1 | 2] | null = null
+    while (left > 0) {
+      if (used >= block) { row = ratios[Math.floor(rnd() * S)]; used = 0 }
+      const r = row[slot]
+      res = settle(plan, p * r[0], p * r[1], p * r[2])
+      if (res) break
+      p *= r[3]
+      left--
+      used++
+      slot++
+      if (slot >= SESSION_BARS) { slot = 0; used = block } // جلسة جديدة ⇒ كتلة من جلسة أخرى
+    }
+    const end = res ? res[0] : p
+    const state = res ? res[1] : 0
+    if (state === 1) hitT++
+    else if (state === 2) hitS++
+    if (state === 1 || (state === 0 && sign * (end - plan.entry) > 0)) green++
+    sumR += (sign * (end - plan.entry)) / risk - costR
+    ends[i] = end
+  }
+  ends.sort((a, b) => a - b)
+  const pTarget = hitT / replays
+  const pStop = hitS / replays
+  return {
+    replays, seed, block, detrend, bars: plan.bars,
+    pTarget, pStop, pOpen: 1 - pTarget - pStop, pGreen: green / replays,
+    endMedian: +quantile(ends, 0.5).toFixed(2),
+    endP5: +quantile(ends, 0.05).toFixed(2),
+    endP95: +quantile(ends, 0.95).toFixed(2),
+    avgR: +(sumR / replays).toFixed(3),
+    targetR: +targetR.toFixed(2),
+    costR: +costR.toFixed(3),
+    ...withNotes(verdictFor(pTarget, pStop, targetR, costR), 1 - pTarget - pStop, sumR / replays),
+  }
+}
+
+/**
+ * السجل اللحظي: في كل جلسة سابقة ندخل في الوقت نفسه من اليوم وبالاتجاه نفسه، والوقف والهدف
+ * على البعد نفسه (نسبةً من سعر الدخول)، ونتابع الشموع الحقيقية. هذا ما حدث فعلاً، لا محاكاة.
+ */
+export function replayIntradayHistory(sessions: TmBar[][], plan: TmIntradayPlan): TmHistory {
+  const stopDist = Math.abs(plan.stop - plan.entry) / plan.entry
+  const tgtDist = Math.abs(plan.target - plan.entry) / plan.entry
+  const sign = plan.direction === 'up' ? 1 : -1
+  const costR = plan.costPct / stopDist
+  const flat = sessions.flat()
+  let target = 0, stop = 0, open = 0, sumR = 0
+  for (let s = 1; s < sessions.length; s++) {
+    const startIdx = s * SESSION_BARS + plan.startSlot
+    if (startIdx + plan.bars > flat.length) break
+    const entry = flat[startIdx - 1].c
+    const lv = { direction: plan.direction, stop: entry * (1 - sign * stopDist), target: entry * (1 + sign * tgtDist) }
+    let r: number | null = null
+    for (let j = startIdx; j < startIdx + plan.bars; j++) {
+      const b = flat[j]
+      const res = settle(lv, b.o, b.h, b.l)
+      if (res) {
+        r = (sign * (res[0] - entry)) / (entry * stopDist)
+        if (res[1] === 1) target++
+        else stop++
+        break
+      }
+    }
+    if (r == null) {
+      r = (sign * (flat[startIdx + plan.bars - 1].c - entry)) / (entry * stopDist)
+      open++
+    }
     sumR += r - costR
   }
   const samples = target + stop + open

@@ -7,6 +7,7 @@ import { NewsImpactBadge, useNews } from '@/components/v2/NewsBar'
 import { DisciplineBar } from '@/components/v2/PositionSizing'
 import { IndexSwitcher } from '@/components/v2/IndexSwitcher'
 import { UnderlyingTradeManager } from '@/components/v2/UnderlyingTradeManager'
+import { IntradayTimeMachine } from '@/components/v2/IntradayTimeMachine'
 import { DecisionCouncilCard } from '@/components/v2/DecisionCouncilCard'
 import { MoneynessLadder } from '@/components/v2/MoneynessLadder'
 import { useLiveQuotes } from '@/lib/v2/useLiveQuotes'
@@ -821,6 +822,16 @@ export default function V2Dashboard() {
                       validUntil={tradeWindow.validUntil}
                       accent={lc}
                       defaultOpen
+                    />
+                  )}
+
+                  {isPrimary && tradeScenario && tradeWindow && (
+                    <IntradayTimeMachine
+                      key={`tm-${c.symbol}-${plan?.lockedAt ?? 0}`}
+                      platform="spx"
+                      symbol="SPX"
+                      scenario={tradeScenario}
+                      window={tradeWindow}
                     />
                   )}
 
