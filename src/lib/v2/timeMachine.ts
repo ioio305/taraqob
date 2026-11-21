@@ -150,7 +150,7 @@ export function withNotes(verdict: TmVerdict, pOpen: number, avgR: number): { ve
     notes.push(`${Math.round(pOpen * 100)}% من المحاولات لم تصل للهدف ولا للوقف — السعر في نهاية المدة هو الذي يحسمها.`)
   }
   if ((verdict.tone === 'bad' && avgR > 0.02) || (verdict.tone === 'good' && avgR < -0.02)) {
-    notes.push('انتبه: متوسط النتيجة يخالف الحكم بسبب المحاولات التي لم تُحسم — لا تعتمد على أحدهما وحده.')
+    notes.push('انتبه: متوسط النتيجة يخالف الحكم — بسبب المحاولات التي لم تُحسم أو فجوات سعرية تجاوزت الوقف. لا تعتمد على أحدهما وحده.')
   }
   return { verdict, notes }
 }
@@ -271,6 +271,7 @@ export function replayHistory(
 export type TmDirection = 'up' | 'down'
 export const SESSION_BARS = 78          // 9:30 → 16:00 بتوقيت نيويورك بشموع 5 دقائق
 export const FORCED_EXIT_SLOT = 72      // 15:30 = الخروج الإجباري للمضاربة اليومية
+export const FIRST_ENTRY_SLOT = 3       // 9:45 = أول دخول مسموح (نتجنب أول 15 دقيقة)
 export const TM_MIN_SESSIONS = 20
 
 export type TmStampedBar = TmBar & { t: number } // t بالثواني (يونكس)

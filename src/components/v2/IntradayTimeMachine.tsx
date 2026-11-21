@@ -113,7 +113,7 @@ export function IntradayTimeMachine({ platform, symbol, scenario, window: win }:
               </div>
             </div>
             <div className="text-[11px] text-slate-500">
-              المدة: {span}{data.window.startsAtOpen ? ' — تبدأ من افتتاح الجلسة القادمة' : ''}{data.window.cappedAtExit ? ' — حتى الخروج الإجباري 3:30 م بتوقيت نيويورك' : ''}
+              المدة: {span}{data.window.startsAtOpen ? ' — نفترض دخولك بعد 9:45 ص بتوقيت نيويورك بسعر الدخول نفسه' : ''}{data.window.cappedAtExit ? ' — حتى الخروج الإجباري 3:30 م بتوقيت نيويورك' : ''}
             </div>
 
             <div className="space-y-2.5">

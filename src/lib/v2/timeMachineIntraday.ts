@@ -5,7 +5,7 @@
 // تقيس حركة الأصل فقط؛ سعر العقد يتأثر أيضاً بالوقت والتذبذب. عرض فقط — لا تمسّ المعايرة.
 // ================================================================
 import {
-  FORCED_EXIT_SLOT, SESSION_BARS, TM_DEFAULTS, groupSessions, nextSlot, replayIntradayHistory,
+  FIRST_ENTRY_SLOT, FORCED_EXIT_SLOT, SESSION_BARS, TM_DEFAULTS, groupSessions, nextSlot, replayIntradayHistory,
   simulateIntraday, validateIntradayPlan, type TmDirection, type TmHistory, type TmRun, type TmStampedBar,
 } from './timeMachine'
 
@@ -73,15 +73,18 @@ export function parseIntradayQuery(q: URLSearchParams): Omit<IntradayTmRequest, 
 export async function runIntradayTimeMachine(req: IntradayTmRequest): Promise<IntradayTmResponse | { error: string; status: number }> {
   const target = req.targets[req.targetIndex - 1]
   const now = nextSlot(req.nowSec ?? Math.floor(Date.now() / 1000))
+  // السوق مغلق أو في أول 15 دقيقة: الدخول الفعلي بعد 9:45 بسعر جديد، فلا نُحمّل الخطة فجوة
+  // الافتتاح (كانت تُنتج خسائر وهمية ضخمة أمام وقف ضيق). نبدأ من 9:45 بسعر الدخول نفسه.
+  const startSlot = Math.max(now.slot, FIRST_ENTRY_SLOT)
   let bars = Math.max(1, Math.ceil(req.minutes / 5))
   let cappedAtExit = false
   if (req.style === 'day') {
-    const room = FORCED_EXIT_SLOT - now.slot
+    const room = FORCED_EXIT_SLOT - startSlot
     if (room <= 0) return { error: 'انتهى وقت الدخول لهذا اليوم — الخروج الإجباري 3:30 م بتوقيت نيويورك', status: 422 }
     if (bars > room) { bars = room; cappedAtExit = true }
   }
   bars = Math.min(bars, SESSION_BARS * 5)
-  const plan = { direction: req.direction, entry: req.entry, stop: req.stop, target, startSlot: now.slot, bars, costPct: 0 }
+  const plan = { direction: req.direction, entry: req.entry, stop: req.stop, target, startSlot, bars, costPct: 0 }
   const bad = validateIntradayPlan(plan)
   if (bad) return { error: bad, status: 400 }
 
@@ -100,7 +103,7 @@ export async function runIntradayTimeMachine(req: IntradayTmRequest): Promise<In
       riskPct: +((Math.abs(req.entry - req.stop) / req.entry) * 100).toFixed(2),
       targetPct: +((Math.abs(target - req.entry) / req.entry) * 100).toFixed(2),
     },
-    window: { bars, minutes: bars * 5, style: req.style, startsAtOpen: !now.marketOpen, cappedAtExit },
+    window: { bars, minutes: bars * 5, style: req.style, startsAtOpen: !now.marketOpen || now.slot < FIRST_ENTRY_SLOT, cappedAtExit },
     neutral, trend, history,
     data: { sessions: sessions.length, from: day(raw[0].t), to: day(raw[raw.length - 1].t), seed: TM_DEFAULTS.seed },
   }
