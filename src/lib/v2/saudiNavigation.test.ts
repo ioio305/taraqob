@@ -9,7 +9,7 @@ describe('بوابات منصة السوق السعودي', () => {
     }
   })
   it('الأدوات الاحترافية وواجهاتها للباقة المدفوعة فقط', () => {
-    for (const p of ['/saudi/scanner', '/api/v2/saudi/scanner', '/saudi/plan', '/api/v2/saudi/portfolio', '/saudi/liquidity']) {
+    for (const p of ['/saudi/scanner', '/api/v2/saudi/scanner', '/saudi/plan', '/api/v2/saudi/portfolio', '/saudi/liquidity', '/api/v2/saudi/timemachine/2222']) {
       expect(saudiPathIsPremium(p)).toBe(true)
       expect(saudiTierAllows('radar', p)).toBe(false)
       expect(saudiTierAllows(null, p)).toBe(false)

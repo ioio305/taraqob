@@ -4,6 +4,7 @@
 // نفسه ونقول الحقيقة بحكم واحد. عرض فقط، لغة مبسّطة، بلا «R» ولا «مونت كارلو».
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import type { TmHistory, TmRun } from '@/lib/v2/timeMachine'
 
 const ACCENT = '#16A34A'
@@ -63,11 +64,13 @@ export function SaudiTimeMachine({ symbol }: { symbol: string }) {
   const [data, setData] = useState<Resp | null>(null)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
+  const [locked, setLocked] = useState(false)
 
   const run = useCallback(async (h: Horizon, ti: number) => {
     setLoading(true)
     try {
       const res = await fetch(`/api/v2/saudi/timemachine/${encodeURIComponent(symbol)}?horizon=${h}&t=${ti}`)
+      if (res.status === 403) { setLocked(true); setLoading(false); return }
       const json = (await res.json()) as Resp
       if (!res.ok || json.error) { setErr(json.error ?? 'تعذّر تشغيل آلة الزمن'); setData(null) }
       else { setData(json); setErr('') }
@@ -81,6 +84,21 @@ export function SaudiTimeMachine({ symbol }: { symbol: string }) {
   const tr = data?.trend
   const h = data?.history
   const trendDiffers = r && tr && tr.verdict.key !== r.verdict.key
+
+  if (locked) {
+    return (
+      <div className="rounded-2xl border p-5 text-center" style={{ borderColor: `${AMBER}40`, background: `${AMBER}0a` }}>
+        <div className="text-2xl">🔒</div>
+        <div className="mt-2 text-sm font-black text-white">⏳ آلة الزمن</div>
+        <p className="mx-auto mt-1 max-w-md text-xs leading-6 text-slate-400">
+          قبل أن تدخل: نعيد الصفقة 10,000 مرة من حركة السهم نفسه، ونريك كم مرة وصلت الهدف وكم مرة ضربت الوقف، وما حدث فعلاً في الأيام السابقة، مع حكم صريح.
+        </p>
+        <Link href="/upgrade?market=saudi" className="mt-3 inline-block rounded-lg px-4 py-2 text-xs font-black text-white" style={{ background: ACCENT }}>
+          متاح في الباقة المتقدمة
+        </Link>
+      </div>
+    )
+  }
 
   return (
     <section className="rounded-2xl border p-4" style={{ borderColor: 'rgba(167,139,250,.35)', background: 'linear-gradient(135deg, rgba(167,139,250,.08), rgba(255,255,255,.02) 60%)' }}>
