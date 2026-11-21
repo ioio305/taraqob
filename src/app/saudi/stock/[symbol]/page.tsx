@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useSaudiFavorites } from '@/lib/v2/saudiFavorites'
 import { SAUDI_CALIBRATION } from '@/lib/v2/saudiIndicators'
 import { SaudiProAnalysis } from '@/components/v2/SaudiProAnalysis'
+import { SaudiTimeMachine } from '@/components/v2/SaudiTimeMachine'
 
 const ACCENT = '#16A34A'
 const RED = '#F04760'
@@ -172,6 +173,8 @@ export default function SaudiStockPage() {
               ) : null}
             </div>
           </div>
+
+          <SaudiTimeMachine symbol={data.symbol} />
 
           <SaudiProAnalysis symbol={data.symbol} live={data.quote ?? null} />
 
