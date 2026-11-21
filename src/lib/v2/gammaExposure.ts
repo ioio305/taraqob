@@ -6,6 +6,7 @@
 // ============================================================
 
 import { fromZonedTime, formatInTimeZone } from 'date-fns-tz'
+import { cboeDelayedEnabled } from './cboe'
 import {
   getExpirations,
   getMarketSnapshot,
@@ -228,6 +229,7 @@ export function calculateLiveGammaExposure(
 }
 
 async function getDelayedCboeExposure(): Promise<GammaExposure | null> {
+  if (!cboeDelayedEnabled()) return null
   let json: any
   try {
     const response = await fetch(CBOE_URL, { headers: { Accept: 'application/json' }, cache: 'no-store' })

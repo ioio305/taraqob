@@ -7,6 +7,13 @@
 import type { MdOption } from '@/lib/v2/marketData'
 
 const CBOE_URL = 'https://cdn.cboe.com/api/global/delayed_quotes/options/_SPX.json'
+
+// منذ 2026-11-20 يحجب CBOE بياناته المؤجلة المجانية عن التطبيقات (403 من Cloudflare).
+// موقوف افتراضياً كي لا نضيّع رحلة فاشلة في كل طلب، ولا نلتفّ على الحجب.
+// يُعاد تفعيله بـ CBOE_DELAYED_ENABLED=true لو رُفع الحجب رسمياً.
+export function cboeDelayedEnabled(): boolean {
+  return process.env.CBOE_DELAYED_ENABLED === 'true'
+}
 const OCC = /^(SPXW|SPX)(\d{6})([CP])(\d{8})$/
 
 export interface CboeData {
@@ -19,6 +26,7 @@ export interface CboeData {
 let cache: CboeData | null = null
 
 export async function getCboeData(): Promise<CboeData | null> {
+  if (!cboeDelayedEnabled()) return null
   if (cache && Date.now() - cache.fetchedAt < 15_000) return cache
   try {
     const res = await fetch(CBOE_URL, { headers: { Accept: 'application/json' }, cache: 'no-store' })

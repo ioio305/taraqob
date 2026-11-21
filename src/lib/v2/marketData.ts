@@ -392,14 +392,16 @@ export function blackScholes(S: number, K: number, T: number, r: number, sigma: 
 
 // ── 5. تواريخ الانتهاء ──────────────────────────────────────
 // SPXW تنتهي يومياً (أيام التداول). نولّد التواريخ القريبة تركيبياً.
-export function syntheticExpirations(count = 8): string[] {
+// بتاريخ نيويورك وبحساب UTC خالص: التوقيت المحلي للخادم كان يُزيح التاريخ يوماً للخلف
+// على الأجهزة المتقدّمة عن UTC (الاثنين يظهر أحداً).
+export function syntheticExpirations(count = 8, now: Date = new Date()): string[] {
   const out: string[] = []
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
+  const nyToday = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+  const d = new Date(`${nyToday}T00:00:00Z`)
   while (out.length < count) {
-    const day = d.getDay()
+    const day = d.getUTCDay()
     if (day !== 0 && day !== 6) out.push(d.toISOString().slice(0, 10))
-    d.setDate(d.getDate() + 1)
+    d.setUTCDate(d.getUTCDate() + 1)
   }
   return out
 }

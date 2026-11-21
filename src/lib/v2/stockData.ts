@@ -7,6 +7,7 @@
 // المشتركة (recommendCore) دون تعديل.
 
 import { hasTradier, tradierGet, blackScholes, type MdBar, type MdOption } from './marketData'
+import { cboeDelayedEnabled } from './cboe'
 
 const YF = 'https://query2.finance.yahoo.com/v8/finance/chart'
 const UA = { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' }
@@ -92,6 +93,7 @@ interface CboeStockData { spot: number; options: any[]; fetchedAt: number }
 const cboeStockCache = new Map<string, CboeStockData>()
 
 async function getCboeStockData(symbol: string): Promise<CboeStockData | null> {
+  if (!cboeDelayedEnabled()) return null
   const sym = symbol.toUpperCase()
   const hit = cboeStockCache.get(sym)
   if (hit && Date.now() - hit.fetchedAt < 15_000) return hit
