@@ -9,6 +9,7 @@
 import { getCboeData, cboeChain, cboeExpirations } from './cboe'
 import { hasAlpaca, getAlpacaChain, getAlpacaExpirations } from './alpaca'
 import { fromZonedTime } from 'date-fns-tz'
+import { liveFeedBase, liveFeedName, liveFeedToken } from './liveFeed'
 import {
   buildTradierTimeSalesPath,
   getIntradayFreshness,
@@ -16,17 +17,16 @@ import {
   NEW_YORK_TZ,
 } from './marketFreshness'
 
-const TRADIER_BASE = 'https://api.tradier.com/v1'
 const YF = 'https://query2.finance.yahoo.com/v8/finance/chart'
 const UA = { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' }
 
 export function hasTradier(): boolean {
-  return !!process.env.TRADIER_API_KEY
+  return !!liveFeedToken()
 }
 
 export async function tradierGet(path: string): Promise<any> {
-  const res = await fetch(`${TRADIER_BASE}${path}`, {
-    headers: { Authorization: `Bearer ${process.env.TRADIER_API_KEY}`, Accept: 'application/json' },
+  const res = await fetch(`${liveFeedBase()}${path}`, {
+    headers: { Authorization: `Bearer ${liveFeedToken()}`, Accept: 'application/json' },
     cache: 'no-store',
     signal: AbortSignal.timeout(8_000),
   })
@@ -411,7 +411,10 @@ export function syntheticExpirations(count = 8, now: Date = new Date()): string[
 // عند أول فشل نتوقف عن المحاولة 6 ساعات — نوفّر رحلتين فاشلتين في كل طلب.
 let _tradierIndexOptionsFailedAt = 0
 function tradierIndexOptionsUsable(): boolean {
-  return hasTradier() && Date.now() - _tradierIndexOptionsFailedAt > 6 * 3600_000
+  // مفتاح Tradier بلا عقود مؤشرات: لا فائدة من المحاولة 6 ساعات. جسر IBKR: فشله مؤقت
+  // (إعادة تشغيل ليلية أو انقطاع قصير) فنعيد المحاولة بعد دقيقتين.
+  const cooldown = liveFeedName() === 'ibkr' ? 2 * 60_000 : 6 * 3600_000
+  return hasTradier() && Date.now() - _tradierIndexOptionsFailedAt > cooldown
 }
 
 export async function getExpirations(): Promise<string[]> {

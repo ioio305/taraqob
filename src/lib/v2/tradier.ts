@@ -2,17 +2,17 @@
 // TRADIER API LAYER — ترقب v2
 // ============================================================
 
-const TRADIER_BASE = 'https://api.tradier.com/v1'
+import { liveFeedBase, liveFeedToken } from './liveFeed'
 
 function getHeaders() {
-  const token = process.env.TRADIER_API_KEY
-  if (!token) throw new Error('TRADIER_API_KEY غير موجود')
+  const token = liveFeedToken()
+  if (!token) throw new Error('لا يوجد مصدر أسعار مباشرة (IBKR_BRIDGE_TOKEN أو TRADIER_API_KEY)')
   return { Authorization: `Bearer ${token}`, Accept: 'application/json' }
 }
 
 async function tradierFetch<T>(endpoint: string, params?: Record<string, string>): Promise<{ data: T | null; error: string | null }> {
   try {
-    const url = new URL(`${TRADIER_BASE}${endpoint}`)
+    const url = new URL(`${liveFeedBase()}${endpoint}`)
     if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
     const res = await fetch(url.toString(), { headers: getHeaders(), cache: 'no-store' })
     if (!res.ok) return { data: null, error: `Tradier ${res.status}: ${(await res.text()).slice(0, 100)}` }

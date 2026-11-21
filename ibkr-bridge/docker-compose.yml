@@ -1,0 +1,46 @@
+# جسر Interactive Brokers لترقّب — ثلاث خدمات على خادم واحد:
+#   ib-gateway : IB Gateway + IBC (دخول وإعادة تشغيل تلقائيان) — منفذ API داخلي فقط
+#   bridge     : خدمة تحاكي واجهة Tradier التي يقرأها ترقّب — داخلية فقط
+#   caddy      : HTTPS تلقائي على نطاقك (المنفذ 443 هو الوحيد المفتوح للعالم)
+services:
+  ib-gateway:
+    image: ghcr.io/gnzsnz/ib-gateway:stable
+    restart: always
+    env_file: .env
+    environment:
+      TRADING_MODE: ${TRADING_MODE:-live}
+      READ_ONLY_API: "yes"                 # لا أوامر عبر الـ API مهما حدث
+      TWOFA_TIMEOUT_ACTION: restart
+      RELOGIN_AFTER_TWOFA_TIMEOUT: "yes"
+      AUTO_RESTART_TIME: ${AUTO_RESTART_TIME:-11:45 PM}
+      TIME_ZONE: America/New_York
+      TZ: America/New_York
+    # لا منافذ منشورة: الوصول من شبكة Docker الداخلية فقط
+
+  bridge:
+    build: ./bridge
+    restart: always
+    depends_on: [ib-gateway]
+    environment:
+      IB_HOST: ib-gateway
+      IB_PORT: ${IB_PORT:-4003}            # 4003 = live، 4004 = paper (داخل الحاوية)
+      BRIDGE_TOKEN: ${BRIDGE_TOKEN}
+      MAX_LINES: ${MAX_LINES:-90}
+
+  caddy:
+    image: caddy:2
+    restart: always
+    depends_on: [bridge]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      BRIDGE_DOMAIN: ${BRIDGE_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

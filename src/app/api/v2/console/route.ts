@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { computeStrategy } from '@/lib/v2/strategyEngine'
 import { getMarketSnapshot, getIntradayBars, getExpirations as mdExpirations, getOptionsChain } from '@/lib/v2/marketData'
+import { liveFeedBase, liveFeedToken } from '@/lib/v2/liveFeed'
 
 export const dynamic = 'force-dynamic'
 
-const TRADIER_KEY = process.env.TRADIER_API_KEY
-const BASE = 'https://api.tradier.com/v1'
+const TRADIER_KEY = liveFeedToken()
+const BASE = liveFeedBase()
 const HDR = { Authorization: `Bearer ${TRADIER_KEY}`, Accept: 'application/json' }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

@@ -82,7 +82,7 @@ export default function LiveWatch({ storageKey }: { storageKey: string }) {
               <td className="px-4 py-3"><button onClick={() => setSelected(symbol)} className={`font-mono font-bold ${selected === symbol ? 'text-amber-200' : 'text-white'}`}>{symbol}</button></td>
               <td className="px-4 py-3 font-mono text-white">{quote ? quote.price.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'}</td>
               <td dir="ltr" className={`px-4 py-3 text-right font-mono ${(quote?.changePct ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{quote ? `${quote.changePct >= 0 ? '+' : ''}${quote.changePct.toFixed(2)}%` : '—'}</td>
-              <td className={`whitespace-nowrap px-4 py-3 text-xs ${current ? 'text-emerald-300' : 'text-amber-200'}`}>{loading ? 'جارٍ التحديث' : current ? 'حديث · Tradier' : quote ? `${quote.source} · غير فوري` : 'غير متاح'}</td>
+              <td className={`whitespace-nowrap px-4 py-3 text-xs ${current ? 'text-emerald-300' : 'text-amber-200'}`}>{loading ? 'جارٍ التحديث' : current ? 'حديث · مباشر' : quote ? `${quote.source} · غير فوري` : 'غير متاح'}</td>
               <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">{quote?.asOf ? new Date(quote.asOf).toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'}</td>
               <td className="px-3 py-3"><button disabled={symbols.length === 1} aria-label={`حذف ${symbol} من المراقبة`} onClick={() => { const next = symbols.filter(s => s !== symbol); save(next); if (selected === symbol) setSelected(next[0]) }} className="text-slate-500 disabled:opacity-20">×</button></td>
             </tr>

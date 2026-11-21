@@ -1,0 +1,3 @@
+ib_async>=1.0,<3
+fastapi>=0.110,<1
+uvicorn[standard]>=0.29,<1

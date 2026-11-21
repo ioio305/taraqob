@@ -120,7 +120,7 @@ export function ExecutionTicket(props: Props) {
           </div>
         )}
         <div className="flex flex-wrap justify-between gap-2 border-t border-white/5 pt-3 text-xs text-slate-400">
-          <span>مصدر SPX: {underlying?.source === 'tradier' ? 'Tradier' : underlying?.source === 'yahoo' ? 'Yahoo · غير معتمد للدخول' : 'غير متاح'}</span>
+          <span>مصدر SPX: {underlying?.source === 'tradier' ? 'مباشر' : underlying?.source === 'yahoo' ? 'Yahoo · غير معتمد للدخول' : 'غير متاح'}</span>
           <span>{quoteIsCurrent(underlying, props.now) ? 'سعر حديث' : 'سعر غير صالح للدخول'} · وقت المصدر: {time} الرياض</span>
           {quote?.asOf && <span>وقت عرض العقد: {new Date(quote.asOf).toLocaleTimeString('ar-SA', { timeZone: 'Asia/Riyadh' })} الرياض</span>}
         </div>

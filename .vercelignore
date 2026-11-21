@@ -4,3 +4,4 @@ scripts/tmp/
 lab-runs/
 lean/data/
 **/__pycache__/
+ibkr-bridge/

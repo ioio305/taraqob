@@ -1,0 +1,9 @@
+{$BRIDGE_DOMAIN} {
+	encode gzip
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+	}
+	reverse_proxy bridge:8080
+}
