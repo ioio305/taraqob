@@ -35,7 +35,7 @@ export interface FundGamma {
   flipLevel: number | null
   callWall:  number | null
   putWall:   number | null
-  source:    'tradier' | 'cboe'
+  source:    'tradier' | 'alpaca' | 'yahoo' | 'cboe'
   status:    'live' | 'delayed'
 }
 

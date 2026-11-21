@@ -35,7 +35,7 @@ export interface GammaExposure {
   walls: GammaWall[]
   profile: { strike: number; gex: number }[]
   fetchedAt: string
-  source: 'tradier' | 'cboe'
+  source: 'tradier' | 'alpaca' | 'yahoo' | 'cboe'
   status: 'live' | 'delayed'
   expirationCount: number
   dataNoteAr: string
@@ -281,6 +281,16 @@ export async function getGammaExposure(): Promise<GammaExposure | null> {
       if (live) {
         exposureCache = { value: live, at: now }
         return live
+      }
+    }
+    // Alpaca (مصدر رسمي، تغذية مجانية): يُعرض موسوماً بالتأخّر ولا يحسم قرار الدخول.
+    const alpacaOptions = chains.filter(chain => chain.source === 'alpaca_delayed').flatMap(chain => chain.options)
+    if (alpacaOptions.length > 0) {
+      const delayed = calculateLiveGammaExposure(snapshot.spxPrice, alpacaOptions)
+      if (delayed) {
+        const value: GammaExposure = { ...delayed, source: 'alpaca', status: 'delayed', dataNoteAr: 'من Alpaca (تغذية مجانية قد تتأخر)، لذلك يُعرض للمعلومة ولا يحسم قرار الدخول' }
+        exposureCache = { value, at: now }
+        return value
       }
     }
   } catch {

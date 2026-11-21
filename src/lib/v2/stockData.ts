@@ -8,6 +8,7 @@
 
 import { hasTradier, tradierGet, blackScholes, type MdBar, type MdOption } from './marketData'
 import { cboeDelayedEnabled } from './cboe'
+import { getAlpacaChain, getAlpacaExpirations, hasAlpaca } from './alpaca'
 
 const YF = 'https://query2.finance.yahoo.com/v8/finance/chart'
 const UA = { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' }
@@ -231,7 +232,13 @@ export async function getStockExpirations(symbol: string): Promise<string[]> {
       if (dates) return Array.isArray(dates) ? dates : [dates]
     } catch { /* اسقط إلى الاحتياط */ }
   }
-  // احتياطي أول: CBOE (حقيقي متأخر)
+  // احتياطي رسمي: Alpaca (يحتاج مفاتيح)
+  if (hasAlpaca()) {
+    const spot = (await getStockQuote(symbol).catch(() => null))?.price ?? 0
+    const exps = await getAlpacaExpirations(symbol, spot)
+    if (exps.length > 0) return exps
+  }
+  // احتياطي: CBOE (حقيقي متأخر — موقوف منذ حجبه)
   const cboe = await getCboeStockData(symbol)
   if (cboe) {
     const exps = cboeStockExpirations(cboe, symbol)
@@ -242,7 +249,14 @@ export async function getStockExpirations(symbol: string): Promise<string[]> {
 }
 
 // ── سلسلة خيارات السهم ────────────────────────────────────────────────────────
+export type StockChainSource = 'tradier' | 'alpaca' | 'cboe' | 'yahoo'
+
 export async function getStockChain(symbol: string, expiration: string): Promise<MdOption[]> {
+  return (await getStockChainWithSource(symbol, expiration)).options
+}
+
+// السلسلة مع مصدرها: جاما الصناديق تحتاج أن تعرف هل الأسعار مباشرة أم متأخرة.
+export async function getStockChainWithSource(symbol: string, expiration: string): Promise<{ options: MdOption[]; source: StockChainSource }> {
   if (hasTradier()) {
     try {
       const chain = await tradierGet(
@@ -251,17 +265,23 @@ export async function getStockChain(symbol: string, expiration: string): Promise
       const opts: any[] = Array.isArray(chain?.options?.option)
         ? chain.options.option
         : [chain?.options?.option].filter(Boolean)
-      if (opts.length > 0) return opts as MdOption[]
+      if (opts.length > 0) return { options: opts as MdOption[], source: 'tradier' }
     } catch { /* اسقط إلى الاحتياط */ }
   }
-  // احتياطي أول: CBOE (حقيقي متأخر، مع إغريق)
+  // احتياطي رسمي: Alpaca (يحتاج مفاتيح؛ أسعار حقيقية + عقود مفتوحة)
+  if (hasAlpaca()) {
+    const spot = (await getStockQuote(symbol).catch(() => null))?.price ?? 0
+    const chain = await getAlpacaChain(symbol, expiration, spot)
+    if (chain.length > 0) return { options: chain, source: 'alpaca' }
+  }
+  // احتياطي: CBOE (حقيقي متأخر، مع إغريق — موقوف منذ حجبه)
   const cboe = await getCboeStockData(symbol)
   if (cboe) {
     const chain = cboeStockChain(cboe, symbol, expiration)
-    if (chain.length > 0) return chain
+    if (chain.length > 0) return { options: chain, source: 'cboe' }
   }
-  // احتياطي ثانٍ: Yahoo (حقيقي متأخر، إغريق محسوبة من التذبذب الحقيقي)
-  return yahooStockChain(symbol, expiration)
+  // احتياطي أخير: Yahoo (حقيقي متأخر، إغريق محسوبة من التذبذب الحقيقي)
+  return { options: await yahooStockChain(symbol, expiration), source: 'yahoo' }
 }
 
 // ── شموع داخل اليوم للسهم (للشارت والتحليل الفني) ─────────────────────────────

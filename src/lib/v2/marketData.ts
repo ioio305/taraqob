@@ -7,6 +7,7 @@
 // ============================================================
 
 import { getCboeData, cboeChain, cboeExpirations } from './cboe'
+import { hasAlpaca, getAlpacaChain, getAlpacaExpirations } from './alpaca'
 import { fromZonedTime } from 'date-fns-tz'
 import {
   buildTradierTimeSalesPath,
@@ -424,6 +425,12 @@ export async function getExpirations(): Promise<string[]> {
     }
     _tradierIndexOptionsFailedAt = Date.now()
   }
+  // Alpaca: مصدر رسمي احتياطي (يحتاج مفاتيح) — تواريخ حقيقية من عقود قريبة من السعر
+  if (hasAlpaca()) {
+    const spot = await getMarketSnapshot().then(s => s.spxPrice).catch(() => 0)
+    const exps = await getAlpacaExpirations('SPX', spot)
+    if (exps.length > 0) return exps
+  }
   // CBOE: تواريخ الانتهاء الحقيقية (مجاناً)
   const cboe = await getCboeData()
   if (cboe) {
@@ -448,7 +455,7 @@ export interface MdOption {
   greeks: { delta: number; gamma: number; theta: number; vega: number; mid_iv: number; smv_vol: number }
 }
 
-export type OptionChainSource = 'tradier_realtime' | 'cboe_delayed' | 'estimated'
+export type OptionChainSource = 'tradier_realtime' | 'alpaca_delayed' | 'cboe_delayed' | 'estimated'
 
 function occSymbol(root: string, expiration: string, type: 'call' | 'put', strike: number): string {
   const [y, mo, da] = expiration.split('-')
@@ -539,6 +546,9 @@ export async function getOptionsChain(
     }
     _tradierIndexOptionsFailedAt = Date.now()
   }
+  // Alpaca: أسعار حقيقية من مصدر رسمي (التغذية المجانية) — تُعرض ولا تُعتمد للدخول (ليست tradier_realtime)
+  const alpaca = await getAlpacaChain('SPX', expiration, spxPrice)
+  if (alpaca.length > 0) return { options: alpaca, estimated: false, source: 'alpaca_delayed' }
   // CBOE: أسعار حقيقية مجاناً (متأخرة ~15 دقيقة)
   const cboe = await getCboeData()
   if (cboe) {

@@ -6,7 +6,7 @@
 // راجع docs/platforms.md (المنصة 3) و src/lib/v2/gammaExposure.ts
 
 import { calculateLiveGammaExposure, type GammaExposure } from './gammaExposure'
-import { getStockQuote, getStockExpirations, getStockChain } from './stockData'
+import { getStockQuote, getStockExpirations, getStockChainWithSource } from './stockData'
 
 // الصناديق التي لها جاما موثوقة (سيولة خيارات عالية جداً)
 const GEX_SYMBOLS = new Set(['SPY', 'QQQ'])
@@ -37,13 +37,19 @@ export async function getEtfGammaExposure(symbol: string): Promise<GammaExposure
     }
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
     const nearest = expirations.filter(e => e >= today).sort().slice(0, 2)
-    const chains = await Promise.all(nearest.map(e => getStockChain(sym, e).catch(() => [])))
-    const options = chains.flat()
+    const chains = await Promise.all(nearest.map(e => getStockChainWithSource(sym, e).catch(() => ({ options: [], source: 'yahoo' as const }))))
+    const options = chains.flatMap(c => c.options)
+    // المباشر فقط من Tradier؛ غيره (Alpaca المجاني، Yahoo) يُوسم متأخراً ولا يحسم الدخول.
+    const liveSource = chains.every(c => !c.options.length || c.source === 'tradier')
+    const delayedSource = chains.find(c => c.options.length && c.source !== 'tradier')?.source
     if (!options.length) {
       cache.set(sym, { value: null, at: now })
       return null
     }
-    const gex = calculateLiveGammaExposure(quote.price, options as any)
+    const raw = calculateLiveGammaExposure(quote.price, options as any)
+    const gex: GammaExposure | null = raw && !liveSource && delayedSource
+      ? { ...raw, source: delayedSource === 'alpaca' ? 'alpaca' : delayedSource === 'cboe' ? 'cboe' : 'yahoo', status: 'delayed', dataNoteAr: 'أسعار عقود متأخرة، لذلك تُعرض للمعلومة ولا تحسم قرار الدخول' }
+      : raw
     cache.set(sym, { value: gex, at: now })
     return gex
   } catch {
